@@ -1,0 +1,132 @@
+package config
+
+import (
+	"encoding/json"
+	"errors"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestConfigDirFailsClosedWithoutAbsoluteUserRoot(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	if got, err := dir(); err == nil {
+		t.Fatalf("config dir without HOME = %q, want an error", got)
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join("relative", "config"))
+	if got, err := dir(); err == nil {
+		t.Fatalf("config dir from relative XDG_CONFIG_HOME = %q, want an error", got)
+	}
+}
+
+func TestLoadDaemonFailsClosedWithoutAbsoluteStateRoot(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	configPath := filepath.Join(t.TempDir(), "errandd.toml")
+	if err := os.WriteFile(configPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadDaemon(configPath); err == nil {
+		t.Fatal("daemon config without state_dir or HOME succeeded, want an error")
+	}
+
+	t.Setenv("HOME", filepath.Join("relative", "home"))
+	if got, err := LoadDaemon(configPath); err == nil {
+		t.Fatalf("daemon config from relative HOME used state dir %q, want an error", got.StateDir)
+	}
+}
+
+func TestLoadDaemonRejectsMissingExplicitConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.toml")
+	if _, err := LoadDaemon(path); err == nil || !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("LoadDaemon(%q) error = %v, want not-exist error", path, err)
+	}
+}
+
+func TestLoadDaemonAllowsMissingDefaultConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	got, err := LoadDaemon("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Listen != "tailnet:7443" || got.StateDir != filepath.Join(home, ".errand") {
+		t.Fatalf("default daemon config = %+v", got)
+	}
+}
+
+func TestResolveListenUsesTailscaleLocalAPIAddress(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "errand-config-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "tailscaled.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/localapi/v0/status" {
+			http.NotFound(w, r)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"BackendState": "Running",
+			"TailscaleIPs": []string{"100.101.102.103", "fd7a:115c:a1e0::1"},
+		})
+	})}
+	go server.Serve(listener)
+	t.Cleanup(func() {
+		server.Close()
+		listener.Close()
+	})
+
+	got, err := ResolveListen("tailnet:7443", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "100.101.102.103:7443" {
+		t.Fatalf("resolved tailnet listener = %q, want %q", got, "100.101.102.103:7443")
+	}
+}
+
+func TestResolveListenLeavesExplicitAddressAlone(t *testing.T) {
+	got, err := ResolveListen("127.0.0.1:7443", filepath.Join(t.TempDir(), "missing.sock"))
+	if err != nil || got != "127.0.0.1:7443" {
+		t.Fatalf("explicit listener = %q, %v", got, err)
+	}
+}
+
+func TestResolveListenFailsClosedWithoutAssignedTailscaleIP(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "errand-config-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "tailscaled.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"BackendState": "NeedsLogin",
+			"TailscaleIPs": []string{},
+		})
+	})}
+	go server.Serve(listener)
+	t.Cleanup(func() {
+		server.Close()
+		listener.Close()
+	})
+
+	if got, err := ResolveListen("tailnet:7443", socket); err == nil {
+		t.Fatalf("tailnet listener without an assigned Tailscale IP = %q, want an error", got)
+	}
+}

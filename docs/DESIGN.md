@@ -78,9 +78,10 @@ network-level access); no separate probe grant exists in v0.
 
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
 is a design constraint, not a v0 deliverable — the protocol and job model
-assume nothing POSIX-only, and process-tree management is an abstraction
-(systemd transient scopes on Linux, process groups on macOS, Job Objects
-on Windows when it lands).
+assume nothing POSIX-only. The milestone 1 host backend uses a process group
+plus an inherited per-job scope marker so it can find descendants that create
+new sessions on Linux and macOS. Native cgroup scopes and Windows Job Objects
+remain backend-specific follow-on work.
 
 ```
 errand -- cargo test                  # configured default peer
@@ -101,8 +102,9 @@ Two transports behind one peer abstraction:
 1. **Tailnet (preferred).** Daemon binds the host's tailnet address.
    Callers are identified via destination-scoped LocalAPI WhoIs
    (`WhoIsForIP`, constraining the capability map to the address actually
-   accessed); if the installed Tailscale is too old to provide those
-   semantics, fail closed. errand stores zero credentials in this mode.
+   accessed); milestone 1 requires Tailscale 1.100 or newer and fails
+   closed on older or unversioned daemons. errand stores zero credentials
+   in this mode.
 2. **Local network.** errand owns identity: a pairing ceremony performs an
    authenticated key exchange (PAKE / short-authentication-string — the
    short code is never sent as a bearer secret over the unauthenticated
@@ -228,15 +230,18 @@ Personal aliases and defaults (`cabal`, default peer, addresses) live in
 
 Environment defaults to **nothing forwarded**: target's PATH, plus `pass`
 by name and `set` literals. The initiator's ambient environment is never
-shipped silently. Secret-designated values are not written verbatim into
-the receipt — names and provenance only.
+shipped silently. Secret-designated values and value-derived hashes are not
+written into the receipt. Only names and provenance are retained.
 
 ### Cleanup, honestly
 
 When a job ends (success, failure, kill), errand removes everything it
-owns: workspace, process tree (systemd transient scope on Linux), temp
-state, containers. `result.json` records `cleanup_ok` separately from the
-exit code — errand never reports pristine when cleanup failed.
+owns: workspace, the inherited per-job process scope, and temporary state.
+The host scope finds ordinary descendants even when they call `setsid`; it is
+lifecycle containment, not a security boundary against hostile code that
+deliberately scrubs the inherited marker. `result.json` records `cleanup_ok`
+separately from the exit code, and errand never reports pristine when scope
+inspection or cleanup failed.
 
 Persistent state comes in three kinds, not one:
 
@@ -256,9 +261,10 @@ Persistent state comes in three kinds, not one:
 `~/.errand/jobs/<ulid>/`:
 
 ```
-spec.json        # immutable canonical request (argv, env spec, backend,
-                 # limits, workspace manifest root hash, request digest)
+spec.json        # versioned, immutable redacted request receipt (argv, env
+                 # names and provenance, limits, manifest root)
 admission.json   # caller user + device identity, authz result, revalidated facts
+execution.json   # argv and, unless PATH was caller-supplied, resolved path
 events.ndjson    # append-only lifecycle + control events
 io.log           # framed, base64-payload stdout/stderr in daemon-observed order
 result.json      # written once at terminal completion
@@ -288,8 +294,12 @@ becomes a requirement — in which case it belongs in milestone 1.
 
 - **At-most-once admission.** The client generates the job ULID and a
   canonical request digest, submitting with `PUT /v0/jobs/<ulid>`.
-  Same ID + same digest → return the existing job. Same ID + different
-  digest → 409 Conflict. Errand never automatically reruns a job whose
+  During one daemon lifetime, same ID + same digest returns the existing job;
+  same ID + different digest returns 409 Conflict. An environment-free receipt
+  can reconstruct that identity after restart. A receipt with declared
+  environment values cannot do so without persisting a value-derived verifier,
+  so every same-ID retry after restart fails closed with 409. Errand never
+  automatically reruns a job whose
   execution state is ambiguous (e.g. after a daemon restart between
   "starting" and process creation) — ambiguity is reported, not replayed.
   Network retries therefore cannot duplicate a command; that is the whole
@@ -325,6 +335,11 @@ fidelity contract promises faithful output, not best-effort truncation.
 
 ## Workspace snapshot
 
+- Automatic selection is limited to Git worktrees. A non-Git directory must
+  contain `.errandignore` or use the explicit `--include-all` override.
+  Filesystem roots are always refused; the user's home directory requires the
+  override even when a policy file exists. The client prints the selected file
+  count and total bytes before admission.
 - Manifest is `.errandignore`, initialized from git ignore rules but
   allowing explicit include/exclude — ignored files are sometimes required
   (generated sources), tracked files are sometimes unwanted.
@@ -333,6 +348,9 @@ fidelity contract promises faithful output, not best-effort truncation.
   detected and the snapshot **fails with a retry prompt** rather than
   shipping a mixture of moments. The manifest root hash is recorded in
   `spec.json` (and is the natural basis for later content-addressed sync).
+- Git submodules are rejected unless an explicit `.errandignore` policy is
+  used to define a recursive filesystem snapshot. A gitlink is never sent as
+  a silently empty directory.
 - `.git` is **not** shipped by default (size, history disclosure); jobs get
   `ERRAND_GIT_COMMIT` / `ERRAND_GIT_DIRTY`, with an opt-in to include the
   repository database.
@@ -384,9 +402,10 @@ separately.
 The receipt records the execution context errand controlled or directly
 observed — it is **not** an attestation of everything the process
 transitively ran, loaded, or fetched (that would be execution tracing, a
-different product). Recorded: the top-level resolved executable path, argv,
-PATH, target platform, container image digest, nix flake lock hash and
-resolved derivation, and explicitly configured version probes. Nothing
+different product). Recorded: argv and, unless PATH was caller-supplied, the
+top-level resolved executable path; target platform; container image digest;
+nix flake lock hash and resolved derivation; and explicitly configured version
+probes. Raw PATH and value-derived PATH hashes are never persisted. Nothing
 vaguer is promised.
 
 ## CLI surface (v0)
@@ -437,12 +456,22 @@ upgrades without lying to each other.
    first, not last.
 2. Disconnect/reattach (`--detach`, `attach`, `ps`) and daemon-restart
    reconciliation.
-3. Output collection and conflict-safe application (`collect`/`apply`,
+3. **Content-addressed snapshot cache** (amendment, 2026-08-28): the
+   manifest already carries per-file hashes, so sync becomes negotiation —
+   the client sends the manifest, the runner replies with the hashes it is
+   missing, the client ships only those blobs, and the runner materializes
+   the workspace from its cache. The cache is errand-owned persistent
+   state with a TTL and size limit, listed and pruned via `errand gc`. The
+   job's workspace still dies with the job, so the cleanup contract is
+   unchanged; what persists is cache with an explicit lifecycle. This is
+   what makes a tight edit-run loop cheap instead of a full re-ship per
+   run.
+4. Output collection and conflict-safe application (`collect`/`apply`,
    staging, `fetch --apply`); failure-artifact retention.
-4. Rootless container backend + named-cache model.
-5. LAN pairing with PAKE and pinned device identities.
-6. Nix backend.
-7. Facts-based `--where` selection with admission-time revalidation.
+5. Rootless container backend + named-cache model.
+6. LAN pairing with PAKE and pinned device identities.
+7. Nix backend.
+8. Facts-based `--where` selection with admission-time revalidation.
 
 Milestone 1 alone replaces `scripts/remote-check` in the Atlas workflow and
 proves the shape on a real daily need.
