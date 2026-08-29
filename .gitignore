@@ -1,0 +1,5 @@
+/errand
+/errandd
+*.test
+dist/
+.DS_Store
