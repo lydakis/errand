@@ -5,9 +5,9 @@ get the result back: same command, same working tree, logs streaming to
 your terminal, real exit code. The heat, watts, and minutes are spent
 elsewhere.
 
-> **Status: milestone 1.** The transactional core works end to end over a
-> tailnet: snapshot, at-most-once admission, host-backend execution,
-> framed resumable logs, receipts, faithful exit codes. The v0 design is
+> **Status: milestone 2.** The transactional core works end to end over a
+> tailnet, including durable detached jobs, listing, reattachment, remote
+> control, and conservative daemon-restart reconciliation. The v0 design is
 > frozen in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Quickstart
@@ -19,6 +19,10 @@ errand serve                  # config: ~/.config/errand/errandd.toml
 # on a caller
 errand info                   # measured facts: arch, kvm, tools
 errand -- python3 -m unittest # runs your working tree over there
+# Ctrl-D detaches without stopping the remote job; Ctrl-C interrupts it
+job=$(errand --detach -- make build)
+errand ps                     # list your jobs across configured peers
+errand attach "$job"          # replay logs and follow to completion
 ```
 
 Runner config authorizes callers by tailnet identity (whois): an ACL app
@@ -40,7 +44,7 @@ no stale artifacts. Every ssh target is a pet you maintain.
 errand ships the workspace *with* the job, so targets are stateless with
 respect to your projects: nothing checked out, nothing drifting, any peer
 equally valid at any moment. Around that round-trip it wraps a
-transaction ssh doesn't attempt. Milestone 1 provides:
+transaction ssh doesn't attempt. Milestone 2 provides:
 
 - **At-most-once admission:** network retries cannot run a command
   twice.
@@ -51,9 +55,9 @@ transaction ssh doesn't attempt. Milestone 1 provides:
 - **A receipt:** an append-only record of what was asked, who asked, what
   ran, and what happened.
 
-The remaining v0 work includes a detach and reattach CLI, declared output
-transfer with conflict detection, and explicitly declared persistent
-caches.
+The remaining v0 work includes declared output transfer with conflict
+detection, content-addressed snapshot reuse, explicitly declared persistent
+caches, fact-based peer selection, and direct LAN pairing.
 
 ## Shape
 
@@ -68,8 +72,16 @@ errand -- cargo test                   # configured default peer
 errand --on buildbox -- cargo test     # named configured peer
 ```
 
-Planned v0 commands include fact-based peer selection and detached jobs;
-their exact command-line interface is not implemented yet.
+An attached terminal can detach at any time with Ctrl-D and later resume with
+`errand attach HANDLE`. Ctrl-C keeps its Unix meaning: it sends SIGINT to the
+remote command, and a second Ctrl-C force-kills it. Interactive detachment
+returns 0 for the detach action; it is not the unfinished job's exit status.
+Non-terminal EOF is ignored, so scripts remain attached unless they request
+`--detach` explicitly.
+
+Detached jobs, `ps`, `attach`, and `kill` are implemented. Planned v0 commands
+still include fact-based peer selection, output fetching, cache management,
+and pairing.
 
 Linux and macOS first; Windows is a design constraint, not yet a
 deliverable.
@@ -77,8 +89,9 @@ deliverable.
 ## Non-goals
 
 Not a CI system, not interactive (no PTY in v0), not a security boundary
-against hostile code, no web UI, no fan-out. The design resists becoming
-ansible, nomad, or a scheduler on purpose.
+against hostile code, no web UI, and no arbitrary-host discovery or scheduler
+fan-out. `errand ps` only queries explicitly configured peers. The design
+resists becoming ansible, nomad, or a scheduler on purpose.
 
 ## License
 

@@ -180,9 +180,12 @@ canonical handle is `peer/ulid`:
 job cabal/01K4Q8ZJ2M...
 ```
 
-Printed handles (especially for detached jobs) are always peer-qualified
-and portable across initiators. The CLI accepts a bare ULID only when local
-submission history resolves it unambiguously.
+Printed handles (especially for detached jobs) are always peer-qualified. A
+configured peer prints its local alias and therefore requires the same alias
+on another initiator, or an explicit `--url`. A raw URL retains its scheme and
+port in the handle. A bare ULID resolves through `--on`, `--url`, or the
+configured default peer. Unknown aliases and conflicting `--on`/`--url`
+selectors fail locally rather than being guessed as network hosts.
 
 ## Execution backends and isolation — separate axes
 
@@ -268,6 +271,7 @@ execution.json   # argv and, unless PATH was caller-supplied, resolved path
 events.ndjson    # append-only lifecycle + control events
 io.log           # framed, base64-payload stdout/stderr in daemon-observed order
 result.json      # written once at terminal completion
+scope.json       # transient recovery marker; retained until runtime cleanup
 workspace/       # deleted at cleanup
 out/             # staged outputs (retention: see open questions)
 ```
@@ -317,11 +321,20 @@ becomes a requirement — in which case it belongs in milestone 1.
   or `errand kill --force` escalates. If contact is lost mid-signal, the
   client prints the peer-qualified handle and admits the process may still
   be running.
-- **v0 durability scope:** jobs survive *caller* disconnection. Daemon
-  crash / target reboot reconciliation is out of v0; until it exists the
-  guarantee is limited to network disconnect, and reconciliation, when it
-  comes, recovers via deterministic systemd unit names and never assumes
-  absence of evidence means the command did not start.
+- **Attachment is local and reversible.** On an interactive terminal, Ctrl-D
+  stops only the local log follower, prints the reattach command, and exits 0
+  for successful detachment. It never signals the remote job. Non-terminal
+  EOF is ignored so scripts retain attached exit-code fidelity unless they
+  explicitly use `--detach`.
+- **Durability and reconciliation:** jobs survive *caller* disconnection.
+  Before starting a process the daemon persists an unguessable inherited
+  scope marker. After a daemon restart it terminates surviving scoped
+  processes, removes the workspace and transient scope record, and writes a
+  durable `ambiguous` result. It never replays the command and never treats
+  the absence of a survivor as evidence that the command did not start. A
+  target reboot is reconciled with the same conservative ambiguous outcome.
+  If terminal cleanup was incomplete, the retained scope marker and workspace
+  are retried on later daemon starts without rewriting the immutable result.
 
 ### Limits
 
@@ -414,7 +427,7 @@ vaguer is promised.
 errand [--on X | --where facts] [--detach] -- <cmd...>
 errand peers                    # configured peers, probed facts, reachability
 errand peers pair | revoke      # LAN identity ceremony
-errand ps [--all]
+errand ps [--on X]
 errand logs <peer/ulid> [-f]    # resumes from last seen seq
 errand attach [--apply] <peer/ulid>
 errand fetch [--apply] <peer/ulid> [path]
@@ -423,15 +436,25 @@ errand caches | gc              # errand-owned caches only
 ```
 
 Without `--detach`: streams, exits per the two-layer status rule — drop-in
-for scripts. With `--detach`: prints the peer-qualified handle and returns
-— the phone workflow.
+for scripts. With `--detach`: prints the peer-qualified handle and returns.
+A terminal user can press Ctrl-D while running or reattached to detach the
+local follower and later attach again; Ctrl-C continues to interrupt the
+remote process. A detach exit of 0 confirms only the local detach action, not
+the eventual job outcome.
+A bare ULID is resolved through `--on`, `--url`, or the configured default
+peer. Alias-qualified handles require the matching peer configuration;
+URL-qualified handles retain the concrete scheme, host, and port. An explicit
+`--url` may route an alias-qualified handle elsewhere, and the client then
+reports the effective URL rather than preserving a misleading alias.
 
 ## Protocol
 
-Versioned HTTP+JSON; `PUT /v0/jobs/<ulid>` (idempotent), SSE with event
-IDs for `GET /v0/jobs/<ulid>/logs?follow=1`, `GET /v0/info` for facts.
-Curl-debuggable; the version prefix lets daemon and CLI drift during
-upgrades without lying to each other.
+Versioned HTTP+JSON: `PUT /v0/jobs/<ulid>` is idempotent;
+`GET /v0/jobs` returns the caller's bounded newest-first listing;
+`GET /v0/jobs/<ulid>` returns status; SSE with event IDs powers
+`GET /v0/jobs/<ulid>/logs?follow=1`; the signal and kill routes control owned
+jobs; and `GET /v0/info` returns facts. Curl-debuggable; the version prefix
+lets daemon and CLI drift during upgrades without lying to each other.
 
 ## Non-goals
 
@@ -441,7 +464,9 @@ upgrades without lying to each other.
   belief and Receipt trust. Containment of hostile workloads is Atlas's
   job.
 - No web UI. No wake-on-LAN, offline queueing, or store-and-forward.
-- No multi-peer fan-out (`--all` is the first step down the ansible path).
+- No arbitrary-host discovery or scheduler-style fan-out. `errand ps` may
+  query the caller's finite, explicit configured-peer set; partial failure is
+  reported with a nonzero exit status.
 - No tailnet scanning for discovery; peers are explicit config.
 - No execution tracing / attestation; the receipt claims only what errand
   observed.

@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -159,6 +160,12 @@ func replaceFile(dest string, data []byte) error {
 	return os.Rename(tmp, dest)
 }
 
+// scrubLegacyPATHReceipts is a receipt migration, not steady-state
+// behavior: it is the one deliberate exception to append-only receipts.
+// It only applies to receipts written before receipt version 1 (daemons
+// older than commit 0d78e99). Sunset: delete this function once no runner
+// retains pre-v1 receipts — after that point a receipt needing this scrub
+// indicates corruption, not legacy.
 func scrubLegacyPATHReceipts(dir string, result *proto.Result) error {
 	if result != nil && strings.Contains(result.StartError, "fork/exec ") {
 		result.StartError = "starting process failed"
@@ -311,12 +318,107 @@ func (d *Daemon) loadExisting() error {
 			}
 		}
 		if j.result == nil {
-			j.state = StateAmbiguous
-			j.event("ambiguous-after-restart", "daemon restarted before a result was recorded; not replayed")
+			d.reconcileUnfinished(j)
+		} else {
+			scopePath := filepath.Join(j.Dir, "scope.json")
+			if _, err := os.Lstat(scopePath); err == nil || !os.IsNotExist(err) {
+				d.reconcileSettledCleanup(j)
+			}
 		}
 		d.jobs[j.ID] = j
 	}
 	return nil
+}
+
+// cleanupPersistedRuntime consumes a persisted process-scope marker. The
+// workspace is recovery evidence because cwd membership is a secondary way
+// to find descendants that scrub the inherited marker, so it is retained
+// until the process scope is confirmed empty. The scope record is removed
+// only after both process and workspace cleanup succeed.
+func cleanupPersistedRuntime(j *Job) (killed []int, cleanupErrs []string) {
+	scopePath := filepath.Join(j.Dir, "scope.json")
+	workspace := filepath.Join(j.Dir, "workspace")
+	raw, err := os.ReadFile(scopePath)
+	scopePresent := err == nil
+	switch {
+	case err == nil:
+		var rec scopeRecord
+		if err := json.Unmarshal(raw, &rec); err != nil {
+			return nil, []string{"scope record is unreadable; surviving processes cannot be found"}
+		}
+		scope, err := resumeProcessScope(rec.Token, workspace)
+		if err != nil {
+			return nil, []string{err.Error()}
+		}
+		killed, err = scope.cleanup(2 * time.Second)
+		if err != nil {
+			return killed, []string{err.Error()}
+		}
+	case os.IsNotExist(err):
+		// A process cannot have started before scope.json was persisted. This is
+		// the pre-scope crash window, so only the partial workspace can remain.
+	default:
+		return nil, []string{err.Error()}
+	}
+
+	if err := removeOwnedTree(workspace); err != nil {
+		return killed, []string{"removing workspace: " + err.Error()}
+	}
+	if scopePresent {
+		if err := removeScopeRecord(scopePath); err != nil {
+			return killed, []string{"removing process scope record: " + err.Error()}
+		}
+	}
+	return killed, nil
+}
+
+// reconcileSettledCleanup retries cleanup without rewriting the immutable
+// terminal result. The original CleanupOK=false remains a truthful record of
+// settlement; append-only events record the later recovery attempt.
+func (d *Daemon) reconcileSettledCleanup(j *Job) {
+	killed, cleanupErrs := cleanupPersistedRuntime(j)
+	if len(killed) > 0 {
+		j.event("scope-killed", fmt.Sprintf("pids=%v (terminal recovery)", killed))
+	}
+	if len(cleanupErrs) > 0 {
+		j.event("recovery-cleanup-failed", strings.Join(cleanupErrs, "; "))
+		return
+	}
+	j.event("recovery-cleanup-succeeded", "retained runtime state removed after terminal settlement")
+}
+
+// reconcileUnfinished settles a job the previous daemon left without a
+// result: terminate any surviving scoped processes, clean the workspace,
+// and write a durable ambiguous result. It never replays, and it never
+// treats the absence of surviving processes as evidence the command did
+// not run — the exit status is simply unknown.
+func (d *Daemon) reconcileUnfinished(j *Job) {
+	// "Execution state unknown" is load-bearing: Result.Started stays false
+	// because errand cannot know, and this wording keeps the receipt from
+	// reading as "never ran". The events file may still record a started pid.
+	detail := "daemon restarted before a result was recorded; execution state unknown; not replayed"
+	killed, cleanupErrs := cleanupPersistedRuntime(j)
+	if len(killed) > 0 {
+		j.event("scope-killed", fmt.Sprintf("pids=%v (reconciliation)", killed))
+		detail = fmt.Sprintf(
+			"daemon restarted before a result was recorded; %d surviving processes terminated; exit status unknown; not replayed",
+			len(killed))
+	}
+
+	res := &proto.Result{
+		State: StateAmbiguous, TransactionError: detail,
+		OutputsOK: true, CleanupOK: len(cleanupErrs) == 0, LogsComplete: false,
+	}
+	if len(cleanupErrs) > 0 {
+		res.TransactionError = detail + "; cleanup: " + strings.Join(cleanupErrs, "; ")
+	}
+	j.event("reconciled-after-restart", res.TransactionError)
+	if err := j.writeJSON("result.json", res); err != nil {
+		j.event("result-write-failed", err.Error())
+		res.TransactionError = appendTransactionError(res.TransactionError, "persisting result: "+err.Error())
+	}
+	j.state = StateAmbiguous
+	j.result = res
 }
 
 func (d *Daemon) release(j *Job) {
@@ -330,6 +432,7 @@ func (d *Daemon) release(j *Job) {
 func (d *Daemon) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v0/info", d.auth("", d.handleInfo))
+	mux.HandleFunc("GET /v0/jobs", d.auth(proto.ActionReadOwn, d.handleList))
 	mux.HandleFunc("PUT /v0/jobs/{id}", d.auth(proto.ActionSubmit, d.handleSubmit))
 	mux.HandleFunc("GET /v0/jobs/{id}", d.auth(proto.ActionReadOwn, d.handleStatus))
 	mux.HandleFunc("GET /v0/jobs/{id}/logs", d.auth(proto.ActionReadOwn, d.handleLogs))
@@ -614,6 +717,40 @@ func (d *Daemon) ownsJob(id Identity, j *Job) bool {
 	}
 	owner := admissionOwner(j.Admission)
 	return owner != "" && id.Owner() == owner
+}
+
+// handleList returns the caller's own jobs, newest first (ULIDs are
+// time-ordered), capped so the response stays bounded.
+func (d *Daemon) handleList(w http.ResponseWriter, r *http.Request, id Identity) {
+	const maxListEntries = 200
+	d.mu.Lock()
+	owned := make([]*Job, 0, len(d.jobs))
+	for _, j := range d.jobs {
+		if d.ownsJob(id, j) {
+			owned = append(owned, j)
+		}
+	}
+	d.mu.Unlock()
+	sort.Slice(owned, func(i, k int) bool { return owned[i].ID > owned[k].ID })
+	if len(owned) > maxListEntries {
+		owned = owned[:maxListEntries]
+	}
+	entries := make([]proto.JobListEntry, 0, len(owned))
+	for _, j := range owned {
+		entries = append(entries, j.summary())
+	}
+	body, err := json.Marshal(entries)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "encoding job listing")
+		return
+	}
+	if len(body)+1 > maxListResponseBytes {
+		httpError(w, http.StatusInternalServerError, "job listing exceeds response limit")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(append(body, '\n'))
 }
 
 func (d *Daemon) handleStatus(w http.ResponseWriter, r *http.Request, id Identity) {

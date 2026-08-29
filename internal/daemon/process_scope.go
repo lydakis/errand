@@ -31,12 +31,43 @@ type processScope struct {
 	procRoot string
 }
 
+// scopeRecord is the persisted form of a job's scope, written to the job
+// directory before the process starts so a restarted daemon can find and
+// settle survivors during reconciliation.
+type scopeRecord struct {
+	Token string `json:"token"`
+}
+
 func newProcessScope(workdir string) (*processScope, error) {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
 		return nil, err
 	}
-	s := &processScope{token: hex.EncodeToString(raw[:]), workdir: workdir, procRoot: "/proc"}
+	return newProcessScopeWithToken(hex.EncodeToString(raw[:]), workdir)
+}
+
+// resumeProcessScope reconstructs a scope from its persisted token, for
+// reconciliation after a daemon restart.
+func resumeProcessScope(token, workdir string) (*processScope, error) {
+	if err := validateProcessScopeToken(token); err != nil {
+		return nil, err
+	}
+	return newProcessScopeWithToken(token, workdir)
+}
+
+func validateProcessScopeToken(token string) error {
+	if len(token) != hex.EncodedLen(16) {
+		return fmt.Errorf("process scope token must be 32 lowercase hexadecimal characters")
+	}
+	raw, err := hex.DecodeString(token)
+	if err != nil || hex.EncodeToString(raw) != token {
+		return fmt.Errorf("process scope token must be 32 lowercase hexadecimal characters")
+	}
+	return nil
+}
+
+func newProcessScopeWithToken(token, workdir string) (*processScope, error) {
+	s := &processScope{token: token, workdir: workdir, procRoot: "/proc"}
 	if runtime.GOOS != "linux" {
 		psPath, err := exec.LookPath("ps")
 		if err != nil {
@@ -141,6 +172,11 @@ func hasEnvEntry(environ, want []byte) bool {
 	return false
 }
 
+// cwdPIDs is weaker on macOS than on Linux: lsof matches processes whose
+// cwd is exactly the workspace directory, while the Linux /proc scan
+// matches any cwd within it. A darwin job that chdirs into a subdirectory
+// and scrubs the env marker evades this scan where its Linux twin would
+// not. Do not assume platform parity when reasoning about scope coverage.
 func (s *processScope) cwdPIDs() ([]int, error) {
 	if runtime.GOOS == "darwin" && s.lsofPath != "" {
 		out, err := exec.Command(s.lsofPath, "-a", "-d", "cwd", "-Fp", "--", s.workdir).Output()
@@ -186,27 +222,43 @@ func (s *processScope) signalEscaped(sig syscall.Signal, originalPGID int) error
 	return joined
 }
 
-func (s *processScope) cleanup(timeout time.Duration) error {
+// cleanup SIGKILLs every pid still in scope until none remain or the
+// deadline passes. It returns the set of pids it killed so the caller can
+// record them in the receipt: the scan can catch an innocent same-user
+// process that merely chdir'd into the workspace, and when that happens
+// the receipt should explain it.
+func (s *processScope) cleanup(timeout time.Duration) ([]int, error) {
 	deadline := time.Now().Add(timeout)
+	killed := map[int]bool{}
+	collect := func() []int {
+		pids := make([]int, 0, len(killed))
+		for pid := range killed {
+			pids = append(pids, pid)
+		}
+		return pids
+	}
 	for {
 		pids, err := s.pids()
 		if err != nil {
-			return err
+			return collect(), err
 		}
 		if len(pids) == 0 {
-			return nil
+			return collect(), nil
 		}
 		var joined error
 		for _, pid := range pids {
-			if err := syscall.Kill(pid, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
-				joined = errors.Join(joined, fmt.Errorf("kill scoped pid %d: %w", pid, err))
+			err := syscall.Kill(pid, syscall.SIGKILL)
+			if err == nil || err == syscall.ESRCH {
+				killed[pid] = true
+				continue
 			}
+			joined = errors.Join(joined, fmt.Errorf("kill scoped pid %d: %w", pid, err))
 		}
 		if joined != nil {
-			return joined
+			return collect(), joined
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("process scope still contains pids %v", pids)
+			return collect(), fmt.Errorf("process scope still contains pids %v", pids)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}

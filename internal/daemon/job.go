@@ -10,14 +10,21 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/logio"
 	"github.com/lydakis/errand/internal/proto"
+)
+
+const (
+	maxListCommandBytes  = 512
+	maxListResponseBytes = 1 << 20
 )
 
 // Job is one admitted transaction. Its directory is the receipt.
@@ -51,6 +58,53 @@ func (j *Job) Status() proto.JobStatus {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	return proto.JobStatus{ID: j.ID, State: j.state, Result: j.result}
+}
+
+// summary is the job's listing row. Spec and result fields are read under
+// the job lock because start() mutates Spec.Env after admission.
+func (j *Job) summary() proto.JobListEntry {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	command, truncated := boundedCommand(j.Spec.Argv, maxListCommandBytes)
+	e := proto.JobListEntry{
+		ID: j.ID, State: j.state, Command: command, CommandTruncated: truncated,
+		AdmittedAt: j.Admission.Time,
+	}
+	if j.result != nil {
+		e.ExitCode = j.result.ExitCode
+		e.Signal = j.result.Signal
+	}
+	return e
+}
+
+func boundedCommand(argv []string, limit int) (string, bool) {
+	if limit <= 0 {
+		return "", len(argv) > 0
+	}
+	quoted := make([]string, len(argv))
+	for i, arg := range argv {
+		quoted[i] = strconv.Quote(arg)
+	}
+	command := strings.Join(quoted, " ")
+	if len(command) > limit {
+		return markCommandTruncated(command, limit), true
+	}
+	return command, false
+}
+
+func markCommandTruncated(s string, limit int) string {
+	const marker = "…"
+	budget := limit - len(marker)
+	if budget < 0 {
+		return ""
+	}
+	if len(s) > budget {
+		s = s[:budget]
+		for !utf8.ValidString(s) {
+			s = s[:len(s)-1]
+		}
+	}
+	return s + marker
 }
 
 func (j *Job) event(name, detail string) {
@@ -179,6 +233,12 @@ func (j *Job) start(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 		logw.Close()
 		return err
 	}
+	// Persisted before the process can exist, so a restarted daemon never
+	// faces a started job it cannot find during reconciliation.
+	if err := j.writeJSON("scope.json", scopeRecord{Token: scope.token}); err != nil {
+		logw.Close()
+		return fmt.Errorf("persisting process scope: %w", err)
+	}
 	jobEnv = append(jobEnv, scope.env())
 	executable, err := resolveExecutable(j.Spec.Argv[0], envValue(jobEnv, "PATH"), workdir)
 	if err != nil {
@@ -264,8 +324,11 @@ func (j *Job) start(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 		j.reaped = true
 		j.mu.Unlock()
 
-		scopeErr := scope.cleanup(2 * time.Second)
+		scopeKilled, scopeErr := scope.cleanup(2 * time.Second)
 		processCleanupOK := scopeErr == nil
+		if len(scopeKilled) > 0 {
+			j.event("scope-killed", fmt.Sprintf("pids=%v", scopeKilled))
+		}
 		if scopeErr != nil {
 			j.event("process-cleanup-failed", scopeErr.Error())
 		}
@@ -278,8 +341,11 @@ func (j *Job) start(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 		res := &proto.Result{Started: true, OutputsOK: true, CleanupOK: processCleanupOK && pipeErr == nil}
 		res.LogsComplete = logw.Complete() && pipeErr == nil
 		res.LimitExceeded = j.limitExceeded(logw)
+		if scopeErr != nil {
+			res.TransactionError = appendTransactionError(res.TransactionError, "process scope cleanup: "+scopeErr.Error())
+		}
 		if err := errors.Join(logw.Err(), pipeErr); err != nil {
-			res.TransactionError = "persisting logs: " + err.Error()
+			res.TransactionError = appendTransactionError(res.TransactionError, "persisting logs: "+err.Error())
 		}
 
 		if waitErr == nil {
@@ -297,7 +363,7 @@ func (j *Job) start(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 		} else {
 			res.StartError = waitErr.Error()
 		}
-		j.finalize(d, res, false)
+		j.finalizeWithScopeOutcome(d, res, false, processCleanupOK)
 	}()
 	return nil
 }
@@ -555,11 +621,38 @@ func (j *Job) Signal(sig syscall.Signal) error {
 // the runner slot. A persistence failure publishes an in-memory ambiguous
 // result rather than claiming durable terminal success.
 func (j *Job) finalize(d *Daemon, res *proto.Result, neverRan bool) {
-	workspaceCleanupOK := removeOwnedTree(filepath.Join(j.Dir, "workspace")) == nil
-	if neverRan {
-		res.CleanupOK = workspaceCleanupOK
+	j.finalizeWithScopeOutcome(d, res, neverRan, true)
+}
+
+func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, scopeCleanupOK bool) {
+	var workspaceErr error
+	if scopeCleanupOK {
+		workspaceErr = removeOwnedTree(filepath.Join(j.Dir, "workspace"))
 	} else {
-		res.CleanupOK = res.CleanupOK && workspaceCleanupOK
+		res.TransactionError = appendTransactionError(res.TransactionError, "workspace retained for process recovery")
+	}
+	// The scope record is runtime state, not receipt: once the job is
+	// settled there is nothing left for reconciliation to find. Retain it
+	// after failed scope cleanup so a restart can still locate survivors.
+	var scopeRecordErr error
+	if scopeCleanupOK && workspaceErr == nil {
+		scopeRecordErr = removeScopeRecord(filepath.Join(j.Dir, "scope.json"))
+	} else {
+		res.TransactionError = appendTransactionError(res.TransactionError, "process scope cleanup incomplete; recovery record retained")
+	}
+	if workspaceErr != nil {
+		j.event("workspace-remove-failed", workspaceErr.Error())
+		res.TransactionError = appendTransactionError(res.TransactionError, "removing workspace: "+workspaceErr.Error())
+	}
+	if scopeRecordErr != nil {
+		j.event("scope-record-remove-failed", scopeRecordErr.Error())
+		res.TransactionError = appendTransactionError(res.TransactionError, "removing process scope record: "+scopeRecordErr.Error())
+	}
+	cleanupOK := workspaceErr == nil && scopeCleanupOK && scopeRecordErr == nil
+	if neverRan {
+		res.CleanupOK = cleanupOK
+	} else {
+		res.CleanupOK = res.CleanupOK && cleanupOK
 	}
 	j.markLogReady()
 
@@ -573,7 +666,7 @@ func (j *Job) finalize(d *Daemon, res *proto.Result, neverRan bool) {
 
 	if err := j.writeJSON("result.json", res); err != nil {
 		j.event("result-write-failed", err.Error())
-		res.TransactionError = "persisting result: " + err.Error()
+		res.TransactionError = appendTransactionError(res.TransactionError, "persisting result: "+err.Error())
 		state = proto.StateAmbiguous
 		res.State = state
 	}
@@ -585,6 +678,24 @@ func (j *Job) finalize(d *Daemon, res *proto.Result, neverRan bool) {
 	j.mu.Unlock()
 	close(j.done)
 	d.release(j)
+}
+
+func removeScopeRecord(path string) error {
+	err := os.Remove(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
+func appendTransactionError(existing, detail string) string {
+	if existing == "" {
+		return detail
+	}
+	if detail == "" {
+		return existing
+	}
+	return existing + "; " + detail
 }
 
 // removeOwnedTree restores owner traversal permissions on directories before

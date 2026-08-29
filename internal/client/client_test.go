@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -116,6 +117,441 @@ func TestInterruptIsForwardedBeforeSubmitResponse(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("SIGINT was not forwarded while the submit response was pending")
+	}
+}
+
+func TestDetachedInterruptWaitsForForwardingAndDoesNotReportSuccess(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	admitted := make(chan struct{})
+	firstControl := make(chan struct{})
+	allowSubmitResponse := make(chan struct{})
+	var controlAttempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPut:
+			if _, err := io.Copy(io.Discard, r.Body); err != nil {
+				t.Errorf("reading submit body: %v", err)
+				return
+			}
+			close(admitted)
+			<-allowSubmitResponse
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/signal"):
+			if controlAttempts.Add(1) == 1 {
+				close(firstControl)
+				http.NotFound(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	interrupts := make(chan os.Signal, 2)
+	var stdout, stderr bytes.Buffer
+	done := make(chan int, 1)
+	go func() {
+		done <- run(RunOptions{
+			PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+			Detach: true, Stdout: &stdout, Stderr: &stderr,
+		}, interrupts, func() {})
+	}()
+	select {
+	case <-admitted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("submission did not reach the remote admission boundary")
+	}
+	interrupts <- os.Interrupt
+	select {
+	case <-firstControl:
+	case <-time.After(2 * time.Second):
+		t.Fatal("SIGINT was not forwarded before the submit response")
+	}
+	close(allowSubmitResponse)
+	select {
+	case code := <-done:
+		if code != 130 {
+			t.Fatalf("detached interrupted run exit = %d, want 130; stderr: %s", code, stderr.String())
+		}
+		if got := strings.TrimSpace(stdout.String()); !strings.Contains(got, "/") {
+			t.Fatalf("detached interrupted stdout = %q, want recoverable handle", got)
+		}
+		if got := controlAttempts.Load(); got != 2 {
+			t.Fatalf("signal control attempts = %d, want 2", got)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("detached run did not wait for the admitted signal retry")
+	}
+}
+
+type blockingMatchWriter struct {
+	match   string
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+	bytes.Buffer
+}
+
+func (w *blockingMatchWriter) Write(p []byte) (int, error) {
+	if strings.Contains(string(p), w.match) {
+		w.once.Do(func() { close(w.started) })
+		<-w.release
+	}
+	return w.Buffer.Write(p)
+}
+
+func TestDetachedSuccessCannotRaceAForwardedInterrupt(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var controlAttempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPut:
+			_, _ = io.Copy(io.Discard, r.Body)
+			json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/signal"):
+			controlAttempts.Add(1)
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	stderr := &blockingMatchWriter{
+		match: "detached;", started: make(chan struct{}), release: make(chan struct{}),
+	}
+	interrupts := make(chan os.Signal, 2)
+	done := make(chan int, 1)
+	go func() {
+		done <- run(RunOptions{
+			PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+			Detach: true, Stdout: io.Discard, Stderr: stderr,
+		}, interrupts, func() {})
+	}()
+	select {
+	case <-stderr.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("detached success write did not start")
+	}
+	interrupts <- os.Interrupt
+	time.Sleep(100 * time.Millisecond)
+	close(stderr.release)
+	select {
+	case code := <-done:
+		if code == 0 && controlAttempts.Load() > 0 {
+			t.Fatalf("detached run returned success after forwarding SIGINT (%d attempts)", controlAttempts.Load())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("detached run did not finish")
+	}
+}
+
+func TestDetachDrainsInterruptDeliveredWhileResetting(t *testing.T) {
+	interrupts := make(chan os.Signal, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resumed := atomic.Bool{}
+	h := startAdmittedInterruptHandoff(
+		ctx, interrupts, "http://invalid", proto.NewULID(), "peer/job",
+		func(string, ...any) {},
+		interruptNotifications{
+			stop:   func() { interrupts <- os.Interrupt },
+			resume: func() { resumed.Store(true) },
+		},
+	)
+	if h.finishDetach(ctx) {
+		t.Fatal("detach reported success after SIGINT was delivered while notification was stopping")
+	}
+	select {
+	case <-h.remote:
+	case <-time.After(time.Second):
+		t.Fatal("interrupt delivered during reset was not handed to remote control")
+	}
+	if !resumed.Load() {
+		t.Fatal("SIGINT notification was not resumed for force-kill escalation")
+	}
+}
+
+func TestInteractiveDetachRequestedBeforeAdmissionSkipsLogFollowing(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var logRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPut:
+			_, _ = io.Copy(io.Discard, r.Body)
+			json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/logs"):
+			logRequests.Add(1)
+			http.Error(w, "unexpected log follow", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	detach := make(chan struct{})
+	close(detach)
+	var stderr bytes.Buffer
+	code := runWithDetach(RunOptions{
+		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+		Stdout: io.Discard, Stderr: &stderr,
+	}, make(chan os.Signal, 2), func() {}, detach)
+	if code != 0 {
+		t.Fatalf("pre-admission interactive detach exit = %d; stderr: %s", code, stderr.String())
+	}
+	if logRequests.Load() != 0 {
+		t.Fatalf("pre-admission detach followed logs %d times", logRequests.Load())
+	}
+	for _, want := range []string{"detached", "reattach with", server.URL + "/"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("pre-admission detach report %q does not contain %q", stderr.String(), want)
+		}
+	}
+}
+
+func TestInteractiveDetachCancelsOnlyTheLocalLogFollow(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	logStarted := make(chan struct{})
+	logCanceled := make(chan struct{})
+	var controlRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPut:
+			_, _ = io.Copy(io.Discard, r.Body)
+			json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/logs"):
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			w.(http.Flusher).Flush()
+			close(logStarted)
+			<-r.Context().Done()
+			close(logCanceled)
+		case r.Method == http.MethodPost:
+			controlRequests.Add(1)
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	detach := make(chan struct{})
+	var stderr bytes.Buffer
+	done := make(chan int, 1)
+	go func() {
+		done <- runWithDetach(RunOptions{
+			PeerURL: server.URL, Root: root, Argv: []string{"/bin/sleep", "30"},
+			Stdout: io.Discard, Stderr: &stderr,
+		}, make(chan os.Signal, 2), func() {}, detach)
+	}()
+	select {
+	case <-logStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("log follow did not start")
+	}
+	close(detach)
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("interactive detach exit = %d; stderr: %s", code, stderr.String())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("interactive detach did not return promptly")
+	}
+	select {
+	case <-logCanceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("interactive detach did not cancel the local log request")
+	}
+	if controlRequests.Load() != 0 {
+		t.Fatalf("interactive detach sent %d remote control requests", controlRequests.Load())
+	}
+	if !strings.Contains(stderr.String(), "detached") || !strings.Contains(stderr.String(), "reattach with") {
+		t.Fatalf("interactive detach report = %q", stderr.String())
+	}
+}
+
+type gatedWriter struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (w *gatedWriter) Write(p []byte) (int, error) {
+	w.once.Do(func() { close(w.started) })
+	<-w.release
+	return len(p), nil
+}
+
+func TestStreamDetachWaitsForFollowerShutdown(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "id: 1\nevent: log\ndata: {\"seq\":1,\"stream\":\"stdout\",\"data_b64\":\"eA==\"}\n\n")
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	writer := &gatedWriter{started: make(chan struct{}), release: make(chan struct{})}
+	detach := make(chan struct{})
+	done := make(chan bool, 1)
+	go func() {
+		_, _, detached := streamUntilDetach(
+			RunOptions{PeerURL: server.URL, Stdout: writer, Stderr: io.Discard},
+			"job", proto.JobStatus{ID: "job", State: proto.StateRunning}, detach,
+		)
+		done <- detached
+	}()
+	select {
+	case <-writer.started:
+	case <-time.After(time.Second):
+		t.Fatal("log follower never reached the output writer")
+	}
+	close(detach)
+	select {
+	case <-done:
+		t.Fatal("detach returned while the log follower was still writing")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(writer.release)
+	select {
+	case detached := <-done:
+		if !detached {
+			t.Fatal("stream completion won after detach had linearized")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("detach did not finish after the follower stopped")
+	}
+}
+
+func TestAttachCanDetachWithoutControllingTheRemoteJob(t *testing.T) {
+	jobID := proto.NewULID()
+	logStarted := make(chan struct{})
+	var controlRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs/"+jobID:
+			json.NewEncoder(w).Encode(proto.JobStatus{ID: jobID, State: proto.StateRunning})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/logs"):
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			w.(http.Flusher).Flush()
+			close(logStarted)
+			<-r.Context().Done()
+		case r.Method == http.MethodPost:
+			controlRequests.Add(1)
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	detach := make(chan struct{})
+	var stderr bytes.Buffer
+	done := make(chan int, 1)
+	go func() {
+		done <- attachWithDetach(AttachOptions{
+			PeerURL: server.URL, JobID: jobID, Stdout: io.Discard, Stderr: &stderr,
+		}, make(chan os.Signal, 2), func() {}, detach)
+	}()
+	select {
+	case <-logStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("attach log follow did not start")
+	}
+	close(detach)
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("attach detach exit = %d; stderr: %s", code, stderr.String())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("attach detach did not return promptly")
+	}
+	if controlRequests.Load() != 0 {
+		t.Fatalf("attach detach sent %d remote control requests", controlRequests.Load())
+	}
+}
+
+func TestDetachOnEOFIsTTYOnly(t *testing.T) {
+	if ch := detachOnEOF(strings.NewReader(""), false); ch != nil {
+		t.Fatal("non-TTY EOF enabled interactive detachment")
+	}
+	r, w := io.Pipe()
+	ch := detachOnEOF(r, true)
+	if ch == nil {
+		t.Fatal("TTY EOF did not enable interactive detachment")
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-ch:
+	case <-time.After(time.Second):
+		t.Fatal("TTY EOF did not request detachment")
+	}
+}
+
+func TestEOFWatcherDoesNotReadWhileBackgrounded(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ready := make(chan struct{}, 1)
+	backgroundChecked := make(chan struct{})
+	var backgroundOnce sync.Once
+	foreground := atomic.Bool{}
+	readCalls := atomic.Int32{}
+	detach := watchTerminalEOF(ctx, terminalEOFOps{
+		foreground: func() bool {
+			isForeground := foreground.Load()
+			if !isForeground {
+				backgroundOnce.Do(func() { close(backgroundChecked) })
+			}
+			return isForeground
+		},
+		waitReadable: func(time.Duration) (bool, error) {
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			case <-ready:
+				return true, nil
+			}
+		},
+		read: func([]byte) (int, error) {
+			readCalls.Add(1)
+			return 0, io.EOF
+		},
+	})
+
+	select {
+	case <-backgroundChecked:
+	case <-time.After(time.Second):
+		t.Fatal("EOF watcher did not inspect background terminal state")
+	}
+	if got := readCalls.Load(); got != 0 {
+		t.Fatalf("background EOF watcher performed %d reads", got)
+	}
+	foreground.Store(true)
+	ready <- struct{}{}
+	select {
+	case <-detach:
+	case <-time.After(time.Second):
+		t.Fatal("foreground EOF did not request detachment")
 	}
 }
 
@@ -229,6 +665,114 @@ func TestDirectTransportDoesNotUseProxyEnvironment(t *testing.T) {
 	}
 	if directHTTP.CheckRedirect == nil {
 		t.Fatal("direct errand client must not follow redirects to another endpoint")
+	}
+}
+
+func TestPeerLabelPreservesRawURL(t *testing.T) {
+	if got := peerLabel("", "http://runner:9000/"); got != "http://runner:9000" {
+		t.Fatalf("raw URL peer label = %q, want port-preserving URL", got)
+	}
+	if got := peerLabel("cabal", "http://runner:9000"); got != "cabal" {
+		t.Fatalf("configured peer label = %q, want alias", got)
+	}
+}
+
+func TestControlJSONGetCancelsAStalledResponseBody(t *testing.T) {
+	started := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		close(started)
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	var status proto.JobStatus
+	done := make(chan error, 1)
+	go func() {
+		done <- getJSONContext(ctx, server.URL, 1<<20, "job lookup", &status)
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("server never started the response body")
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("stalled control response error = %v, want deadline exceeded", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("stalled control response ignored its request deadline")
+	}
+}
+
+func TestAmbiguousResultReportsTransactionExplanation(t *testing.T) {
+	var stderr bytes.Buffer
+	code := exitCode(proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{
+		State: proto.StateAmbiguous, OutputsOK: true, CleanupOK: false, LogsComplete: false,
+		TransactionError: "execution state unknown; not replayed",
+	}}, &stderr, "cabal/job")
+	if code != ExitTransaction {
+		t.Fatalf("ambiguous result exit = %d, want %d", code, ExitTransaction)
+	}
+	for _, want := range []string{"cabal/job", "ambiguous", "cleanup failed", "logs truncated", "execution state unknown; not replayed"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("ambiguous transaction report %q does not contain %q", stderr.String(), want)
+		}
+	}
+}
+
+func TestAmbiguousStatePreservesRecordedNonzeroProcessOutcome(t *testing.T) {
+	codeSeven := 7
+	for name, tc := range map[string]struct {
+		result *proto.Result
+		want   int
+	}{
+		"exit": {
+			result: &proto.Result{State: proto.StateAmbiguous, ExitCode: &codeSeven, OutputsOK: true, CleanupOK: true,
+				LogsComplete: true, TransactionError: "persisting result failed"},
+			want: 7,
+		},
+		"signal": {
+			result: &proto.Result{State: proto.StateAmbiguous, Signal: "killed", SignalNum: 9, OutputsOK: true,
+				CleanupOK: true, LogsComplete: true, TransactionError: "persisting result failed"},
+			want: 137,
+		},
+		"start": {
+			result: &proto.Result{State: proto.StateAmbiguous, StartError: "exec format error", OutputsOK: true,
+				CleanupOK: true, LogsComplete: true, TransactionError: "rollback failed"},
+			want: ExitTransaction,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			code := exitCode(proto.JobStatus{
+				State: proto.StateAmbiguous, Result: tc.result,
+			}, &stderr, "cabal/job")
+			if code != tc.want {
+				t.Fatalf("ambiguous %s exit = %d, want %d", name, code, tc.want)
+			}
+			for _, want := range []string{"ambiguous", tc.result.TransactionError} {
+				if !strings.Contains(stderr.String(), want) {
+					t.Fatalf("ambiguous %s report %q does not contain %q", name, stderr.String(), want)
+				}
+			}
+		})
+	}
+}
+
+func TestAmbiguousSuccessfulExitRemainsTransactionFailure(t *testing.T) {
+	zero := 0
+	code := exitCode(proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{
+		State: proto.StateAmbiguous, ExitCode: &zero, OutputsOK: true, CleanupOK: true,
+		LogsComplete: true, TransactionError: "persisting result failed",
+	}}, io.Discard, "cabal/job")
+	if code != ExitTransaction {
+		t.Fatalf("ambiguous successful exit = %d, want %d", code, ExitTransaction)
 	}
 }
 

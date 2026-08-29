@@ -52,6 +52,22 @@ func TestLinuxProcessScopeFindsMarkerAndWorkingDirectoryInProc(t *testing.T) {
 	}
 }
 
+func TestResumeProcessScopeRejectsMalformedTokens(t *testing.T) {
+	for _, token := range []string{
+		"",
+		"ab",
+		strings.Repeat("a", 31),
+		strings.Repeat("A", 32),
+		strings.Repeat("z", 32),
+	} {
+		t.Run(fmt.Sprintf("%q", token), func(t *testing.T) {
+			if _, err := resumeProcessScope(token, t.TempDir()); err == nil {
+				t.Fatalf("resumeProcessScope accepted malformed token %q", token)
+			}
+		})
+	}
+}
+
 func TestProcessScopeCleansDescendantThatCallsSetsid(t *testing.T) {
 	python, err := exec.LookPath("python3")
 	if err != nil {
@@ -90,8 +106,12 @@ open(sys.argv[1], "w").write(str(p.pid))
 	if err := syscall.Kill(pid, 0); err != nil {
 		t.Fatalf("escaped descendant was not running before cleanup: %v", err)
 	}
-	if err := scope.cleanup(2 * time.Second); err != nil {
+	killed, err := scope.cleanup(2 * time.Second)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !slices.Contains(killed, pid) {
+		t.Fatalf("cleanup killed %v, expected it to report escaped pid %d", killed, pid)
 	}
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {

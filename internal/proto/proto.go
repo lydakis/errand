@@ -186,6 +186,18 @@ type JobStatus struct {
 	Result *Result `json:"result,omitempty"`
 }
 
+// JobListEntry is one row of a runner's job listing: enough to identify,
+// age, and triage a job without fetching its full receipt.
+type JobListEntry struct {
+	ID               string    `json:"id"`
+	State            string    `json:"state"`
+	Command          string    `json:"command,omitempty"`
+	CommandTruncated bool      `json:"command_truncated,omitempty"`
+	AdmittedAt       time.Time `json:"admitted_at"`
+	ExitCode         *int      `json:"exit_code,omitempty"`
+	Signal           string    `json:"signal,omitempty"`
+}
+
 type Facts struct {
 	ObservedAt time.Time         `json:"observed_at"`
 	OS         string            `json:"os"`
