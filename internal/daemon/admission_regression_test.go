@@ -138,13 +138,26 @@ func TestKillDuringStagingPreventsExecution(t *testing.T) {
 		state:     proto.StateStaging,
 		done:      make(chan struct{}),
 	}
-	d := &Daemon{cfg: Config{StateDir: stateDir}, jobs: map[string]*Job{j.ID: j}, running: j}
+	d := &Daemon{
+		cfg: Config{StateDir: stateDir, MaxJobs: 1}, jobs: map[string]*Job{j.ID: j},
+		running: map[string]*Job{}, queue: []*Job{j},
+	}
 	reader := &blockingReader{started: make(chan struct{}), release: make(chan struct{})}
 	defer reader.Close()
-	go j.start(d, reader, manifest)
+	startDone := make(chan error, 1)
+	go func() {
+		settled, err := j.stage(d, reader, manifest)
+		if err == nil && !settled {
+			_, err = d.queueStaged(j)
+		}
+		startDone <- err
+	}()
 	<-reader.started
-	if err := j.terminate("user-kill", 9); err != nil {
+	if handled, err := d.cancelBeforeStart(context.Background(), j, "user-kill", 9); !handled || err != nil {
 		t.Fatal(err)
+	}
+	if err := <-startDone; err != nil {
+		t.Fatalf("cancelled staging = %v", err)
 	}
 	select {
 	case <-j.done:
@@ -159,9 +172,9 @@ func TestKillDuringStagingPreventsExecution(t *testing.T) {
 		t.Fatalf("cancelled staging status = %+v, want durable clean kill", status)
 	}
 	d.mu.Lock()
-	running := d.running
+	running := len(d.running)
 	d.mu.Unlock()
-	if running != nil {
+	if running != 0 {
 		t.Fatal("cancelled staging job did not release the runner slot")
 	}
 }
@@ -202,10 +215,17 @@ func TestKillDuringCacheInsertionPreventsExecution(t *testing.T) {
 		state:     proto.StateStaging,
 		done:      make(chan struct{}),
 	}
-	d := &Daemon{cfg: Config{StateDir: stateDir}, jobs: map[string]*Job{j.ID: j}, running: j, cache: cache}
+	d := &Daemon{
+		cfg: Config{StateDir: stateDir, MaxJobs: 1}, jobs: map[string]*Job{j.ID: j},
+		running: map[string]*Job{}, queue: []*Job{j}, cache: cache,
+	}
 	startDone := make(chan error, 1)
 	go func() {
-		startDone <- j.start(d, io.NopCloser(bytes.NewReader(packed.Bytes())), manifest)
+		settled, err := j.stage(d, io.NopCloser(bytes.NewReader(packed.Bytes())), manifest)
+		if err == nil && !settled {
+			_, err = d.queueStaged(j)
+		}
+		startDone <- err
 	}()
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -219,7 +239,7 @@ func TestKillDuringCacheInsertionPreventsExecution(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if err := j.terminate("user-kill", 9); err != nil {
+	if handled, err := d.cancelBeforeStart(context.Background(), j, "user-kill", 9); !handled || err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -237,11 +257,11 @@ func TestKillDuringCacheInsertionPreventsExecution(t *testing.T) {
 	if status.State != proto.StateKilled || status.Result == nil || status.Result.SignalNum != 9 || !status.Result.CleanupOK {
 		t.Fatalf("cancelled cache-staging status = %+v, want durable clean kill", status)
 	}
-	if running := func() *Job {
+	if running := func() int {
 		d.mu.Lock()
 		defer d.mu.Unlock()
-		return d.running
-	}(); running != nil {
+		return len(d.running)
+	}(); running != 0 {
 		t.Fatal("cancelled cache-staging job did not release the runner slot")
 	}
 }
@@ -263,12 +283,18 @@ func TestKillCannotBeAcknowledgedAfterStartRejected(t *testing.T) {
 		done:      make(chan struct{}),
 		logReady:  make(chan struct{}),
 	}
-	d := &Daemon{cfg: Config{StateDir: stateDir}, jobs: map[string]*Job{j.ID: j}, running: j}
-	startErr := j.start(d, io.NopCloser(strings.NewReader("not a tar archive")), proto.Manifest{})
+	d := &Daemon{
+		cfg: Config{StateDir: stateDir, MaxJobs: 1}, jobs: map[string]*Job{j.ID: j},
+		running: map[string]*Job{}, queue: []*Job{j},
+	}
+	_, startErr := j.stage(d, io.NopCloser(strings.NewReader("not a tar archive")), proto.Manifest{})
 	if startErr == nil {
 		t.Fatal("malformed staging input unexpectedly started")
 	}
-	if err := j.terminate("user-kill", 9); err == nil {
+	if res := j.settleStartFailure(); res != nil {
+		t.Fatal("rejected start unexpectedly had a cancellation result")
+	}
+	if handled, err := d.cancelBeforeStart(context.Background(), j, "user-kill", 9); !handled || err == nil {
 		t.Fatal("kill was acknowledged after start had already rejected the job")
 	}
 	if err := d.abortAdmission(j, startErr); err != nil {
@@ -329,7 +355,7 @@ func TestResultWriteFailureIsAmbiguous(t *testing.T) {
 		t.Fatal(err)
 	}
 	j := &Job{ID: proto.NewULID(), Dir: dir, state: proto.StateRunning, done: make(chan struct{})}
-	d := &Daemon{jobs: map[string]*Job{j.ID: j}, running: j}
+	d := &Daemon{jobs: map[string]*Job{j.ID: j}, running: map[string]*Job{j.ID: j}}
 	code := 0
 	j.finalize(d, &proto.Result{ExitCode: &code, OutputsOK: true, LogsComplete: true}, false)
 	if got := j.Status().State; got != StateAmbiguous {
@@ -354,7 +380,7 @@ func TestFinalizeRemovesWorkspaceWithRestrictiveDirectoryModes(t *testing.T) {
 
 	id := proto.NewULID()
 	j := &Job{ID: id, Dir: dir, state: proto.StateRunning, done: make(chan struct{})}
-	d := &Daemon{jobs: map[string]*Job{id: j}, running: j}
+	d := &Daemon{jobs: map[string]*Job{id: j}, running: map[string]*Job{id: j}}
 	code := 0
 	j.finalize(d, &proto.Result{
 		ExitCode: &code, OutputsOK: true, LogsComplete: true, CleanupOK: true,
@@ -386,7 +412,7 @@ func TestAbortAdmissionRemovesWorkspaceWithRestrictiveDirectoryModes(t *testing.
 	t.Cleanup(func() { _ = os.Chmod(readonly, 0o700) })
 
 	j := &Job{ID: id, Dir: jobDir, state: proto.StateStaging, done: make(chan struct{}), logReady: make(chan struct{})}
-	d := &Daemon{cfg: Config{StateDir: stateDir}, jobs: map[string]*Job{id: j}, running: j}
+	d := &Daemon{cfg: Config{StateDir: stateDir}, jobs: map[string]*Job{id: j}, running: map[string]*Job{id: j}}
 	if err := d.abortAdmission(j, errors.New("start rejected")); err != nil {
 		t.Fatal(err)
 	}
@@ -396,10 +422,10 @@ func TestAbortAdmissionRemovesWorkspaceWithRestrictiveDirectoryModes(t *testing.
 	}
 	d.mu.Lock()
 	_, retained := d.jobs[id]
-	running := d.running
+	running := len(d.running)
 	d.mu.Unlock()
-	if retained || running != nil {
-		t.Fatalf("rejected job remained admitted: retained=%v running=%v", retained, running != nil)
+	if retained || running != 0 {
+		t.Fatalf("rejected job remained admitted: retained=%v running=%v", retained, running != 0)
 	}
 }
 
@@ -430,7 +456,7 @@ func TestAbortAdmissionRetainsAmbiguousJobWhenCleanupFails(t *testing.T) {
 	if err := j.writeJSON("admission.json", j.Admission); err != nil {
 		t.Fatal(err)
 	}
-	d := &Daemon{cfg: Config{StateDir: stateDir}, jobs: map[string]*Job{id: j}, running: j}
+	d := &Daemon{cfg: Config{StateDir: stateDir}, jobs: map[string]*Job{id: j}, running: map[string]*Job{id: j}}
 	cleanupErr := d.abortAdmission(j, errors.New("start rejected"))
 	if cleanupErr == nil {
 		t.Fatal("failed admission rollback discarded its cleanup failure")
@@ -438,12 +464,12 @@ func TestAbortAdmissionRetainsAmbiguousJobWhenCleanupFails(t *testing.T) {
 
 	d.mu.Lock()
 	retained := d.jobs[id]
-	running := d.running
+	running := len(d.running)
 	d.mu.Unlock()
 	status := j.Status()
-	if retained != j || running != nil || status.State != proto.StateAmbiguous ||
+	if retained != j || running != 0 || status.State != proto.StateAmbiguous ||
 		status.Result == nil || status.Result.CleanupOK || status.Result.TransactionError == "" {
-		t.Fatalf("failed rollback state: retained=%v running=%v status=%+v", retained == j, running != nil, status)
+		t.Fatalf("failed rollback state: retained=%v running=%v status=%+v", retained == j, running != 0, status)
 	}
 
 	if err := os.Chmod(jobsDir, 0o700); err != nil {
@@ -695,20 +721,28 @@ func TestProcessStartErrorDoesNotExposeDeclaredPATH(t *testing.T) {
 		Env: map[string]string{"PATH": "secret-dir"}, EnvSources: map[string]string{"PATH": "literal"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}
-	resp := rawSubmitSpec(t, ts.URL, proto.NewULID(), root, spec, manifest)
+	id := proto.NewULID()
+	resp := rawSubmitSpec(t, ts.URL, id, root, spec, manifest)
 	body, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("start failure = %s: %s", resp.Status, body)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("start failure admission = %s: %s", resp.Status, body)
 	}
 	if bytes.Contains(body, []byte("secret-dir")) {
-		t.Fatalf("start error exposed declared PATH material: %s", body)
+		t.Fatalf("admission response exposed declared PATH material: %s", body)
 	}
-	if !bytes.Contains(body, []byte("exec format error")) {
-		t.Fatalf("start error lost the path-free OS cause: %s", body)
+	status := waitTerminal(t, ts.URL, id)
+	if status.Result == nil || status.Result.StartError == "" {
+		t.Fatalf("start failure result = %+v", status.Result)
+	}
+	if strings.Contains(status.Result.StartError, "secret-dir") {
+		t.Fatalf("start error exposed declared PATH material: %s", status.Result.StartError)
+	}
+	if !strings.Contains(status.Result.StartError, "exec format error") {
+		t.Fatalf("start error lost the path-free OS cause: %s", status.Result.StartError)
 	}
 }
 

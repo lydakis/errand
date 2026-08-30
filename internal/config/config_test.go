@@ -58,6 +58,24 @@ func TestLoadDaemonAllowsMissingDefaultConfig(t *testing.T) {
 	if got.Listen != "tailnet:7443" || got.StateDir != filepath.Join(home, ".errand") {
 		t.Fatalf("default daemon config = %+v", got)
 	}
+	if got.MaxJobs != 1 || got.MaxQueued != 8 {
+		t.Fatalf("default concurrency = %d running, %d queued; want 1 and 8", got.MaxJobs, got.MaxQueued)
+	}
+}
+
+func TestLoadDaemonPreservesExplicitZeroQueueCapacity(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "errandd.toml")
+	config := "state_dir = \"/tmp/errand-test-state\"\nmax_queued = 0\n"
+	if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadDaemon(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MaxJobs != 1 || got.MaxQueued != 0 {
+		t.Fatalf("explicit zero queue config = %d running, %d queued; want 1 and 0", got.MaxJobs, got.MaxQueued)
+	}
 }
 
 func TestLoadDaemonRejectsCacheTTLThatOverflowsDuration(t *testing.T) {

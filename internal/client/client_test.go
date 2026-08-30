@@ -1074,6 +1074,45 @@ func TestSubmitRetriesSameJobIDAfterLostResponse(t *testing.T) {
 	}
 }
 
+func TestSubmitBusyReportsCapacityInsteadOfSingleJob(t *testing.T) {
+	root := t.TempDir()
+	manifest, err := snapshot.Build(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := proto.Spec{
+		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
+		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		json.NewEncoder(w).Encode(map[string]string{"error": "runner capacity is full"})
+	}))
+	defer server.Close()
+
+	_, _, err = submitOnce(RunOptions{PeerURL: server.URL, Root: root}, "job", spec, manifest, shipPlan{})
+	if err == nil || !strings.Contains(err.Error(), "capacity") || strings.Contains(err.Error(), "one job at a time") {
+		t.Fatalf("busy diagnostic = %v", err)
+	}
+}
+
+func TestStreamDeadlineRefreshesWhileQueued(t *testing.T) {
+	now := time.Unix(100, 0)
+	tracker := newStreamDeadlineTracker(now, proto.JobStatus{State: proto.StateQueued})
+	original := tracker.deadline
+	later := now.Add(time.Hour)
+	tracker.observe(later, proto.JobStatus{State: proto.StateQueued})
+	if !tracker.deadline.After(original) {
+		t.Fatalf("queued deadline was not refreshed: original=%v refreshed=%v", original, tracker.deadline)
+	}
+	runningDeadline := tracker.deadline
+	tracker.observe(later.Add(time.Minute), proto.JobStatus{State: proto.StateRunning})
+	if tracker.phase != proto.StateRunning || !tracker.deadline.After(runningDeadline) {
+		t.Fatalf("running phase did not start a fresh deadline: phase=%q deadline=%v", tracker.phase, tracker.deadline)
+	}
+}
+
 func TestCacheMissGetsIndependentFullSubmitRetryBudget(t *testing.T) {
 	root := t.TempDir()
 	const content = "cache fallback payload"

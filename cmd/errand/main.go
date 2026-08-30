@@ -504,6 +504,8 @@ func cmdServe(args []string) int {
 		CacheDisabled:    fileCfg.Cache.Disabled,
 		CacheMaxBytes:    fileCfg.Cache.MaxBytes,
 		CacheTTL:         time.Duration(fileCfg.Cache.TTLHours) * time.Hour,
+		MaxJobs:          fileCfg.MaxJobs,
+		MaxQueued:        fileCfg.MaxQueued,
 	})
 	if err != nil {
 		log.Fatalf("errand serve: %v", err)

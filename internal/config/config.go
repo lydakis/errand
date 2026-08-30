@@ -88,6 +88,10 @@ type Daemon struct {
 	Capability       string      `toml:"capability"`
 	TailscaledSocket string      `toml:"tailscaled_socket"`
 	Cache            DaemonCache `toml:"cache"`
+
+	// MaxJobs defaults to 1. MaxQueued defaults to 8; zero disables queueing.
+	MaxJobs   int `toml:"max_jobs"`
+	MaxQueued int `toml:"max_queued"`
 }
 
 // DaemonCache uses a 5 GiB, 14-day default when fields are zero.
@@ -100,7 +104,7 @@ type DaemonCache struct {
 // LoadDaemon reads the runner config (default ~/.config/errand/errandd.toml)
 // and fills defaults: listen on the tailnet address, state in ~/.errand.
 func LoadDaemon(path string) (Daemon, error) {
-	var d Daemon
+	d := Daemon{MaxJobs: 1, MaxQueued: 8}
 	explicitPath := path != ""
 	if path == "" {
 		configDir, err := dir()
@@ -126,6 +130,15 @@ func LoadDaemon(path string) (Daemon, error) {
 	}
 	if d.Cache.TTLHours < 0 || int64(d.Cache.TTLHours) > int64((time.Duration(1<<63-1))/time.Hour) {
 		return d, fmt.Errorf("cache ttl_hours must fit in a time.Duration")
+	}
+	if d.MaxJobs <= 0 {
+		return d, fmt.Errorf("max_jobs must be positive")
+	}
+	if d.MaxQueued < -1 {
+		return d, fmt.Errorf("max_queued must not be less than -1")
+	}
+	if d.MaxQueued == -1 { // compatibility with the original disable sentinel
+		d.MaxQueued = 0
 	}
 	return d, nil
 }

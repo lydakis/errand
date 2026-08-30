@@ -144,7 +144,8 @@ func waitTerminal(t *testing.T, url, id string) proto.JobStatus {
 		var st proto.JobStatus
 		json.NewDecoder(resp.Body).Decode(&st)
 		resp.Body.Close()
-		if st.State != proto.StateRunning {
+		switch st.State {
+		case proto.StateExited, proto.StateKilled, proto.StateAmbiguous:
 			return st
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -443,7 +444,14 @@ func TestDirectoryAtTerminalLogPathProducesPermanentStreamError(t *testing.T) {
 }
 
 func TestBusyAndForceKill(t *testing.T) {
-	_, ts := testDaemon(t)
+	// Zero queue capacity preserves the pre-3.5 busy contract.
+	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true, MaxQueued: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	ts := httptest.NewServer(d.Handler())
+	t.Cleanup(ts.Close)
 	root := workspaceWith(t, nil)
 	longID := proto.NewULID()
 	resp := rawSubmit(t, ts.URL, longID, root, []string{"/bin/sh", "-c", "sleep 30"})
@@ -494,6 +502,7 @@ func TestAmbiguousAfterRestart(t *testing.T) {
 		t.Fatalf("submit: %s", resp.Status)
 	}
 	resp.Body.Close()
+	waitState(t, ts.URL, id, proto.StateRunning)
 
 	// A second daemon over the same state must report the unfinished job
 	// as ambiguous — and must not replay it.

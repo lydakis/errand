@@ -340,11 +340,31 @@ becomes a requirement — in which case it belongs in milestone 1.
 
 Limits are **fixed at admission and enforced at the relevant execution
 phase**: upload size at admission; workspace expansion at unpack; runtime,
-log size, and output size during execution and collection. One running job
-per peer — a second submission returns `busy`, no queue and no `queued`
-state. On hitting the log cap the daemon terminates the job with
-`limit_exceeded`, preserving a complete log up to termination — the
-fidelity contract promises faithful output, not best-effort truncation.
+log size, and output size during execution and collection. On hitting the
+log cap the daemon terminates the job with `limit_exceeded`, preserving a
+complete log up to termination; the fidelity contract promises faithful
+output, not best-effort truncation.
+
+**Concurrency (milestone 3.5 amendment, 2026-08-30).** A runner executes
+up to `max_jobs` jobs at once (default 1; concurrency is an explicit
+per-runner choice) with a bounded FIFO admission queue of `max_queued`
+waiting jobs (default 8; zero disables waiting). Beyond both, submissions
+return `busy`; that boundary survives. Admission order and capacity are
+reserved before staging, so upload duration cannot reorder jobs. Once staging
+succeeds, a durable queued marker commits the admission and every process
+start flows through one FIFO launcher. Launch failures therefore produce the
+same durable receipt whether or not a slot was initially free. A signal or
+kill accepted before process start settles durably as killed before the
+control request succeeds.
+
+Queued jobs appear in listings as `queued`. On daemon restart, a queued marker
+without a process-scope record proves the command never started; the daemon
+settles that job with a never-started result and does not replay it. A scope
+record still means execution may have begun and retains the ambiguous restart
+semantics. The runtime limit starts at launch; time spent queued is unbounded.
+The queue remains deliberately simple: no priorities, bin-packing, or
+cross-peer scheduling, and errand does not referee CPU or memory contention.
+Both limits are per-machine choices for the operator who knows its workloads.
 
 ## Workspace snapshot
 

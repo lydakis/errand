@@ -5,6 +5,7 @@ package daemon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -54,6 +55,11 @@ type Config struct {
 	CacheDisabled bool
 	CacheMaxBytes int64
 	CacheTTL      time.Duration
+
+	// MaxJobs defaults to one for direct callers. MaxQueued is the exact
+	// waiting capacity; zero disables queueing.
+	MaxJobs   int
+	MaxQueued int
 }
 
 type Daemon struct {
@@ -61,9 +67,13 @@ type Daemon struct {
 	whoisClient *http.Client
 	cache       *blobCache // nil when the cache is disabled
 
-	mu        sync.Mutex
-	jobs      map[string]*Job
-	running   *Job
+	mu      sync.Mutex
+	jobs    map[string]*Job
+	running map[string]*Job
+	// queue is the admission-ordered waiting list. Entries remain here while
+	// staging and, once staged, while queued for a running slot.
+	queue     []*Job
+	draining  bool
 	lockFile  *os.File
 	closeOnce sync.Once
 	closeErr  error
@@ -97,7 +107,22 @@ func New(cfg Config) (*Daemon, error) {
 	if cfg.CacheMaxBytes < 0 || cfg.CacheTTL < 0 {
 		return nil, fmt.Errorf("cache size and TTL must not be negative")
 	}
-	d := &Daemon{cfg: cfg, jobs: map[string]*Job{}, whoisClient: newWhoisClient(cfg.TailscaledSocket)}
+	if cfg.MaxJobs == 0 {
+		cfg.MaxJobs = 1
+	}
+	if cfg.MaxJobs < 0 {
+		return nil, fmt.Errorf("max jobs must be positive")
+	}
+	if cfg.MaxQueued < -1 {
+		return nil, fmt.Errorf("max queued must not be less than -1")
+	}
+	if cfg.MaxQueued == -1 {
+		cfg.MaxQueued = 0
+	}
+	d := &Daemon{
+		cfg: cfg, jobs: map[string]*Job{}, running: map[string]*Job{},
+		whoisClient: newWhoisClient(cfg.TailscaledSocket),
+	}
 	if err := d.lockStateDir(); err != nil {
 		return nil, err
 	}
@@ -345,7 +370,11 @@ func (d *Daemon) loadExisting() error {
 			}
 		}
 		if j.result == nil {
-			d.reconcileUnfinished(j)
+			if persistedQueuedWithoutScope(j.Dir) {
+				d.reconcileQueued(j)
+			} else {
+				d.reconcileUnfinished(j)
+			}
 		} else {
 			scopePath := filepath.Join(j.Dir, "scope.json")
 			if _, err := os.Lstat(scopePath); err == nil || !os.IsNotExist(err) {
@@ -391,12 +420,52 @@ func cleanupPersistedRuntime(j *Job) (killed []int, cleanupErrs []string) {
 	if err := removeOwnedTree(workspace); err != nil {
 		return killed, []string{"removing workspace: " + err.Error()}
 	}
+	// queued.json distinguishes a job that cannot have started from one whose
+	// execution is ambiguous. Remove it before scope.json so no crash can leave
+	// the unsafe marker-without-scope combination after a process may have run.
+	if err := removeQueuedMarker(j.Dir); err != nil {
+		return killed, []string{"removing queued marker: " + err.Error()}
+	}
 	if scopePresent {
 		if err := removeScopeRecord(scopePath); err != nil {
 			return killed, []string{"removing process scope record: " + err.Error()}
 		}
 	}
 	return killed, nil
+}
+
+func persistedQueuedWithoutScope(dir string) bool {
+	if _, err := os.Lstat(filepath.Join(dir, queuedMarkerName)); err != nil {
+		return false
+	}
+	_, err := os.Lstat(filepath.Join(dir, "scope.json"))
+	return os.IsNotExist(err)
+}
+
+// reconcileQueued settles an acknowledged queue entry that cannot have run.
+// The marker remains as receipt evidence, so another crash before result.json
+// is written cannot turn a known never-started job into an ambiguous one.
+func (d *Daemon) reconcileQueued(j *Job) {
+	startError := "daemon restarted while job was queued; command never started"
+	var cleanupErrs []string
+	if err := removeOwnedTree(filepath.Join(j.Dir, "workspace")); err != nil {
+		cleanupErrs = []string{"removing workspace: " + err.Error()}
+	}
+	res := &proto.Result{
+		State: proto.StateExited, StartError: startError,
+		OutputsOK: true, CleanupOK: len(cleanupErrs) == 0, LogsComplete: true,
+	}
+	if len(cleanupErrs) > 0 {
+		res.TransactionError = "cleanup: " + strings.Join(cleanupErrs, "; ")
+	}
+	j.event("reconciled-queued-after-restart", startError)
+	if err := j.writeJSON("result.json", res); err != nil {
+		j.event("result-write-failed", err.Error())
+		res.State = StateAmbiguous
+		res.TransactionError = appendTransactionError(res.TransactionError, "persisting result: "+err.Error())
+	}
+	j.state = res.State
+	j.result = res
 }
 
 // reconcileSettledCleanup retries cleanup without rewriting the immutable
@@ -448,11 +517,48 @@ func (d *Daemon) reconcileUnfinished(j *Job) {
 	j.result = res
 }
 
+// release frees a settled job's reservation and drains the queue.
 func (d *Daemon) release(j *Job) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.running == j {
-		d.running = nil
+	delete(d.running, j.ID)
+	d.removeQueuedLocked(j)
+	d.mu.Unlock()
+	d.drainQueue()
+}
+
+// drainQueue starts queued jobs while free running slots exist, FIFO.
+func (d *Daemon) drainQueue() {
+	d.mu.Lock()
+	if d.draining {
+		d.mu.Unlock()
+		return
+	}
+	d.draining = true
+	d.mu.Unlock()
+	go d.runQueue()
+}
+
+func (d *Daemon) runQueue() {
+	for {
+		d.mu.Lock()
+		if len(d.running) >= d.cfg.MaxJobs || len(d.queue) == 0 {
+			d.draining = false
+			d.mu.Unlock()
+			return
+		}
+		next := d.queue[0]
+		next.mu.Lock()
+		ready := next.state == proto.StateQueued
+		next.mu.Unlock()
+		if !ready {
+			d.draining = false
+			d.mu.Unlock()
+			return
+		}
+		d.queue = d.queue[1:]
+		d.running[next.ID] = next
+		d.mu.Unlock()
+		d.launchDequeued(next)
 	}
 }
 
@@ -494,13 +600,20 @@ func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 
 func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) {
 	d.mu.Lock()
-	busy := d.running != nil
+	o := d.occupancyLocked()
+	busy := d.capacityFullLocked()
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, proto.Info{
-		Proto:   proto.ProtoVersion,
-		Version: d.cfg.Version,
-		Busy:    busy,
-		Facts:   measureFacts(),
+		Proto:        proto.ProtoVersion,
+		Version:      d.cfg.Version,
+		Busy:         busy,
+		StagingJobs:  o.staging,
+		StartingJobs: o.starting,
+		RunningJobs:  o.running,
+		QueuedJobs:   o.queued,
+		MaxJobs:      d.cfg.MaxJobs,
+		MaxQueued:    d.cfg.MaxQueued,
+		Facts:        measureFacts(),
 	})
 }
 
@@ -626,9 +739,12 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		writeJSON(w, http.StatusOK, existing.Status())
 		return
 	}
-	if d.running != nil {
+	if d.capacityFullLocked() {
+		o := d.occupancyLocked()
+		msg := fmt.Sprintf("busy: %d running, %d starting, %d staging, %d queued (capacity %d running + %d queued)",
+			o.running, o.starting, o.staging, o.queued, d.cfg.MaxJobs, d.cfg.MaxQueued)
 		d.mu.Unlock()
-		httpError(w, http.StatusTooManyRequests, "busy: one job at a time in v0")
+		httpError(w, http.StatusTooManyRequests, msg)
 		return
 	}
 	dir := filepath.Join(d.jobsDir(), jobID)
@@ -664,11 +780,19 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 	}
 	j.Dir = dir
 	d.jobs[jobID] = j
-	d.running = j
+	d.queue = append(d.queue, j)
 	d.mu.Unlock()
 
-	if err := j.start(d, &stagingUpload{Reader: workspace, body: r.Body}, manifest); err != nil {
+	// rejectPreExecution mirrors the pre-3.5 semantics for failures during
+	// the submit request: a kill that raced the failure becomes a durable
+	// terminal result; anything else rolls the admission back entirely.
+	rejectPreExecution := func(err error) {
 		j.event("start-rejected", err.Error())
+		if res := j.settleStartFailure(); res != nil {
+			j.finalize(d, res, true)
+			writeJSON(w, http.StatusCreated, j.Status())
+			return
+		}
 		if cleanupErr := d.abortAdmission(j, err); cleanupErr != nil {
 			httpError(w, http.StatusInternalServerError, errors.Join(err, cleanupErr).Error())
 		} else {
@@ -678,9 +802,164 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 				httpError(w, http.StatusBadRequest, err.Error())
 			}
 		}
+	}
+
+	settled, err := j.stage(d, &stagingUpload{Reader: workspace, body: r.Body}, manifest)
+	if err != nil {
+		rejectPreExecution(err)
+		return
+	}
+	if settled { // killed during staging; already finalized durably
+		writeJSON(w, http.StatusCreated, j.Status())
+		return
+	}
+	cancelled, err := d.queueStaged(j)
+	if err != nil {
+		rejectPreExecution(err)
+		return
+	}
+	if cancelled {
+		writeJSON(w, http.StatusCreated, j.Status())
 		return
 	}
 	writeJSON(w, http.StatusCreated, j.Status())
+}
+
+// queueStaged commits the durable queue phase. Every launch then flows through
+// the single drain worker, which preserves process-start order.
+func (d *Daemon) queueStaged(j *Job) (cancelled bool, err error) {
+	if err := j.writeJSON(queuedMarkerName, queuedRecord{State: proto.StateQueued}); err != nil {
+		return false, fmt.Errorf("persisting queued state: %w", err)
+	}
+	d.mu.Lock()
+	j.mu.Lock()
+	if j.killed != "" {
+		res := &proto.Result{
+			Signal: j.killSignal.String(), SignalNum: int(j.killSignal),
+			OutputsOK: true, LogsComplete: true,
+		}
+		d.removeQueuedLocked(j)
+		j.mu.Unlock()
+		d.mu.Unlock()
+		j.finalize(d, res, true)
+		return true, nil
+	}
+	j.state = proto.StateQueued
+	j.mu.Unlock()
+	position := 0
+	for i, queued := range d.queue {
+		if queued == j {
+			position = i + 1
+			break
+		}
+	}
+	j.event("queued", fmt.Sprintf("position=%d", position))
+	d.mu.Unlock()
+	d.drainQueue()
+	return false, nil
+}
+
+// launchDequeued starts a job that waited in the queue. Its submitter is
+// long gone, so a launch failure settles into a durable receipt instead of
+// an admission rollback.
+func (d *Daemon) launchDequeued(j *Job) {
+	if err := j.launch(d); err != nil {
+		j.event("start-rejected", err.Error())
+		res := j.settleStartFailure()
+		if res == nil {
+			res = &proto.Result{
+				State: proto.StateExited, StartError: err.Error(),
+				OutputsOK: true, LogsComplete: true,
+			}
+		}
+		j.finalize(d, res, true)
+	}
+}
+
+// cancelBeforeStart owns every cancellation before cmd.Start. A successful
+// return means the killed receipt is durable, not merely that staging stopped.
+func (d *Daemon) cancelBeforeStart(ctx context.Context, j *Job, reason string, sig syscall.Signal) (bool, error) {
+	d.mu.Lock()
+	j.mu.Lock()
+	if j.result != nil || j.reaped || j.startRejected || j.state == proto.StateExited ||
+		j.state == proto.StateKilled || j.state == proto.StateAmbiguous {
+		j.mu.Unlock()
+		d.mu.Unlock()
+		return true, fmt.Errorf("job %s is not running", j.ID)
+	}
+	if j.started {
+		j.mu.Unlock()
+		d.mu.Unlock()
+		return false, nil
+	}
+	if j.killed == "" {
+		j.killed = reason
+		j.killSignal = sig
+	}
+	stagingCancel := j.stagingCancel
+	removed := j.state == proto.StateQueued && d.removeQueuedLocked(j)
+	j.mu.Unlock()
+	d.mu.Unlock()
+
+	if stagingCancel != nil {
+		stagingCancel()
+	}
+	if removed {
+		j.event("terminated", reason+" before start")
+		j.finalize(d, j.cancelledBeforeStart(), true)
+	}
+	select {
+	case <-j.done:
+		return true, nil
+	case <-ctx.Done():
+		return true, ctx.Err()
+	}
+}
+
+func (d *Daemon) removeQueuedLocked(j *Job) bool {
+	for i, queued := range d.queue {
+		if queued == j {
+			d.queue = append(d.queue[:i], d.queue[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+type occupancy struct {
+	staging  int
+	queued   int
+	starting int
+	running  int
+}
+
+// occupancyLocked derives the public phase counts from scheduler ownership.
+// d.mu must be held so queue and running membership cannot change mid-snapshot.
+func (d *Daemon) occupancyLocked() occupancy {
+	var o occupancy
+	for _, j := range d.queue {
+		j.mu.Lock()
+		if j.state == proto.StateStaging {
+			o.staging++
+		} else {
+			o.queued++
+		}
+		j.mu.Unlock()
+	}
+	for _, j := range d.running {
+		j.mu.Lock()
+		if j.state == proto.StateRunning {
+			o.running++
+		} else {
+			o.starting++
+		}
+		j.mu.Unlock()
+	}
+	return o
+}
+
+func (d *Daemon) capacityFullLocked() bool {
+	return len(d.running)+len(d.queue) >= d.cfg.MaxJobs+d.cfg.MaxQueued
 }
 
 type stagingUpload struct {
@@ -691,15 +970,15 @@ type stagingUpload struct {
 func (r *stagingUpload) Close() error { return r.body.Close() }
 
 func (d *Daemon) abortAdmission(j *Job, startErr error) error {
+	defer d.drainQueue() // a rollback can free a running slot
 	cleanupErr := removeOwnedTree(j.Dir)
 	var receiptWriteErr error
 	d.mu.Lock()
 	if cleanupErr == nil && d.jobs[j.ID] == j {
 		delete(d.jobs, j.ID)
 	}
-	if d.running == j {
-		d.running = nil
-	}
+	delete(d.running, j.ID)
+	d.removeQueuedLocked(j)
 	d.mu.Unlock()
 	if cleanupErr != nil {
 		rollbackErr := fmt.Errorf("cleaning rejected admission: %w", cleanupErr)
@@ -730,6 +1009,7 @@ func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 			result.TransactionError = errors.Join(rollbackErr, receiptWriteErr).Error()
 		}
 		j.mu.Lock()
+		j.Spec.Env = nil
 		j.state = proto.StateAmbiguous
 		j.result = result
 		j.mu.Unlock()
@@ -947,6 +1227,16 @@ func (d *Daemon) handleSignal(w http.ResponseWriter, r *http.Request, id Identit
 		httpError(w, http.StatusBadRequest, "signal must be SIGINT or SIGTERM")
 		return
 	}
+	if handled, err := d.cancelBeforeStart(r.Context(), j, "user-signal", sig); handled {
+		if err != nil {
+			if r.Context().Err() == nil {
+				httpError(w, http.StatusConflict, err.Error())
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"ok": "cancelled before start"})
+		return
+	}
 	if err := j.Signal(sig); err != nil {
 		httpError(w, http.StatusConflict, err.Error())
 		return
@@ -962,6 +1252,16 @@ func (d *Daemon) handleKill(w http.ResponseWriter, r *http.Request, id Identity)
 	sig := syscall.SIGTERM
 	if r.URL.Query().Get("force") == "1" {
 		sig = syscall.SIGKILL
+	}
+	if handled, err := d.cancelBeforeStart(r.Context(), j, "user-kill", sig); handled {
+		if err != nil {
+			if r.Context().Err() == nil {
+				httpError(w, http.StatusConflict, err.Error())
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"ok": "cancelled before start"})
+		return
 	}
 	if err := j.terminate("user-kill", sig); err != nil {
 		httpError(w, http.StatusConflict, err.Error())

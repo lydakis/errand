@@ -157,15 +157,24 @@ subprocess.Popen(
 	}
 	d.mu.Lock()
 	d.jobs[id] = j
-	d.running = j
+	d.queue = append(d.queue, j)
 	d.mu.Unlock()
 	var workspace bytes.Buffer
 	tw := tar.NewWriter(&workspace)
 	if err := tw.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := j.start(d, io.NopCloser(&workspace), proto.Manifest{}); err != nil {
+	settled, err := j.stage(d, io.NopCloser(&workspace), proto.Manifest{})
+	if err != nil {
 		t.Fatal(err)
+	}
+	if settled {
+		t.Fatal("scope test job settled during staging")
+	}
+	if cancelled, err := d.queueStaged(j); err != nil {
+		t.Fatal(err)
+	} else if cancelled {
+		t.Fatal("scope test job was cancelled before launch")
 	}
 	select {
 	case <-j.done:

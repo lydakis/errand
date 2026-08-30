@@ -219,6 +219,9 @@ func runWithDetachNotifications(
 	}
 	fmt.Fprintf(opts.Stderr, "errand: job %s (%d files, commit %s)\n",
 		handle, len(paths), shortCommit(gitInfo))
+	if status.State == proto.StateQueued {
+		fmt.Fprintln(opts.Stderr, "errand: queued on the runner; logs follow once a slot frees (Ctrl-C cancels)")
+	}
 
 	detachRequested := false
 	select {
@@ -383,9 +386,13 @@ func attachWithDetachNotifications(
 }
 
 func getStatus(peerURL, jobID string) (proto.JobStatus, error) {
-	var status proto.JobStatus
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
+	return getStatusContext(ctx, peerURL, jobID)
+}
+
+func getStatusContext(ctx context.Context, peerURL, jobID string) (proto.JobStatus, error) {
+	var status proto.JobStatus
 	err := getJSONContext(ctx, peerURL+"/v0/jobs/"+jobID, 1<<20, "job lookup", &status)
 	return status, err
 }
@@ -605,7 +612,11 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 		}
 		return status, false, nil
 	case http.StatusTooManyRequests:
-		return status, false, fmt.Errorf("runner is busy (one job at a time)")
+		payload := decodeAPIError(body)
+		if payload.Error == "" {
+			return status, false, fmt.Errorf("runner capacity is full")
+		}
+		return status, false, fmt.Errorf("runner capacity is full: %s", payload.Error)
 	default:
 		payload := decodeAPIError(body)
 		return status, false, &submitHTTPError{
@@ -627,6 +638,31 @@ func (e *submitHTTPError) Error() string {
 type streamResult struct {
 	status proto.JobStatus
 	err    error
+}
+
+type streamDeadlineTracker struct {
+	deadline time.Time
+	phase    string
+}
+
+func newStreamDeadlineTracker(now time.Time, status proto.JobStatus) streamDeadlineTracker {
+	t := streamDeadlineTracker{deadline: now.Add(time.Duration(proto.DefaultLimits().MaxRuntimeSec)*time.Second + streamDeadlineMargin)}
+	t.observe(now, status)
+	return t
+}
+
+func (t *streamDeadlineTracker) observe(now time.Time, status proto.JobStatus) {
+	window := time.Duration(proto.DefaultLimits().MaxRuntimeSec)*time.Second + streamDeadlineMargin
+	switch {
+	case status.Result != nil:
+		t.phase = "terminal"
+	case status.State == proto.StateStaging || status.State == proto.StateQueued:
+		t.phase = status.State
+		t.deadline = now.Add(window)
+	case status.State == proto.StateRunning && t.phase != proto.StateRunning:
+		t.phase = proto.StateRunning
+		t.deadline = now.Add(window)
+	}
 }
 
 func streamUntilDetach(
@@ -674,7 +710,7 @@ func streamContext(
 ) (proto.JobStatus, error) {
 	terminalReplay := initial.State != proto.StateRunning && initial.Result != nil
 	var last int64
-	deadline := time.Now().Add(time.Duration(proto.DefaultLimits().MaxRuntimeSec)*time.Second + streamDeadlineMargin)
+	tracker := newStreamDeadlineTracker(time.Now(), initial)
 	for attempt := 0; ; attempt++ {
 		final, err := followOnceContext(ctx, opts, jobID, &last)
 		if err == nil {
@@ -691,7 +727,18 @@ func streamContext(
 		if errors.As(err, &permanentErr) && permanentErr.permanent() {
 			return proto.JobStatus{}, err
 		}
-		if time.Now().After(deadline) {
+		now := time.Now()
+		if tracker.phase == proto.StateStaging || tracker.phase == proto.StateQueued {
+			statusCtx, cancelStatus := context.WithTimeout(ctx, controlRequestTimeout)
+			status, statusErr := getStatusContext(statusCtx, opts.PeerURL, jobID)
+			cancelStatus()
+			if statusErr == nil {
+				now = time.Now()
+				tracker.observe(now, status)
+				terminalReplay = status.Result != nil
+			}
+		}
+		if now.After(tracker.deadline) {
 			kind := "log stream"
 			if terminalReplay {
 				kind = "terminal log replay"

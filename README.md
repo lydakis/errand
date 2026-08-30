@@ -29,6 +29,9 @@ errand attach "$job"          # replay logs and follow to completion
 Runner config authorizes callers by tailnet identity (whois): an ACL app
 capability or a local `allow_users` list. Destination-scoped capability
 checks require Tailscale 1.100 or newer. No keys, no credentials stored.
+Runners execute one job at a time by default and queue up to eight more. Set
+`max_jobs` and `max_queued` in `errandd.toml` to change those limits;
+`max_queued = 0` disables queueing.
 
 Run errand from a Git worktree for automatic snapshot selection. A non-Git
 directory requires an explicit `.errandignore` policy or `--include-all`.

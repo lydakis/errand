@@ -25,7 +25,12 @@ import (
 const (
 	maxListCommandBytes  = 512
 	maxListResponseBytes = 1 << 20
+	queuedMarkerName     = "queued.json"
 )
+
+type queuedRecord struct {
+	State string `json:"state"`
+}
 
 // Job is one admitted transaction. Its directory is the receipt.
 type Job struct {
@@ -61,7 +66,7 @@ func (j *Job) Status() proto.JobStatus {
 }
 
 // summary is the job's listing row. Spec and result fields are read under
-// the job lock because start() mutates Spec.Env after admission.
+// the job lock because launch mutates Spec.Env after admission.
 func (j *Job) summary() proto.JobListEntry {
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -161,27 +166,16 @@ func (j *Job) markLogReady() {
 	})
 }
 
-// start extracts the workspace and launches the process. Pre-execution
-// failures are returned so admission can be rolled back safely; the wait and
-// terminal finalize happen in a goroutine after a successful launch.
-func (j *Job) start(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manifest) (retErr error) {
+// stage extracts the workspace. settled means a concurrent kill finalized it.
+func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manifest) (settled bool, retErr error) {
 	j.event("admitted", j.Admission.Method)
 	stagingCtx, cancelStaging := j.beginStaging(workspaceTar)
 	defer cancelStaging()
 	defer j.markStagingDone()
-	defer func() {
-		if retErr == nil {
-			return
-		}
-		if res := j.settleStartFailure(); res != nil {
-			j.finalize(d, res, true)
-			retErr = nil
-		}
-	}()
 
 	workspace := filepath.Join(j.Dir, "workspace")
 	if err := os.Mkdir(workspace, 0o700); err != nil {
-		return err
+		return false, err
 	}
 	cachedPaths := map[string]bool{}
 	extractOpts := archive.ExtractOptions{}
@@ -199,12 +193,12 @@ func (j *Job) start(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 		j.markStagingDone()
 		if res := j.cancelledBeforeStart(); res != nil {
 			j.finalize(d, res, true)
-			return nil
+			return true, nil
 		}
-		return extractErr
+		return false, extractErr
 	}
 	if err := os.Mkdir(filepath.Join(j.Dir, "out"), 0o700); err != nil {
-		return err
+		return false, err
 	}
 	totalFiles := 0
 	for _, e := range manifest.Entries {
@@ -230,9 +224,15 @@ func (j *Job) start(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 	j.markStagingDone()
 	if res := j.cancelledBeforeStart(); res != nil {
 		j.finalize(d, res, true)
-		return nil
+		return true, nil
 	}
+	return false, nil
+}
 
+// launch runs a staged job: log writer, process scope, exec, and the wait
+// goroutine that finalizes. The scheduler settles any launch error durably.
+func (j *Job) launch(d *Daemon) error {
+	workspace := filepath.Join(j.Dir, "workspace")
 	var (
 		logw *logio.Writer
 		err  error
@@ -273,6 +273,10 @@ func (j *Job) start(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 	if err := j.writeJSON("scope.json", scopeRecord{Token: scope.token}); err != nil {
 		logw.Close()
 		return fmt.Errorf("persisting process scope: %w", err)
+	}
+	if err := removeQueuedMarker(j.Dir); err != nil {
+		logw.Close()
+		return fmt.Errorf("consuming queued marker: %w", err)
 	}
 	jobEnv = append(jobEnv, scope.env())
 	executable, err := resolveExecutable(j.Spec.Argv[0], envValue(jobEnv, "PATH"), workdir)
@@ -596,43 +600,35 @@ func (j *Job) terminate(reason string, sig syscall.Signal) error {
 	}
 	cmd := j.cmd
 	scope := j.scope
-	stagingCancel := j.stagingCancel
-	stagingDone := j.stagingDone
-	staging := j.state == proto.StateStaging && cmd == nil
+	if !j.started || cmd == nil || cmd.Process == nil {
+		j.mu.Unlock()
+		return fmt.Errorf("job %s is not running", j.ID)
+	}
 	if j.killed == "" {
 		j.killed = reason
 		j.killSignal = sig
 	}
 	j.mu.Unlock()
-	var groupErr, scopeErr, stagingErr error
-	if staging {
-		if stagingCancel != nil {
-			stagingCancel()
-		}
-		if stagingDone != nil {
-			select {
-			case <-stagingDone:
-			case <-time.After(5 * time.Second):
-				stagingErr = fmt.Errorf("timed out stopping job %s staging", j.ID)
-			}
-		}
+	groupErr := syscall.Kill(-cmd.Process.Pid, sig)
+	if groupErr == syscall.ESRCH {
+		groupErr = nil
 	}
-	if cmd != nil && cmd.Process != nil {
-		groupErr = syscall.Kill(-cmd.Process.Pid, sig)
-		if groupErr == syscall.ESRCH {
-			groupErr = nil
-		}
-		if scope != nil {
-			scopeErr = scope.signalEscaped(sig, cmd.Process.Pid)
-		}
+	var scopeErr error
+	if scope != nil {
+		scopeErr = scope.signalEscaped(sig, cmd.Process.Pid)
 	}
 	j.event("terminated", reason)
-	return errors.Join(groupErr, scopeErr, stagingErr)
+	return errors.Join(groupErr, scopeErr)
 }
 
 // Signal forwards a signal to the job's process group.
 func (j *Job) Signal(sig syscall.Signal) error {
 	j.mu.Lock()
+	if j.result != nil || j.reaped || j.startRejected || j.state == proto.StateExited ||
+		j.state == proto.StateKilled || j.state == proto.StateAmbiguous {
+		j.mu.Unlock()
+		return fmt.Errorf("job %s is not running", j.ID)
+	}
 	cmd := j.cmd
 	scope := j.scope
 	running := j.state == proto.StateRunning
@@ -660,6 +656,12 @@ func (j *Job) finalize(d *Daemon, res *proto.Result, neverRan bool) {
 }
 
 func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, scopeCleanupOK bool) {
+	// Runtime values are no longer needed once settlement begins. The request
+	// digest and redacted receipt retain idempotency without retaining secrets.
+	j.mu.Lock()
+	j.Spec.Env = nil
+	j.mu.Unlock()
+
 	var workspaceErr error
 	if scopeCleanupOK {
 		workspaceErr = removeOwnedTree(filepath.Join(j.Dir, "workspace"))
@@ -683,6 +685,8 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 		j.event("scope-record-remove-failed", scopeRecordErr.Error())
 		res.TransactionError = appendTransactionError(res.TransactionError, "removing process scope record: "+scopeRecordErr.Error())
 	}
+	// A queued marker on a never-started job is receipt evidence. Retaining it
+	// closes the crash gap between cleanup and the durable terminal result.
 	cleanupOK := workspaceErr == nil && scopeCleanupOK && scopeRecordErr == nil
 	if neverRan {
 		res.CleanupOK = cleanupOK
@@ -717,6 +721,14 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 
 func removeScopeRecord(path string) error {
 	err := os.Remove(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
+func removeQueuedMarker(dir string) error {
+	err := os.Remove(filepath.Join(dir, queuedMarkerName))
 	if os.IsNotExist(err) {
 		return nil
 	}

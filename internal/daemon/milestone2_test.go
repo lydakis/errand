@@ -229,9 +229,9 @@ func TestFinalizeIncludesScopeRecordRemovalInCleanupResult(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "scope.json", "sentinel"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	d := &Daemon{cfg: Config{StateDir: stateDir}}
+	d := &Daemon{cfg: Config{StateDir: stateDir}, running: map[string]*Job{}}
 	j := &Job{ID: id, Dir: dir, state: proto.StateRunning, done: make(chan struct{}), logReady: make(chan struct{})}
-	d.running = j
+	d.running[j.ID] = j
 	code := 0
 	res := &proto.Result{Started: true, ExitCode: &code, OutputsOK: true, CleanupOK: true, LogsComplete: true}
 	j.finalize(d, res, false)
@@ -265,9 +265,9 @@ func TestFinalizeRetainsScopeRecordAfterProcessCleanupFailure(t *testing.T) {
 	if err := os.WriteFile(scopePath, []byte(`{"token":"`+strings.Repeat("ab", 16)+`"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	d := &Daemon{cfg: Config{StateDir: stateDir}}
+	d := &Daemon{cfg: Config{StateDir: stateDir}, running: map[string]*Job{}}
 	j := &Job{ID: id, Dir: dir, state: proto.StateRunning, done: make(chan struct{}), logReady: make(chan struct{})}
-	d.running = j
+	d.running[j.ID] = j
 	code := 0
 	res := &proto.Result{Started: true, ExitCode: &code, OutputsOK: true, CleanupOK: false, LogsComplete: true}
 	j.finalizeWithScopeOutcome(d, res, false, false)

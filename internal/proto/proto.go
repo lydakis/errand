@@ -180,6 +180,7 @@ type LogStreamError struct {
 
 const (
 	StateStaging   = "staging"
+	StateQueued    = "queued"
 	StateRunning   = "running"
 	StateExited    = "exited"
 	StateKilled    = "killed"
@@ -243,8 +244,16 @@ type Facts struct {
 type Info struct {
 	Proto   int    `json:"proto"`
 	Version string `json:"version"`
-	Busy    bool   `json:"busy"`
-	Facts   Facts  `json:"facts"`
+	// Busy means a submission right now would be refused: every running
+	// slot and queue position is taken.
+	Busy         bool  `json:"busy"`
+	StagingJobs  int   `json:"staging_jobs"`
+	StartingJobs int   `json:"starting_jobs"`
+	RunningJobs  int   `json:"running_jobs"`
+	QueuedJobs   int   `json:"queued_jobs"`
+	MaxJobs      int   `json:"max_jobs"`
+	MaxQueued    int   `json:"max_queued"`
+	Facts        Facts `json:"facts"`
 }
 
 type Event struct {
