@@ -21,6 +21,10 @@ import (
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
+func testInterruptNotifications() interruptNotifications {
+	return newInterruptNotifications(func() {}, func() {})
+}
+
 func TestSignalExitUsesSignalNumber(t *testing.T) {
 	code := exitCode(proto.JobStatus{Result: &proto.Result{
 		Signal: "segmentation fault", OutputsOK: true, CleanupOK: true, LogsComplete: true,
@@ -39,10 +43,44 @@ func TestSignaledExitReportsTransactionFailures(t *testing.T) {
 	if code != 137 {
 		t.Fatalf("SIGKILL exit = %d, want 137", code)
 	}
-	for _, want := range []string{"cleanup failed", "logs truncated", "scope cleanup failed"} {
-		if !strings.Contains(stderr.String(), want) {
-			t.Fatalf("signaled transaction report %q does not contain %q", stderr.String(), want)
-		}
+	want := "errand: remote process killed by killed (cleanup failed) (logs truncated) (transaction error: scope cleanup failed)\n"
+	if got := stderr.String(); got != want {
+		t.Fatalf("signaled transaction report = %q, want %q", got, want)
+	}
+}
+
+func TestExitDiagnosticsStayCompatible(t *testing.T) {
+	zero, seven := 0, 7
+	for name, tc := range map[string]struct {
+		status proto.JobStatus
+		want   string
+		code   int
+	}{
+		"successful process with incomplete outputs": {
+			status: proto.JobStatus{Result: &proto.Result{
+				ExitCode: &zero, CleanupOK: true, LogsComplete: true,
+			}},
+			want: "errand: transaction incomplete (remote_exit=0)\n",
+			code: ExitTransaction,
+		},
+		"failed process with secondary transaction failures": {
+			status: proto.JobStatus{Result: &proto.Result{
+				ExitCode: &seven, OutputsOK: true, CleanupOK: false, LogsComplete: false,
+				LimitExceeded: "runtime", TransactionError: "persisting result failed",
+			}},
+			want: "errand: transaction incomplete (remote_exit=7, cleanup failed, limit exceeded: runtime, logs truncated, persisting result failed)\n",
+			code: 7,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			if got := exitCode(tc.status, &stderr, "peer/job"); got != tc.code {
+				t.Fatalf("exit code = %d, want %d", got, tc.code)
+			}
+			if got := stderr.String(); got != tc.want {
+				t.Fatalf("transaction report = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -96,10 +134,10 @@ func TestInterruptIsForwardedBeforeSubmitResponse(t *testing.T) {
 	interrupts := make(chan os.Signal, 2)
 	done := make(chan int, 1)
 	go func() {
-		done <- run(RunOptions{
+		done <- runWithDetachNotifications(RunOptions{
 			PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
 			Stdout: io.Discard, Stderr: io.Discard,
-		}, interrupts, func() {})
+		}, interrupts, testInterruptNotifications(), nil)
 	}()
 	select {
 	case <-admitted:
@@ -157,10 +195,10 @@ func TestDetachedInterruptWaitsForForwardingAndDoesNotReportSuccess(t *testing.T
 	var stdout, stderr bytes.Buffer
 	done := make(chan int, 1)
 	go func() {
-		done <- run(RunOptions{
+		done <- runWithDetachNotifications(RunOptions{
 			PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
 			Detach: true, Stdout: &stdout, Stderr: &stderr,
-		}, interrupts, func() {})
+		}, interrupts, testInterruptNotifications(), nil)
 	}()
 	select {
 	case <-admitted:
@@ -190,89 +228,26 @@ func TestDetachedInterruptWaitsForForwardingAndDoesNotReportSuccess(t *testing.T
 	}
 }
 
-type blockingMatchWriter struct {
-	match   string
-	started chan struct{}
-	release chan struct{}
-	once    sync.Once
-	bytes.Buffer
-}
-
-func (w *blockingMatchWriter) Write(p []byte) (int, error) {
-	if strings.Contains(string(p), w.match) {
-		w.once.Do(func() { close(w.started) })
-		<-w.release
-	}
-	return w.Buffer.Write(p)
-}
-
-func TestDetachedSuccessCannotRaceAForwardedInterrupt(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	var controlAttempts atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPut:
-			_, _ = io.Copy(io.Discard, r.Body)
-			json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/signal"):
-			controlAttempts.Add(1)
-			w.WriteHeader(http.StatusOK)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-
-	stderr := &blockingMatchWriter{
-		match: "detached;", started: make(chan struct{}), release: make(chan struct{}),
-	}
-	interrupts := make(chan os.Signal, 2)
-	done := make(chan int, 1)
-	go func() {
-		done <- run(RunOptions{
-			PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
-			Detach: true, Stdout: io.Discard, Stderr: stderr,
-		}, interrupts, func() {})
-	}()
-	select {
-	case <-stderr.started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("detached success write did not start")
-	}
-	interrupts <- os.Interrupt
-	time.Sleep(100 * time.Millisecond)
-	close(stderr.release)
-	select {
-	case code := <-done:
-		if code == 0 && controlAttempts.Load() > 0 {
-			t.Fatalf("detached run returned success after forwarding SIGINT (%d attempts)", controlAttempts.Load())
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("detached run did not finish")
-	}
-}
-
 func TestDetachDrainsInterruptDeliveredWhileResetting(t *testing.T) {
 	interrupts := make(chan os.Signal, 2)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	resumed := atomic.Bool{}
-	h := startAdmittedInterruptHandoff(
-		ctx, interrupts, "http://invalid", proto.NewULID(), "peer/job",
-		func(string, ...any) {},
-		interruptNotifications{
-			stop:   func() { interrupts <- os.Interrupt },
-			resume: func() { resumed.Store(true) },
-		},
+	controller := startAdmittedJobController(
+		ctx, interrupts,
+		newInterruptTarget(
+			"http://invalid", proto.NewULID(), "peer/job", func(string, ...any) {},
+			newInterruptNotifications(
+				func() { interrupts <- os.Interrupt },
+				func() { resumed.Store(true) },
+			),
+		),
 	)
-	if h.finishDetach(ctx) {
+	if controller.detach(ctx) {
 		t.Fatal("detach reported success after SIGINT was delivered while notification was stopping")
 	}
 	select {
-	case <-h.remote:
+	case <-controller.remote:
 	case <-time.After(time.Second):
 		t.Fatal("interrupt delivered during reset was not handed to remote control")
 	}
@@ -304,10 +279,10 @@ func TestInteractiveDetachRequestedBeforeAdmissionSkipsLogFollowing(t *testing.T
 	detach := make(chan struct{})
 	close(detach)
 	var stderr bytes.Buffer
-	code := runWithDetach(RunOptions{
+	code := runWithDetachNotifications(RunOptions{
 		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
 		Stdout: io.Discard, Stderr: &stderr,
-	}, make(chan os.Signal, 2), func() {}, detach)
+	}, make(chan os.Signal, 2), testInterruptNotifications(), detach)
 	if code != 0 {
 		t.Fatalf("pre-admission interactive detach exit = %d; stderr: %s", code, stderr.String())
 	}
@@ -354,10 +329,10 @@ func TestInteractiveDetachCancelsOnlyTheLocalLogFollow(t *testing.T) {
 	var stderr bytes.Buffer
 	done := make(chan int, 1)
 	go func() {
-		done <- runWithDetach(RunOptions{
+		done <- runWithDetachNotifications(RunOptions{
 			PeerURL: server.URL, Root: root, Argv: []string{"/bin/sleep", "30"},
 			Stdout: io.Discard, Stderr: &stderr,
-		}, make(chan os.Signal, 2), func() {}, detach)
+		}, make(chan os.Signal, 2), testInterruptNotifications(), detach)
 	}()
 	select {
 	case <-logStarted:
@@ -466,9 +441,9 @@ func TestAttachCanDetachWithoutControllingTheRemoteJob(t *testing.T) {
 	var stderr bytes.Buffer
 	done := make(chan int, 1)
 	go func() {
-		done <- attachWithDetach(AttachOptions{
+		done <- attachWithDetachNotifications(AttachOptions{
 			PeerURL: server.URL, JobID: jobID, Stdout: io.Discard, Stderr: &stderr,
-		}, make(chan os.Signal, 2), func() {}, detach)
+		}, make(chan os.Signal, 2), testInterruptNotifications(), detach)
 	}()
 	select {
 	case <-logStarted:
@@ -490,11 +465,11 @@ func TestAttachCanDetachWithoutControllingTheRemoteJob(t *testing.T) {
 }
 
 func TestDetachOnEOFIsTTYOnly(t *testing.T) {
-	if ch := detachOnEOF(strings.NewReader(""), false); ch != nil {
+	if ch := detachOnEOFContext(context.Background(), strings.NewReader(""), false); ch != nil {
 		t.Fatal("non-TTY EOF enabled interactive detachment")
 	}
 	r, w := io.Pipe()
-	ch := detachOnEOF(r, true)
+	ch := detachOnEOFContext(context.Background(), r, true)
 	if ch == nil {
 		t.Fatal("TTY EOF did not enable interactive detachment")
 	}
@@ -569,15 +544,32 @@ func TestInterruptBeforeAdmissionDoesNotSubmit(t *testing.T) {
 
 	interrupts := make(chan os.Signal, 2)
 	interrupts <- os.Interrupt
-	code := run(RunOptions{
+	code := runWithDetachNotifications(RunOptions{
 		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
 		Stdout: io.Discard, Stderr: io.Discard,
-	}, interrupts, func() {})
+	}, interrupts, testInterruptNotifications(), nil)
 	if code != 130 {
 		t.Fatalf("pre-admission interrupt exit = %d, want 130", code)
 	}
 	if got := requests.Load(); got != 0 {
 		t.Fatalf("pre-admission interrupt made %d remote requests, want 0", got)
+	}
+}
+
+func TestQueuedInterruptAtAdmissionStaysLocal(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	interrupts := make(chan os.Signal, 1)
+	interrupts <- os.Interrupt
+	controller := admitJobController(
+		ctx, interrupts,
+		newInterruptTarget(
+			"http://invalid", proto.NewULID(), "peer/job", func(string, ...any) {},
+			testInterruptNotifications(),
+		),
+	)
+	if controller != nil {
+		t.Fatal("queued pre-admission interrupt started remote control")
 	}
 }
 
@@ -600,13 +592,17 @@ func TestSecondInterruptRestoresDefaultBeforeForceKillRetry(t *testing.T) {
 	defer cancel()
 	interrupts := make(chan os.Signal, 2)
 	reset := make(chan struct{})
-	done := make(chan struct{})
-	go func() {
-		forwardInterrupts(ctx, interrupts, server.URL, proto.NewULID(), "peer/job", func(string, ...any) {}, func() {
-			close(reset)
-		})
-		close(done)
-	}()
+	var resetOnce sync.Once
+	controller := startAdmittedJobController(
+		ctx, interrupts,
+		newInterruptTarget(
+			server.URL, proto.NewULID(), "peer/job", func(string, ...any) {},
+			newInterruptNotifications(
+				func() { resetOnce.Do(func() { close(reset) }) },
+				func() {},
+			),
+		),
+	)
 	interrupts <- os.Interrupt
 	interrupts <- os.Interrupt
 	select {
@@ -621,7 +617,7 @@ func TestSecondInterruptRestoresDefaultBeforeForceKillRetry(t *testing.T) {
 	}
 	cancel()
 	select {
-	case <-done:
+	case <-controller.done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("interrupt forwarder did not stop after cancellation")
 	}
@@ -713,16 +709,15 @@ func TestControlJSONGetCancelsAStalledResponseBody(t *testing.T) {
 func TestAmbiguousResultReportsTransactionExplanation(t *testing.T) {
 	var stderr bytes.Buffer
 	code := exitCode(proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{
-		State: proto.StateAmbiguous, OutputsOK: true, CleanupOK: false, LogsComplete: false,
+		State: proto.StateAmbiguous, StartError: "exec format error", OutputsOK: false, CleanupOK: false, LogsComplete: false,
 		TransactionError: "execution state unknown; not replayed",
 	}}, &stderr, "cabal/job")
 	if code != ExitTransaction {
 		t.Fatalf("ambiguous result exit = %d, want %d", code, ExitTransaction)
 	}
-	for _, want := range []string{"cabal/job", "ambiguous", "cleanup failed", "logs truncated", "execution state unknown; not replayed"} {
-		if !strings.Contains(stderr.String(), want) {
-			t.Fatalf("ambiguous transaction report %q does not contain %q", stderr.String(), want)
-		}
+	want := "errand: transaction incomplete (cabal/job, state=ambiguous, start error: exec format error, outputs incomplete, cleanup failed, logs truncated, execution state unknown; not replayed)\n"
+	if got := stderr.String(); got != want {
+		t.Fatalf("ambiguous transaction report = %q, want %q", got, want)
 	}
 }
 
@@ -782,7 +777,7 @@ func TestTerminalJobLogReplayFailureIsTransactionFailure(t *testing.T) {
 	}))
 	defer server.Close()
 	code := 0
-	_, err := stream(RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{
+	_, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{
 		ID: "job", State: proto.StateExited,
 		Result: &proto.Result{ExitCode: &code, OutputsOK: true, CleanupOK: true, LogsComplete: true},
 	})
@@ -803,7 +798,7 @@ func TestTerminalJobRetriesTransientLogReplay(t *testing.T) {
 	}))
 	defer server.Close()
 	code := 0
-	final, err := stream(RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{
+	final, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{
 		ID: "job", State: proto.StateExited,
 		Result: &proto.Result{ExitCode: &code, OutputsOK: true, CleanupOK: true, LogsComplete: true},
 	})
@@ -822,7 +817,7 @@ func TestPermanentLogHTTPFailureIsNotRetried(t *testing.T) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 	}))
 	defer server.Close()
-	_, err := stream(RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{ID: "job", State: proto.StateRunning})
+	_, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{ID: "job", State: proto.StateRunning})
 	if err == nil || !strings.Contains(err.Error(), "403") {
 		t.Fatalf("permanent log response error = %v", err)
 	}
@@ -838,7 +833,7 @@ func TestNotImplementedLogHTTPFailureIsNotRetried(t *testing.T) {
 		http.Error(w, "unsupported", http.StatusNotImplemented)
 	}))
 	defer server.Close()
-	_, err := stream(RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{ID: "job", State: proto.StateRunning})
+	_, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{ID: "job", State: proto.StateRunning})
 	if err == nil || !strings.Contains(err.Error(), "501") {
 		t.Fatalf("not-implemented log response error = %v", err)
 	}
@@ -859,7 +854,7 @@ func TestRetryableRemoteLogErrorResumes(t *testing.T) {
 		io.WriteString(w, "event: status\ndata: {\"id\":\"job\",\"state\":\"exited\",\"result\":{}}\n\n")
 	}))
 	defer server.Close()
-	final, err := stream(RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{ID: "job", State: proto.StateRunning})
+	final, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{ID: "job", State: proto.StateRunning})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -876,7 +871,7 @@ func TestMalformedLogFrameCannotAdvanceResumeCursor(t *testing.T) {
 		io.WriteString(w, "id: 1\nevent: log\ndata: {\"seq\":1,\"stream\":\"stdout\",\"data_b64\":\"%%%\"}\n\n")
 	}))
 	defer server.Close()
-	_, err := stream(RunOptions{PeerURL: server.URL, Stdout: io.Discard, Stderr: io.Discard}, "job", proto.JobStatus{
+	_, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL, Stdout: io.Discard, Stderr: io.Discard}, "job", proto.JobStatus{
 		ID: "job", State: proto.StateRunning,
 	})
 	if err == nil {
@@ -897,7 +892,7 @@ func TestShortOutputWriteFailsTransaction(t *testing.T) {
 		io.WriteString(w, "id: 1\nevent: log\ndata: {\"seq\":1,\"stream\":\"stdout\",\"data_b64\":\"eA==\"}\n\n")
 	}))
 	defer server.Close()
-	_, err := stream(RunOptions{PeerURL: server.URL, Stdout: shortWriter{}, Stderr: io.Discard}, "job", proto.JobStatus{
+	_, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL, Stdout: shortWriter{}, Stderr: io.Discard}, "job", proto.JobStatus{
 		ID: "job", State: proto.StateRunning,
 	})
 	if !errors.Is(err, io.ErrShortWrite) {

@@ -72,26 +72,11 @@ func Run(opts RunOptions) int {
 	defer stopDetach()
 	return runWithDetachNotifications(
 		opts, sigCh,
-		interruptNotifications{
-			stop:   func() { signal.Stop(sigCh) },
-			resume: func() { signal.Notify(sigCh, os.Interrupt) },
-		},
+		newInterruptNotifications(
+			func() { signal.Stop(sigCh) },
+			func() { signal.Notify(sigCh, os.Interrupt) },
+		),
 		detachOnEOFContext(detachCtx, os.Stdin, isTerminalFile(os.Stdin)),
-	)
-}
-
-func run(opts RunOptions, sigCh <-chan os.Signal, resetInterrupt func()) int {
-	return runWithDetach(opts, sigCh, resetInterrupt, nil)
-}
-
-func runWithDetach(
-	opts RunOptions,
-	sigCh <-chan os.Signal,
-	resetInterrupt func(),
-	detach <-chan struct{},
-) int {
-	return runWithDetachNotifications(
-		opts, sigCh, interruptNotifications{stop: resetInterrupt}, detach,
 	)
 }
 
@@ -115,15 +100,13 @@ func runWithDetachNotifications(
 	handle := peerLabel(opts.PeerName, opts.PeerURL) + "/" + jobID
 	interruptCtx, stopInterrupts := context.WithCancel(context.Background())
 	defer stopInterrupts()
-	interrupts := startInterruptHandoff(
-		interruptCtx, sigCh, opts.PeerURL, jobID, handle, errf, interruptsControl,
-	)
+	target := newInterruptTarget(opts.PeerURL, jobID, handle, errf, interruptsControl)
 
 	prepared := make(chan snapshotPreparation, 1)
 	go func() { prepared <- prepareSnapshot(opts.Root, opts.IncludeAll) }()
 	var prep snapshotPreparation
 	select {
-	case <-interrupts.local:
+	case <-sigCh:
 		errf("interrupted before submission")
 		return signalExit("interrupt", 2)
 	case prep = <-prepared:
@@ -165,7 +148,8 @@ func runWithDetachNotifications(
 		GitDirty:     gitInfo.Dirty,
 	}
 
-	if !interrupts.beginAdmission(interruptCtx) {
+	controller := admitJobController(interruptCtx, sigCh, target)
+	if controller == nil {
 		errf("interrupted before submission")
 		return signalExit("interrupt", 2)
 	}
@@ -191,12 +175,12 @@ func runWithDetachNotifications(
 		if opts.Detach {
 			fmt.Fprintln(opts.Stdout, handle)
 		}
-		return completeDetach(interrupts, interruptCtx, errf, handle)
+		return controller.completeDetach(interruptCtx)
 	}
 
 	final, err, detached := streamUntilDetach(opts, jobID, status, detach)
 	if detached {
-		return completeDetach(interrupts, interruptCtx, errf, handle)
+		return controller.completeDetach(interruptCtx)
 	}
 	if err != nil {
 		errf("%v", err)
@@ -236,245 +220,6 @@ func snapshotSize(manifest proto.Manifest) (int, int64) {
 		}
 	}
 	return files, size
-}
-
-// interruptHandoff gives one goroutine ownership of sigCh. Before admission,
-// the first interrupt is a purely local cancellation. beginAdmission is the
-// linearization point after which the same signal becomes remote job control.
-type interruptHandoff struct {
-	begin     chan chan bool
-	finish    chan chan bool
-	local     chan struct{}
-	remote    chan struct{}
-	forwarded chan error
-}
-
-// interruptNotifications owns the process-wide os/signal registration. A
-// successful detach first stops delivery, then drains the channel. If a
-// signal was already in flight, delivery is resumed so the usual second
-// Ctrl-C force-kill behavior remains available.
-type interruptNotifications struct {
-	stop   func()
-	resume func()
-}
-
-func startInterruptHandoff(
-	ctx context.Context,
-	sigCh <-chan os.Signal,
-	peerURL, jobID, handle string,
-	errf func(string, ...any),
-	interrupts interruptNotifications,
-) *interruptHandoff {
-	h := &interruptHandoff{
-		begin: make(chan chan bool), finish: make(chan chan bool), local: make(chan struct{}),
-		remote: make(chan struct{}), forwarded: make(chan error, 1),
-	}
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-sigCh:
-				close(h.local)
-				return
-			case ack := <-h.begin:
-				// Prefer an already-delivered interrupt over the handoff so a
-				// queued pre-admission Ctrl-C cannot become remote execution.
-				select {
-				case <-sigCh:
-					close(h.local)
-					ack <- false
-					return
-				default:
-					ack <- true
-				}
-				forwardInterruptsWithOutcome(
-					ctx, sigCh, peerURL, jobID, handle, errf, interrupts,
-					h.finish,
-					func() { close(h.remote) },
-					func(err error) { h.forwarded <- err },
-				)
-				return
-			}
-		}
-	}()
-	return h
-}
-
-func startAdmittedInterruptHandoff(
-	ctx context.Context,
-	sigCh <-chan os.Signal,
-	peerURL, jobID, handle string,
-	errf func(string, ...any),
-	interrupts interruptNotifications,
-) *interruptHandoff {
-	h := &interruptHandoff{
-		finish: make(chan chan bool), remote: make(chan struct{}), forwarded: make(chan error, 1),
-	}
-	go forwardInterruptsWithOutcome(
-		ctx, sigCh, peerURL, jobID, handle, errf, interrupts,
-		h.finish,
-		func() { close(h.remote) },
-		func(err error) { h.forwarded <- err },
-	)
-	return h
-}
-
-// finishDetach is the success linearization point for detached submission.
-// The interrupt owner either confirms no signal was pending and restores
-// normal local SIGINT handling, or reports that remote control has begun.
-func (h *interruptHandoff) finishDetach(ctx context.Context) bool {
-	ack := make(chan bool, 1)
-	select {
-	case h.finish <- ack:
-	case <-h.remote:
-		return false
-	case <-ctx.Done():
-		return false
-	}
-	select {
-	case ok := <-ack:
-		return ok
-	case <-h.remote:
-		return false
-	case <-ctx.Done():
-		return false
-	}
-}
-
-func completeDetach(
-	interrupts *interruptHandoff,
-	ctx context.Context,
-	errf func(string, ...any),
-	handle string,
-) int {
-	if interrupts.finishDetach(ctx) {
-		errf("detached; reattach with: errand attach %s", handle)
-		return 0
-	}
-	timer := time.NewTimer(controlRequestTimeout)
-	defer timer.Stop()
-	select {
-	case forwardErr := <-interrupts.forwarded:
-		if forwardErr != nil {
-			errf("SIGINT delivery is uncertain: %v; inspect or control job %s", forwardErr, handle)
-			return ExitTransaction
-		}
-		errf("SIGINT forwarded to %s", handle)
-		return signalExit("interrupt", 2)
-	case <-timer.C:
-		errf("SIGINT delivery is uncertain; inspect or control job %s", handle)
-		return ExitTransaction
-	}
-}
-
-func (h *interruptHandoff) beginAdmission(ctx context.Context) bool {
-	ack := make(chan bool, 1)
-	select {
-	case h.begin <- ack:
-	case <-h.local:
-		return false
-	case <-ctx.Done():
-		return false
-	}
-	select {
-	case ok := <-ack:
-		return ok
-	case <-h.local:
-		return false
-	case <-ctx.Done():
-		return false
-	}
-}
-
-// forwardInterrupts starts before submit so an admitted job can be controlled
-// even while its submit response is delayed or being retried. A 404/409 can be
-// a pre-start race, so the first signal is retried until accepted or Run ends.
-func forwardInterrupts(
-	ctx context.Context,
-	sigCh <-chan os.Signal,
-	peerURL, jobID, handle string,
-	errf func(string, ...any),
-	resetInterrupt func(),
-) {
-	forwardInterruptsWithOutcome(
-		ctx, sigCh, peerURL, jobID, handle, errf,
-		interruptNotifications{stop: resetInterrupt}, nil, nil, nil,
-	)
-}
-
-func forwardInterruptsWithOutcome(
-	ctx context.Context,
-	sigCh <-chan os.Signal,
-	peerURL, jobID, handle string,
-	errf func(string, ...any),
-	interrupts interruptNotifications,
-	finish <-chan chan bool,
-	onFirst func(),
-	onForwarded func(error),
-) {
-
-firstSignal:
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-sigCh:
-			break firstSignal
-		case ack := <-finish:
-			// Stop delivery before the final drain. signal.Stop guarantees that
-			// no send remains in flight when it returns, closing the check-then-stop
-			// race that could otherwise abandon a queued Ctrl-C.
-			if interrupts.stop != nil {
-				interrupts.stop()
-			}
-			select {
-			case <-sigCh:
-				if interrupts.resume != nil {
-					interrupts.resume()
-				}
-				ack <- false
-				break firstSignal
-			default:
-				ack <- true
-				return
-			}
-		}
-	}
-	if onFirst != nil {
-		onFirst()
-	}
-
-	errf("forwarding SIGINT to %s (Ctrl-C again to force-kill)", handle)
-	forwardCtx, cancelForward := context.WithCancel(ctx)
-	defer cancelForward()
-	go func() {
-		err := retryJobControl(forwardCtx, peerURL+"/v0/jobs/"+jobID+"/signal", map[string]string{"signal": "SIGINT"}, true)
-		if onForwarded != nil {
-			onForwarded(err)
-		}
-		if err != nil && ctx.Err() == nil {
-			errf("forwarding SIGINT failed: %v", err)
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return
-	case <-sigCh:
-	}
-	cancelForward()
-	errf("force-killing %s", handle)
-	// Further Ctrl-Cs must recover their normal local behavior even if the
-	// force-kill control request loses contact with the peer.
-	if interrupts.stop != nil {
-		interrupts.stop()
-	}
-	killCtx, cancelKill := context.WithTimeout(ctx, controlRequestTimeout)
-	defer cancelKill()
-	if err := retryJobControl(killCtx, peerURL+"/v0/jobs/"+jobID+"/kill?force=1", nil, false); err != nil && ctx.Err() == nil {
-		errf("force-kill failed: %v; process may still be running; handle %s", err, handle)
-	}
 }
 
 func retryJobControl(ctx context.Context, url string, v any, retryConflict bool) error {
@@ -524,22 +269,11 @@ func Attach(opts AttachOptions) int {
 	defer stopDetach()
 	return attachWithDetachNotifications(
 		opts, sigCh,
-		interruptNotifications{
-			stop:   func() { signal.Stop(sigCh) },
-			resume: func() { signal.Notify(sigCh, os.Interrupt) },
-		},
+		newInterruptNotifications(
+			func() { signal.Stop(sigCh) },
+			func() { signal.Notify(sigCh, os.Interrupt) },
+		),
 		detachOnEOFContext(detachCtx, os.Stdin, isTerminalFile(os.Stdin)),
-	)
-}
-
-func attachWithDetach(
-	opts AttachOptions,
-	sigCh <-chan os.Signal,
-	resetInterrupt func(),
-	detach <-chan struct{},
-) int {
-	return attachWithDetachNotifications(
-		opts, sigCh, interruptNotifications{stop: resetInterrupt}, detach,
 	)
 }
 
@@ -570,14 +304,15 @@ func attachWithDetachNotifications(
 	defer cancel()
 	// The job is already admitted, so signals are remote control from the
 	// first Ctrl-C; there is no pre-admission local-cancel phase here.
-	interrupts := startAdmittedInterruptHandoff(
-		ctx, sigCh, opts.PeerURL, opts.JobID, handle, errf, interruptsControl,
+	controller := startAdmittedJobController(
+		ctx, sigCh,
+		newInterruptTarget(opts.PeerURL, opts.JobID, handle, errf, interruptsControl),
 	)
 
 	runOpts := RunOptions{PeerURL: opts.PeerURL, Stdout: opts.Stdout, Stderr: opts.Stderr}
 	final, err, detached := streamUntilDetach(runOpts, opts.JobID, status, detach)
 	if detached {
-		return completeDetach(interrupts, ctx, errf, handle)
+		return controller.completeDetach(ctx)
 	}
 	if err != nil {
 		errf("%v", err)
@@ -730,13 +465,6 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 	}
 }
 
-// stream follows the SSE log stream, printing frames to the local
-// stdout/stderr, resuming after transient disconnects, until the terminal
-// status event arrives.
-func stream(opts RunOptions, jobID string, initial proto.JobStatus) (proto.JobStatus, error) {
-	return streamContext(context.Background(), opts, jobID, initial)
-}
-
 type streamResult struct {
 	status proto.JobStatus
 	err    error
@@ -749,7 +477,7 @@ func streamUntilDetach(
 	detach <-chan struct{},
 ) (proto.JobStatus, error, bool) {
 	if detach == nil {
-		status, err := stream(opts, jobID, initial)
+		status, err := streamContext(context.Background(), opts, jobID, initial)
 		return status, err, false
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -846,10 +574,6 @@ func (e *streamIntegrityError) Unwrap() error { return e.err }
 
 func streamIntegrity(err error) error {
 	return &streamIntegrityError{err: err}
-}
-
-func followOnce(opts RunOptions, jobID string, last *int64) (proto.JobStatus, error) {
-	return followOnceContext(context.Background(), opts, jobID, last)
 }
 
 func followOnceContext(
@@ -959,13 +683,6 @@ type idleReadCloser struct {
 	timeout time.Duration
 }
 
-// detachOnEOF converts terminal EOF (normally Ctrl-D on an empty line) into
-// a local detach request. Non-terminal EOF is ignored so scripts and
-// background jobs do not silently change from attached to detached mode.
-func detachOnEOF(r io.Reader, interactive bool) <-chan struct{} {
-	return detachOnEOFContext(context.Background(), r, interactive)
-}
-
 type terminalEOFOps struct {
 	foreground   func() bool
 	waitReadable func(time.Duration) (bool, error)
@@ -1007,6 +724,9 @@ func watchTerminalEOF(ctx context.Context, ops terminalEOFOps) <-chan struct{} {
 	return detach
 }
 
+// detachOnEOFContext converts terminal EOF (normally Ctrl-D on an empty line)
+// into a local detach request. Non-terminal EOF is ignored so scripts and
+// background jobs do not silently change from attached to detached mode.
 func detachOnEOFContext(ctx context.Context, r io.Reader, interactive bool) <-chan struct{} {
 	if !interactive || r == nil {
 		return nil
@@ -1055,142 +775,6 @@ func (r *idleReadCloser) Read(p []byte) (int, error) {
 	case <-timer.C:
 		_ = r.ReadCloser.Close()
 		return 0, fmt.Errorf("stream idle timeout after %s", r.timeout)
-	}
-}
-
-// exitCode applies the two-layer rule.
-func exitCode(st proto.JobStatus, stderr io.Writer, handle string) int {
-	res := st.Result
-	if res == nil {
-		fmt.Fprintf(stderr, "errand: %s has no result (state %s)\n", handle, st.State)
-		return ExitTransaction
-	}
-	ambiguous := st.State == proto.StateAmbiguous
-	if ambiguous && res.ExitCode == nil && res.Signal == "" {
-		fmt.Fprintf(stderr, "errand: transaction incomplete (%s, state=%s", handle, st.State)
-		if res.StartError != "" {
-			fmt.Fprintf(stderr, ", start error: %s", res.StartError)
-		}
-		if !res.OutputsOK {
-			fmt.Fprint(stderr, ", outputs incomplete")
-		}
-		if !res.CleanupOK {
-			fmt.Fprint(stderr, ", cleanup failed")
-		}
-		if res.LimitExceeded != "" {
-			fmt.Fprintf(stderr, ", limit exceeded: %s", res.LimitExceeded)
-		}
-		if !res.LogsComplete {
-			fmt.Fprint(stderr, ", logs truncated")
-		}
-		if res.TransactionError != "" {
-			fmt.Fprintf(stderr, ", %s", res.TransactionError)
-		}
-		fmt.Fprintln(stderr, ")")
-		return ExitTransaction
-	}
-	transactionOK := !ambiguous && res.CleanupOK && res.OutputsOK && res.LimitExceeded == "" &&
-		res.StartError == "" && res.TransactionError == "" && res.LogsComplete
-	switch {
-	case res.StartError != "":
-		if ambiguous {
-			fmt.Fprintf(stderr, "errand: job failed to start (state ambiguous): %s\n", res.StartError)
-		} else {
-			fmt.Fprintf(stderr, "errand: job failed to start: %s\n", res.StartError)
-		}
-		return ExitTransaction
-	case res.Signal != "":
-		fmt.Fprintf(stderr, "errand: remote process killed by %s", res.Signal)
-		if ambiguous {
-			fmt.Fprint(stderr, " (state ambiguous)")
-		}
-		if !res.CleanupOK {
-			fmt.Fprintf(stderr, " (cleanup failed)")
-		}
-		if res.LimitExceeded != "" {
-			fmt.Fprintf(stderr, " (limit exceeded: %s)", res.LimitExceeded)
-		}
-		if !res.LogsComplete {
-			fmt.Fprintf(stderr, " (logs truncated)")
-		}
-		if res.TransactionError != "" {
-			fmt.Fprintf(stderr, " (transaction error: %s)", res.TransactionError)
-		}
-		fmt.Fprintln(stderr)
-		return signalExit(res.Signal, res.SignalNum)
-	case res.ExitCode != nil && !transactionOK:
-		fmt.Fprint(stderr, "errand: transaction incomplete (")
-		if ambiguous {
-			fmt.Fprint(stderr, "state=ambiguous, ")
-		}
-		fmt.Fprintf(stderr, "remote_exit=%d", *res.ExitCode)
-		if !res.CleanupOK {
-			fmt.Fprintf(stderr, ", cleanup failed")
-		}
-		if res.LimitExceeded != "" {
-			fmt.Fprintf(stderr, ", limit exceeded: %s", res.LimitExceeded)
-		}
-		if !res.LogsComplete {
-			fmt.Fprintf(stderr, ", logs truncated")
-		}
-		if res.TransactionError != "" {
-			fmt.Fprintf(stderr, ", %s", res.TransactionError)
-		}
-		fmt.Fprintln(stderr, ")")
-		if *res.ExitCode == 0 {
-			return ExitTransaction
-		}
-		return *res.ExitCode
-	case res.ExitCode != nil:
-		return *res.ExitCode
-	case !transactionOK:
-		fmt.Fprintf(stderr, "errand: transaction incomplete (%s, state=%s", handle, st.State)
-		if !res.OutputsOK {
-			fmt.Fprint(stderr, ", outputs incomplete")
-		}
-		if !res.CleanupOK {
-			fmt.Fprint(stderr, ", cleanup failed")
-		}
-		if res.LimitExceeded != "" {
-			fmt.Fprintf(stderr, ", limit exceeded: %s", res.LimitExceeded)
-		}
-		if !res.LogsComplete {
-			fmt.Fprint(stderr, ", logs truncated")
-		}
-		if res.TransactionError != "" {
-			fmt.Fprintf(stderr, ", %s", res.TransactionError)
-		}
-		fmt.Fprintln(stderr, ")")
-		return ExitTransaction
-	default:
-		fmt.Fprintf(stderr, "errand: %s has no process outcome (state %s)\n", handle, st.State)
-		return ExitTransaction
-	}
-}
-
-func signalExit(sig string, signalNum int) int {
-	if signalNum > 0 && signalNum < 128 {
-		return 128 + signalNum
-	}
-	switch sig {
-	case "hangup":
-		return 129
-	case "interrupt":
-		return 130
-	case "quit":
-		return 131
-	case "aborted":
-		return 134
-	case "terminated":
-		return 143
-	case "killed":
-		return 137
-	case "segmentation fault":
-		return 139
-	case "broken pipe":
-		return 141
-	default:
-		return ExitTransaction
 	}
 }
 
