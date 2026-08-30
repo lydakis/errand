@@ -24,6 +24,8 @@ import (
 
 const (
 	maxListCommandBytes  = 512
+	maxListWorkdirBytes  = 384
+	maxListDigestBytes   = 64
 	maxListResponseBytes = 1 << 20
 	queuedMarkerName     = "queued.json"
 )
@@ -49,6 +51,7 @@ type Job struct {
 	killed        string // limit name or signal that terminated the job, if any
 	killSignal    syscall.Signal
 	started       bool
+	startedAt     time.Time
 	reaped        bool
 	startRejected bool
 	done          chan struct{}
@@ -71,15 +74,42 @@ func (j *Job) summary() proto.JobListEntry {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	command, truncated := boundedCommand(j.Spec.Argv, maxListCommandBytes)
+	manifestRoot, manifestRootTruncated := boundedListField(j.Spec.ManifestRoot, maxListDigestBytes)
+	gitCommit, gitCommitTruncated := boundedListField(j.Spec.GitCommit, maxListDigestBytes)
+	workdir, workdirTruncated := boundedListField(j.Spec.Workdir, maxListWorkdirBytes)
 	e := proto.JobListEntry{
 		ID: j.ID, State: j.state, Command: command, CommandTruncated: truncated,
-		AdmittedAt: j.Admission.Time,
+		AdmittedAt:   j.Admission.Time,
+		ManifestRoot: manifestRoot, ManifestRootTruncated: manifestRootTruncated,
+		GitCommit: gitCommit, GitCommitTruncated: gitCommitTruncated, GitDirty: j.Spec.GitDirty,
+		Workdir: workdir, WorkdirTruncated: workdirTruncated,
+	}
+	if !j.startedAt.IsZero() {
+		startedAt := j.startedAt
+		e.StartedAt = &startedAt
+		elapsed := time.Since(j.startedAt)
+		if elapsed < 0 {
+			elapsed = 0
+		}
+		e.DurationMS = elapsed.Milliseconds()
 	}
 	if j.result != nil {
 		e.ExitCode = j.result.ExitCode
 		e.Signal = j.result.Signal
+		if j.result.StartedAt != nil {
+			e.StartedAt = j.result.StartedAt
+			e.DurationMS = j.result.DurationMS
+		}
+		e.FinishedAt = j.result.FinishedAt
 	}
 	return e
+}
+
+func boundedListField(value string, limit int) (string, bool) {
+	if len(value) <= limit {
+		return value, false
+	}
+	return markCommandTruncated(value, limit), true
 }
 
 func boundedCommand(argv []string, limit int) (string, bool) {
@@ -326,10 +356,13 @@ func (j *Job) launch(d *Daemon) error {
 		j.finalize(d, j.cancelledBeforeStart(), true)
 		return nil
 	}
+	var startedAt time.Time
 	err = cmd.Start()
 	if err == nil {
+		startedAt = time.Now()
 		j.cmd = cmd
 		j.started = true
+		j.startedAt = startedAt
 		j.state = proto.StateRunning
 		j.Spec.Env = nil // values now belong to the child; retain only the digest and metadata
 	}
@@ -357,6 +390,8 @@ func (j *Job) launch(d *Daemon) error {
 
 	go func() {
 		waitErr := cmd.Wait()
+		finishedAt := time.Now()
+		durationMS := finishedAt.Sub(startedAt).Milliseconds()
 		timer.Stop()
 		j.mu.Lock()
 		j.cmd = nil
@@ -377,7 +412,10 @@ func (j *Job) launch(d *Daemon) error {
 		}
 		logw.Close()
 
-		res := &proto.Result{Started: true, OutputsOK: true, CleanupOK: processCleanupOK && pipeErr == nil}
+		res := &proto.Result{
+			Started: true, StartedAt: &startedAt, FinishedAt: &finishedAt, DurationMS: durationMS,
+			OutputsOK: true, CleanupOK: processCleanupOK && pipeErr == nil,
+		}
 		res.LogsComplete = logw.Complete() && pipeErr == nil
 		res.LimitExceeded = j.limitExceeded(logw)
 		if scopeErr != nil {

@@ -12,9 +12,11 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
@@ -30,7 +32,7 @@ usage:
   errand [--on PEER | --url URL] [--detach] [--env K=V]... [--passenv K]...
          [--workdir REL] [--include-all | --no-snapshot] -- CMD [ARG...]
   errand attach [--on PEER | --url URL] HANDLE
-  errand ps [--on PEER | --url URL]
+  errand ps [--json] [--on PEER | --url URL]
   errand kill [--force] [--on PEER | --url URL] HANDLE
   errand caches [--on PEER | --url URL]
   errand gc [--on PEER | --url URL]
@@ -42,8 +44,10 @@ A HANDLE is peer/ULID as printed at submission (a bare ULID works with
 --on/--url or a configured default peer). --detach prints the handle on
 stdout and returns after admission; the job keeps running on the peer.
 When attached from a terminal, Ctrl-D detaches locally and prints the
-reattach command; Ctrl-C sends SIGINT to the remote job and a second Ctrl-C
-force-kills it. Ctrl-D exits 0 for successful detachment, not job completion.
+reattach command without changing the job. Ctrl-C sends SIGINT to the remote
+job and a second Ctrl-C sends SIGKILL. "errand kill" requests SIGTERM;
+"errand kill --force" sends SIGKILL. Ctrl-D exits 0 for successful local
+detachment, not job completion.
 
 Exit status: the remote process's own exit code. If that code is 0 but the
 transaction itself fails, errand exits 120; secondary failures accompanying
@@ -290,7 +294,11 @@ func cmdKill(args []string) int {
 		return 1
 	}
 	label = cmpOr(label, peerURL)
-	fmt.Fprintf(os.Stderr, "errand: kill requested for %s/%s\n", label, jobID)
+	if *force {
+		fmt.Fprintf(os.Stderr, "errand: force kill (SIGKILL) requested for %s/%s\n", label, jobID)
+	} else {
+		fmt.Fprintf(os.Stderr, "errand: graceful termination (SIGTERM) requested for %s/%s\n", label, jobID)
+	}
 	return 0
 }
 
@@ -301,6 +309,11 @@ func cmpOr(a, b string) string {
 	return b
 }
 
+type psRow struct {
+	Peer string `json:"peer"`
+	proto.JobListEntry
+}
+
 func cmdPs(args []string) int {
 	return cmdPsTo(args, os.Stdout, os.Stderr)
 }
@@ -309,6 +322,7 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("ps", flag.ExitOnError)
 	on := fs.String("on", "", "restrict to one peer name")
 	rawURL := fs.String("url", "", "restrict to one peer base URL")
+	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
 	fs.Parse(args)
 	if *rawURL != "" && *on != "" {
 		fmt.Fprintln(stderr, "errand: --on and --url are mutually exclusive")
@@ -357,8 +371,7 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	w := tabwriter.NewWriter(stdout, 2, 8, 2, ' ', 0)
-	fmt.Fprintln(w, "PEER\tJOB\tSTATE\tEXIT\tAGE\tCOMMAND")
+	rows := make([]psRow, 0)
 	reached := false
 	for _, tgt := range targets {
 		entries, err := client.List(tgt.url)
@@ -369,42 +382,111 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 		}
 		reached = true
 		for _, e := range entries {
-			exit := "-"
-			switch {
-			case e.ExitCode != nil:
-				exit = fmt.Sprintf("%d", *e.ExitCode)
-			case e.Signal != "":
-				exit = e.Signal
-			}
-			age := "-"
-			if !e.AdmittedAt.IsZero() {
-				age = shortDuration(time.Since(e.AdmittedAt))
-			}
-			commandRunes := []rune(e.Command)
-			cmd := e.Command
-			if len(commandRunes) > 60 {
-				cmd = string(commandRunes[:59]) + "…"
-			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", tgt.name, e.ID, e.State, exit, age, cmd)
+			rows = append(rows, psRow{Peer: tgt.name, JobListEntry: e})
 		}
 	}
-	w.Flush()
+	if *jsonOutput {
+		encoder := json.NewEncoder(stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(rows); err != nil {
+			fmt.Fprintf(stderr, "errand: encoding job listing: %v\n", err)
+			return 1
+		}
+	} else {
+		writePsTable(stdout, rows)
+	}
 	if !reached || failed {
 		return 1
 	}
 	return 0
 }
 
+func writePsTable(w io.Writer, rows []psRow) {
+	tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
+	fmt.Fprintln(tw, "PEER\tJOB\tSTATE\tEXIT\tADMITTED\tSTARTED\tDURATION\tSOURCE\tWORKDIR\tCOMMAND")
+	for _, row := range rows {
+		exit := "-"
+		switch {
+		case row.ExitCode != nil:
+			exit = fmt.Sprintf("%d", *row.ExitCode)
+		case row.Signal != "":
+			exit = row.Signal
+		}
+		admitted := formatLocalTime(row.AdmittedAt)
+		started := "-"
+		if row.StartedAt != nil {
+			started = formatLocalTime(*row.StartedAt)
+		}
+		duration := "-"
+		if row.StartedAt != nil {
+			duration = shortDuration(time.Duration(row.DurationMS) * time.Millisecond)
+		}
+		source := terminalSafeField(jobSource(row.JobListEntry))
+		workdir := row.Workdir
+		if workdir == "" {
+			workdir = "."
+		}
+		workdir = terminalSafeField(workdir)
+		commandRunes := []rune(row.Command)
+		cmd := row.Command
+		if len(commandRunes) > 60 {
+			cmd = string(commandRunes[:59]) + "…"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			row.Peer, row.ID, row.State, exit, admitted, started, duration, source, workdir, cmd)
+	}
+	_ = tw.Flush()
+}
+
+func formatLocalTime(value time.Time) string {
+	if value.IsZero() {
+		return "-"
+	}
+	return value.Local().Format("2006-01-02 15:04:05")
+}
+
+func terminalSafeField(value string) string {
+	if strings.IndexFunc(value, unicode.IsControl) >= 0 {
+		return strconv.QuoteToGraphic(value)
+	}
+	return value
+}
+
+func jobSource(entry proto.JobListEntry) string {
+	if entry.GitCommit != "" {
+		source := truncateHash(entry.GitCommit)
+		if entry.GitDirty {
+			source += "+dirty"
+		}
+		return source
+	}
+	if entry.ManifestRoot != "" {
+		return "snapshot:" + truncateHash(entry.ManifestRoot)
+	}
+	return "-"
+}
+
+func truncateHash(hash string) string {
+	if len(hash) > 12 {
+		return hash[:12]
+	}
+	return hash
+}
+
 func shortDuration(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	d = d.Truncate(time.Second)
 	switch {
 	case d < time.Minute:
 		return fmt.Sprintf("%ds", int(d.Seconds()))
 	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
+		return fmt.Sprintf("%dm%ds", int(d/time.Minute), int(d%time.Minute/time.Second))
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
+		return fmt.Sprintf("%dh%dm", int(d/time.Hour), int(d%time.Hour/time.Minute))
 	default:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
+		return fmt.Sprintf("%dd%dh", int(d/(24*time.Hour)), int(d%(24*time.Hour)/time.Hour))
 	}
 }
 

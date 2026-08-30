@@ -23,6 +23,7 @@ errand --no-snapshot -- uname -a # runs in a fresh empty remote workspace
 # Ctrl-D detaches without stopping the remote job; Ctrl-C interrupts it
 job=$(errand --detach -- make build)
 errand ps                     # list your jobs across configured peers
+errand ps --json              # the same receipt-backed data for clients
 errand attach "$job"          # replay logs and follow to completion
 ```
 
@@ -88,6 +89,36 @@ Non-terminal EOF is ignored, so scripts remain attached unless they request
 Detached jobs, `ps`, `attach`, `kill`, snapshot-cache inspection, and cache GC
 are implemented. Planned v0 commands still include fact-based peer selection,
 output fetching, named-cache management, and pairing.
+
+## Job state and control
+
+`errand ps` shows admission and process start times, process duration, source
+snapshot, workdir, command, and terminal outcome. Git sources are shown as a
+short commit plus `+dirty` when applicable; `errand ps --json` retains the full
+commit and manifest digests. Running durations are measured on the runner, so
+caller and runner clock offsets do not distort them.
+
+The remote job states have deliberately narrow meanings:
+
+- `staging`: admitted and preparing its workspace, but the command has not
+  started.
+- `queued`: staging is complete and the job is waiting for a running slot. Its
+  process start and duration remain blank.
+- `running`: the command has started and has not reached a terminal result.
+- `exited`: the command reached a terminal result, including ordinary nonzero
+  exits and signals forwarded to or raised by the process.
+- `killed`: Errand terminated the job because of a user request or enforced
+  limit.
+- `ambiguous`: Errand cannot prove a clean terminal outcome, commonly after
+  restart reconciliation or a receipt persistence failure. It never silently
+  replays the command.
+
+`detached` is a local attachment condition, not a remote job state. Detaching
+with Ctrl-D leaves the job unchanged. Ctrl-C sends SIGINT, and a second Ctrl-C
+sends SIGKILL. `errand kill HANDLE` requests graceful SIGTERM termination;
+`errand kill --force HANDLE` sends SIGKILL. Staging and queued jobs can be
+cancelled durably before they start. A submission is rejected as busy only
+when both the configured running slots and bounded queue are full.
 
 Capability-based runners must grant `manage-caches` to use `errand caches` and
 `errand gc`; the frozen design's ACL example includes the complete action set.

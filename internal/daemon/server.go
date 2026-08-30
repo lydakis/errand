@@ -6,6 +6,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1050,6 +1051,14 @@ func validateSpec(s proto.Spec, maxLimits proto.Limits) error {
 		clean := path.Clean(s.Workdir)
 		if path.IsAbs(s.Workdir) || clean != s.Workdir || clean == ".." || strings.HasPrefix(clean, "../") {
 			return fmt.Errorf("unsafe workdir %q", s.Workdir)
+		}
+	}
+	if s.GitCommit != "" {
+		if len(s.GitCommit) != 40 && len(s.GitCommit) != 64 {
+			return fmt.Errorf("git commit must be a full 40- or 64-character object id")
+		}
+		if _, err := hex.DecodeString(s.GitCommit); err != nil {
+			return fmt.Errorf("git commit must be hexadecimal")
 		}
 	}
 	l := s.Limits

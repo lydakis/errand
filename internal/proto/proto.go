@@ -143,17 +143,20 @@ type Admission struct {
 // Result is written once at terminal completion. Process result and
 // transaction result are separate outcomes.
 type Result struct {
-	State            string `json:"state,omitempty"`
-	Started          bool   `json:"started"`
-	ExitCode         *int   `json:"exit_code"` // nil when signaled or never started
-	Signal           string `json:"signal,omitempty"`
-	SignalNum        int    `json:"signal_num,omitempty"`
-	StartError       string `json:"start_error,omitempty"`
-	TransactionError string `json:"transaction_error,omitempty"`
-	LimitExceeded    string `json:"limit_exceeded,omitempty"` // log_bytes | runtime | workspace_bytes
-	OutputsOK        bool   `json:"outputs_ok"`
-	CleanupOK        bool   `json:"cleanup_ok"`
-	LogsComplete     bool   `json:"logs_complete"`
+	State            string     `json:"state,omitempty"`
+	Started          bool       `json:"started"`
+	StartedAt        *time.Time `json:"started_at,omitempty"`
+	FinishedAt       *time.Time `json:"finished_at,omitempty"`
+	DurationMS       int64      `json:"duration_ms,omitempty"`
+	ExitCode         *int       `json:"exit_code"` // nil when signaled or never started
+	Signal           string     `json:"signal,omitempty"`
+	SignalNum        int        `json:"signal_num,omitempty"`
+	StartError       string     `json:"start_error,omitempty"`
+	TransactionError string     `json:"transaction_error,omitempty"`
+	LimitExceeded    string     `json:"limit_exceeded,omitempty"` // log_bytes | runtime | workspace_bytes
+	OutputsOK        bool       `json:"outputs_ok"`
+	CleanupOK        bool       `json:"cleanup_ok"`
+	LogsComplete     bool       `json:"logs_complete"`
 }
 
 // ExecutionContext records the top-level execution facts controlled by the
@@ -196,15 +199,25 @@ type JobStatus struct {
 }
 
 // JobListEntry is one row of a runner's job listing: enough to identify,
-// age, and triage a job without fetching its full receipt.
+// time, reproduce, and triage a job without fetching its full receipt.
 type JobListEntry struct {
-	ID               string    `json:"id"`
-	State            string    `json:"state"`
-	Command          string    `json:"command,omitempty"`
-	CommandTruncated bool      `json:"command_truncated,omitempty"`
-	AdmittedAt       time.Time `json:"admitted_at"`
-	ExitCode         *int      `json:"exit_code,omitempty"`
-	Signal           string    `json:"signal,omitempty"`
+	ID                    string     `json:"id"`
+	State                 string     `json:"state"`
+	Command               string     `json:"command,omitempty"`
+	CommandTruncated      bool       `json:"command_truncated,omitempty"`
+	AdmittedAt            time.Time  `json:"admitted_at"`
+	StartedAt             *time.Time `json:"started_at,omitempty"`
+	FinishedAt            *time.Time `json:"finished_at,omitempty"`
+	DurationMS            int64      `json:"duration_ms,omitempty"`
+	ManifestRoot          string     `json:"manifest_root,omitempty"`
+	ManifestRootTruncated bool       `json:"manifest_root_truncated,omitempty"`
+	GitCommit             string     `json:"git_commit,omitempty"`
+	GitCommitTruncated    bool       `json:"git_commit_truncated,omitempty"`
+	GitDirty              bool       `json:"git_dirty,omitempty"`
+	Workdir               string     `json:"workdir,omitempty"`
+	WorkdirTruncated      bool       `json:"workdir_truncated,omitempty"`
+	ExitCode              *int       `json:"exit_code,omitempty"`
+	Signal                string     `json:"signal,omitempty"`
 }
 
 type BlobRef struct {

@@ -340,6 +340,10 @@ func TestListJobsNewestFirst(t *testing.T) {
 	if entries[0].Command == "" || entries[0].AdmittedAt.IsZero() {
 		t.Fatalf("listing entry lacks command or admission time: %+v", entries[0])
 	}
+	if entries[0].StartedAt == nil || entries[0].FinishedAt == nil ||
+		entries[0].FinishedAt.Before(*entries[0].StartedAt) {
+		t.Fatalf("listing entry lacks valid process timing: %+v", entries[0])
+	}
 	if entries[0].ExitCode == nil || *entries[0].ExitCode != 0 {
 		t.Fatalf("listing entry lacks exit code: %+v", entries[0])
 	}
@@ -347,20 +351,31 @@ func TestListJobsNewestFirst(t *testing.T) {
 
 func TestJobListSummaryIsByteBounded(t *testing.T) {
 	longArg := strings.Repeat("\u0000\"\\界", 1<<16)
+	// NUL has the largest JSON expansion (six bytes), so this exercises the
+	// actual worst case for the fixed listing response budget.
+	longMetadata := strings.Repeat("\x00", 1<<16)
 	original := []string{"/bin/tool", longArg, "tail"}
 	j := &Job{
-		ID: proto.NewULID(), Spec: proto.Spec{Argv: original}, state: proto.StateRunning,
+		ID: proto.NewULID(), Spec: proto.Spec{
+			Argv: original, Workdir: longMetadata,
+			GitCommit: longMetadata, ManifestRoot: longMetadata,
+		}, state: proto.StateRunning, startedAt: time.Now().Add(-time.Hour),
 		Admission: proto.Admission{Time: time.Now()},
 	}
 	entry := j.summary()
-	if !entry.CommandTruncated {
-		t.Fatalf("large command was not marked truncated: %+v", entry)
+	if !entry.CommandTruncated || !entry.WorkdirTruncated ||
+		!entry.GitCommitTruncated || !entry.ManifestRootTruncated {
+		t.Fatalf("large listing metadata was not marked truncated: %+v", entry)
 	}
 	if !strings.HasSuffix(entry.Command, "…") || !utf8.ValidString(entry.Command) {
 		t.Fatalf("bounded command is not valid marked UTF-8: %q", entry.Command)
 	}
 	if len(entry.Command) > maxListCommandBytes {
 		t.Fatalf("bounded command is %d bytes, want <= %d", len(entry.Command), maxListCommandBytes)
+	}
+	if len(entry.Workdir) > maxListWorkdirBytes || len(entry.GitCommit) > maxListDigestBytes ||
+		len(entry.ManifestRoot) > maxListDigestBytes {
+		t.Fatalf("listing metadata exceeds bounds: %+v", entry)
 	}
 	if len(j.Spec.Argv) != 3 || j.Spec.Argv[1] != longArg {
 		t.Fatal("building a listing summary mutated the admitted argv")
@@ -376,6 +391,57 @@ func TestJobListSummaryIsByteBounded(t *testing.T) {
 	}
 	if len(encoded) > maxListResponseBytes {
 		t.Fatalf("maximum listing encoded to %d bytes, want <= %d", len(encoded), maxListResponseBytes)
+	}
+}
+
+func TestJobListSummaryIncludesTimingAndSourceContext(t *testing.T) {
+	started := time.Date(2026, 8, 30, 14, 5, 6, 0, time.UTC)
+	finished := started.Add(3 * time.Minute)
+	j := &Job{
+		ID: proto.NewULID(),
+		Spec: proto.Spec{
+			Argv:         []string{"nix", "build"},
+			Workdir:      "vm",
+			ManifestRoot: strings.Repeat("a", 64),
+			GitCommit:    strings.Repeat("b", 40),
+			GitDirty:     true,
+		},
+		Admission: proto.Admission{Time: started.Add(-time.Second)},
+		state:     proto.StateExited,
+		startedAt: started,
+		result: &proto.Result{
+			State: proto.StateExited, StartedAt: &started, FinishedAt: &finished,
+			DurationMS: 180000,
+		},
+	}
+
+	entry := j.summary()
+	if entry.StartedAt == nil || !entry.StartedAt.Equal(started) ||
+		entry.FinishedAt == nil || !entry.FinishedAt.Equal(finished) ||
+		entry.DurationMS != 180000 || entry.Workdir != "vm" ||
+		entry.ManifestRoot != strings.Repeat("a", 64) ||
+		entry.GitCommit != strings.Repeat("b", 40) || !entry.GitDirty {
+		t.Fatalf("listing context = %+v", entry)
+	}
+}
+
+func TestRunningJobListSummaryComputesElapsedTimeOnRunner(t *testing.T) {
+	started := time.Now().Add(-2 * time.Second)
+	j := &Job{state: proto.StateRunning, startedAt: started}
+	entry := j.summary()
+	if entry.DurationMS < 1900 || entry.DurationMS > 3000 {
+		t.Fatalf("runner elapsed time = %dms, want about 2000ms", entry.DurationMS)
+	}
+}
+
+func TestQueuedJobListSummaryHasNoProcessTiming(t *testing.T) {
+	j := &Job{
+		state:     proto.StateQueued,
+		Admission: proto.Admission{Time: time.Now().Add(-time.Minute)},
+	}
+	entry := j.summary()
+	if entry.StartedAt != nil || entry.FinishedAt != nil || entry.DurationMS != 0 {
+		t.Fatalf("queued job has process timing: %+v", entry)
 	}
 }
 

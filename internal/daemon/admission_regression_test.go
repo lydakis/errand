@@ -339,6 +339,16 @@ func TestUnsafeWorkdirRejectedBeforeAdmission(t *testing.T) {
 	}
 }
 
+func TestInvalidGitCommitRejectedBeforeAdmission(t *testing.T) {
+	spec := proto.Spec{
+		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"}, GitCommit: "not-a-full-git-object-id",
+		Limits: proto.DefaultLimits(),
+	}
+	if err := validateSpec(spec, proto.DefaultLimits()); err == nil {
+		t.Fatal("invalid git commit passed validation")
+	}
+}
+
 func TestEnvironmentProvenanceIsRequired(t *testing.T) {
 	spec := proto.Spec{
 		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"},

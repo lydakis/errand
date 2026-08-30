@@ -450,7 +450,7 @@ vaguer is promised.
 errand [--on X | --where facts] [--detach] -- <cmd...>
 errand peers                    # configured peers, probed facts, reachability
 errand peers pair | revoke      # LAN identity ceremony
-errand ps [--on X]
+errand ps [--on X] [--json]
 errand logs <peer/ulid> [-f]    # resumes from last seen seq
 errand attach [--apply] <peer/ulid>
 errand fetch [--apply] <peer/ulid> [path]
