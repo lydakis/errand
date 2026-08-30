@@ -71,6 +71,7 @@ type RunOptions struct {
 	PassEnv    []string          // names copied from the local environment
 	Workdir    string
 	IncludeAll bool
+	NoSnapshot bool // use a fresh empty workspace without inspecting Root
 	Detach     bool // return after admission, printing the handle on stdout
 	Stdout     io.Writer
 	Stderr     io.Writer
@@ -118,7 +119,7 @@ func runWithDetachNotifications(
 	target := newInterruptTarget(opts.PeerURL, jobID, handle, errf, interruptsControl)
 
 	prepared := make(chan snapshotPreparation, 1)
-	go func() { prepared <- prepareSnapshot(opts.Root, opts.IncludeAll) }()
+	go func() { prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot) }()
 	var prep snapshotPreparation
 	select {
 	case <-sigCh:
@@ -132,7 +133,11 @@ func runWithDetachNotifications(
 	}
 	paths, gitInfo, manifest := prep.paths, prep.gitInfo, prep.manifest
 	files, snapshotBytes := snapshotSize(manifest)
-	fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
+	if opts.NoSnapshot {
+		fmt.Fprintln(opts.Stderr, "errand: no snapshot; using an empty remote workspace")
+	} else {
+		fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
+	}
 
 	env := map[string]string{}
 	envSources := map[string]string{}
@@ -250,7 +255,10 @@ type snapshotPreparation struct {
 	err      error
 }
 
-func prepareSnapshot(root string, includeAll bool) snapshotPreparation {
+func prepareSnapshot(root string, includeAll, noSnapshot bool) snapshotPreparation {
+	if noSnapshot {
+		return snapshotPreparation{}
+	}
 	paths, gitInfo, err := snapshot.SelectFilesWithOptions(root, snapshot.SelectOptions{IncludeAll: includeAll})
 	if err != nil {
 		return snapshotPreparation{stage: "selecting files", err: err}

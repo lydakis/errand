@@ -1,8 +1,10 @@
 package snapshot
 
 import (
+	"archive/tar"
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -259,6 +261,17 @@ func TestNonGitSnapshotRequiresExplicitPolicyOrOverride(t *testing.T) {
 	}
 	if gi.Repository || !slices.Contains(paths, "secret.env") {
 		t.Fatalf("explicit non-Git snapshot = paths %v, git %+v", paths, gi)
+	}
+}
+
+func TestPackEmptyManifestDoesNotInspectRoot(t *testing.T) {
+	var packed bytes.Buffer
+	missingRoot := filepath.Join(t.TempDir(), "does-not-exist")
+	if err := Pack(&packed, missingRoot, proto.Manifest{}); err != nil {
+		t.Fatalf("packing empty manifest: %v", err)
+	}
+	if _, err := tar.NewReader(&packed).Next(); err != io.EOF {
+		t.Fatalf("empty archive first entry error = %v, want EOF", err)
 	}
 }
 

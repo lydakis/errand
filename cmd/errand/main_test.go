@@ -123,3 +123,15 @@ url = ""
 		t.Fatalf("partial ps diagnostics missing; stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
 }
+
+func TestCmdRunRejectsConflictingSnapshotFlags(t *testing.T) {
+	if code := cmdRun([]string{"--no-snapshot", "--include-all", "--", "/bin/true"}); code != 2 {
+		t.Fatalf("conflicting snapshot flags exit = %d, want 2", code)
+	}
+}
+
+func TestCmdRunRejectsWorkdirWithoutSnapshot(t *testing.T) {
+	if code := cmdRun([]string{"--no-snapshot", "--workdir", "build", "--", "/bin/true"}); code != 2 {
+		t.Fatalf("no-snapshot workdir exit = %d, want 2", code)
+	}
+}

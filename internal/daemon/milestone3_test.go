@@ -106,6 +106,37 @@ func TestSecondRunHitsSnapshotCache(t *testing.T) {
 	}
 }
 
+func TestRunWithoutSnapshotPreservesCachedBlobs(t *testing.T) {
+	d, ts := testDaemon(t)
+	const content = "preserve me"
+	sha, size := insertContent(t, d.cache, content)
+
+	var stderr bytes.Buffer
+	code := client.Run(client.RunOptions{
+		PeerURL:    ts.URL,
+		Root:       filepath.Join(t.TempDir(), "does-not-exist"),
+		Argv:       []string{"/bin/sh", "-c", "exit 0"},
+		NoSnapshot: true,
+		Stdout:     io.Discard,
+		Stderr:     &stderr,
+	})
+	if code != 0 {
+		t.Fatalf("no-snapshot exit = %d; stderr: %s", code, stderr.String())
+	}
+
+	dest := filepath.Join(t.TempDir(), "materialized")
+	hit, err := d.cache.Materialize(context.Background(), dest, proto.ManifestEntry{
+		Path: "materialized", Type: proto.EntryFile, Mode: 0o600, Size: size, SHA256: sha,
+	})
+	if err != nil || !hit {
+		t.Fatalf("cached blob after no-snapshot run: hit=%v err=%v", hit, err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil || string(got) != content {
+		t.Fatalf("materialized content after no-snapshot run = %q, %v", got, err)
+	}
+}
+
 func TestNegotiatedEvictionAutomaticallyRetriesFullSnapshot(t *testing.T) {
 	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: "test"})
 	if err != nil {

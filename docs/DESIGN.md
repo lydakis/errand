@@ -353,6 +353,9 @@ fidelity contract promises faithful output, not best-effort truncation.
   Filesystem roots are always refused; the user's home directory requires the
   override even when a policy file exists. The client prints the selected file
   count and total bytes before admission.
+- `--no-snapshot` explicitly skips local filesystem inspection and transfer.
+  The job still receives an errand-owned workspace, but it starts empty, so a
+  non-root `--workdir` is rejected locally.
 - Manifest is `.errandignore`, initialized from git ignore rules but
   allowing explicit include/exclude — ignored files are sometimes required
   (generated sources), tracked files are sometimes unwanted.

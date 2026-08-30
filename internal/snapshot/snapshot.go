@@ -297,6 +297,9 @@ func Pack(w io.Writer, root string, m proto.Manifest) error {
 // PackPartial revalidates every entry but writes only selected files.
 // Directories and symlinks are always written.
 func PackPartial(w io.Writer, root string, m proto.Manifest, shipFile func(proto.ManifestEntry) bool) error {
+	if len(m.Entries) == 0 {
+		return tar.NewWriter(w).Close()
+	}
 	rootFS, err := os.OpenRoot(root)
 	if err != nil {
 		return err

@@ -173,6 +173,23 @@ func TestRunHappyPath(t *testing.T) {
 	}
 }
 
+func TestRunWithoutSnapshotDoesNotInspectLocalRoot(t *testing.T) {
+	_, ts := testDaemon(t)
+	missingRoot := filepath.Join(t.TempDir(), "does-not-exist")
+	var stderr bytes.Buffer
+	code := client.Run(client.RunOptions{
+		PeerURL: ts.URL, Root: missingRoot, NoSnapshot: true,
+		Argv:   []string{"/bin/sh", "-c", `test -z "$(/usr/bin/find . -mindepth 1 -print -quit)"`},
+		Stdout: io.Discard, Stderr: &stderr,
+	})
+	if code != 0 {
+		t.Fatalf("no-snapshot exit = %d; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "empty remote workspace") {
+		t.Fatalf("no-snapshot diagnostic = %q", stderr.String())
+	}
+}
+
 func TestEnvIsExplicitOnly(t *testing.T) {
 	_, ts := testDaemon(t)
 	t.Setenv("ERRAND_TEST_SECRET", "leaky")

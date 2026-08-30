@@ -28,7 +28,7 @@ const usage = `errand — a personal job runner for machines you own
 
 usage:
   errand [--on PEER | --url URL] [--detach] [--env K=V]... [--passenv K]...
-         [--workdir REL] [--include-all] -- CMD [ARG...]
+         [--workdir REL] [--include-all | --no-snapshot] -- CMD [ARG...]
   errand attach [--on PEER | --url URL] HANDLE
   errand ps [--on PEER | --url URL]
   errand kill [--force] [--on PEER | --url URL] HANDLE
@@ -51,7 +51,8 @@ a nonzero remote exit are reported without replacing that exit code.
 
 Snapshot safety: Git worktrees are selected automatically. Other directories
 require .errandignore or --include-all. Filesystem roots are always refused;
-the user's home directory requires --include-all.`
+the user's home directory requires --include-all. --no-snapshot runs in a
+fresh empty remote workspace without inspecting or transferring local files.`
 
 func main() {
 	args := os.Args[1:]
@@ -96,6 +97,7 @@ func cmdRun(args []string) int {
 	rawURL := fs.String("url", "", "peer base URL (mutually exclusive with --on)")
 	workdir := fs.String("workdir", "", "working directory, relative to the workspace root")
 	includeAll := fs.Bool("include-all", false, "allow an otherwise refused broad snapshot (never permits a filesystem root)")
+	noSnapshot := fs.Bool("no-snapshot", false, "run in an empty remote workspace without inspecting local files")
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
 	var envs, passenvs stringList
 	fs.Var(&envs, "env", "set K=V in the job environment (repeatable)")
@@ -122,6 +124,14 @@ func cmdRun(args []string) int {
 		fmt.Fprintln(os.Stderr, "errand: empty command after \"--\"")
 		return 2
 	}
+	if *includeAll && *noSnapshot {
+		fmt.Fprintln(os.Stderr, "errand: --include-all and --no-snapshot are mutually exclusive")
+		return 2
+	}
+	if *noSnapshot && *workdir != "" && *workdir != "." {
+		fmt.Fprintln(os.Stderr, "errand: --workdir must be the workspace root when using --no-snapshot")
+		return 2
+	}
 
 	peerURL, peerLabel, err := resolvePeerTarget(*rawURL, *on)
 	if err != nil {
@@ -137,10 +147,13 @@ func cmdRun(args []string) int {
 		}
 		env[k] = v
 	}
-	root, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return client.ExitTransaction
+	root := ""
+	if !*noSnapshot {
+		root, err = os.Getwd()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+			return client.ExitTransaction
+		}
 	}
 	return client.Run(client.RunOptions{
 		PeerURL:    peerURL,
@@ -151,6 +164,7 @@ func cmdRun(args []string) int {
 		PassEnv:    passenvs,
 		Workdir:    *workdir,
 		IncludeAll: *includeAll,
+		NoSnapshot: *noSnapshot,
 		Detach:     *detach,
 	})
 }

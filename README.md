@@ -19,6 +19,7 @@ errand serve                  # config: ~/.config/errand/errandd.toml
 # on a caller
 errand info                   # measured facts: arch, kvm, tools
 errand -- python3 -m unittest # runs your working tree over there
+errand --no-snapshot -- uname -a # runs in a fresh empty remote workspace
 # Ctrl-D detaches without stopping the remote job; Ctrl-C interrupts it
 job=$(errand --detach -- make build)
 errand ps                     # list your jobs across configured peers
@@ -33,7 +34,9 @@ Run errand from a Git worktree for automatic snapshot selection. A non-Git
 directory requires an explicit `.errandignore` policy or `--include-all`.
 Errand always refuses a filesystem root, and snapshotting your home directory
 requires `--include-all`. The client prints the selected file count and byte
-total before remote admission.
+total before remote admission. Use `--no-snapshot` when a command needs no
+local files; Errand then skips local inspection and runs it in an empty remote
+workspace. Because that workspace is empty, `--workdir` may only name its root.
 
 ## Why not just ssh?
 
