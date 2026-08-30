@@ -60,6 +60,17 @@ func TestLoadDaemonAllowsMissingDefaultConfig(t *testing.T) {
 	}
 }
 
+func TestLoadDaemonRejectsCacheTTLThatOverflowsDuration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "errandd.toml")
+	config := "state_dir = \"/tmp/errand-test-state\"\n[cache]\nttl_hours = 3000000\n"
+	if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadDaemon(path); err == nil {
+		t.Fatal("cache TTL exceeding time.Duration was accepted")
+	}
+}
+
 func TestResolveListenUsesTailscaleLocalAPIAddress(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "errand-config-test-")
 	if err != nil {

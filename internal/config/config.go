@@ -82,11 +82,19 @@ func (c Client) PeerURL(name string) (string, error) {
 }
 
 type Daemon struct {
-	Listen           string   `toml:"listen"`
-	StateDir         string   `toml:"state_dir"`
-	AllowUsers       []string `toml:"allow_users"`
-	Capability       string   `toml:"capability"`
-	TailscaledSocket string   `toml:"tailscaled_socket"`
+	Listen           string      `toml:"listen"`
+	StateDir         string      `toml:"state_dir"`
+	AllowUsers       []string    `toml:"allow_users"`
+	Capability       string      `toml:"capability"`
+	TailscaledSocket string      `toml:"tailscaled_socket"`
+	Cache            DaemonCache `toml:"cache"`
+}
+
+// DaemonCache uses a 5 GiB, 14-day default when fields are zero.
+type DaemonCache struct {
+	Disabled bool  `toml:"disabled"`
+	MaxBytes int64 `toml:"max_bytes"`
+	TTLHours int   `toml:"ttl_hours"`
 }
 
 // LoadDaemon reads the runner config (default ~/.config/errand/errandd.toml)
@@ -115,6 +123,9 @@ func LoadDaemon(path string) (Daemon, error) {
 			return d, err
 		}
 		d.StateDir = filepath.Join(home, ".errand")
+	}
+	if d.Cache.TTLHours < 0 || int64(d.Cache.TTLHours) > int64((time.Duration(1<<63-1))/time.Hour) {
+		return d, fmt.Errorf("cache ttl_hours must fit in a time.Duration")
 	}
 	return d, nil
 }

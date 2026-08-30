@@ -32,6 +32,8 @@ usage:
   errand attach [--on PEER | --url URL] HANDLE
   errand ps [--on PEER | --url URL]
   errand kill [--force] [--on PEER | --url URL] HANDLE
+  errand caches [--on PEER | --url URL]
+  errand gc [--on PEER | --url URL]
   errand serve [--config PATH] [--listen ADDR] [--state-dir DIR] [--allow-user LOGIN]...
   errand info [--on PEER | --url URL]
   errand version
@@ -66,6 +68,10 @@ func main() {
 		os.Exit(cmdPs(args[1:]))
 	case "kill":
 		os.Exit(cmdKill(args[1:]))
+	case "caches":
+		os.Exit(cmdCaches(args[1:]))
+	case "gc":
+		os.Exit(cmdGC(args[1:]))
 	case "info":
 		os.Exit(cmdInfo(args[1:]))
 	case "version":
@@ -388,6 +394,45 @@ func shortDuration(d time.Duration) string {
 	}
 }
 
+func cmdCaches(args []string) int {
+	fs := flag.NewFlagSet("caches", flag.ExitOnError)
+	on := fs.String("on", "", "peer name")
+	rawURL := fs.String("url", "", "peer base URL")
+	fs.Parse(args)
+	peerURL, label, err := resolvePeerTarget(*rawURL, *on)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		return 1
+	}
+	stats, err := client.CacheStats(peerURL)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		return 1
+	}
+	fmt.Printf("%s: %d blobs, %d bytes used of %d (ttl %dh)\n",
+		label, stats.Blobs, stats.Bytes, stats.MaxBytes, stats.TTLHours)
+	return 0
+}
+
+func cmdGC(args []string) int {
+	fs := flag.NewFlagSet("gc", flag.ExitOnError)
+	on := fs.String("on", "", "peer name")
+	rawURL := fs.String("url", "", "peer base URL")
+	fs.Parse(args)
+	peerURL, label, err := resolvePeerTarget(*rawURL, *on)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		return 1
+	}
+	result, err := client.CacheGC(peerURL)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		return 1
+	}
+	fmt.Printf("%s: removed %d blobs, freed %d bytes\n", label, result.RemovedBlobs, result.FreedBytes)
+	return 0
+}
+
 func cmdInfo(args []string) int {
 	fs := flag.NewFlagSet("info", flag.ExitOnError)
 	on := fs.String("on", "", "peer name")
@@ -442,6 +487,9 @@ func cmdServe(args []string) int {
 		TailscaledSocket: fileCfg.TailscaledSocket,
 		InsecureNoAuth:   *insecure,
 		Version:          version,
+		CacheDisabled:    fileCfg.Cache.Disabled,
+		CacheMaxBytes:    fileCfg.Cache.MaxBytes,
+		CacheTTL:         time.Duration(fileCfg.Cache.TTLHours) * time.Hour,
 	})
 	if err != nil {
 		log.Fatalf("errand serve: %v", err)

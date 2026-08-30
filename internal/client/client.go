@@ -27,10 +27,11 @@ import (
 const ExitTransaction = 120
 
 const (
-	controlRequestTimeout = 15 * time.Second
-	submitRequestTimeout  = 31 * time.Minute
-	streamIdleTimeout     = 2 * time.Minute
-	streamDeadlineMargin  = 5 * time.Minute
+	controlRequestTimeout   = 15 * time.Second
+	cacheMaintenanceTimeout = 30 * time.Minute
+	submitRequestTimeout    = 31 * time.Minute
+	streamIdleTimeout       = 2 * time.Minute
+	streamDeadlineMargin    = 5 * time.Minute
 )
 
 var directTransport = func() *http.Transport {
@@ -42,6 +43,20 @@ var directTransport = func() *http.Transport {
 
 var directHTTP = &http.Client{
 	Transport: directTransport,
+	CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
+var cacheGCTransport = func() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.Proxy = nil
+	t.ResponseHeaderTimeout = cacheMaintenanceTimeout
+	return t
+}()
+
+var cacheGCHTTP = &http.Client{
+	Transport: cacheGCTransport,
 	CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 		return http.ErrUseLastResponse
 	},
@@ -148,13 +163,50 @@ func runWithDetachNotifications(
 		GitDirty:     gitInfo.Dirty,
 	}
 
+	type negotiationResult struct {
+		plan shipPlan
+		err  error
+	}
+	negotiationCtx, cancelNegotiation := context.WithCancel(interruptCtx)
+	negotiated := make(chan negotiationResult, 1)
+	go func() {
+		plan, err := negotiateSnapshot(negotiationCtx, opts, manifest)
+		negotiated <- negotiationResult{plan: plan, err: err}
+	}()
+	var negotiation negotiationResult
+	select {
+	case <-sigCh:
+		cancelNegotiation()
+		<-negotiated
+		errf("interrupted before submission")
+		return signalExit("interrupt", 2)
+	case negotiation = <-negotiated:
+		cancelNegotiation()
+	}
+	plan, negErr := negotiation.plan, negotiation.err
+	if negErr != nil {
+		errf("snapshot negotiation failed (%v); shipping everything", negErr)
+		plan = shipPlan{}
+	}
+	if plan.partial {
+		shipFiles, shipBytes := 0, int64(0)
+		for _, e := range manifest.Entries {
+			if e.Type == proto.EntryFile && plan.ships(e) {
+				shipFiles++
+				shipBytes += e.Size
+			}
+		}
+		fmt.Fprintf(opts.Stderr, "errand: shipping %d of %d files (%d bytes; the rest is cached on the runner)\n",
+			shipFiles, files, shipBytes)
+	}
+
 	controller := admitJobController(interruptCtx, sigCh, target)
 	if controller == nil {
 		errf("interrupted before submission")
 		return signalExit("interrupt", 2)
 	}
 
-	status, err := submit(opts, jobID, spec, manifest)
+	status, err := submit(opts, jobID, spec, manifest, plan)
 	if err != nil {
 		errf("%v", err)
 		errf("the job may have been admitted; handle %s", handle)
@@ -326,7 +378,25 @@ func getStatus(peerURL, jobID string) (proto.JobStatus, error) {
 	var status proto.JobStatus
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
-	return status, getJSONContext(ctx, peerURL+"/v0/jobs/"+jobID, 1<<20, "job lookup", &status)
+	err := getJSONContext(ctx, peerURL+"/v0/jobs/"+jobID, 1<<20, "job lookup", &status)
+	return status, err
+}
+
+func CacheStats(peerURL string) (proto.CacheStats, error) {
+	var stats proto.CacheStats
+	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
+	defer cancel()
+	err := getJSONContext(ctx, peerURL+"/v0/cache", 1<<20, "cache stats", &stats)
+	return stats, err
+}
+
+func CacheGC(peerURL string) (proto.CacheGCResult, error) {
+	var result proto.CacheGCResult
+	err := postJSONResultContextTimeout(
+		context.Background(), cacheGCHTTP, cacheMaintenanceTimeout,
+		peerURL+"/v0/cache/gc", nil, "cache gc", &result,
+	)
+	return result, err
 }
 
 // List fetches a runner's job listing (the caller's own jobs).
@@ -334,7 +404,8 @@ func List(peerURL string) ([]proto.JobListEntry, error) {
 	var entries []proto.JobListEntry
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
-	return entries, getJSONContext(ctx, peerURL+"/v0/jobs", 1<<20, "job listing", &entries)
+	err := getJSONContext(ctx, peerURL+"/v0/jobs", 1<<20, "job listing", &entries)
+	return entries, err
 }
 
 func getJSONContext(ctx context.Context, url string, maxBytes int64, label string, dst any) error {
@@ -347,12 +418,9 @@ func getJSONContext(ctx context.Context, url string, maxBytes int64, label strin
 		return err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	body, err := readBoundedBody(resp.Body, maxBytes, label)
 	if err != nil {
-		return fmt.Errorf("%s: reading response: %w", label, err)
-	}
-	if int64(len(body)) > maxBytes {
-		return fmt.Errorf("%s: response exceeds %d bytes", label, maxBytes)
+		return err
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s: %s: %s", label, resp.Status, apiError(body))
@@ -386,12 +454,78 @@ func shortCommit(gi snapshot.GitInfo) string {
 	return c
 }
 
-// submit PUTs the spec, manifest, and workspace tar as one streaming
-// multipart request. The job ID and digest make it safe to retry.
-func submit(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest) (proto.JobStatus, error) {
+type shipPlan struct {
+	partial bool
+	hashes  map[string]bool
+}
+
+func (p shipPlan) ships(entry proto.ManifestEntry) bool {
+	return !p.partial || p.hashes[entry.SHA256]
+}
+
+func negotiateSnapshot(ctx context.Context, opts RunOptions, manifest proto.Manifest) (shipPlan, error) {
+	refs := make([]proto.BlobRef, 0, len(manifest.Entries))
+	for _, e := range manifest.Entries {
+		if e.Type == proto.EntryFile {
+			refs = append(refs, proto.BlobRef{SHA256: e.SHA256, Size: e.Size})
+		}
+	}
+	if len(refs) == 0 {
+		return shipPlan{}, nil
+	}
+	body, err := json.Marshal(proto.SnapshotDiffRequest{Blobs: refs})
+	if err != nil {
+		return shipPlan{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, controlRequestTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, opts.PeerURL+"/v0/snapshot/diff", bytes.NewReader(body))
+	if err != nil {
+		return shipPlan{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := directHTTP.Do(req)
+	if err != nil {
+		return shipPlan{}, err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusNotImplemented:
+		return shipPlan{}, nil
+	default:
+		return shipPlan{}, fmt.Errorf("snapshot negotiation: %s: %s", resp.Status, apiError(raw))
+	}
+	var diff proto.SnapshotDiffResponse
+	if err := json.Unmarshal(raw, &diff); err != nil {
+		return shipPlan{}, err
+	}
+	ship := make(map[string]bool, len(diff.Missing))
+	for _, h := range diff.Missing {
+		ship[h] = true
+	}
+	return shipPlan{partial: true, hashes: ship}, nil
+}
+
+func submit(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, error) {
+	status, err := submitAttempts(opts, jobID, spec, manifest, plan)
+	var responseErr *submitHTTPError
+	if err == nil || !plan.partial || !errors.As(err, &responseErr) || responseErr.code != proto.ErrorCodeSnapshotCacheMiss {
+		return status, err
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	fmt.Fprintln(stderr, "errand: runner evicted negotiated blobs; re-shipping the full snapshot")
+	return submitAttempts(opts, jobID, spec, manifest, shipPlan{})
+}
+
+func submitAttempts(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, error) {
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
-		status, retryable, err := submitOnce(opts, jobID, spec, manifest)
+		status, retryable, err := submitOnce(opts, jobID, spec, manifest, plan)
 		if err == nil {
 			return status, nil
 		}
@@ -406,7 +540,7 @@ func submit(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manif
 	return proto.JobStatus{}, lastErr
 }
 
-func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest) (proto.JobStatus, bool, error) {
+func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, bool, error) {
 	var status proto.JobStatus
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
@@ -430,7 +564,11 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 			if err != nil {
 				return err
 			}
-			if err := snapshot.Pack(part, opts.Root, manifest); err != nil {
+			var shipFile func(proto.ManifestEntry) bool
+			if plan.partial {
+				shipFile = plan.ships
+			}
+			if err := snapshot.PackPartial(part, opts.Root, manifest, shipFile); err != nil {
 				return err
 			}
 			return mw.Close()
@@ -461,8 +599,21 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 	case http.StatusTooManyRequests:
 		return status, false, fmt.Errorf("runner is busy (one job at a time)")
 	default:
-		return status, false, fmt.Errorf("submit rejected: %s: %s", resp.Status, apiError(body))
+		payload := decodeAPIError(body)
+		return status, false, &submitHTTPError{
+			status: resp.Status, code: payload.Code, message: payload.Error,
+		}
 	}
+}
+
+type submitHTTPError struct {
+	status  string
+	code    string
+	message string
+}
+
+func (e *submitHTTPError) Error() string {
+	return fmt.Sprintf("submit rejected: %s: %s", e.status, e.message)
 }
 
 type streamResult struct {
@@ -783,7 +934,8 @@ func Info(peerURL string) (proto.Info, error) {
 	var info proto.Info
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
-	return info, getJSONContext(ctx, peerURL+"/v0/info", 1<<20, "runner info", &info)
+	err := getJSONContext(ctx, peerURL+"/v0/info", 1<<20, "runner info", &info)
+	return info, err
 }
 
 type controlHTTPError struct {
@@ -807,19 +959,35 @@ func (e *controlHTTPError) retryableDuringAdmission(retryConflict bool) bool {
 }
 
 func postJSONContext(parent context.Context, url string, v any) error {
+	return postJSONResultContext(parent, url, v, "control request", nil)
+}
+
+func postJSONResultContext(parent context.Context, url string, v any, label string, dst any) error {
+	return postJSONResultContextTimeout(parent, directHTTP, controlRequestTimeout, url, v, label, dst)
+}
+
+func postJSONResultContextTimeout(
+	parent context.Context,
+	httpClient *http.Client,
+	timeout time.Duration,
+	url string,
+	v any,
+	label string,
+	dst any,
+) error {
 	var body io.Reader
 	if v != nil {
 		b, _ := json.Marshal(v)
 		body = bytes.NewReader(b)
 	}
-	ctx, cancel := context.WithTimeout(parent, controlRequestTimeout)
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := directHTTP.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -831,15 +999,37 @@ func postJSONContext(parent context.Context, url string, v any) error {
 			err:        fmt.Errorf("%s: %s", resp.Status, apiError(body)),
 		}
 	}
+	if dst != nil {
+		body, err := readBoundedBody(resp.Body, 1<<20, label)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(body, dst); err != nil {
+			return fmt.Errorf("%s: decoding response: %w", label, err)
+		}
+	}
 	return nil
 }
 
+func readBoundedBody(r io.Reader, maxBytes int64, label string) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("%s: reading response: %w", label, err)
+	}
+	if int64(len(body)) > maxBytes {
+		return nil, fmt.Errorf("%s: response exceeds %d bytes", label, maxBytes)
+	}
+	return body, nil
+}
+
 func apiError(body []byte) string {
-	var e struct {
-		Error string `json:"error"`
-	}
+	return decodeAPIError(body).Error
+}
+
+func decodeAPIError(body []byte) proto.APIError {
+	var e proto.APIError
 	if json.Unmarshal(body, &e) == nil && e.Error != "" {
-		return e.Error
+		return e
 	}
-	return strings.TrimSpace(string(body))
+	return proto.APIError{Error: strings.TrimSpace(string(body))}
 }

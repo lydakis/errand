@@ -34,6 +34,89 @@ func TestSignalExitUsesSignalNumber(t *testing.T) {
 	}
 }
 
+func TestControlEndpointsReturnDecodedResponses(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs/job-1":
+			json.NewEncoder(w).Encode(proto.JobStatus{ID: "job-1", State: proto.StateRunning})
+		case r.Method == http.MethodGet && r.URL.Path == "/v0/cache":
+			json.NewEncoder(w).Encode(proto.CacheStats{Blobs: 3, Bytes: 42})
+		case r.Method == http.MethodPost && r.URL.Path == "/v0/cache/gc":
+			json.NewEncoder(w).Encode(proto.CacheGCResult{RemovedBlobs: 2, FreedBytes: 17})
+		case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs":
+			json.NewEncoder(w).Encode([]proto.JobListEntry{{ID: "job-1", State: proto.StateRunning}})
+		case r.Method == http.MethodGet && r.URL.Path == "/v0/info":
+			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: "test"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	status, err := getStatus(server.URL, "job-1")
+	if err != nil || status.ID != "job-1" || status.State != proto.StateRunning {
+		t.Fatalf("getStatus() = %+v, %v", status, err)
+	}
+	stats, err := CacheStats(server.URL)
+	if err != nil || stats.Blobs != 3 || stats.Bytes != 42 {
+		t.Fatalf("CacheStats() = %+v, %v", stats, err)
+	}
+	gc, err := CacheGC(server.URL)
+	if err != nil || gc.RemovedBlobs != 2 || gc.FreedBytes != 17 {
+		t.Fatalf("CacheGC() = %+v, %v", gc, err)
+	}
+	jobs, err := List(server.URL)
+	if err != nil || len(jobs) != 1 || jobs[0].ID != "job-1" {
+		t.Fatalf("List() = %+v, %v", jobs, err)
+	}
+	info, err := Info(server.URL)
+	if err != nil || info.Proto != proto.ProtoVersion || info.Version != "test" {
+		t.Fatalf("Info() = %+v, %v", info, err)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestCacheGCUsesMaintenanceDeadline(t *testing.T) {
+	oldHTTP := cacheGCHTTP
+	t.Cleanup(func() { cacheGCHTTP = oldHTTP })
+
+	var remaining time.Duration
+	cacheGCHTTP = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		deadline, ok := req.Context().Deadline()
+		if !ok {
+			t.Fatal("cache GC request has no deadline")
+		}
+		remaining = time.Until(deadline)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"removed_blobs":1,"freed_bytes":2}`)),
+			Request:    req,
+		}, nil
+	})}
+
+	result, err := CacheGC("http://runner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RemovedBlobs != 1 || result.FreedBytes != 2 {
+		t.Fatalf("CacheGC() = %+v", result)
+	}
+	if remaining <= controlRequestTimeout {
+		t.Fatalf("cache GC deadline = %v, want longer than control timeout %v", remaining, controlRequestTimeout)
+	}
+	if cacheGCTransport.ResponseHeaderTimeout != cacheMaintenanceTimeout {
+		t.Fatalf("cache GC response-header timeout = %v, want %v", cacheGCTransport.ResponseHeaderTimeout, cacheMaintenanceTimeout)
+	}
+}
+
 func TestSignaledExitReportsTransactionFailures(t *testing.T) {
 	var stderr bytes.Buffer
 	code := exitCode(proto.JobStatus{Result: &proto.Result{
@@ -316,6 +399,8 @@ func TestInteractiveDetachCancelsOnlyTheLocalLogFollow(t *testing.T) {
 			close(logStarted)
 			<-r.Context().Done()
 			close(logCanceled)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/snapshot/diff"):
+			http.NotFound(w, r)
 		case r.Method == http.MethodPost:
 			controlRequests.Add(1)
 			w.WriteHeader(http.StatusOK)
@@ -553,6 +638,65 @@ func TestInterruptBeforeAdmissionDoesNotSubmit(t *testing.T) {
 	}
 	if got := requests.Load(); got != 0 {
 		t.Fatalf("pre-admission interrupt made %d remote requests, want 0", got)
+	}
+}
+
+func TestInterruptCancelsSnapshotNegotiation(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var puts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v0/snapshot/diff":
+			close(started)
+			select {
+			case <-r.Context().Done():
+			case <-release:
+				http.Error(w, "released", http.StatusServiceUnavailable)
+			}
+		case r.Method == http.MethodPut:
+			puts.Add(1)
+			http.Error(w, "unexpected submit", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(func() {
+		close(release)
+		server.Close()
+	})
+
+	interrupts := make(chan os.Signal, 2)
+	done := make(chan int, 1)
+	go func() {
+		done <- runWithDetachNotifications(RunOptions{
+			PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+			Stdout: io.Discard, Stderr: io.Discard,
+		}, interrupts, testInterruptNotifications(), nil)
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("snapshot negotiation did not start")
+	}
+	interrupts <- os.Interrupt
+	select {
+	case code := <-done:
+		if code != 130 {
+			t.Fatalf("negotiation interrupt exit = %d, want 130", code)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("interrupt did not cancel snapshot negotiation promptly")
+	}
+	if got := puts.Load(); got != 0 {
+		t.Fatalf("interrupt during negotiation submitted %d jobs", got)
 	}
 }
 
@@ -921,11 +1065,63 @@ func TestSubmitRetriesSameJobIDAfterLostResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err = submit(RunOptions{PeerURL: server.URL, Root: root}, "same", spec, manifest)
+	_, err = submit(RunOptions{PeerURL: server.URL, Root: root}, "same", spec, manifest, shipPlan{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := attempts.Load(); got != 2 {
 		t.Fatalf("submit attempts = %d, want 2", got)
+	}
+}
+
+func TestCacheMissGetsIndependentFullSubmitRetryBudget(t *testing.T) {
+	root := t.TempDir()
+	const content = "cache fallback payload"
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := snapshot.Build(root, []string{"file.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := proto.Spec{
+		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
+		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
+	}
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		switch attempts.Add(1) {
+		case 1, 2:
+			panic(http.ErrAbortHandler)
+		case 3:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "negotiated cache content was evicted",
+				"code":  "snapshot_cache_miss",
+			})
+		case 4:
+			if !bytes.Contains(body, []byte(content)) {
+				http.Error(w, "full snapshot was not shipped", http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(proto.JobStatus{ID: "same", State: proto.StateRunning})
+		default:
+			http.Error(w, "unexpected retry", http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	var stderr bytes.Buffer
+	_, err = submit(RunOptions{PeerURL: server.URL, Root: root, Stderr: &stderr}, "same", spec, manifest, shipPlan{partial: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := attempts.Load(); got != 4 {
+		t.Fatalf("submit attempts = %d, want 4", got)
+	}
+	if !strings.Contains(stderr.String(), "re-shipping the full snapshot") {
+		t.Fatalf("fallback diagnostic = %q", stderr.String())
 	}
 }

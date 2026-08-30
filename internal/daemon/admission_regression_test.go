@@ -166,6 +166,86 @@ func TestKillDuringStagingPreventsExecution(t *testing.T) {
 	}
 }
 
+func TestKillDuringCacheInsertionPreventsExecution(t *testing.T) {
+	root := workspaceWith(t, map[string]string{"input.txt": "cache me"})
+	paths, _, err := snapshot.SelectFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := snapshot.Build(root, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var packed bytes.Buffer
+	if err := snapshot.Pack(&packed, root, manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := testCache(t, 1<<20, time.Hour)
+	if err := cache.acquireInsert(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer cache.releaseInsert()
+	stateDir := t.TempDir()
+	jobDir := filepath.Join(stateDir, "jobs", proto.NewULID())
+	if err := os.MkdirAll(jobDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "ran")
+	j := &Job{
+		ID: filepath.Base(jobDir), Dir: jobDir,
+		Spec: proto.Spec{
+			V: proto.ProtoVersion, Argv: []string{"/usr/bin/touch", marker},
+			ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
+		},
+		Admission: proto.Admission{Method: "insecure-test"},
+		state:     proto.StateStaging,
+		done:      make(chan struct{}),
+	}
+	d := &Daemon{cfg: Config{StateDir: stateDir}, jobs: map[string]*Job{j.ID: j}, running: j, cache: cache}
+	startDone := make(chan error, 1)
+	go func() {
+		startDone <- j.start(d, io.NopCloser(bytes.NewReader(packed.Bytes())), manifest)
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		events, _ := os.ReadFile(filepath.Join(j.Dir, "events.ndjson"))
+		if strings.Contains(string(events), "workspace-extracted") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("job did not reach cache insertion")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := j.terminate("user-kill", 9); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-j.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cache insertion ignored staging cancellation")
+	}
+	if err := <-startDone; err != nil {
+		t.Fatalf("canceled start = %v", err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("cancelled cache-staging job executed; marker stat = %v", err)
+	}
+	status := j.Status()
+	if status.State != proto.StateKilled || status.Result == nil || status.Result.SignalNum != 9 || !status.Result.CleanupOK {
+		t.Fatalf("cancelled cache-staging status = %+v, want durable clean kill", status)
+	}
+	if running := func() *Job {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return d.running
+	}(); running != nil {
+		t.Fatal("cancelled cache-staging job did not release the runner slot")
+	}
+}
+
 func TestKillCannotBeAcknowledgedAfterStartRejected(t *testing.T) {
 	stateDir := t.TempDir()
 	jobDir := filepath.Join(stateDir, "jobs", proto.NewULID())

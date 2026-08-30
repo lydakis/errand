@@ -183,9 +183,20 @@ func (j *Job) start(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 	if err := os.Mkdir(workspace, 0o700); err != nil {
 		return err
 	}
-	extractErr := archive.Extract(&contextReader{ctx: stagingCtx, r: workspaceTar}, workspace, manifest, j.Spec.Limits.MaxWorkspaceBytes)
-	j.markStagingDone()
+	cachedPaths := map[string]bool{}
+	extractOpts := archive.ExtractOptions{}
+	if d.cache != nil {
+		extractOpts.ResolveMissing = func(dest string, entry proto.ManifestEntry) (bool, error) {
+			hit, err := d.cache.Materialize(stagingCtx, dest, entry)
+			if hit {
+				cachedPaths[entry.Path] = true
+			}
+			return hit, err
+		}
+	}
+	extractErr := archive.ExtractWith(&contextReader{ctx: stagingCtx, r: workspaceTar}, workspace, manifest, j.Spec.Limits.MaxWorkspaceBytes, extractOpts)
 	if extractErr != nil {
+		j.markStagingDone()
 		if res := j.cancelledBeforeStart(); res != nil {
 			j.finalize(d, res, true)
 			return nil
@@ -195,14 +206,38 @@ func (j *Job) start(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 	if err := os.Mkdir(filepath.Join(j.Dir, "out"), 0o700); err != nil {
 		return err
 	}
-	j.event("workspace-extracted", manifest.RootHash())
+	totalFiles := 0
+	for _, e := range manifest.Entries {
+		if e.Type == proto.EntryFile {
+			totalFiles++
+		}
+	}
+	j.event("workspace-extracted", fmt.Sprintf("root=%s cached=%d/%d", manifest.RootHash(), len(cachedPaths), totalFiles))
+	if d.cache != nil {
+		for _, e := range manifest.Entries {
+			if e.Type != proto.EntryFile || cachedPaths[e.Path] {
+				continue
+			}
+			src := filepath.Join(workspace, filepath.FromSlash(e.Path))
+			if err := d.cache.Insert(stagingCtx, src, e.SHA256, e.Size); err != nil {
+				if stagingCtx.Err() == nil {
+					j.event("cache-insert-failed", e.Path+": "+err.Error())
+				}
+				break
+			}
+		}
+	}
+	j.markStagingDone()
 	if res := j.cancelledBeforeStart(); res != nil {
 		j.finalize(d, res, true)
 		return nil
 	}
 
-	var logw *logio.Writer
-	logw, err := logio.NewWriter(filepath.Join(j.Dir, "io.log"), j.Spec.Limits.MaxLogBytes, func() {
+	var (
+		logw *logio.Writer
+		err  error
+	)
+	logw, err = logio.NewWriter(filepath.Join(j.Dir, "io.log"), j.Spec.Limits.MaxLogBytes, func() {
 		reason := "log_bytes"
 		if logw != nil && logw.Err() != nil {
 			reason = "log_io"

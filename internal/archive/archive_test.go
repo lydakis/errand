@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -198,5 +199,51 @@ func TestExtractRestoresFileModeMaskedByUmask(t *testing.T) {
 	}
 	if got := info.Mode().Perm(); got != 0o755 {
 		t.Fatalf("file mode = %04o, want 0755", got)
+	}
+}
+
+func TestExtractWithCountsManifestBytesBeforeResolving(t *testing.T) {
+	cached := strings.Repeat("c", 50)
+	streamed := strings.Repeat("s", 60)
+	m := proto.Manifest{Entries: []proto.ManifestEntry{
+		entryFile("cached.txt", cached), entryFile("streamed.txt", streamed),
+	}}
+	err := ExtractWith(tarOf(t, map[string]string{"streamed.txt": streamed}), t.TempDir(), m, 100, ExtractOptions{
+		ResolveMissing: func(string, proto.ManifestEntry) (bool, error) { return true, nil },
+	})
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("expected workspace limit rejection, got %v", err)
+	}
+}
+
+func TestExtractWithDoesNotResolveOrDoubleCountStreamedFile(t *testing.T) {
+	const content = "abcdef"
+	m := proto.Manifest{Entries: []proto.ManifestEntry{entryFile("file.txt", content)}}
+	called := false
+	err := ExtractWith(tarOf(t, map[string]string{"file.txt": content}), t.TempDir(), m, int64(len(content)), ExtractOptions{
+		ResolveMissing: func(string, proto.ManifestEntry) (bool, error) {
+			called = true
+			return true, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("full ship at workspace limit failed: %v", err)
+	}
+	if called {
+		t.Fatal("resolver was called for a file present in the stream")
+	}
+}
+
+func TestExtractWithReportsCacheMissForUnstreamedFiles(t *testing.T) {
+	m := proto.Manifest{Entries: []proto.ManifestEntry{
+		entryFile("shipped.txt", "here"),
+		entryFile("evicted.txt", "gone"),
+	}}
+	buf := tarOf(t, map[string]string{"shipped.txt": "here"})
+	err := ExtractWith(buf, t.TempDir(), m, 1<<20, ExtractOptions{
+		ResolveMissing: func(string, proto.ManifestEntry) (bool, error) { return false, nil },
+	})
+	if !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("expected cache-miss sentinel, got %v", err)
 	}
 }

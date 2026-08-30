@@ -22,7 +22,15 @@ const (
 	ActionSubmit  = "submit"
 	ActionReadOwn = "read-own"
 	ActionKillOwn = "kill-own"
+	ActionCaches  = "manage-caches"
+
+	ErrorCodeSnapshotCacheMiss = "snapshot_cache_miss"
 )
+
+type APIError struct {
+	Error string `json:"error"`
+	Code  string `json:"code,omitempty"`
+}
 
 const (
 	EntryFile    = "file"
@@ -196,6 +204,31 @@ type JobListEntry struct {
 	AdmittedAt       time.Time `json:"admitted_at"`
 	ExitCode         *int      `json:"exit_code,omitempty"`
 	Signal           string    `json:"signal,omitempty"`
+}
+
+type BlobRef struct {
+	SHA256 string `json:"sha256"`
+	Size   int64  `json:"size"`
+}
+
+type SnapshotDiffRequest struct {
+	Blobs []BlobRef `json:"blobs"`
+}
+
+type SnapshotDiffResponse struct {
+	Missing []string `json:"missing"`
+}
+
+type CacheStats struct {
+	Blobs    int   `json:"blobs"`
+	Bytes    int64 `json:"bytes"`
+	MaxBytes int64 `json:"max_bytes"`
+	TTLHours int   `json:"ttl_hours"`
+}
+
+type CacheGCResult struct {
+	RemovedBlobs int   `json:"removed_blobs"`
+	FreedBytes   int64 `json:"freed_bytes"`
 }
 
 type Facts struct {

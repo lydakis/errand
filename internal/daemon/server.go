@@ -35,6 +35,11 @@ const (
 	defaultUploadOverhead = 1 << 30
 )
 
+const (
+	defaultCacheMaxBytes = 5 << 30
+	defaultCacheTTL      = 14 * 24 * time.Hour
+)
+
 type Config struct {
 	Listen           string
 	StateDir         string
@@ -45,11 +50,16 @@ type Config struct {
 	MaxUploadBytes   int64
 	MaxLimits        proto.Limits // ceiling a spec may request
 	Version          string
+
+	CacheDisabled bool
+	CacheMaxBytes int64
+	CacheTTL      time.Duration
 }
 
 type Daemon struct {
 	cfg         Config
 	whoisClient *http.Client
+	cache       *blobCache // nil when the cache is disabled
 
 	mu        sync.Mutex
 	jobs      map[string]*Job
@@ -78,6 +88,15 @@ func New(cfg Config) (*Daemon, error) {
 	if cfg.MaxUploadBytes <= cfg.MaxLimits.MaxWorkspaceBytes {
 		return nil, fmt.Errorf("max upload bytes must exceed the workspace byte ceiling")
 	}
+	if cfg.CacheMaxBytes == 0 {
+		cfg.CacheMaxBytes = defaultCacheMaxBytes
+	}
+	if cfg.CacheTTL == 0 {
+		cfg.CacheTTL = defaultCacheTTL
+	}
+	if cfg.CacheMaxBytes < 0 || cfg.CacheTTL < 0 {
+		return nil, fmt.Errorf("cache size and TTL must not be negative")
+	}
 	d := &Daemon{cfg: cfg, jobs: map[string]*Job{}, whoisClient: newWhoisClient(cfg.TailscaledSocket)}
 	if err := d.lockStateDir(); err != nil {
 		return nil, err
@@ -85,6 +104,14 @@ func New(cfg Config) (*Daemon, error) {
 	if err := d.loadExisting(); err != nil {
 		_ = d.Close()
 		return nil, err
+	}
+	if !cfg.CacheDisabled {
+		cache, err := newBlobCache(filepath.Join(cfg.StateDir, "cache", "blobs"), cfg.CacheMaxBytes, cfg.CacheTTL)
+		if err != nil {
+			_ = d.Close()
+			return nil, fmt.Errorf("opening snapshot cache: %w", err)
+		}
+		d.cache = cache
 	}
 	return d, nil
 }
@@ -433,6 +460,9 @@ func (d *Daemon) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v0/info", d.auth("", d.handleInfo))
 	mux.HandleFunc("GET /v0/jobs", d.auth(proto.ActionReadOwn, d.handleList))
+	mux.HandleFunc("POST /v0/snapshot/diff", d.auth(proto.ActionSubmit, d.handleSnapshotDiff))
+	mux.HandleFunc("GET /v0/cache", d.auth(proto.ActionCaches, d.handleCacheStats))
+	mux.HandleFunc("POST /v0/cache/gc", d.auth(proto.ActionCaches, d.handleCacheGC))
 	mux.HandleFunc("PUT /v0/jobs/{id}", d.auth(proto.ActionSubmit, d.handleSubmit))
 	mux.HandleFunc("GET /v0/jobs/{id}", d.auth(proto.ActionReadOwn, d.handleStatus))
 	mux.HandleFunc("GET /v0/jobs/{id}/logs", d.auth(proto.ActionReadOwn, d.handleLogs))
@@ -472,6 +502,60 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) 
 		Busy:    busy,
 		Facts:   measureFacts(),
 	})
+}
+
+// Negotiation is advisory; extraction detects blobs evicted before submission.
+func (d *Daemon) handleSnapshotDiff(w http.ResponseWriter, r *http.Request, _ Identity) {
+	if d.cache == nil {
+		httpError(w, http.StatusNotFound, "snapshot cache is disabled on this runner")
+		return
+	}
+	var req proto.SnapshotDiffRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxManifestBytes)).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	missing, err := d.cache.MissingContext(r.Context(), req.Blobs)
+	if err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, proto.SnapshotDiffResponse{Missing: missing})
+}
+
+func (d *Daemon) handleCacheStats(w http.ResponseWriter, r *http.Request, _ Identity) {
+	if d.cache == nil {
+		httpError(w, http.StatusNotFound, "snapshot cache is disabled on this runner")
+		return
+	}
+	stats, err := d.cache.StatsContext(r.Context())
+	if err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (d *Daemon) handleCacheGC(w http.ResponseWriter, r *http.Request, _ Identity) {
+	if d.cache == nil {
+		httpError(w, http.StatusNotFound, "snapshot cache is disabled on this runner")
+		return
+	}
+	result, err := d.cache.GCContext(r.Context())
+	if err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // handleSubmit is at-most-once admission: the in-memory registry (backed
@@ -588,7 +672,11 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		if cleanupErr := d.abortAdmission(j, err); cleanupErr != nil {
 			httpError(w, http.StatusInternalServerError, errors.Join(err, cleanupErr).Error())
 		} else {
-			httpError(w, http.StatusBadRequest, err.Error())
+			if errors.Is(err, archive.ErrCacheMiss) {
+				httpErrorCode(w, http.StatusConflict, proto.ErrorCodeSnapshotCacheMiss, err.Error())
+			} else {
+				httpError(w, http.StatusBadRequest, err.Error())
+			}
 		}
 		return
 	}
@@ -907,7 +995,11 @@ func readJSONPart(mr *multipart.Reader, name string, limit int64, v any) error {
 }
 
 func httpError(w http.ResponseWriter, code int, msg string) {
-	writeJSON(w, code, map[string]string{"error": msg})
+	httpErrorCode(w, code, "", msg)
+}
+
+func httpErrorCode(w http.ResponseWriter, status int, code, msg string) {
+	writeJSON(w, status, proto.APIError{Error: msg, Code: code})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

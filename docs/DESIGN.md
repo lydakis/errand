@@ -141,14 +141,14 @@ required:
   "ip":  ["tcp:7443"],
   "app": {
     "lydakis.dev/cap/errand": [
-      { "actions": ["submit", "read-own", "kill-own"] }
+      { "actions": ["submit", "read-own", "kill-own", "manage-caches"] }
     ]
   }
 }]
 ```
 
 The capability carries an **action schema from day one** (not a boolean):
-`submit`, `read-own`, `kill-own`, later `read-all`, `manage-caches`.
+`submit`, `read-own`, `kill-own`, `manage-caches`, and later `read-all`.
 Matching grants are additive; errand merges capability objects
 deliberately (union of actions).
 
@@ -453,8 +453,13 @@ Versioned HTTP+JSON: `PUT /v0/jobs/<ulid>` is idempotent;
 `GET /v0/jobs` returns the caller's bounded newest-first listing;
 `GET /v0/jobs/<ulid>` returns status; SSE with event IDs powers
 `GET /v0/jobs/<ulid>/logs?follow=1`; the signal and kill routes control owned
-jobs; and `GET /v0/info` returns facts. Curl-debuggable; the version prefix
-lets daemon and CLI drift during upgrades without lying to each other.
+jobs; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;
+`GET /v0/cache` and `POST /v0/cache/gc` inspect and prune the snapshot cache;
+and `GET /v0/info` returns facts. A negotiated blob disappearing before
+submission returns the machine-readable `snapshot_cache_miss` error code so
+the client can retry the same job ID with a complete snapshot. Curl-debuggable;
+the version prefix lets daemon and CLI drift during upgrades without lying to
+each other.
 
 ## Non-goals
 

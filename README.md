@@ -5,10 +5,10 @@ get the result back: same command, same working tree, logs streaming to
 your terminal, real exit code. The heat, watts, and minutes are spent
 elsewhere.
 
-> **Status: milestone 2.** The transactional core works end to end over a
-> tailnet, including durable detached jobs, listing, reattachment, remote
-> control, and conservative daemon-restart reconciliation. The v0 design is
-> frozen in [docs/DESIGN.md](docs/DESIGN.md).
+> **Status: milestone 3.** The transactional core works end to end over a
+> tailnet, including durable detached jobs, restart reconciliation, and
+> content-addressed snapshot reuse. The v0 design is frozen in
+> [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Quickstart
 
@@ -44,7 +44,7 @@ no stale artifacts. Every ssh target is a pet you maintain.
 errand ships the workspace *with* the job, so targets are stateless with
 respect to your projects: nothing checked out, nothing drifting, any peer
 equally valid at any moment. Around that round-trip it wraps a
-transaction ssh doesn't attempt. Milestone 2 provides:
+transaction ssh doesn't attempt. The implemented milestones provide:
 
 - **At-most-once admission:** network retries cannot run a command
   twice.
@@ -56,8 +56,8 @@ transaction ssh doesn't attempt. Milestone 2 provides:
   ran, and what happened.
 
 The remaining v0 work includes declared output transfer with conflict
-detection, content-addressed snapshot reuse, explicitly declared persistent
-caches, fact-based peer selection, and direct LAN pairing.
+detection, explicitly declared named caches, fact-based peer selection, and
+direct LAN pairing.
 
 ## Shape
 
@@ -79,9 +79,12 @@ returns 0 for the detach action; it is not the unfinished job's exit status.
 Non-terminal EOF is ignored, so scripts remain attached unless they request
 `--detach` explicitly.
 
-Detached jobs, `ps`, `attach`, and `kill` are implemented. Planned v0 commands
-still include fact-based peer selection, output fetching, cache management,
-and pairing.
+Detached jobs, `ps`, `attach`, `kill`, snapshot-cache inspection, and cache GC
+are implemented. Planned v0 commands still include fact-based peer selection,
+output fetching, named-cache management, and pairing.
+
+Capability-based runners must grant `manage-caches` to use `errand caches` and
+`errand gc`; the frozen design's ACL example includes the complete action set.
 
 Linux and macOS first; Windows is a design constraint, not yet a
 deliverable.

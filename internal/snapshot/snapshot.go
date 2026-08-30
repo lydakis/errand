@@ -291,6 +291,12 @@ func Build(root string, paths []string) (proto.Manifest, error) {
 // Pack writes the manifest's entries as a tar stream, verifying each file
 // still hashes to its manifest value. Any change aborts the pack.
 func Pack(w io.Writer, root string, m proto.Manifest) error {
+	return PackPartial(w, root, m, nil)
+}
+
+// PackPartial revalidates every entry but writes only selected files.
+// Directories and symlinks are always written.
+func PackPartial(w io.Writer, root string, m proto.Manifest, shipFile func(proto.ManifestEntry) bool) error {
 	rootFS, err := os.OpenRoot(root)
 	if err != nil {
 		return err
@@ -341,14 +347,18 @@ func Pack(w io.Writer, root string, m proto.Manifest) error {
 				f.Close()
 				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
 			}
-			hdr.Typeflag = tar.TypeReg
-			hdr.Size = e.Size
-			if err := tw.WriteHeader(hdr); err != nil {
-				f.Close()
-				return err
-			}
 			h := sha256.New()
-			n, err := io.Copy(io.MultiWriter(tw, h), io.LimitReader(f, e.Size))
+			var dest io.Writer = h
+			if shipFile == nil || shipFile(e) {
+				hdr.Typeflag = tar.TypeReg
+				hdr.Size = e.Size
+				if err := tw.WriteHeader(hdr); err != nil {
+					f.Close()
+					return err
+				}
+				dest = io.MultiWriter(tw, h)
+			}
+			n, err := io.Copy(dest, io.LimitReader(f, e.Size))
 			if err != nil {
 				f.Close()
 				return err

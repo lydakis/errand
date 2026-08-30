@@ -8,6 +8,7 @@ import (
 	"archive/tar"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -101,21 +102,37 @@ func checkSymlinkTarget(link, target string) error {
 	return nil
 }
 
+type ExtractOptions struct {
+	ResolveMissing func(dest string, entry proto.ManifestEntry) (bool, error)
+}
+
+var ErrCacheMiss = errors.New("snapshot cache miss")
+
 // Extract writes the stream into dest, verifying each entry against the
 // manifest and enforcing the total-size limit. dest must be a fresh,
 // errand-owned directory. Symlinks are created after all other entries.
 func Extract(r io.Reader, dest string, m proto.Manifest, maxBytes int64) error {
+	return ExtractWith(r, dest, m, maxBytes, ExtractOptions{})
+}
+
+func ExtractWith(r io.Reader, dest string, m proto.Manifest, maxBytes int64, opts ExtractOptions) error {
 	if err := Validate(m); err != nil {
 		return err
 	}
 	byPath := make(map[string]proto.ManifestEntry, len(m.Entries))
+	var workspaceBytes int64
 	for _, e := range m.Entries {
 		byPath[e.Path] = e
+		if e.Type == proto.EntryFile {
+			if maxBytes < 0 || e.Size > maxBytes-workspaceBytes {
+				return fmt.Errorf("archive: workspace exceeds %d bytes", maxBytes)
+			}
+			workspaceBytes += e.Size
+		}
 	}
 
 	tr := tar.NewReader(r)
 	written := make(map[string]bool)
-	var total int64
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -146,10 +163,6 @@ func Extract(r io.Reader, dest string, m proto.Manifest, maxBytes int64) error {
 			if e.Type != proto.EntryFile {
 				return typeMismatch(name)
 			}
-			if maxBytes < 0 || e.Size > maxBytes-total {
-				return fmt.Errorf("archive: workspace exceeds %d bytes", maxBytes)
-			}
-			total += e.Size
 			if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 				return err
 			}
@@ -183,10 +196,29 @@ func Extract(r io.Reader, dest string, m proto.Manifest, maxBytes int64) error {
 			return fmt.Errorf("archive: %q has unsupported tar type %d", name, hdr.Typeflag)
 		}
 	}
+	var cacheMisses []string
 	for _, e := range m.Entries {
-		if !written[e.Path] {
-			return fmt.Errorf("archive: manifest entry %q missing from stream", e.Path)
+		if written[e.Path] {
+			continue
 		}
+		if e.Type == proto.EntryFile && opts.ResolveMissing != nil {
+			resolved, err := opts.ResolveMissing(
+				filepath.Join(dest, filepath.FromSlash(e.Path)), e,
+			)
+			if err != nil {
+				return err
+			}
+			if resolved {
+				continue
+			}
+			cacheMisses = append(cacheMisses, e.Path)
+			continue
+		}
+		return fmt.Errorf("archive: manifest entry %q missing from stream", e.Path)
+	}
+	if len(cacheMisses) > 0 {
+		return fmt.Errorf("archive: %w: %d manifest files unavailable (first: %q)",
+			ErrCacheMiss, len(cacheMisses), cacheMisses[0])
 	}
 	// Symlinks last: no file write can ever traverse one of our links.
 	for _, e := range m.Entries {

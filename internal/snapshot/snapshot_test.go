@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lydakis/errand/internal/proto"
 )
 
 func writeFile(t *testing.T, root, rel, content string) {
@@ -100,6 +102,22 @@ func TestPackDetectsChangeDuringSnapshot(t *testing.T) {
 	err = Pack(&buf, root, m)
 	if err == nil || !strings.Contains(err.Error(), "changed during pack") {
 		t.Fatalf("expected changed-during-pack refusal, got %v", err)
+	}
+}
+
+func TestPackPartialRevalidatesCachedFile(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "cached.txt", "before")
+	manifest, err := Build(root, []string{"cached.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, root, "cached.txt", "after!")
+
+	var packed bytes.Buffer
+	err = PackPartial(&packed, root, manifest, func(proto.ManifestEntry) bool { return false })
+	if err == nil || !strings.Contains(err.Error(), "changed during pack") {
+		t.Fatalf("cached file mutation error = %v", err)
 	}
 }
 
