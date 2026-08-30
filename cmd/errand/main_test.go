@@ -39,6 +39,103 @@ func TestResolveHandlePreservesRawURL(t *testing.T) {
 	}
 }
 
+func TestCmdRunRejectsWorkspaceRootWithoutSnapshot(t *testing.T) {
+	if code := cmdRun([]string{"--no-snapshot", "--workspace-root", ".", "--", "/bin/true"}); code != 2 {
+		t.Fatalf("no-snapshot workspace-root exit = %d, want 2", code)
+	}
+}
+
+func TestCmdGCRequiresExplicitTarget(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := cmdGCTo(nil, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "cache|jobs|all") {
+		t.Fatalf("bare gc = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestCmdGCRejectsUnexpectedArguments(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := cmdGCTo([]string{"cache", "unexpected"}, &stdout, &stderr); code != 2 ||
+		!strings.Contains(stderr.String(), "unexpected gc arguments") {
+		t.Fatalf("gc extra args = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestParseRetentionDurationSupportsDays(t *testing.T) {
+	got, err := parseRetentionDuration("30d")
+	if err != nil || got != 30*24*time.Hour {
+		t.Fatalf("parseRetentionDuration(30d) = %v, %v", got, err)
+	}
+}
+
+func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
+	var cacheCalls, jobCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v0/cache/gc":
+			cacheCalls++
+			json.NewEncoder(w).Encode(proto.CacheGCResult{RemovedBlobs: 2, FreedBytes: 10})
+		case "/v0/jobs/gc":
+			jobCalls++
+			var request proto.JobGCRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+			}
+			if request.OlderThanSeconds == nil || *request.OlderThanSeconds != 86400 ||
+				request.Keep == nil || *request.Keep != 5 {
+				t.Errorf("job GC request = %+v", request)
+			}
+			json.NewEncoder(w).Encode(proto.JobGCResult{SelectedJobs: 3, RemovedJobs: 3, FreedBytes: 20})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	var stdout, stderr bytes.Buffer
+	code := cmdGCTo([]string{"all", "--url", server.URL, "--older-than", "1d", "--keep", "5"}, &stdout, &stderr)
+	if code != 0 || cacheCalls != 1 || jobCalls != 1 ||
+		!strings.Contains(stdout.String(), "cache: removed 2") ||
+		!strings.Contains(stdout.String(), "jobs: removed 3") {
+		t.Fatalf("gc all = %d, calls=(%d,%d), stdout=%q stderr=%q",
+			code, cacheCalls, jobCalls, stdout.String(), stderr.String())
+	}
+}
+
+func TestCmdGCRoundsFractionalSecondsUp(t *testing.T) {
+	var gotSeconds int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request proto.JobGCRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+		}
+		if request.OlderThanSeconds != nil {
+			gotSeconds = *request.OlderThanSeconds
+		}
+		json.NewEncoder(w).Encode(proto.JobGCResult{})
+	}))
+	defer server.Close()
+	var stdout, stderr bytes.Buffer
+	code := cmdGCTo([]string{"jobs", "--url", server.URL, "--older-than", "1500ms"}, &stdout, &stderr)
+	if code != 0 || gotSeconds != 2 {
+		t.Fatalf("gc fractional cutoff = %d, seconds=%d, stdout=%q stderr=%q",
+			code, gotSeconds, stdout.String(), stderr.String())
+	}
+}
+
+func TestCmdGCReportsCleanupFailuresSeparately(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(proto.JobGCResult{
+			SelectedJobs: 1, RemovedJobs: 1, CleanupFailures: 1,
+		})
+	}))
+	defer server.Close()
+	var stdout, stderr bytes.Buffer
+	code := cmdGCTo([]string{"jobs", "--url", server.URL, "--keep", "0"}, &stdout, &stderr)
+	if code != 1 || !strings.Contains(stdout.String(), "removed 1") ||
+		!strings.Contains(stdout.String(), "1 cleanup failures") {
+		t.Fatalf("gc cleanup failure = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
 func TestResolvePeerTargetUsesConfiguredDefaultAlias(t *testing.T) {
 	writeClientConfig(t, `default_peer = "cabal"
 [peers.cabal]

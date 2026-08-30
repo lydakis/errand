@@ -54,6 +54,8 @@ type Job struct {
 	startedAt     time.Time
 	reaped        bool
 	startRejected bool
+	deleting      bool
+	logReaders    int
 	done          chan struct{}
 	logReady      chan struct{}
 	logReadyOnce  sync.Once
@@ -194,6 +196,22 @@ func (j *Job) markLogReady() {
 			close(j.logReady)
 		}
 	})
+}
+
+func (j *Job) acquireLogReader() bool {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.deleting {
+		return false
+	}
+	j.logReaders++
+	return true
+}
+
+func (j *Job) releaseLogReader() {
+	j.mu.Lock()
+	j.logReaders--
+	j.mu.Unlock()
 }
 
 // stage extracts the workspace. settled means a concurrent kill finalized it.
@@ -740,6 +758,10 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	}
 	j.mu.Unlock()
 	res.State = state
+	if res.SettledAt == nil {
+		settledAt := time.Now()
+		res.SettledAt = &settledAt
+	}
 
 	if err := j.writeJSON("result.json", res); err != nil {
 		j.event("result-write-failed", err.Error())

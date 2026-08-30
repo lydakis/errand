@@ -27,11 +27,11 @@ import (
 const ExitTransaction = 120
 
 const (
-	controlRequestTimeout   = 15 * time.Second
-	cacheMaintenanceTimeout = 30 * time.Minute
-	submitRequestTimeout    = 31 * time.Minute
-	streamIdleTimeout       = 2 * time.Minute
-	streamDeadlineMargin    = 5 * time.Minute
+	controlRequestTimeout = 15 * time.Second
+	maintenanceTimeout    = 30 * time.Minute
+	submitRequestTimeout  = 31 * time.Minute
+	streamIdleTimeout     = 2 * time.Minute
+	streamDeadlineMargin  = 5 * time.Minute
 )
 
 var directTransport = func() *http.Transport {
@@ -48,15 +48,15 @@ var directHTTP = &http.Client{
 	},
 }
 
-var cacheGCTransport = func() *http.Transport {
+var maintenanceTransport = func() *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.Proxy = nil
-	t.ResponseHeaderTimeout = cacheMaintenanceTimeout
+	t.ResponseHeaderTimeout = maintenanceTimeout
 	return t
 }()
 
-var cacheGCHTTP = &http.Client{
-	Transport: cacheGCTransport,
+var maintenanceHTTP = &http.Client{
+	Transport: maintenanceTransport,
 	CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 		return http.ErrUseLastResponse
 	},
@@ -408,8 +408,17 @@ func CacheStats(peerURL string) (proto.CacheStats, error) {
 func CacheGC(peerURL string) (proto.CacheGCResult, error) {
 	var result proto.CacheGCResult
 	err := postJSONResultContextTimeout(
-		context.Background(), cacheGCHTTP, cacheMaintenanceTimeout,
+		context.Background(), maintenanceHTTP, maintenanceTimeout,
 		peerURL+"/v0/cache/gc", nil, "cache gc", &result,
+	)
+	return result, err
+}
+
+func JobGC(peerURL string, request proto.JobGCRequest) (proto.JobGCResult, error) {
+	var result proto.JobGCResult
+	err := postJSONResultContextTimeout(
+		context.Background(), maintenanceHTTP, maintenanceTimeout,
+		peerURL+"/v0/jobs/gc", request, "job gc", &result,
 	)
 	return result, err
 }

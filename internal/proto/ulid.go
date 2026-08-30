@@ -59,3 +59,22 @@ func ValidULID(s string) bool {
 	}
 	return true
 }
+
+// ULIDTimestamp returns the millisecond timestamp encoded by a canonical ULID.
+func ULIDTimestamp(s string) (time.Time, bool) {
+	if !ValidULID(s) {
+		return time.Time{}, false
+	}
+	var encoded uint64
+	for i := 0; i < 10; i++ {
+		var value int
+		for value < len(crockford) && crockford[value] != s[i] {
+			value++
+		}
+		encoded = encoded<<5 | uint64(value)
+	}
+	if encoded >= 1<<48 {
+		return time.Time{}, false
+	}
+	return time.UnixMilli(int64(encoded)), true
+}

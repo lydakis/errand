@@ -141,14 +141,15 @@ required:
   "ip":  ["tcp:7443"],
   "app": {
     "lydakis.dev/cap/errand": [
-      { "actions": ["submit", "read-own", "kill-own", "manage-caches"] }
+      { "actions": ["submit", "read-own", "kill-own", "manage-caches", "gc-own"] }
     ]
   }
 }]
 ```
 
 The capability carries an **action schema from day one** (not a boolean):
-`submit`, `read-own`, `kill-own`, `manage-caches`, and later `read-all`.
+`submit`, `read-own`, `kill-own`, `manage-caches`, `gc-own`, and later
+`read-all`.
 Matching grants are additive; errand merges capability objects
 deliberately (union of actions).
 
@@ -209,6 +210,9 @@ Per-project defaults (portable, in the repo):
 
 ```toml
 # .errand.toml — describes the project, never names your machines
+[workspace]
+root = true                    # this directory is the snapshot boundary
+
 [run]
 backend = "container"
 image   = "rust:1.86"          # receipt records the resolved digest
@@ -250,12 +254,17 @@ Persistent state comes in three kinds, not one:
 
 - **Named caches** — errand-owned writable directories with explicit
   lifecycle: declared in config, listed by `errand caches`, removed by
-  `errand gc`. Project-scoped by default.
+  `errand gc cache`. Project-scoped by default.
 - **Backend stores** — container image layers, the nix store. Managed by
   the runtime, not by `errand gc`; pruning them is the runtime's own
   command, surfaced but never run implicitly.
-- **Job state** — always removed per the contract above (receipts are kept;
-  they are files you can delete).
+- **Job state** — runtime state is removed per the contract above. Receipts
+  remain until their owner explicitly applies a bounded `errand gc jobs`
+  policy. New job IDs must carry a ULID timestamp from the preceding 24 hours,
+  with one hour of allowed future clock skew. Before collection markers expire,
+  the runner durably advances a high-water clock that never moves backward
+  across restart. Collection retains a minimal non-secret job-ID marker for 25
+  hours, so clock rollback cannot reopen its ID for execution.
 
 ## The job transaction
 
@@ -368,6 +377,14 @@ Both limits are per-machine choices for the operator who knows its workloads.
 
 ## Workspace snapshot
 
+- Snapshot-root discovery precedence is explicit `--workspace-root PATH`, the
+  nearest ancestor `.errand.toml` with `[workspace] root = true`, then the
+  current directory. The selected root must contain the invocation directory;
+  the latter becomes the default remote workdir relative to that root. The
+  root marker defines a boundary, not permission to ship it. Automatic
+  discovery trusts only caller-owned markers in caller-owned directories that
+  are not group- or world-writable; intentionally shared workspaces use the
+  explicit flag.
 - Automatic selection is limited to Git worktrees. A non-Git directory must
   contain `.errandignore` or use the explicit `--include-all` override.
   Filesystem roots are always refused; the user's home directory requires the
@@ -455,7 +472,10 @@ errand logs <peer/ulid> [-f]    # resumes from last seen seq
 errand attach [--apply] <peer/ulid>
 errand fetch [--apply] <peer/ulid> [path]
 errand kill [--force] <peer/ulid>
-errand caches | gc              # errand-owned caches only
+errand caches                   # snapshot and future named-cache status
+errand gc cache                 # shared cache policy; manage-caches
+errand gc jobs --older-than 30d # caller-owned clean terminal receipts
+errand gc all --older-than 30d  # client composition of both endpoints
 ```
 
 Without `--detach`: streams, exits per the two-layer status rule — drop-in
@@ -478,7 +498,8 @@ Versioned HTTP+JSON: `PUT /v0/jobs/<ulid>` is idempotent;
 `GET /v0/jobs/<ulid>/logs?follow=1`; the signal and kill routes control owned
 jobs; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;
 `GET /v0/cache` and `POST /v0/cache/gc` inspect and prune the snapshot cache;
-and `GET /v0/info` returns facts. A negotiated blob disappearing before
+`POST /v0/jobs/gc` applies bounded owner-scoped receipt retention; and
+`GET /v0/info` returns facts. A negotiated blob disappearing before
 submission returns the machine-readable `snapshot_cache_miss` error code so
 the client can retry the same job ID with a complete snapshot. Curl-debuggable;
 the version prefix lets daemon and CLI drift during upgrades without lying to
@@ -514,7 +535,7 @@ each other.
    the client sends the manifest, the runner replies with the hashes it is
    missing, the client ships only those blobs, and the runner materializes
    the workspace from its cache. The cache is errand-owned persistent
-   state with a TTL and size limit, listed and pruned via `errand gc`. The
+   state with a TTL and size limit, listed and pruned via `errand gc cache`. The
    job's workspace still dies with the job, so the cleanup contract is
    unchanged; what persists is cache with an explicit lifecycle. This is
    what makes a tight edit-run loop cheap instead of a full re-ship per
@@ -535,5 +556,7 @@ proves the shape on a real daily need.
    sense there (no systemd scopes, no rootless podman by default)?
 2. Privilege separation (`errandd` vs worker account): post-v0, unless
    adversarial receipt integrity gets promoted into the North Star.
-3. Retention: receipts (age out vs `errand gc --jobs`?) and staged outputs
-   on the target (how long does a detached job's `out/` survive?).
+3. Retention for staged outputs on the target: how long does a detached job's
+   future `out/` survive? Receipt retention is explicit through bounded,
+   owner-scoped `errand gc jobs`; ambiguous and cleanup-incomplete receipts are
+   protected.

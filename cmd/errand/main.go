@@ -22,6 +22,7 @@ import (
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/workspace"
 )
 
 var version = "0.1.0-dev"
@@ -30,12 +31,15 @@ const usage = `errand — a personal job runner for machines you own
 
 usage:
   errand [--on PEER | --url URL] [--detach] [--env K=V]... [--passenv K]...
-         [--workdir REL] [--include-all | --no-snapshot] -- CMD [ARG...]
+         [--workspace-root PATH] [--workdir REL]
+         [--include-all | --no-snapshot] -- CMD [ARG...]
   errand attach [--on PEER | --url URL] HANDLE
   errand ps [--json] [--on PEER | --url URL]
   errand kill [--force] [--on PEER | --url URL] HANDLE
   errand caches [--on PEER | --url URL]
-  errand gc [--on PEER | --url URL]
+  errand gc cache [--on PEER | --url URL]
+  errand gc jobs [--older-than DURATION] [--keep N] [--dry-run] [--on PEER | --url URL]
+  errand gc all [--older-than DURATION] [--keep N] [--on PEER | --url URL]
   errand serve [--config PATH] [--listen ADDR] [--state-dir DIR] [--allow-user LOGIN]...
   errand info [--on PEER | --url URL]
   errand version
@@ -56,7 +60,10 @@ a nonzero remote exit are reported without replacing that exit code.
 Snapshot safety: Git worktrees are selected automatically. Other directories
 require .errandignore or --include-all. Filesystem roots are always refused;
 the user's home directory requires --include-all. --no-snapshot runs in a
-fresh empty remote workspace without inspecting or transferring local files.`
+fresh empty remote workspace without inspecting or transferring local files.
+A marked ancestor with [workspace] root=true in .errand.toml, or an explicit
+--workspace-root, selects a shared snapshot root containing the current
+directory without weakening those safety checks.`
 
 func main() {
 	args := os.Args[1:]
@@ -100,6 +107,7 @@ func cmdRun(args []string) int {
 	on := fs.String("on", "", "peer name from ~/.config/errand/config.toml")
 	rawURL := fs.String("url", "", "peer base URL (mutually exclusive with --on)")
 	workdir := fs.String("workdir", "", "working directory, relative to the workspace root")
+	workspaceRoot := fs.String("workspace-root", "", "snapshot root containing the current directory")
 	includeAll := fs.Bool("include-all", false, "allow an otherwise refused broad snapshot (never permits a filesystem root)")
 	noSnapshot := fs.Bool("no-snapshot", false, "run in an empty remote workspace without inspecting local files")
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
@@ -132,6 +140,10 @@ func cmdRun(args []string) int {
 		fmt.Fprintln(os.Stderr, "errand: --include-all and --no-snapshot are mutually exclusive")
 		return 2
 	}
+	if *noSnapshot && *workspaceRoot != "" {
+		fmt.Fprintln(os.Stderr, "errand: --workspace-root and --no-snapshot are mutually exclusive")
+		return 2
+	}
 	if *noSnapshot && *workdir != "" && *workdir != "." {
 		fmt.Fprintln(os.Stderr, "errand: --workdir must be the workspace root when using --no-snapshot")
 		return 2
@@ -153,11 +165,26 @@ func cmdRun(args []string) int {
 	}
 	root := ""
 	if !*noSnapshot {
-		root, err = os.Getwd()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			fmt.Fprintf(os.Stderr, "errand: %v\n", cwdErr)
 			return client.ExitTransaction
 		}
+		selected, discoverErr := workspace.Discover(cwd, *workspaceRoot)
+		if discoverErr != nil {
+			fmt.Fprintf(os.Stderr, "errand: %v\n", discoverErr)
+			return client.ExitTransaction
+		}
+		root = selected.Root
+		if *workdir == "" {
+			*workdir = selected.Workdir
+		}
+		shownWorkdir := *workdir
+		if shownWorkdir == "" {
+			shownWorkdir = "."
+		}
+		fmt.Fprintf(os.Stderr, "errand: workspace root %s (from %s)\n", selected.Root, selected.Source)
+		fmt.Fprintf(os.Stderr, "errand: command workdir %s\n", shownWorkdir)
 	}
 	return client.Run(client.RunOptions{
 		PeerURL:    peerURL,
@@ -511,22 +538,113 @@ func cmdCaches(args []string) int {
 }
 
 func cmdGC(args []string) int {
+	return cmdGCTo(args, os.Stdout, os.Stderr)
+}
+
+func cmdGCTo(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, "usage: errand gc cache|jobs|all [options]")
+		return 2
+	}
+	target := args[0]
 	fs := flag.NewFlagSet("gc", flag.ExitOnError)
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
-	fs.Parse(args)
+	olderThan := fs.String("older-than", "", "remove jobs settled longer than this duration ago")
+	keep := fs.Int("keep", -1, "retain at least the newest N eligible jobs")
+	dryRun := fs.Bool("dry-run", false, "report eligible jobs without removing them")
+	fs.Parse(args[1:])
+	if fs.NArg() != 0 {
+		fmt.Fprintf(stderr, "errand: unexpected gc arguments: %s\n", strings.Join(fs.Args(), " "))
+		return 2
+	}
+	if target != "cache" && target != "jobs" && target != "all" {
+		fmt.Fprintf(stderr, "errand: unknown gc target %q; want cache, jobs, or all\n", target)
+		return 2
+	}
+	if target == "cache" && (*olderThan != "" || *keep != -1 || *dryRun) {
+		fmt.Fprintln(stderr, "errand: job retention flags do not apply to gc cache")
+		return 2
+	}
+	if target == "all" && *dryRun {
+		fmt.Fprintln(stderr, "errand: --dry-run applies only to gc jobs")
+		return 2
+	}
+	var jobRequest proto.JobGCRequest
+	if target == "jobs" || target == "all" {
+		if *olderThan == "" && *keep == -1 {
+			fmt.Fprintln(stderr, "errand: gc jobs requires --older-than or --keep")
+			return 2
+		}
+		if *olderThan != "" {
+			duration, err := parseRetentionDuration(*olderThan)
+			if err != nil || duration <= 0 || duration < time.Second {
+				fmt.Fprintln(stderr, "errand: --older-than must be a positive duration of at least 1s")
+				return 2
+			}
+			seconds := int64(duration / time.Second)
+			if duration%time.Second != 0 {
+				seconds++
+			}
+			jobRequest.OlderThanSeconds = &seconds
+		}
+		if *keep != -1 {
+			if *keep < 0 {
+				fmt.Fprintln(stderr, "errand: --keep must not be negative")
+				return 2
+			}
+			jobRequest.Keep = keep
+		}
+		jobRequest.DryRun = *dryRun
+	}
 	peerURL, label, err := resolvePeerTarget(*rawURL, *on)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		fmt.Fprintf(stderr, "errand: %v\n", err)
 		return 1
 	}
-	result, err := client.CacheGC(peerURL)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+	failed := false
+	if target == "cache" || target == "all" {
+		result, err := client.CacheGC(peerURL)
+		if err != nil {
+			fmt.Fprintf(stderr, "errand: cache gc: %v\n", err)
+			failed = true
+		} else {
+			fmt.Fprintf(stdout, "%s cache: removed %d blobs, freed %d bytes\n",
+				label, result.RemovedBlobs, result.FreedBytes)
+		}
+	}
+	if target == "jobs" || target == "all" {
+		result, err := client.JobGC(peerURL, jobRequest)
+		if err != nil {
+			fmt.Fprintf(stderr, "errand: job gc: %v\n", err)
+			failed = true
+		} else if result.DryRun {
+			fmt.Fprintf(stdout, "%s jobs: would remove %d jobs and free %d bytes (%d protected)\n",
+				label, result.SelectedJobs-result.FailedJobs, result.FreedBytes, result.ProtectedJobs)
+		} else {
+			fmt.Fprintf(stdout, "%s jobs: removed %d jobs, freed %d bytes (%d protected, %d skipped, %d failed, %d cleanup failures)\n",
+				label, result.RemovedJobs, result.FreedBytes, result.ProtectedJobs, result.SkippedJobs,
+				result.FailedJobs, result.CleanupFailures)
+		}
+		if err == nil && (result.FailedJobs != 0 || result.CleanupFailures != 0) {
+			failed = true
+		}
+	}
+	if failed {
 		return 1
 	}
-	fmt.Printf("%s: removed %d blobs, freed %d bytes\n", label, result.RemovedBlobs, result.FreedBytes)
 	return 0
+}
+
+func parseRetentionDuration(value string) (time.Duration, error) {
+	if strings.HasSuffix(value, "d") {
+		days, err := strconv.ParseInt(strings.TrimSuffix(value, "d"), 10, 64)
+		if err != nil || days <= 0 || days > int64((1<<63-1)/int64(24*time.Hour)) {
+			return 0, fmt.Errorf("invalid day duration %q", value)
+		}
+		return time.Duration(days) * 24 * time.Hour, nil
+	}
+	return time.ParseDuration(value)
 }
 
 func cmdInfo(args []string) int {

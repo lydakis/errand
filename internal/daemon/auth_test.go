@@ -303,6 +303,44 @@ func TestCacheEndpointsRequireManageCachesAction(t *testing.T) {
 	}
 }
 
+func TestJobGCEndpointRequiresGCAction(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		actions []string
+		want    int
+	}{
+		{name: "read only", actions: []string{proto.ActionReadOwn}, want: http.StatusForbidden},
+		{name: "job collector", actions: []string{proto.ActionGCJobs}, want: http.StatusOK},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			response := map[string]any{
+				"Node":        map[string]any{"Name": "laptop.tailnet.ts.net.", "StableID": "node-1"},
+				"UserProfile": map[string]any{"ID": 42, "LoginName": "george@example.com"},
+				"CapMap": map[string]any{
+					proto.DefaultCapability: []any{map[string]any{"actions": tt.actions}},
+				},
+			}
+			d, err := New(Config{StateDir: t.TempDir(), TailscaledSocket: fakeWhoisSocket(t, response)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { d.Close() })
+			ts := httptest.NewServer(d.Handler())
+			t.Cleanup(ts.Close)
+			keep := 1
+			body, _ := json.Marshal(proto.JobGCRequest{Keep: &keep})
+			resp, err := http.Post(ts.URL+"/v0/jobs/gc", "application/json", bytes.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			if resp.StatusCode != tt.want {
+				t.Fatalf("POST /v0/jobs/gc = %s, want %d", resp.Status, tt.want)
+			}
+		})
+	}
+}
+
 func TestIdentifyFailsClosedWithoutValidGrant(t *testing.T) {
 	response := map[string]any{
 		"Node":        map[string]any{"Name": "laptop.tailnet.ts.net.", "StableID": "node-1"},

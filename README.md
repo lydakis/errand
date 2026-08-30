@@ -5,7 +5,7 @@ get the result back: same command, same working tree, logs streaming to
 your terminal, real exit code. The heat, watts, and minutes are spent
 elsewhere.
 
-> **Status: milestone 3.** The transactional core works end to end over a
+> **Status: milestone 3.5.** The transactional core works end to end over a
 > tailnet, including durable detached jobs, restart reconciliation, and
 > content-addressed snapshot reuse. The v0 design is frozen in
 > [docs/DESIGN.md](docs/DESIGN.md).
@@ -25,6 +25,7 @@ job=$(errand --detach -- make build)
 errand ps                     # list your jobs across configured peers
 errand ps --json              # the same receipt-backed data for clients
 errand attach "$job"          # replay logs and follow to completion
+errand gc jobs --dry-run --older-than 30d --keep 500
 ```
 
 Runner config authorizes callers by tailnet identity (whois): an ACL app
@@ -41,6 +42,23 @@ requires `--include-all`. The client prints the selected file count and byte
 total before remote admission. Use `--no-snapshot` when a command needs no
 local files; Errand then skips local inspection and runs it in an empty remote
 workspace. Because that workspace is empty, `--workdir` may only name its root.
+
+For a workspace containing several repositories, place this marker and an
+explicit `.errandignore` at the shared root:
+
+```toml
+# .errand.toml
+[workspace]
+root = true
+```
+
+Errand discovers the nearest marked ancestor, snapshots from there, and runs
+the command in the caller's relative directory. `--workspace-root PATH`
+selects the same boundary explicitly. Automatic discovery trusts only a marker
+and directory owned by the caller in a directory that is not group- or
+world-writable; use the explicit flag for intentionally shared workspaces. A
+marker chooses only the boundary; it does not bypass `.errandignore`, Git
+selection, home-directory protection, or the filesystem-root refusal.
 
 ## Why not just ssh?
 
@@ -86,9 +104,10 @@ returns 0 for the detach action; it is not the unfinished job's exit status.
 Non-terminal EOF is ignored, so scripts remain attached unless they request
 `--detach` explicitly.
 
-Detached jobs, `ps`, `attach`, `kill`, snapshot-cache inspection, and cache GC
-are implemented. Planned v0 commands still include fact-based peer selection,
-output fetching, named-cache management, and pairing.
+Detached jobs, `ps`, `attach`, `kill`, workspace-root discovery,
+snapshot-cache inspection, and cache and receipt GC are implemented. Planned
+v0 commands still include fact-based peer selection, output fetching,
+named-cache management, and pairing.
 
 ## Job state and control
 
@@ -121,7 +140,29 @@ cancelled durably before they start. A submission is rejected as busy only
 when both the configured running slots and bounded queue are full.
 
 Capability-based runners must grant `manage-caches` to use `errand caches` and
-`errand gc`; the frozen design's ACL example includes the complete action set.
+`errand gc cache`. Job receipt collection uses the separate `gc-own` action.
+The frozen design's ACL example includes the complete action set.
+
+GC always names its target. Bare `errand gc` only prints usage:
+
+```text
+errand gc cache
+errand gc jobs --older-than 30d --keep 500
+errand gc jobs --dry-run --older-than 30d
+errand gc all --older-than 30d --keep 500
+```
+
+Job GC only removes the caller's clean `exited` or `killed` receipts. Clean
+means cleanup, logs, and outputs all completed with no transaction error.
+Active, queued, ambiguous, incomplete, and actively replayed receipts are
+protected. When both retention bounds are present, a receipt must be older
+than the cutoff and outside the newest `keep` receipts to be removed. `all` is
+client-side composition of the separately authorized cache and job endpoints.
+New job IDs must carry a ULID timestamp from the preceding 24 hours, with one
+hour of allowed future clock skew. Before collection markers expire, the
+runner durably advances a high-water clock that never moves backward across
+restart. Collection retains a small, non-secret job-ID marker for 25 hours, so
+clock rollback cannot reopen a collected ID for execution.
 
 Linux and macOS first; Windows is a design constraint, not yet a
 deliverable.

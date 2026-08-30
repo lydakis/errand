@@ -83,11 +83,11 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestCacheGCUsesMaintenanceDeadline(t *testing.T) {
-	oldHTTP := cacheGCHTTP
-	t.Cleanup(func() { cacheGCHTTP = oldHTTP })
+	oldHTTP := maintenanceHTTP
+	t.Cleanup(func() { maintenanceHTTP = oldHTTP })
 
 	var remaining time.Duration
-	cacheGCHTTP = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	maintenanceHTTP = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		deadline, ok := req.Context().Deadline()
 		if !ok {
 			t.Fatal("cache GC request has no deadline")
@@ -112,8 +112,8 @@ func TestCacheGCUsesMaintenanceDeadline(t *testing.T) {
 	if remaining <= controlRequestTimeout {
 		t.Fatalf("cache GC deadline = %v, want longer than control timeout %v", remaining, controlRequestTimeout)
 	}
-	if cacheGCTransport.ResponseHeaderTimeout != cacheMaintenanceTimeout {
-		t.Fatalf("cache GC response-header timeout = %v, want %v", cacheGCTransport.ResponseHeaderTimeout, cacheMaintenanceTimeout)
+	if maintenanceTransport.ResponseHeaderTimeout != maintenanceTimeout {
+		t.Fatalf("maintenance response-header timeout = %v, want %v", maintenanceTransport.ResponseHeaderTimeout, maintenanceTimeout)
 	}
 }
 

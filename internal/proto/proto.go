@@ -23,6 +23,7 @@ const (
 	ActionReadOwn = "read-own"
 	ActionKillOwn = "kill-own"
 	ActionCaches  = "manage-caches"
+	ActionGCJobs  = "gc-own"
 
 	ErrorCodeSnapshotCacheMiss = "snapshot_cache_miss"
 )
@@ -147,6 +148,7 @@ type Result struct {
 	Started          bool       `json:"started"`
 	StartedAt        *time.Time `json:"started_at,omitempty"`
 	FinishedAt       *time.Time `json:"finished_at,omitempty"`
+	SettledAt        *time.Time `json:"settled_at,omitempty"`
 	DurationMS       int64      `json:"duration_ms,omitempty"`
 	ExitCode         *int       `json:"exit_code"` // nil when signaled or never started
 	Signal           string     `json:"signal,omitempty"`
@@ -243,6 +245,23 @@ type CacheStats struct {
 type CacheGCResult struct {
 	RemovedBlobs int   `json:"removed_blobs"`
 	FreedBytes   int64 `json:"freed_bytes"`
+}
+
+type JobGCRequest struct {
+	OlderThanSeconds *int64 `json:"older_than_seconds,omitempty"`
+	Keep             *int   `json:"keep,omitempty"`
+	DryRun           bool   `json:"dry_run,omitempty"`
+}
+
+type JobGCResult struct {
+	SelectedJobs    int   `json:"selected_jobs"`
+	RemovedJobs     int   `json:"removed_jobs"`
+	ProtectedJobs   int   `json:"protected_jobs"`
+	SkippedJobs     int   `json:"skipped_jobs"`
+	FailedJobs      int   `json:"failed_jobs"`
+	CleanupFailures int   `json:"cleanup_failures"`
+	FreedBytes      int64 `json:"freed_bytes"`
+	DryRun          bool  `json:"dry_run"`
 }
 
 type Facts struct {

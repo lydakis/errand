@@ -68,9 +68,14 @@ type Daemon struct {
 	whoisClient *http.Client
 	cache       *blobCache // nil when the cache is disabled
 
-	mu      sync.Mutex
-	jobs    map[string]*Job
-	running map[string]*Job
+	mu        sync.Mutex
+	jobs      map[string]*Job
+	running   map[string]*Job
+	collected map[string]collectedRecord
+	clockMu   sync.Mutex
+	// admissionHighWater never moves backward and is persisted before it is
+	// used to expire replay-prevention markers.
+	admissionHighWater time.Time
 	// queue is the admission-ordered waiting list. Entries remain here while
 	// staging and, once staged, while queued for a running slot.
 	queue     []*Job
@@ -121,10 +126,18 @@ func New(cfg Config) (*Daemon, error) {
 		cfg.MaxQueued = 0
 	}
 	d := &Daemon{
-		cfg: cfg, jobs: map[string]*Job{}, running: map[string]*Job{},
+		cfg: cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{},
 		whoisClient: newWhoisClient(cfg.TailscaledSocket),
 	}
 	if err := d.lockStateDir(); err != nil {
+		return nil, err
+	}
+	if err := d.loadAdmissionClock(); err != nil {
+		_ = d.Close()
+		return nil, err
+	}
+	if err := d.loadCollected(); err != nil {
+		_ = d.Close()
 		return nil, err
 	}
 	if err := d.loadExisting(); err != nil {
@@ -180,12 +193,45 @@ func (d *Daemon) Close() error {
 
 func (d *Daemon) jobsDir() string { return filepath.Join(d.cfg.StateDir, "jobs") }
 
+func (d *Daemon) collectedDir() string { return filepath.Join(d.cfg.StateDir, "collected") }
+
 func replaceJSON(dest string, v any) error {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
 	return replaceFile(dest, append(b, '\n'))
+}
+
+func replaceJSONDurable(dest string, v any) error {
+	return replaceJSONDurableWith(dest, v, syncDirectory)
+}
+
+func replaceJSONDurableWith(dest string, v any, syncDir func(string) error) error {
+	if err := replaceJSON(dest, v); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(dest))
+}
+
+func syncDirectory(path string) error {
+	dir, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
+}
+
+func ensureChildDirectoryDurable(path string, mode os.FileMode) error {
+	return ensureChildDirectoryDurableWith(path, mode, syncDirectory)
+}
+
+func ensureChildDirectoryDurableWith(path string, mode os.FileMode, syncParent func(string) error) error {
+	if err := os.MkdirAll(path, mode); err != nil {
+		return err
+	}
+	return syncParent(filepath.Dir(path))
 }
 
 func replaceFile(dest string, data []byte) error {
@@ -284,11 +330,20 @@ func (d *Daemon) loadExisting() error {
 	if err := os.MkdirAll(d.jobsDir(), 0o700); err != nil {
 		return err
 	}
+	if _, err := cleanupGCTombstones(context.Background(), d.jobsDir(), removeOwnedTree); err != nil {
+		return fmt.Errorf("scanning interrupted job GC tombstones: %w", err)
+	}
+	if err := d.pruneCollected(context.Background(), d.admissionNow(time.Now())); err != nil {
+		return fmt.Errorf("pruning collection markers after tombstone recovery: %w", err)
+	}
 	entries, err := os.ReadDir(d.jobsDir())
 	if err != nil {
 		return err
 	}
 	for _, ent := range entries {
+		if ent.IsDir() && strings.HasPrefix(ent.Name(), ".gc-") {
+			continue
+		}
 		if !ent.IsDir() || !proto.ValidULID(ent.Name()) {
 			continue
 		}
@@ -383,6 +438,12 @@ func (d *Daemon) loadExisting() error {
 			}
 		}
 		d.jobs[j.ID] = j
+		if _, ok := d.collected[j.ID]; ok {
+			if err := os.Remove(filepath.Join(d.collectedDir(), j.ID+".json")); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("removing stale collection marker %s: %w", j.ID, err)
+			}
+			delete(d.collected, j.ID)
+		}
 	}
 	return nil
 }
@@ -452,8 +513,10 @@ func (d *Daemon) reconcileQueued(j *Job) {
 	if err := removeOwnedTree(filepath.Join(j.Dir, "workspace")); err != nil {
 		cleanupErrs = []string{"removing workspace: " + err.Error()}
 	}
+	settledAt := time.Now()
 	res := &proto.Result{
 		State: proto.StateExited, StartError: startError,
+		SettledAt: &settledAt,
 		OutputsOK: true, CleanupOK: len(cleanupErrs) == 0, LogsComplete: true,
 	}
 	if len(cleanupErrs) > 0 {
@@ -502,8 +565,10 @@ func (d *Daemon) reconcileUnfinished(j *Job) {
 			len(killed))
 	}
 
+	settledAt := time.Now()
 	res := &proto.Result{
 		State: StateAmbiguous, TransactionError: detail,
+		SettledAt: &settledAt,
 		OutputsOK: true, CleanupOK: len(cleanupErrs) == 0, LogsComplete: false,
 	}
 	if len(cleanupErrs) > 0 {
@@ -570,6 +635,7 @@ func (d *Daemon) Handler() http.Handler {
 	mux.HandleFunc("POST /v0/snapshot/diff", d.auth(proto.ActionSubmit, d.handleSnapshotDiff))
 	mux.HandleFunc("GET /v0/cache", d.auth(proto.ActionCaches, d.handleCacheStats))
 	mux.HandleFunc("POST /v0/cache/gc", d.auth(proto.ActionCaches, d.handleCacheGC))
+	mux.HandleFunc("POST /v0/jobs/gc", d.auth(proto.ActionGCJobs, d.handleJobGC))
 	mux.HandleFunc("PUT /v0/jobs/{id}", d.auth(proto.ActionSubmit, d.handleSubmit))
 	mux.HandleFunc("GET /v0/jobs/{id}", d.auth(proto.ActionReadOwn, d.handleStatus))
 	mux.HandleFunc("GET /v0/jobs/{id}/logs", d.auth(proto.ActionReadOwn, d.handleLogs))
@@ -682,6 +748,17 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		httpError(w, http.StatusBadRequest, "job id must be a ULID")
 		return
 	}
+	freshnessErr := validateNewJobID(jobID, d.admissionNow(time.Now()))
+	if freshnessErr != nil {
+		d.mu.Lock()
+		_, knownJob := d.jobs[jobID]
+		_, knownCollected := d.collected[jobID]
+		d.mu.Unlock()
+		if !knownJob && !knownCollected {
+			httpError(w, http.StatusBadRequest, freshnessErr.Error())
+			return
+		}
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, d.cfg.MaxUploadBytes)
 	mr, err := r.MultipartReader()
 	if err != nil {
@@ -738,6 +815,24 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 			return
 		}
 		writeJSON(w, http.StatusOK, existing.Status())
+		return
+	}
+	if collected, ok := d.collected[jobID]; ok {
+		d.mu.Unlock()
+		if !d.cfg.InsecureNoAuth && collected.Owner != id.Owner() {
+			httpError(w, http.StatusForbidden, "not the owner of this job")
+			return
+		}
+		if collected.RequestDigest != "" && collected.RequestDigest != digest {
+			httpError(w, http.StatusConflict, "job id was collected with a different request digest")
+			return
+		}
+		httpError(w, http.StatusGone, "job receipt was collected; the job id cannot be replayed")
+		return
+	}
+	if freshnessErr != nil {
+		d.mu.Unlock()
+		httpError(w, http.StatusBadRequest, freshnessErr.Error())
 		return
 	}
 	if d.capacityFullLocked() {
@@ -987,8 +1082,10 @@ func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 		if startErr != nil {
 			startMessage = startErr.Error()
 		}
+		settledAt := time.Now()
 		result := &proto.Result{
 			State: proto.StateAmbiguous, StartError: startMessage,
+			SettledAt:        &settledAt,
 			TransactionError: rollbackErr.Error(), OutputsOK: true,
 			CleanupOK: false, LogsComplete: true,
 		}
@@ -1143,6 +1240,11 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	if j == nil {
 		return
 	}
+	if !j.acquireLogReader() {
+		httpError(w, http.StatusNotFound, "no such job")
+		return
+	}
+	defer j.releaseLogReader()
 	from, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
 	if lei, err := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64); err == nil && lei > from {
 		from = lei
