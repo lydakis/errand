@@ -23,7 +23,30 @@ func TestDiscoverUsesNearestMarkedAncestor(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantRoot, _ := filepath.EvalSymlinks(root)
-	if got.Root != wantRoot || got.Workdir != "src/package-b" || got.Source != filepath.Join(wantRoot, markerName) {
+	if got.Root != wantRoot || got.Workdir != "src/package-b" || got.Project != "src" ||
+		got.Source != filepath.Join(wantRoot, markerName) {
+		t.Fatalf("Discover() = %+v", got)
+	}
+}
+
+func TestDiscoverUsesGitWorkspaceNameBelowRepositoryRoot(t *testing.T) {
+	root := t.TempDir()
+	cwd := filepath.Join(root, "src", "package-b")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, markerName), []byte("[workspace]\nroot = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".git"), []byte("gitdir: elsewhere\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Discover(cwd, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRoot, _ := filepath.EvalSymlinks(root)
+	if got.Project != filepath.Base(wantRoot) || got.Workdir != "src/package-b" {
 		t.Fatalf("Discover() = %+v", got)
 	}
 }
@@ -42,7 +65,8 @@ func TestDiscoverMarkerWithoutRootDoesNotSelectAncestor(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantRoot, _ := filepath.EvalSymlinks(cwd)
-	if got.Root != wantRoot || got.Workdir != "" || got.Source != "current directory" {
+	if got.Root != wantRoot || got.Workdir != "" || got.Project != filepath.Base(wantRoot) ||
+		got.Source != "current directory" {
 		t.Fatalf("Discover() = %+v", got)
 	}
 }
@@ -80,7 +104,8 @@ func TestDiscoverExplicitRelativeRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantRoot, _ := filepath.EvalSymlinks(root)
-	if got.Root != wantRoot || got.Workdir != "src/package" || got.Source != "--workspace-root" {
+	if got.Root != wantRoot || got.Workdir != "src/package" || got.Project != "src" ||
+		got.Source != "--workspace-root" {
 		t.Fatalf("Discover() = %+v", got)
 	}
 }

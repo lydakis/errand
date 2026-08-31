@@ -14,6 +14,8 @@ import (
 const (
 	ProtoVersion   = 0
 	ReceiptVersion = 1
+	// MaxJobListEntries is the bounded per-runner listing window.
+	MaxJobListEntries = 200
 
 	// DefaultCapability is the tailnet ACL app-capability key the daemon
 	// looks for in a caller's WhoIs capability map.
@@ -167,16 +169,19 @@ func (r ReceiptSpec) SpecWithoutEnv() Spec {
 	}
 }
 
-// Admission records who was allowed to run a job, and why.
+// Admission records who was allowed to run a job, why, and the caller-facing
+// project label attached to that admission.
 type Admission struct {
-	Time       time.Time `json:"time"`
-	UserID     int64     `json:"user_id,omitempty"`
-	UserLogin  string    `json:"user_login,omitempty"`
-	NodeID     string    `json:"node_id,omitempty"`
-	NodeName   string    `json:"node_name,omitempty"`
-	RemoteAddr string    `json:"remote_addr"`
-	Method     string    `json:"method"` // capability | allowlist | insecure-test
-	Facts      Facts     `json:"facts"`
+	Time             time.Time `json:"time"`
+	UserID           int64     `json:"user_id,omitempty"`
+	UserLogin        string    `json:"user_login,omitempty"`
+	NodeID           string    `json:"node_id,omitempty"`
+	NodeName         string    `json:"node_name,omitempty"`
+	RemoteAddr       string    `json:"remote_addr"`
+	Method           string    `json:"method"` // capability | allowlist | insecure-test
+	Project          string    `json:"project,omitempty"`
+	ProjectTruncated bool      `json:"project_truncated,omitempty"`
+	Facts            Facts     `json:"facts"`
 }
 
 // Result is written once at terminal completion. Process result and
@@ -254,6 +259,8 @@ type JobListEntry struct {
 	GitDirty              bool       `json:"git_dirty,omitempty"`
 	Workdir               string     `json:"workdir,omitempty"`
 	WorkdirTruncated      bool       `json:"workdir_truncated,omitempty"`
+	Project               string     `json:"project,omitempty"`
+	ProjectTruncated      bool       `json:"project_truncated,omitempty"`
 	ExitCode              *int       `json:"exit_code,omitempty"`
 	Signal                string     `json:"signal,omitempty"`
 }

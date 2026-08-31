@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/lydakis/errand/internal/proto"
@@ -15,6 +16,7 @@ const markerName = ".errand.toml"
 type Selection struct {
 	Root    string
 	Workdir string
+	Project string
 	Source  string
 	Outputs []proto.OutputSpec
 }
@@ -143,5 +145,14 @@ func selection(root, cwd, source string, outputs []proto.OutputSpec) (Selection,
 	} else {
 		rel = filepath.ToSlash(rel)
 	}
-	return Selection{Root: root, Workdir: rel, Source: source, Outputs: outputs}, nil
+	project := filepath.Base(root)
+	if rel != "" && !hasGitMetadata(root) {
+		project = strings.SplitN(rel, "/", 2)[0]
+	}
+	return Selection{Root: root, Workdir: rel, Project: project, Source: source, Outputs: outputs}, nil
+}
+
+func hasGitMetadata(root string) bool {
+	_, err := os.Lstat(filepath.Join(root, ".git"))
+	return err == nil
 }

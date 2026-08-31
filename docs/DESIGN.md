@@ -483,7 +483,8 @@ vaguer is promised.
 errand [--on X | --where facts] [--detach] -- <cmd...>
 errand peers                    # configured peers, probed facts, reachability
 errand peers pair | revoke      # LAN identity ceremony
-errand ps [--on X] [--json]
+errand ps [-a | --all] [-n N | --last N] [--on X] [--json] # N <= 200
+errand info [--on X]           # all configured peers unless narrowed
 errand logs <peer/ulid> [-f]    # resumes from last seen seq
 errand attach [--apply] <peer/ulid>
 errand fetch [--apply] <peer/ulid> [path]
@@ -510,7 +511,8 @@ reports the effective URL rather than preserving a misleading alias.
 ## Protocol
 
 Versioned HTTP+JSON: `PUT /v0/jobs/<ulid>` is idempotent;
-`GET /v0/jobs` returns the caller's bounded newest-first listing;
+`GET /v0/jobs` returns the caller's bounded newest-first listing, while
+`GET /v0/jobs?active=1` filters active jobs before applying that bound;
 `GET /v0/jobs/<ulid>` returns status; SSE with event IDs powers
 `GET /v0/jobs/<ulid>/logs?follow=1`; the signal and kill routes control owned
 jobs; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;

@@ -349,6 +349,32 @@ func TestListJobsNewestFirst(t *testing.T) {
 	}
 }
 
+func TestActiveJobListFiltersBeforeReceiptCap(t *testing.T) {
+	d, ts := testDaemon(t)
+	activeID := "01" + strings.Repeat("0", 24)
+	d.mu.Lock()
+	d.jobs[activeID] = &Job{
+		ID: activeID, Spec: proto.Spec{Argv: []string{"/bin/sleep", "10"}},
+		Admission: proto.Admission{Time: time.Now().Add(-time.Hour)}, state: proto.StateRunning,
+	}
+	for i := 0; i < 201; i++ {
+		id := proto.NewULID()
+		d.jobs[id] = &Job{
+			ID: id, Spec: proto.Spec{Argv: []string{"/bin/true"}},
+			Admission: proto.Admission{Time: time.Now()}, state: proto.StateExited,
+		}
+	}
+	d.mu.Unlock()
+
+	entries, err := client.ListActive(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].ID != activeID {
+		t.Fatalf("active listing = %+v, want only %s", entries, activeID)
+	}
+}
+
 func TestJobListSummaryIsByteBounded(t *testing.T) {
 	longArg := strings.Repeat("\u0000\"\\界", 1<<16)
 	// NUL has the largest JSON expansion (six bytes), so this exercises the
@@ -360,10 +386,10 @@ func TestJobListSummaryIsByteBounded(t *testing.T) {
 			Argv: original, Workdir: longMetadata,
 			GitCommit: longMetadata, ManifestRoot: longMetadata,
 		}, state: proto.StateRunning, startedAt: time.Now().Add(-time.Hour),
-		Admission: proto.Admission{Time: time.Now()},
+		Admission: proto.Admission{Time: time.Now(), Project: longMetadata},
 	}
 	entry := j.summary()
-	if !entry.CommandTruncated || !entry.WorkdirTruncated ||
+	if !entry.CommandTruncated || !entry.WorkdirTruncated || !entry.ProjectTruncated ||
 		!entry.GitCommitTruncated || !entry.ManifestRootTruncated {
 		t.Fatalf("large listing metadata was not marked truncated: %+v", entry)
 	}
@@ -373,7 +399,8 @@ func TestJobListSummaryIsByteBounded(t *testing.T) {
 	if len(entry.Command) > maxListCommandBytes {
 		t.Fatalf("bounded command is %d bytes, want <= %d", len(entry.Command), maxListCommandBytes)
 	}
-	if len(entry.Workdir) > maxListWorkdirBytes || len(entry.GitCommit) > maxListDigestBytes ||
+	if len(entry.Workdir) > maxListWorkdirBytes || len(entry.Project) > maxListProjectBytes ||
+		len(entry.GitCommit) > maxListDigestBytes ||
 		len(entry.ManifestRoot) > maxListDigestBytes {
 		t.Fatalf("listing metadata exceeds bounds: %+v", entry)
 	}
@@ -406,7 +433,7 @@ func TestJobListSummaryIncludesTimingAndSourceContext(t *testing.T) {
 			GitCommit:    strings.Repeat("b", 40),
 			GitDirty:     true,
 		},
-		Admission: proto.Admission{Time: started.Add(-time.Second)},
+		Admission: proto.Admission{Time: started.Add(-time.Second), Project: "atlas"},
 		state:     proto.StateExited,
 		startedAt: started,
 		result: &proto.Result{
@@ -418,7 +445,7 @@ func TestJobListSummaryIncludesTimingAndSourceContext(t *testing.T) {
 	entry := j.summary()
 	if entry.StartedAt == nil || !entry.StartedAt.Equal(started) ||
 		entry.FinishedAt == nil || !entry.FinishedAt.Equal(finished) ||
-		entry.DurationMS != 180000 || entry.Workdir != "vm" ||
+		entry.DurationMS != 180000 || entry.Workdir != "vm" || entry.Project != "atlas" ||
 		entry.ManifestRoot != strings.Repeat("a", 64) ||
 		entry.GitCommit != strings.Repeat("b", 40) || !entry.GitDirty {
 		t.Fatalf("listing context = %+v", entry)

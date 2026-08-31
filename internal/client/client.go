@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
@@ -32,6 +33,7 @@ const (
 	submitRequestTimeout  = 31 * time.Minute
 	streamIdleTimeout     = 2 * time.Minute
 	streamDeadlineMargin  = 5 * time.Minute
+	maxProjectLabelBytes  = 128
 )
 
 var directTransport = func() *http.Transport {
@@ -70,6 +72,7 @@ type RunOptions struct {
 	Env            map[string]string // literal values
 	PassEnv        []string          // names copied from the local environment
 	Workdir        string
+	Project        string
 	IncludeAll     bool
 	NoSnapshot     bool // use a fresh empty workspace without inspecting Root
 	Detach         bool // return after admission, printing the handle on stdout
@@ -497,10 +500,24 @@ func JobGC(peerURL string, request proto.JobGCRequest) (proto.JobGCResult, error
 
 // List fetches a runner's job listing (the caller's own jobs).
 func List(peerURL string) ([]proto.JobListEntry, error) {
+	return list(peerURL, false)
+}
+
+// ListActive fetches the runner's bounded active-job window without letting
+// retained terminal receipts consume it.
+func ListActive(peerURL string) ([]proto.JobListEntry, error) {
+	return list(peerURL, true)
+}
+
+func list(peerURL string, activeOnly bool) ([]proto.JobListEntry, error) {
 	var entries []proto.JobListEntry
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
-	err := getJSONContext(ctx, peerURL+"/v0/jobs", 1<<20, "job listing", &entries)
+	url := peerURL + "/v0/jobs"
+	if activeOnly {
+		url += "?active=1"
+	}
+	err := getJSONContext(ctx, url, 1<<20, "job listing", &entries)
 	return entries, err
 }
 
@@ -689,6 +706,13 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	req.Header.Set("X-Errand-Digest", spec.Digest())
+	if opts.Project != "" {
+		encoded, truncated := encodeProjectMetadata(opts.Project)
+		req.Header.Set("X-Errand-Project-B64", encoded)
+		if truncated {
+			req.Header.Set("X-Errand-Project-Truncated", "1")
+		}
+	}
 	resp, err := directHTTP.Do(req)
 	if err != nil {
 		return status, true, fmt.Errorf("submitting to %s: %w", opts.PeerURL, err)
@@ -713,6 +737,21 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 			statusCode: resp.StatusCode, status: resp.Status, code: payload.Code, message: payload.Error,
 		}
 	}
+}
+
+func encodeProjectMetadata(project string) (string, bool) {
+	project = strings.ToValidUTF8(project, "�")
+	truncated := false
+	if len(project) > maxProjectLabelBytes {
+		truncated = true
+		const marker = "…"
+		project = project[:maxProjectLabelBytes-len(marker)]
+		for !utf8.ValidString(project) {
+			project = project[:len(project)-1]
+		}
+		project += marker
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(project)), truncated
 }
 
 type submitHTTPError struct {

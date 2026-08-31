@@ -174,7 +174,7 @@ func TestRunHappyPath(t *testing.T) {
 	root := workspaceWith(t, map[string]string{"hello.txt": "hello from the workspace\n"})
 	var stdout, stderr bytes.Buffer
 	code := client.Run(client.RunOptions{
-		PeerURL: ts.URL, Root: root,
+		PeerURL: ts.URL, Root: root, Project: "example-project",
 		Argv:   []string{"/bin/sh", "-c", "cat hello.txt; echo oops >&2; exit 3"},
 		Stdout: &stdout, Stderr: &stderr,
 	})
@@ -186,6 +186,49 @@ func TestRunHappyPath(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "oops") {
 		t.Fatalf("stderr missing remote output: %q", stderr.String())
+	}
+	jobs, err := client.List(ts.URL)
+	if err != nil || len(jobs) != 1 || jobs[0].Project != "example-project" {
+		t.Fatalf("listed project metadata = %+v, %v", jobs, err)
+	}
+}
+
+func TestProjectMetadataCannotBlockRun(t *testing.T) {
+	_, ts := testDaemon(t)
+	root := workspaceWith(t, nil)
+	projects := []string{
+		"atlas\r\nX-Injected: true",
+		strings.Repeat("界", 100),
+	}
+	for _, project := range projects {
+		var stderr bytes.Buffer
+		code := client.Run(client.RunOptions{
+			PeerURL: ts.URL, Root: root, Project: project,
+			Argv: []string{"/usr/bin/true"}, Stdout: io.Discard, Stderr: &stderr,
+		})
+		if code != 0 {
+			t.Fatalf("run with project %q = %d; stderr: %s", project, code, stderr.String())
+		}
+	}
+	jobs, err := client.List(ts.URL)
+	if err != nil || len(jobs) != len(projects) {
+		t.Fatalf("listed project metadata = %+v, %v", jobs, err)
+	}
+	sawControlLabel := false
+	sawTruncatedLabel := false
+	for _, job := range jobs {
+		if len(job.Project) > maxListProjectBytes {
+			t.Fatalf("project metadata is %d bytes: %q", len(job.Project), job.Project)
+		}
+		if job.Project == projects[0] && !job.ProjectTruncated {
+			sawControlLabel = true
+		}
+		if strings.HasSuffix(job.Project, "…") && job.ProjectTruncated {
+			sawTruncatedLabel = true
+		}
+	}
+	if !sawControlLabel || !sawTruncatedLabel {
+		t.Fatalf("project truncation metadata is not truthful: %+v", jobs)
 	}
 }
 

@@ -6,6 +6,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -743,6 +744,7 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		httpError(w, http.StatusBadRequest, "X-Errand-Digest does not match the submitted spec")
 		return
 	}
+	project, projectTruncated := projectMetadata(r)
 	var manifest proto.Manifest
 	if err := readJSONPart(mr, "manifest", maxManifestBytes, &manifest); err != nil {
 		httpError(w, http.StatusBadRequest, err.Error())
@@ -818,7 +820,8 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		Admission: proto.Admission{
 			Time: time.Now(), UserID: id.UserID, UserLogin: id.Login,
 			NodeID: id.NodeID, NodeName: id.Node,
-			RemoteAddr: r.RemoteAddr, Method: id.Method, Facts: measureFacts(),
+			RemoteAddr: r.RemoteAddr, Method: id.Method,
+			Project: project, ProjectTruncated: projectTruncated, Facts: measureFacts(),
 		},
 		state:       proto.StateStaging,
 		done:        make(chan struct{}),
@@ -1182,9 +1185,10 @@ func (d *Daemon) ownsJob(id Identity, j *Job) bool {
 }
 
 // handleList returns the caller's own jobs, newest first (ULIDs are
-// time-ordered), capped so the response stays bounded.
+// time-ordered), capped so the response stays bounded. An active-only query
+// filters before the cap so terminal receipts cannot hide live work.
 func (d *Daemon) handleList(w http.ResponseWriter, r *http.Request, id Identity) {
-	const maxListEntries = 200
+	activeOnly := r.URL.Query().Get("active") == "1"
 	d.mu.Lock()
 	owned := make([]*Job, 0, len(d.jobs))
 	for _, j := range d.jobs {
@@ -1193,9 +1197,19 @@ func (d *Daemon) handleList(w http.ResponseWriter, r *http.Request, id Identity)
 		}
 	}
 	d.mu.Unlock()
+	if activeOnly {
+		active := owned[:0]
+		for _, j := range owned {
+			state := j.Status().State
+			if state == proto.StateStaging || state == proto.StateQueued || state == proto.StateRunning {
+				active = append(active, j)
+			}
+		}
+		owned = active
+	}
 	sort.Slice(owned, func(i, k int) bool { return owned[i].ID > owned[k].ID })
-	if len(owned) > maxListEntries {
-		owned = owned[:maxListEntries]
+	if len(owned) > proto.MaxJobListEntries {
+		owned = owned[:proto.MaxJobListEntries]
 	}
 	entries := make([]proto.JobListEntry, 0, len(owned))
 	for _, j := range owned {
@@ -1213,6 +1227,21 @@ func (d *Daemon) handleList(w http.ResponseWriter, r *http.Request, id Identity)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(append(body, '\n'))
+}
+
+func projectMetadata(r *http.Request) (string, bool) {
+	project := r.Header.Get("X-Errand-Project")
+	truncated := r.Header.Get("X-Errand-Project-Truncated") == "1"
+	if encoded := r.Header.Get("X-Errand-Project-B64"); encoded != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil {
+			return "", false
+		}
+		project = string(decoded)
+	}
+	project = strings.ToValidUTF8(project, "�")
+	project, bounded := boundedListField(project, maxListProjectBytes)
+	return project, truncated || bounded
 }
 
 func (d *Daemon) handleStatus(w http.ResponseWriter, r *http.Request, id Identity) {

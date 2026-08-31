@@ -17,13 +17,14 @@ elsewhere.
 errand serve                  # config: ~/.config/errand/errandd.toml
 
 # on a caller
-errand info                   # measured facts: arch, kvm, tools
+errand info                   # measured facts from every configured peer
 errand -- python3 -m unittest # runs your working tree over there
 errand --no-snapshot -- uname -a # runs in a fresh empty remote workspace
 # Ctrl-D detaches without stopping the remote job; Ctrl-C interrupts it
 job=$(errand --detach -- make build)
-errand ps                     # list your jobs across configured peers
-errand ps --json              # the same receipt-backed data for clients
+errand ps                     # active jobs across configured peers
+errand ps --last 20           # latest jobs across all states (maximum 200)
+errand ps --all --json        # terminal receipt data for clients
 errand attach "$job"          # replay logs and follow to completion
 errand gc jobs --dry-run --older-than 30d --keep 500
 ```
@@ -131,11 +132,23 @@ apply state.
 
 ## Job state and control
 
-`errand ps` shows admission and process start times, process duration, source
-snapshot, workdir, command, and terminal outcome. Git sources are shown as a
-short commit plus `+dirty` when applicable; `errand ps --json` retains the full
-commit and manifest digests. Running durations are measured on the runner, so
-caller and runner clock offsets do not distort them.
+Bare `errand ps` queries every explicitly configured peer, merges the results
+newest-first by job ULID, and shows active jobs only. The active filter is
+applied by each runner before its bounded receipt window, so retained terminal
+jobs cannot hide a long-running job. `--all` includes terminal receipts;
+`--last N` includes all states and applies one global limit after merging.
+`--on` and `--url` explicitly narrow either view to one runner. Bare
+`errand info` follows the same all-configured-peers rule.
+
+The table shows admission and process start times, process duration, project,
+source snapshot, command, and terminal outcome. `WORKDIR` appears only when a
+listed job runs below its workspace root. Git sources are shown as a short
+commit plus `+dirty` when applicable; `errand ps --json` retains structured
+project, workdir, commit, and manifest metadata, including truncation flags.
+Running durations are measured on the runner, so caller and runner clock
+offsets do not distort them. Receipts made by older clients have no project
+label and display `-`. Whenever the rendered table would exceed the terminal,
+the same fields switch to wrapped job cards.
 
 The remote job states have deliberately narrow meanings:
 

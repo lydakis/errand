@@ -48,6 +48,20 @@ func TestSubmitRejectsMismatchedDigestHeader(t *testing.T) {
 	}
 }
 
+func TestProjectMetadataIsOptionalAndBounded(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPut, "/v0/jobs/"+proto.NewULID(), nil)
+	r.Header.Set("X-Errand-Project", strings.Repeat("x", maxListProjectBytes+1))
+	got, truncated := projectMetadata(r)
+	if len(got) > maxListProjectBytes || !strings.HasSuffix(got, "…") || !truncated {
+		t.Fatalf("bounded legacy project metadata = %q (%d bytes)", got, len(got))
+	}
+
+	r.Header.Set("X-Errand-Project-B64", "not valid base64 %%%")
+	if got, truncated := projectMetadata(r); got != "" || truncated {
+		t.Fatalf("invalid encoded project metadata = %q, want ignored", got)
+	}
+}
+
 func TestRejectedUploadDoesNotBurnJobID(t *testing.T) {
 	_, ts := testDaemon(t)
 	root := workspaceWith(t, map[string]string{"input.txt": "ok"})

@@ -26,6 +26,7 @@ import (
 const (
 	maxListCommandBytes  = 512
 	maxListWorkdirBytes  = 384
+	maxListProjectBytes  = 128
 	maxListDigestBytes   = 64
 	maxListResponseBytes = 1 << 20
 	queuedMarkerName     = "queued.json"
@@ -83,12 +84,15 @@ func (j *Job) summary() proto.JobListEntry {
 	manifestRoot, manifestRootTruncated := boundedListField(j.Spec.ManifestRoot, maxListDigestBytes)
 	gitCommit, gitCommitTruncated := boundedListField(j.Spec.GitCommit, maxListDigestBytes)
 	workdir, workdirTruncated := boundedListField(j.Spec.Workdir, maxListWorkdirBytes)
+	project, projectTruncated := boundedListField(j.Admission.Project, maxListProjectBytes)
+	projectTruncated = projectTruncated || j.Admission.ProjectTruncated
 	e := proto.JobListEntry{
 		ID: j.ID, State: j.state, Command: command, CommandTruncated: truncated,
 		AdmittedAt:   j.Admission.Time,
 		ManifestRoot: manifestRoot, ManifestRootTruncated: manifestRootTruncated,
 		GitCommit: gitCommit, GitCommitTruncated: gitCommitTruncated, GitDirty: j.Spec.GitDirty,
 		Workdir: workdir, WorkdirTruncated: workdirTruncated,
+		Project: project, ProjectTruncated: projectTruncated,
 	}
 	if !j.startedAt.IsZero() {
 		startedAt := j.startedAt

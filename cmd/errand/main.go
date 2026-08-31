@@ -14,9 +14,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/tabwriter"
+	"sync"
 	"time"
-	"unicode"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
@@ -36,7 +35,7 @@ usage:
          [--include-all | --no-snapshot] -- CMD [ARG...]
   errand attach [--apply] [--on PEER | --url URL] HANDLE
   errand fetch [--apply] [--on PEER | --url URL] HANDLE [PATH]
-  errand ps [--json] [--on PEER | --url URL]
+  errand ps [-a | --all] [-n N | --last N] [--json] [--on PEER | --url URL]
   errand kill [--force] [--on PEER | --url URL] HANDLE
   errand caches [--on PEER | --url URL]
   errand gc cache [--on PEER | --url URL]
@@ -170,6 +169,7 @@ func cmdRun(args []string) int {
 	}
 	root := ""
 	var declaredOutputs []proto.OutputSpec
+	project := ""
 	if !*noSnapshot {
 		cwd, cwdErr := os.Getwd()
 		if cwdErr != nil {
@@ -182,6 +182,7 @@ func cmdRun(args []string) int {
 			return client.ExitTransaction
 		}
 		root = selected.Root
+		project = selected.Project
 		declaredOutputs, err = outputops.NormalizeSpecs(selected.Outputs)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "errand: %v\n", err)
@@ -205,6 +206,7 @@ func cmdRun(args []string) int {
 		Env:        env,
 		PassEnv:    passenvs,
 		Workdir:    *workdir,
+		Project:    project,
 		IncludeAll: *includeAll,
 		NoSnapshot: *noSnapshot,
 		Detach:     *detach,
@@ -407,6 +409,69 @@ type psRow struct {
 	proto.JobListEntry
 }
 
+type peerTarget struct{ name, url string }
+
+type peerQueryResult[T any] struct {
+	target peerTarget
+	value  T
+	err    error
+}
+
+func queryPeerTargets[T any](targets []peerTarget, query func(string) (T, error)) []peerQueryResult[T] {
+	results := make([]peerQueryResult[T], len(targets))
+	var wg sync.WaitGroup
+	wg.Add(len(targets))
+	for i, target := range targets {
+		go func() {
+			defer wg.Done()
+			value, err := query(target.url)
+			results[i] = peerQueryResult[T]{target: target, value: value, err: err}
+		}()
+	}
+	wg.Wait()
+	return results
+}
+
+// peerTargets fans discovery commands out to every configured peer unless the
+// caller explicitly narrows the request with --on or --url.
+func peerTargets(rawURL, on string) ([]peerTarget, []error, error) {
+	if rawURL != "" && on != "" {
+		return nil, nil, fmt.Errorf("--on and --url are mutually exclusive")
+	}
+	if rawURL != "" {
+		url := strings.TrimSuffix(rawURL, "/")
+		return []peerTarget{{name: url, url: url}}, nil, nil
+	}
+	cfg, err := config.LoadClient()
+	if err != nil {
+		return nil, nil, err
+	}
+	if on != "" {
+		url, err := cfg.PeerURL(on)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []peerTarget{{name: on, url: url}}, nil, nil
+	}
+
+	names := make([]string, 0, len(cfg.Peers))
+	for name := range cfg.Peers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	targets := make([]peerTarget, 0, len(names))
+	var warnings []error
+	for _, name := range names {
+		url, err := cfg.PeerURL(name)
+		if err != nil {
+			warnings = append(warnings, fmt.Errorf("peer %s: %w", name, err))
+			continue
+		}
+		targets = append(targets, peerTarget{name: name, url: url})
+	}
+	return targets, warnings, nil
+}
+
 func cmdPs(args []string) int {
 	return cmdPsTo(args, os.Stdout, os.Stderr)
 }
@@ -416,48 +481,33 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	on := fs.String("on", "", "restrict to one peer name")
 	rawURL := fs.String("url", "", "restrict to one peer base URL")
 	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
+	all := false
+	last := 0
+	fs.BoolVar(&all, "all", false, "include terminal jobs")
+	fs.BoolVar(&all, "a", false, "include terminal jobs")
+	fs.IntVar(&last, "last", 0, "show only the latest N jobs across all states")
+	fs.IntVar(&last, "n", 0, "show only the latest N jobs across all states")
 	fs.Parse(args)
-	if *rawURL != "" && *on != "" {
-		fmt.Fprintln(stderr, "errand: --on and --url are mutually exclusive")
+	if fs.NArg() != 0 {
+		fmt.Fprintf(stderr, "errand: unexpected ps arguments: %s\n", strings.Join(fs.Args(), " "))
 		return 2
 	}
-
-	type target struct{ name, url string }
-	var targets []target
-	failed := false
-	switch {
-	case *rawURL != "":
-		url := strings.TrimSuffix(*rawURL, "/")
-		targets = append(targets, target{name: url, url: url})
-	default:
-		cfg, err := config.LoadClient()
-		if err != nil {
-			fmt.Fprintf(stderr, "errand: %v\n", err)
-			return 1
-		}
-		if *on != "" {
-			url, err := cfg.PeerURL(*on)
-			if err != nil {
-				fmt.Fprintf(stderr, "errand: %v\n", err)
-				return 1
-			}
-			targets = append(targets, target{name: *on, url: url})
-		} else {
-			names := make([]string, 0, len(cfg.Peers))
-			for name := range cfg.Peers {
-				names = append(names, name)
-			}
-			sort.Strings(names)
-			for _, name := range names {
-				url, err := cfg.PeerURL(name)
-				if err != nil {
-					fmt.Fprintf(stderr, "errand: peer %s: %v\n", name, err)
-					failed = true
-					continue
-				}
-				targets = append(targets, target{name: name, url: url})
-			}
-		}
+	if last < 0 {
+		fmt.Fprintln(stderr, "errand: --last must be positive")
+		return 2
+	}
+	if last > proto.MaxJobListEntries {
+		fmt.Fprintf(stderr, "errand: --last must not exceed %d\n", proto.MaxJobListEntries)
+		return 2
+	}
+	targets, warnings, err := peerTargets(*rawURL, *on)
+	if err != nil {
+		fmt.Fprintf(stderr, "errand: %v\n", err)
+		return 1
+	}
+	failed := len(warnings) != 0
+	for _, warning := range warnings {
+		fmt.Fprintf(stderr, "errand: %v\n", warning)
 	}
 	if len(targets) == 0 {
 		fmt.Fprintln(stderr, "errand: no usable peers configured; check ~/.config/errand/config.toml")
@@ -466,17 +516,35 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 
 	rows := make([]psRow, 0)
 	reached := false
-	for _, tgt := range targets {
-		entries, err := client.List(tgt.url)
-		if err != nil {
-			fmt.Fprintf(stderr, "errand: peer %s: %v\n", tgt.name, err)
+	list := client.List
+	if !all && last == 0 {
+		list = client.ListActive
+	}
+	for _, result := range queryPeerTargets(targets, list) {
+		if result.err != nil {
+			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
 			failed = true
 			continue
 		}
 		reached = true
-		for _, e := range entries {
-			rows = append(rows, psRow{Peer: tgt.name, JobListEntry: e})
+		for _, e := range result.value {
+			rows = append(rows, psRow{Peer: result.target.name, JobListEntry: e})
 		}
+	}
+	sort.SliceStable(rows, func(i, k int) bool {
+		return rows[i].ID > rows[k].ID
+	})
+	if !all && last == 0 {
+		active := rows[:0]
+		for _, row := range rows {
+			if activeJobState(row.State) {
+				active = append(active, row)
+			}
+		}
+		rows = active
+	}
+	if last > 0 && len(rows) > last {
+		rows = rows[:last]
 	}
 	if *jsonOutput {
 		encoder := json.NewEncoder(stdout)
@@ -486,7 +554,7 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 	} else {
-		writePsTable(stdout, rows)
+		writePs(stdout, rows)
 	}
 	if !reached || failed {
 		return 1
@@ -494,93 +562,8 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func writePsTable(w io.Writer, rows []psRow) {
-	tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-	fmt.Fprintln(tw, "PEER\tJOB\tSTATE\tEXIT\tADMITTED\tSTARTED\tDURATION\tSOURCE\tWORKDIR\tCOMMAND")
-	for _, row := range rows {
-		exit := "-"
-		switch {
-		case row.ExitCode != nil:
-			exit = fmt.Sprintf("%d", *row.ExitCode)
-		case row.Signal != "":
-			exit = row.Signal
-		}
-		admitted := formatLocalTime(row.AdmittedAt)
-		started := "-"
-		if row.StartedAt != nil {
-			started = formatLocalTime(*row.StartedAt)
-		}
-		duration := "-"
-		if row.StartedAt != nil {
-			duration = shortDuration(time.Duration(row.DurationMS) * time.Millisecond)
-		}
-		source := terminalSafeField(jobSource(row.JobListEntry))
-		workdir := row.Workdir
-		if workdir == "" {
-			workdir = "."
-		}
-		workdir = terminalSafeField(workdir)
-		commandRunes := []rune(row.Command)
-		cmd := row.Command
-		if len(commandRunes) > 60 {
-			cmd = string(commandRunes[:59]) + "…"
-		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			row.Peer, row.ID, row.State, exit, admitted, started, duration, source, workdir, cmd)
-	}
-	_ = tw.Flush()
-}
-
-func formatLocalTime(value time.Time) string {
-	if value.IsZero() {
-		return "-"
-	}
-	return value.Local().Format("2006-01-02 15:04:05")
-}
-
-func terminalSafeField(value string) string {
-	if strings.IndexFunc(value, unicode.IsControl) >= 0 {
-		return strconv.QuoteToGraphic(value)
-	}
-	return value
-}
-
-func jobSource(entry proto.JobListEntry) string {
-	if entry.GitCommit != "" {
-		source := truncateHash(entry.GitCommit)
-		if entry.GitDirty {
-			source += "+dirty"
-		}
-		return source
-	}
-	if entry.ManifestRoot != "" {
-		return "snapshot:" + truncateHash(entry.ManifestRoot)
-	}
-	return "-"
-}
-
-func truncateHash(hash string) string {
-	if len(hash) > 12 {
-		return hash[:12]
-	}
-	return hash
-}
-
-func shortDuration(d time.Duration) string {
-	if d < 0 {
-		d = 0
-	}
-	d = d.Truncate(time.Second)
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm%ds", int(d/time.Minute), int(d%time.Minute/time.Second))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh%dm", int(d/time.Hour), int(d%time.Hour/time.Minute))
-	default:
-		return fmt.Sprintf("%dd%dh", int(d/(24*time.Hour)), int(d%(24*time.Hour)/time.Hour))
-	}
+func activeJobState(state string) bool {
+	return state == proto.StateStaging || state == proto.StateQueued || state == proto.StateRunning
 }
 
 func cmdCaches(args []string) int {
@@ -766,22 +749,56 @@ func parseRetentionDuration(value string) (time.Duration, error) {
 }
 
 func cmdInfo(args []string) int {
+	return cmdInfoTo(args, os.Stdout, os.Stderr)
+}
+
+func cmdInfoTo(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("info", flag.ExitOnError)
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	fs.Parse(args)
-	peerURL, _, err := resolvePeerTarget(*rawURL, *on)
+	if fs.NArg() != 0 {
+		fmt.Fprintf(stderr, "errand: unexpected info arguments: %s\n", strings.Join(fs.Args(), " "))
+		return 2
+	}
+	targets, warnings, err := peerTargets(*rawURL, *on)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		fmt.Fprintf(stderr, "errand: %v\n", err)
 		return 1
 	}
-	info, err := client.Info(peerURL)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+	failed := len(warnings) != 0
+	for _, warning := range warnings {
+		fmt.Fprintf(stderr, "errand: %v\n", warning)
+	}
+	if len(targets) == 0 {
+		fmt.Fprintln(stderr, "errand: no usable peers configured; check ~/.config/errand/config.toml")
 		return 1
 	}
-	out, _ := json.MarshalIndent(info, "", "  ")
-	fmt.Println(string(out))
+	infos := make(map[string]proto.Info, len(targets))
+	for _, result := range queryPeerTargets(targets, client.Info) {
+		if result.err != nil {
+			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
+			failed = true
+			continue
+		}
+		infos[result.target.name] = result.value
+	}
+
+	var output any = infos
+	if (*rawURL != "" || *on != "") && len(infos) == 1 {
+		for _, info := range infos {
+			output = info
+		}
+	}
+	encoded, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		fmt.Fprintf(stderr, "errand: encoding runner info: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, string(encoded))
+	if failed || len(infos) == 0 {
+		return 1
+	}
 	return 0
 }
 

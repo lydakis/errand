@@ -241,6 +241,121 @@ url = ""
 	}
 }
 
+func TestCmdPsAggregatesConfiguredPeersNewestFirst(t *testing.T) {
+	older := time.Date(2026, 8, 30, 14, 0, 0, 0, time.UTC)
+	newer := older.Add(time.Minute)
+	olderID := "01" + strings.Repeat("A", 24)
+	newerID := "01" + strings.Repeat("B", 24)
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	serveJob := func(peer, id string, admitted time.Time) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			started <- struct{}{}
+			<-release
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]proto.JobListEntry{{
+				ID: id, State: proto.StateRunning, AdmittedAt: admitted,
+				Project: peer, Command: `"sleep" "10"`,
+			}})
+		}))
+	}
+	// Runner wall clocks disagree, so the newer ULID deliberately carries the
+	// older admission timestamp. Cross-runner ordering must use the job ID.
+	cabal := serveJob("atlas", newerID, older)
+	defer cabal.Close()
+	macMini := serveJob("errand", olderID, newer)
+	defer macMini.Close()
+	writeClientConfig(t, fmt.Sprintf(`default_peer = "cabal"
+[peers.cabal]
+url = %q
+[peers.mac-mini]
+url = %q
+	`, cabal.URL, macMini.URL))
+
+	var stdout, stderr bytes.Buffer
+	done := make(chan int, 1)
+	go func() { done <- cmdPsTo(nil, &stdout, &stderr) }()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			close(release)
+			t.Fatal("ps did not query configured peers concurrently")
+		}
+	}
+	close(release)
+	if code := <-done; code != 0 {
+		t.Fatalf("ps exit = %d; stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	if strings.Count(out, "cabal") != 1 || strings.Count(out, "mac-mini") != 1 {
+		t.Fatalf("ps did not aggregate configured peers: %q", out)
+	}
+	if strings.Index(out, "cabal") > strings.Index(out, "mac-mini") {
+		t.Fatalf("ps rows are not globally newest-first: %q", out)
+	}
+}
+
+func TestCmdPsDefaultsToActiveAndSupportsAllAndLast(t *testing.T) {
+	base := time.Date(2026, 8, 30, 14, 0, 0, 0, time.UTC)
+	var activeQueries int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("active") == "1" {
+			activeQueries++
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]proto.JobListEntry{
+			{ID: "01" + strings.Repeat("C", 24), State: proto.StateExited, AdmittedAt: base.Add(2 * time.Minute), Project: "newest-terminal", Command: `"false"`},
+			{ID: "01" + strings.Repeat("B", 24), State: proto.StateRunning, AdmittedAt: base.Add(time.Minute), Project: "active", Command: `"sleep" "10"`},
+			{ID: "01" + strings.Repeat("A", 24), State: proto.StateExited, AdmittedAt: base, Project: "old-terminal", Command: `"true"`},
+		})
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	if code := cmdPsTo([]string{"--url", server.URL}, &stdout, &stderr); code != 0 {
+		t.Fatalf("active ps exit = %d; stderr=%q", code, stderr.String())
+	}
+	if out := stdout.String(); !strings.Contains(out, "active") || strings.Contains(out, "terminal") {
+		t.Fatalf("default ps did not restrict output to active jobs: %q", out)
+	}
+	if activeQueries != 1 {
+		t.Fatalf("default ps made %d active-only list requests, want 1", activeQueries)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := cmdPsTo([]string{"--url", server.URL, "--all"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("ps --all exit = %d; stderr=%q", code, stderr.String())
+	}
+	if out := stdout.String(); !strings.Contains(out, "newest-terminal") || !strings.Contains(out, "old-terminal") {
+		t.Fatalf("ps --all omitted terminal jobs: %q", out)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := cmdPsTo([]string{"--url", server.URL, "--last", "1"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("ps --last exit = %d; stderr=%q", code, stderr.String())
+	}
+	if out := stdout.String(); !strings.Contains(out, "newest-terminal") || strings.Contains(out, "active") || strings.Contains(out, "old-terminal") {
+		t.Fatalf("ps --last did not apply a global newest-first limit: %q", out)
+	}
+	if activeQueries != 1 {
+		t.Fatalf("--all or --last unexpectedly used the active-only query: %d requests", activeQueries)
+	}
+}
+
+func TestCmdPsRejectsLastBeyondListingWindow(t *testing.T) {
+	writeClientConfig(t, "")
+	var stdout, stderr bytes.Buffer
+	if code := cmdPsTo([]string{"--last", "201"}, &stdout, &stderr); code != 2 {
+		t.Fatalf("ps --last 201 exit = %d; stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "must not exceed 200") {
+		t.Fatalf("ps --last 201 diagnostic = %q", stderr.String())
+	}
+}
+
 func TestCmdPsPresentsTimingSourceAndWorkdir(t *testing.T) {
 	admitted := time.Date(2026, 8, 30, 14, 0, 0, 0, time.Local)
 	started := time.Date(2026, 8, 30, 14, 5, 6, 0, time.Local)
@@ -264,7 +379,7 @@ func TestCmdPsPresentsTimingSourceAndWorkdir(t *testing.T) {
 	defer server.Close()
 
 	var stdout, stderr bytes.Buffer
-	if code := cmdPsTo([]string{"--url", server.URL}, &stdout, &stderr); code != 0 {
+	if code := cmdPsTo([]string{"--url", server.URL, "--all"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("ps exit = %d; stderr=%q", code, stderr.String())
 	}
 	out := stdout.String()
@@ -275,6 +390,61 @@ func TestCmdPsPresentsTimingSourceAndWorkdir(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("ps output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestCmdInfoAggregatesConfiguredPeers(t *testing.T) {
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	serveInfo := func(version string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			started <- struct{}{}
+			<-release
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(proto.Info{Version: version})
+		}))
+	}
+	cabal := serveInfo("linux-runner")
+	defer cabal.Close()
+	macMini := serveInfo("darwin-runner")
+	defer macMini.Close()
+	writeClientConfig(t, fmt.Sprintf(`[peers.cabal]
+url = %q
+[peers.mac-mini]
+url = %q
+	`, cabal.URL, macMini.URL))
+
+	var stdout, stderr bytes.Buffer
+	done := make(chan int, 1)
+	go func() { done <- cmdInfoTo(nil, &stdout, &stderr) }()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			close(release)
+			t.Fatal("info did not query configured peers concurrently")
+		}
+	}
+	close(release)
+	if code := <-done; code != 0 {
+		t.Fatalf("info exit = %d; stderr=%q", code, stderr.String())
+	}
+	var got map[string]proto.Info
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("decoding aggregate info: %v; output=%q", err, stdout.String())
+	}
+	if got["cabal"].Version != "linux-runner" || got["mac-mini"].Version != "darwin-runner" {
+		t.Fatalf("aggregate info = %+v", got)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := cmdInfoTo([]string{"--on", "cabal"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("targeted info exit = %d; stderr=%q", code, stderr.String())
+	}
+	var targeted proto.Info
+	if err := json.Unmarshal(stdout.Bytes(), &targeted); err != nil || targeted.Version != "linux-runner" {
+		t.Fatalf("targeted info = %+v, %v; output=%q", targeted, err, stdout.String())
 	}
 }
 
@@ -302,7 +472,7 @@ func TestCmdPsQueuedJobHasAdmissionButNoProcessTiming(t *testing.T) {
 		t.Fatalf("queued ps output has %d lines, want header and row: %q", len(lines), out)
 	}
 	fields := strings.Fields(lines[1])
-	if len(fields) < 10 || fields[6] != "-" || fields[7] != "-" {
+	if len(fields) < 10 || fields[7] != "-" || fields[8] != "-" {
 		t.Fatalf("queued ps row unexpectedly has process timing: %q", stdout.String())
 	}
 }
@@ -312,7 +482,7 @@ func TestCmdPsEscapesTerminalControlsInMetadata(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]proto.JobListEntry{{
 			ID: proto.NewULID(), State: proto.StateRunning,
-			GitCommit: "abc\t\x1b[2Jdef", Workdir: "build\n\x1b[2Jowned",
+			Project: "atlas\r\x1b[2Jowned", GitCommit: "abc\t\x1b[2Jdef", Workdir: "build\n\x1b[2Jowned",
 		}})
 	}))
 	defer server.Close()
@@ -340,7 +510,7 @@ func TestCmdPsJSONIncludesPeerAndReceiptMetadata(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]proto.JobListEntry{{
 			ID: proto.NewULID(), State: proto.StateRunning, StartedAt: &started,
-			DurationMS: 42000, GitCommit: "0123456789abcdef", GitDirty: true, Workdir: "vm",
+			DurationMS: 42000, Project: "atlas", GitCommit: "0123456789abcdef", GitDirty: true, Workdir: "vm",
 		}})
 	}))
 	defer server.Close()
@@ -357,7 +527,7 @@ func TestCmdPsJSONIncludesPeerAndReceiptMetadata(t *testing.T) {
 		t.Fatalf("decoding ps JSON: %v; output=%q", err, stdout.String())
 	}
 	if len(rows) != 1 || rows[0].Peer != server.URL || rows[0].StartedAt == nil ||
-		rows[0].DurationMS != 42000 || rows[0].GitCommit != "0123456789abcdef" ||
+		rows[0].DurationMS != 42000 || rows[0].Project != "atlas" || rows[0].GitCommit != "0123456789abcdef" ||
 		!rows[0].GitDirty || rows[0].Workdir != "vm" {
 		t.Fatalf("ps JSON = %+v", rows)
 	}
