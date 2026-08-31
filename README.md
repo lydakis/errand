@@ -5,10 +5,10 @@ get the result back: same command, same working tree, logs streaming to
 your terminal, real exit code. The heat, watts, and minutes are spent
 elsewhere.
 
-> **Status: milestone 3.5.** The transactional core works end to end over a
-> tailnet, including durable detached jobs, restart reconciliation, and
-> content-addressed snapshot reuse. The v0 design is frozen in
-> [docs/DESIGN.md](docs/DESIGN.md).
+> **Status: milestone 4.** The transactional core works end to end over a
+> tailnet, including durable detached jobs, restart reconciliation,
+> content-addressed snapshot reuse, and conflict-safe declared outputs. The
+> v0 design is frozen in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Quickstart
 
