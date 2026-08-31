@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +10,14 @@ import (
 
 	"github.com/lydakis/errand/internal/proto"
 )
+
+func TestPsEmptyStateDoesNotRenderTable(t *testing.T) {
+	var out bytes.Buffer
+	writePs(&out, nil)
+	if got := out.String(); got != "No jobs.\n" {
+		t.Fatalf("empty ps = %q", got)
+	}
+}
 
 func TestPsTableShowsProjectsAndTruthfulWorkdirs(t *testing.T) {
 	rows := []psRow{
@@ -45,7 +53,27 @@ func TestPsTableShowsProjectsAndTruthfulWorkdirs(t *testing.T) {
 	}
 }
 
-func TestPsUsesCardsWhenRenderedTableDoesNotFit(t *testing.T) {
+func TestPsInteractiveOutputAlwaysUsesCards(t *testing.T) {
+	rows := []psRow{{
+		Peer: "cabal",
+		JobListEntry: proto.JobListEntry{
+			ID: proto.NewULID(), State: proto.StateRunning, Project: "atlas",
+			Command: `"true"`,
+		},
+	}}
+	var out bytes.Buffer
+	writePsWithOptions(&out, rows, psRenderOptions{interactive: true, width: 220})
+	if got := out.String(); !strings.Contains(got, "  command ") || strings.HasPrefix(got, "PEER") {
+		t.Fatalf("interactive ps did not use cards: %q", got)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		if len([]rune(line)) > 220 {
+			t.Fatalf("ps line exceeds terminal width: %d runes in %q", len([]rune(line)), line)
+		}
+	}
+}
+
+func TestPsPipedOutputAlwaysUsesPlainTable(t *testing.T) {
 	rows := []psRow{{
 		Peer: "cabal",
 		JobListEntry: proto.JobListEntry{
@@ -54,15 +82,46 @@ func TestPsUsesCardsWhenRenderedTableDoesNotFit(t *testing.T) {
 		},
 	}}
 	var out bytes.Buffer
-	t.Setenv("COLUMNS", "220")
+	t.Setenv("COLUMNS", "60")
 	writePs(&out, rows)
-	if got := out.String(); !strings.Contains(got, "  command ") || strings.HasPrefix(got, "PEER") {
-		t.Fatalf("oversized table did not switch to cards: %q", got)
+	if got := out.String(); !strings.HasPrefix(got, "PEER") || strings.Contains(got, "\x1b[") {
+		t.Fatalf("piped ps was not a plain table: %q", got)
 	}
-	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
-		if len([]rune(line)) > 220 {
-			t.Fatalf("ps line exceeds terminal width: %d runes in %q", len([]rune(line)), line)
-		}
+}
+
+func TestPsInteractiveOutputBoldsOnlyJobIdentity(t *testing.T) {
+	jobID := proto.NewULID()
+	rows := []psRow{{
+		Peer: "cabal",
+		JobListEntry: proto.JobListEntry{
+			ID: jobID, State: proto.StateRunning, Project: "atlas", Command: `"nix" "build"`,
+		},
+	}}
+	var out bytes.Buffer
+	writePsWithOptions(&out, rows, psRenderOptions{interactive: true, width: 120, style: true})
+	wantIdentity := "\x1b[1mcabal/" + jobID + "\x1b[0m"
+	if got := out.String(); !strings.Contains(got, wantIdentity) {
+		t.Fatalf("interactive ps did not emphasize identity: %q", got)
+	} else if strings.Contains(got, "\x1b[1mcommand") || strings.Contains(got, "\x1b[1m\"nix\"") {
+		t.Fatalf("interactive ps over-emphasized command: %q", got)
+	}
+}
+
+func TestPsStylingRespectsNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	if terminalStylingEnabled(true) {
+		t.Fatal("NO_COLOR did not disable terminal styling")
+	}
+	t.Setenv("NO_COLOR", "")
+	if terminalStylingEnabled(true) {
+		t.Fatal("present but empty NO_COLOR did not disable terminal styling")
+	}
+	os.Unsetenv("NO_COLOR")
+	if !terminalStylingEnabled(true) {
+		t.Fatal("interactive terminal styling remained disabled without NO_COLOR")
+	}
+	if terminalStylingEnabled(false) {
+		t.Fatal("non-interactive output enabled terminal styling")
 	}
 }
 
@@ -77,8 +136,7 @@ func TestPsCardsWrapToTerminalWidth(t *testing.T) {
 		},
 	}}
 	var out bytes.Buffer
-	t.Setenv("COLUMNS", "72")
-	writePs(&out, rows)
+	writePsWithOptions(&out, rows, psRenderOptions{interactive: true, width: 72})
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	if len(lines) < 4 {
 		t.Fatalf("narrow ps did not wrap: %q", out.String())
@@ -92,6 +150,12 @@ func TestPsCardsWrapToTerminalWidth(t *testing.T) {
 		!strings.Contains(got, "command") {
 		t.Fatalf("narrow ps omitted context: %q", got)
 	}
+	if got := out.String(); !strings.Contains(got, "\n          \"") {
+		t.Fatalf("wrapped command lacks hanging indent: %q", got)
+	}
+	if got := out.String(); strings.Contains(got, "source\n") || strings.Contains(got, "workdir\n") {
+		t.Fatalf("wrapped metadata separated a label from its value: %q", got)
+	}
 }
 
 func TestPsMeasuresAndWrapsUnicodeByTerminalCells(t *testing.T) {
@@ -104,8 +168,7 @@ func TestPsMeasuresAndWrapsUnicodeByTerminalCells(t *testing.T) {
 	}}
 	for _, width := range []int{160, 60} {
 		var out bytes.Buffer
-		t.Setenv("COLUMNS", fmt.Sprint(width))
-		writePs(&out, rows)
+		writePsWithOptions(&out, rows, psRenderOptions{interactive: true, width: width})
 		if got := out.String(); strings.HasPrefix(got, "PEER") {
 			t.Fatalf("width %d selected an overflowing table: %q", width, got)
 		}

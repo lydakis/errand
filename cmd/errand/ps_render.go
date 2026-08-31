@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -14,43 +13,57 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+const defaultPsTerminalWidth = 80
+
+type psRenderOptions struct {
+	interactive bool
+	width       int
+	style       bool
+}
+
 func writePs(w io.Writer, rows []psRow) {
-	width := terminalColumns(w)
-	if width <= 0 {
+	writePsWithOptions(w, rows, psRenderOptionsFor(w))
+}
+
+func writePsWithOptions(w io.Writer, rows []psRow, options psRenderOptions) {
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "No jobs.")
+		return
+	}
+	if !options.interactive {
 		writePsTable(w, rows)
 		return
 	}
-	var table bytes.Buffer
-	writePsTable(&table, rows)
-	if maxLineWidth(table.String()) > width {
-		writePsCards(w, rows, width)
-		return
+	if options.width <= 0 {
+		options.width = defaultPsTerminalWidth
 	}
-	_, _ = io.Copy(w, &table)
+	writePsCardsWithStyle(w, rows, options.width, options.style)
 }
 
-func maxLineWidth(value string) int {
-	maxWidth := 0
-	for _, line := range strings.Split(value, "\n") {
-		if width := terminalCellWidth(line); width > maxWidth {
-			maxWidth = width
-		}
-	}
-	return maxWidth
-}
-
-func terminalColumns(w io.Writer) int {
-	if configured, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && configured > 0 {
-		return configured
-	}
+func psRenderOptionsFor(w io.Writer) psRenderOptions {
 	file, ok := w.(*os.File)
 	if !ok {
-		return 0
+		return psRenderOptions{}
 	}
-	return fileTerminalColumns(file.Fd())
+	width := fileTerminalColumns(file.Fd())
+	if width <= 0 {
+		return psRenderOptions{}
+	}
+	if configured, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && configured > 0 {
+		width = configured
+	}
+	return psRenderOptions{interactive: true, width: width, style: terminalStylingEnabled(true)}
 }
 
-func writePsCards(w io.Writer, rows []psRow, width int) {
+func terminalStylingEnabled(interactive bool) bool {
+	if !interactive {
+		return false
+	}
+	_, noColor := os.LookupEnv("NO_COLOR")
+	return !noColor
+}
+
+func writePsCardsWithStyle(w io.Writer, rows []psRow, width int, style bool) {
 	if len(rows) == 0 {
 		fmt.Fprintln(w, "No jobs.")
 		return
@@ -59,7 +72,8 @@ func writePsCards(w io.Writer, rows []psRow, width int) {
 		if i != 0 {
 			fmt.Fprintln(w)
 		}
-		header := []string{terminalSafeField(row.Peer) + "/" + row.ID, row.State}
+		identity := terminalSafeField(row.Peer) + "/" + row.ID
+		header := []string{identity, row.State}
 		if row.Project != "" {
 			header = append(header, terminalSafeField(row.Project))
 		}
@@ -69,7 +83,13 @@ func writePsCards(w io.Writer, rows []psRow, width int) {
 		if row.StartedAt != nil {
 			header = append(header, shortDuration(time.Duration(row.DurationMS)*time.Millisecond))
 		}
-		writeWrappedLine(w, "", strings.Join(header, "  "), width)
+		decorateHeader := func(line string) string { return line }
+		if style {
+			decorateHeader = func(line string) string {
+				return strings.Replace(line, identity, "\x1b[1m"+identity+"\x1b[0m", 1)
+			}
+		}
+		writeWrappedDecoratedLine(w, "", strings.Join(header, "  "), width, decorateHeader)
 
 		metadata := []string{"admitted " + formatLocalTime(row.AdmittedAt)}
 		if row.StartedAt != nil {
@@ -81,14 +101,18 @@ func writePsCards(w io.Writer, rows []psRow, width int) {
 		if workdir := psWorkdir(row.JobListEntry); workdir != "" {
 			metadata = append(metadata, "workdir "+terminalSafeField(workdir))
 		}
-		writeWrappedLine(w, "  ", strings.Join(metadata, "  "), width)
+		writeWrappedFields(w, "  ", metadata, width)
 		if row.Command != "" {
-			writeWrappedLine(w, "  ", "command "+row.Command, width)
+			writeWrappedLabeledLine(w, "  ", "command ", row.Command, width)
 		}
 	}
 }
 
 func writeWrappedLine(w io.Writer, indent, value string, width int) {
+	writeWrappedDecoratedLine(w, indent, value, width, func(line string) string { return line })
+}
+
+func writeWrappedDecoratedLine(w io.Writer, indent, value string, width int, decorate func(string) string) {
 	if terminalCellWidth(indent) >= width {
 		indent = ""
 	}
@@ -97,8 +121,59 @@ func writeWrappedLine(w io.Writer, indent, value string, width int) {
 		available = 1
 	}
 	for _, line := range wrapText(value, available) {
-		fmt.Fprintln(w, indent+line)
+		fmt.Fprintln(w, indent+decorate(line))
 	}
+}
+
+func writeWrappedLabeledLine(w io.Writer, indent, label, value string, width int) {
+	if terminalCellWidth(indent+label) >= width {
+		writeWrappedLine(w, indent, label+value, width)
+		return
+	}
+	continuation := indent + strings.Repeat(" ", terminalCellWidth(label))
+	available := width - terminalCellWidth(continuation)
+	for i, line := range wrapText(value, available) {
+		if i == 0 {
+			fmt.Fprintln(w, indent+label+line)
+			continue
+		}
+		fmt.Fprintln(w, continuation+line)
+	}
+}
+
+func writeWrappedFields(w io.Writer, indent string, fields []string, width int) {
+	if terminalCellWidth(indent) >= width {
+		indent = ""
+	}
+	available := width - terminalCellWidth(indent)
+	if available < 1 {
+		available = 1
+	}
+	line := ""
+	flush := func() {
+		if line != "" {
+			writeWrappedLine(w, indent, line, width)
+			line = ""
+		}
+	}
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		if line == "" {
+			line = field
+			continue
+		}
+		candidate := line + "  " + field
+		if terminalCellWidth(candidate) <= available {
+			line = candidate
+			continue
+		}
+		flush()
+		line = field
+	}
+	flush()
 }
 
 func wrapText(value string, width int) []string {

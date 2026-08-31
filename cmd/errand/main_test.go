@@ -236,8 +236,44 @@ url = ""
 	if code := cmdPsTo(nil, &stdout, &stderr); code == 0 {
 		t.Fatalf("partial ps returned success; stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "PEER") || !strings.Contains(stderr.String(), "broken") {
+	if !strings.Contains(stdout.String(), "No active jobs found on reachable peers.") ||
+		!strings.Contains(stderr.String(), "broken") {
 		t.Fatalf("partial ps diagnostics missing; stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+}
+
+func TestCmdPsPresentsExplicitEmptyStates(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `[]`)
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	if code := cmdPsTo([]string{"--url", server.URL}, &stdout, &stderr); code != 0 {
+		t.Fatalf("empty active ps exit = %d; stderr=%q", code, stderr.String())
+	}
+	if want := "No active jobs on " + server.URL + ".\n"; stdout.String() != want {
+		t.Fatalf("empty active ps = %q, want %q", stdout.String(), want)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := cmdPsTo([]string{"--url", server.URL, "--all"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("empty ps --all exit = %d; stderr=%q", code, stderr.String())
+	}
+	if want := "No jobs on " + server.URL + ".\n"; stdout.String() != want {
+		t.Fatalf("empty ps --all = %q, want %q", stdout.String(), want)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := cmdPsTo([]string{"--url", server.URL, "--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("empty ps --json exit = %d; stderr=%q", code, stderr.String())
+	}
+	var rows []psRow
+	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil || len(rows) != 0 {
+		t.Fatalf("empty ps --json = %q, %v", stdout.String(), err)
 	}
 }
 

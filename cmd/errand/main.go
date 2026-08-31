@@ -553,13 +553,29 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "errand: encoding job listing: %v\n", err)
 			return 1
 		}
-	} else {
+	} else if len(rows) != 0 {
 		writePs(stdout, rows)
+	} else if reached {
+		fmt.Fprintln(stdout, psEmptyMessage(targets, !all && last == 0, failed))
 	}
 	if !reached || failed {
 		return 1
 	}
 	return 0
+}
+
+func psEmptyMessage(targets []peerTarget, activeOnly, partial bool) string {
+	kind := "jobs"
+	if activeOnly {
+		kind = "active jobs"
+	}
+	if partial {
+		return fmt.Sprintf("No %s found on reachable peers.", kind)
+	}
+	if len(targets) == 1 {
+		return fmt.Sprintf("No %s on %s.", kind, terminalSafeField(targets[0].name))
+	}
+	return fmt.Sprintf("No %s.", kind)
 }
 
 func activeJobState(state string) bool {

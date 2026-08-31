@@ -140,15 +140,16 @@ jobs cannot hide a long-running job. `--all` includes terminal receipts;
 `--on` and `--url` explicitly narrow either view to one runner. Bare
 `errand info` follows the same all-configured-peers rule.
 
-The table shows admission and process start times, process duration, project,
-source snapshot, command, and terminal outcome. `WORKDIR` appears only when a
-listed job runs below its workspace root. Git sources are shown as a short
-commit plus `+dirty` when applicable; `errand ps --json` retains structured
-project, workdir, commit, and manifest metadata, including truncation flags.
-Running durations are measured on the runner, so caller and runner clock
-offsets do not distort them. Receipts made by older clients have no project
-label and display `-`. Whenever the rendered table would exceed the terminal,
-the same fields switch to wrapped job cards.
+Interactive terminals show wrapped job cards with complete commands. Piped or
+redirected output uses a compact plain table for tools such as `grep` and
+`head`. Both forms show admission and process start times, process duration,
+project, source snapshot, command, and terminal outcome. `WORKDIR` appears only
+when a listed job runs below its workspace root. Git sources are shown as a
+short commit plus `+dirty` when applicable; `errand ps --json` retains exact
+structured project, workdir, commit, and manifest metadata, including
+truncation flags. Running durations are measured on the runner, so caller and
+runner clock offsets do not distort them. Receipts made by older clients have
+no project label and display `-`.
 
 The remote job states have deliberately narrow meanings:
 
