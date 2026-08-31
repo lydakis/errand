@@ -134,11 +134,8 @@ func LoadDaemon(path string) (Daemon, error) {
 	if d.MaxJobs <= 0 {
 		return d, fmt.Errorf("max_jobs must be positive")
 	}
-	if d.MaxQueued < -1 {
-		return d, fmt.Errorf("max_queued must not be less than -1")
-	}
-	if d.MaxQueued == -1 { // compatibility with the original disable sentinel
-		d.MaxQueued = 0
+	if d.MaxQueued < 0 {
+		return d, fmt.Errorf("max_queued must not be negative")
 	}
 	return d, nil
 }

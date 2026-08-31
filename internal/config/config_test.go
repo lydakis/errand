@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -75,6 +76,17 @@ func TestLoadDaemonPreservesExplicitZeroQueueCapacity(t *testing.T) {
 	}
 	if got.MaxJobs != 1 || got.MaxQueued != 0 {
 		t.Fatalf("explicit zero queue config = %d running, %d queued; want 1 and 0", got.MaxJobs, got.MaxQueued)
+	}
+}
+
+func TestLoadDaemonRejectsNegativeQueueCapacity(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "errandd.toml")
+	config := "state_dir = \"/tmp/errand-test-state\"\nmax_queued = -1\n"
+	if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadDaemon(path); err == nil || !strings.Contains(err.Error(), "must not be negative") {
+		t.Fatalf("negative max_queued error = %v", err)
 	}
 }
 

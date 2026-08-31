@@ -80,9 +80,8 @@ transaction ssh doesn't attempt. The implemented milestones provide:
 - **A receipt:** an append-only record of what was asked, who asked, what
   ran, and what happened.
 
-The remaining v0 work includes declared output transfer with conflict
-detection, explicitly declared named caches, fact-based peer selection, and
-direct LAN pairing.
+The remaining v0 work includes explicitly declared named caches, fact-based
+peer selection, and direct LAN pairing.
 
 ## Shape
 
@@ -104,10 +103,31 @@ returns 0 for the detach action; it is not the unfinished job's exit status.
 Non-terminal EOF is ignored, so scripts remain attached unless they request
 `--detach` explicitly.
 
-Detached jobs, `ps`, `attach`, `kill`, workspace-root discovery,
-snapshot-cache inspection, and cache and receipt GC are implemented. Planned
-v0 commands still include fact-based peer selection, output fetching,
-named-cache management, and pairing.
+Detached jobs, `ps`, `attach`, `kill`, workspace-root discovery, declared
+output collection and conflict-safe application, snapshot-cache inspection,
+and cache and receipt GC are implemented. Planned v0 commands still include
+fact-based peer selection, named-cache management, and pairing.
+
+Declare outputs in the selected workspace's `.errand.toml`:
+
+```toml
+[[outputs]]
+path = "dist/app"
+collect = "success" # success | always
+apply = "auto"      # auto | manual
+```
+
+The originating attached run downloads every collected output into the local
+Errand state directory. `apply = "auto"` replaces the declared local path only
+when it is unchanged from the pre-submission baseline. A later `attach` stages
+only; `errand fetch --apply HANDLE [PATH]` or `errand attach --apply HANDLE`
+explicitly applies outputs. The
+optional path selects one declared output. A different machine can fetch and
+inspect outputs, but cannot apply them without the original machine's local
+baseline record. Output paths must be clean workspace-relative paths and may
+not enter `.git` metadata. Local baseline and download records are scoped by
+both runner endpoint and job ID, so one peer can never reuse another peer's
+apply state.
 
 ## Job state and control
 
@@ -149,6 +169,7 @@ GC always names its target. Bare `errand gc` only prints usage:
 errand gc cache
 errand gc jobs --older-than 30d --keep 500
 errand gc jobs --dry-run --older-than 30d
+errand gc outputs --older-than 30d
 errand gc all --older-than 30d --keep 500
 ```
 
@@ -157,12 +178,24 @@ means cleanup, logs, and outputs all completed with no transaction error.
 Active, queued, ambiguous, incomplete, and actively replayed receipts are
 protected. When both retention bounds are present, a receipt must be older
 than the cutoff and outside the newest `keep` receipts to be removed. `all` is
-client-side composition of the separately authorized cache and job endpoints.
+client-side composition of the separately authorized cache and job endpoints
+plus local output-state collection. `gc outputs` removes old local baseline
+records, verified downloads, and interrupted download staging; pending apply
+transactions are always protected. Records whose submission never began follow
+the requested `--older-than` boundary. Unresolved submitted jobs remain
+protected for 30 days, after which an explicit local GC may retire abandoned
+state.
+After non-dry job GC, the client replays the runner's durable, owner-scoped
+collection markers, so a lost deletion response does not strand local records.
 New job IDs must carry a ULID timestamp from the preceding 24 hours, with one
-hour of allowed future clock skew. Before collection markers expire, the
-runner durably advances a high-water clock that never moves backward across
-restart. Collection retains a small, non-secret job-ID marker for 25 hours, so
-clock rollback cannot reopen a collected ID for execution.
+hour of allowed future clock skew. The runner durably advances a high-water
+clock that never moves backward across restart. Replay-only collection markers
+expire after 25 hours. Markers for jobs with declared outputs are scoped to the
+originating client and retain that minimum lifetime; after the client reconciles
+its local state, it acknowledges the marker so it can retire. Unacknowledged
+output markers expire after 30 days, bounding abandoned client state. The
+markers are small and non-secret, and they never permit a collected ID to
+execute again.
 
 Linux and macOS first; Windows is a design constraint, not yet a
 deliverable.

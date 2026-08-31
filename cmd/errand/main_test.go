@@ -47,7 +47,7 @@ func TestCmdRunRejectsWorkspaceRootWithoutSnapshot(t *testing.T) {
 
 func TestCmdGCRequiresExplicitTarget(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := cmdGCTo(nil, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "cache|jobs|all") {
+	if code := cmdGCTo(nil, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "cache|jobs|outputs|all") {
 		t.Fatalf("bare gc = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
@@ -68,7 +68,10 @@ func TestParseRetentionDurationSupportsDays(t *testing.T) {
 }
 
 func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
-	var cacheCalls, jobCalls int
+	stateHome := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateHome)
+	jobID := proto.NewULID()
+	var cacheCalls, jobCalls, collectedCalls, acknowledgementCalls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v0/cache/gc":
@@ -84,7 +87,18 @@ func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
 				request.Keep == nil || *request.Keep != 5 {
 				t.Errorf("job GC request = %+v", request)
 			}
-			json.NewEncoder(w).Encode(proto.JobGCResult{SelectedJobs: 3, RemovedJobs: 3, FreedBytes: 20})
+			json.NewEncoder(w).Encode(proto.JobGCResult{
+				SelectedJobs: 3, RemovedJobs: 3, FreedBytes: 20,
+			})
+		case "/v0/jobs/collected":
+			collectedCalls++
+			if !proto.ValidOutputClientID(r.URL.Query().Get("client_id")) {
+				t.Errorf("invalid output client ID %q", r.URL.Query().Get("client_id"))
+			}
+			json.NewEncoder(w).Encode(proto.CollectedJobsPage{JobIDs: []string{jobID}})
+		case "/v0/jobs/collected/ack":
+			acknowledgementCalls++
+			json.NewEncoder(w).Encode(proto.CollectedJobsAckResult{Acknowledged: 1})
 		default:
 			http.NotFound(w, r)
 		}
@@ -92,17 +106,21 @@ func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
 	defer server.Close()
 	var stdout, stderr bytes.Buffer
 	code := cmdGCTo([]string{"all", "--url", server.URL, "--older-than", "1d", "--keep", "5"}, &stdout, &stderr)
-	if code != 0 || cacheCalls != 1 || jobCalls != 1 ||
+	if code != 0 || cacheCalls != 1 || jobCalls != 1 || collectedCalls != 1 || acknowledgementCalls != 1 ||
 		!strings.Contains(stdout.String(), "cache: removed 2") ||
 		!strings.Contains(stdout.String(), "jobs: removed 3") {
-		t.Fatalf("gc all = %d, calls=(%d,%d), stdout=%q stderr=%q",
-			code, cacheCalls, jobCalls, stdout.String(), stderr.String())
+		t.Fatalf("gc all = %d, calls=(%d,%d,%d,%d), stdout=%q stderr=%q",
+			code, cacheCalls, jobCalls, collectedCalls, acknowledgementCalls, stdout.String(), stderr.String())
 	}
 }
 
 func TestCmdGCRoundsFractionalSecondsUp(t *testing.T) {
 	var gotSeconds int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v0/jobs/collected" {
+			json.NewEncoder(w).Encode(proto.CollectedJobsPage{})
+			return
+		}
 		var request proto.JobGCRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Error(err)

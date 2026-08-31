@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+	"github.com/lydakis/errand/internal/proto"
 )
 
 const markerName = ".errand.toml"
@@ -15,12 +16,14 @@ type Selection struct {
 	Root    string
 	Workdir string
 	Source  string
+	Outputs []proto.OutputSpec
 }
 
 type projectConfig struct {
 	Workspace struct {
 		Root bool `toml:"root"`
 	} `toml:"workspace"`
+	Outputs []proto.OutputSpec `toml:"outputs"`
 }
 
 // Discover selects an explicit root, the nearest marked ancestor, or cwd.
@@ -39,9 +42,14 @@ func Discover(cwd, explicit string) (Selection, error) {
 		if err != nil {
 			return Selection{}, fmt.Errorf("workspace: resolving --workspace-root: %w", err)
 		}
-		return selection(root, cwd, "--workspace-root")
+		cfg, err := readExplicitConfig(root)
+		if err != nil {
+			return Selection{}, err
+		}
+		return selection(root, cwd, "--workspace-root", cfg.Outputs)
 	}
 
+	var fallbackOutputs []proto.OutputSpec
 	for dir := cwd; ; dir = filepath.Dir(dir) {
 		marker := filepath.Join(dir, markerName)
 		if markerInfo, err := os.Stat(marker); err == nil {
@@ -55,7 +63,10 @@ func Discover(cwd, explicit string) (Selection, error) {
 					return Selection{}, fmt.Errorf("workspace: reading %s: %w", marker, err)
 				}
 				if cfg.Workspace.Root {
-					return selection(dir, cwd, marker)
+					return selection(dir, cwd, marker, cfg.Outputs)
+				}
+				if dir == cwd {
+					fallbackOutputs = cfg.Outputs
 				}
 			}
 		}
@@ -64,7 +75,26 @@ func Discover(cwd, explicit string) (Selection, error) {
 			break
 		}
 	}
-	return selection(cwd, cwd, "current directory")
+	return selection(cwd, cwd, "current directory", fallbackOutputs)
+}
+
+func readExplicitConfig(root string) (projectConfig, error) {
+	var cfg projectConfig
+	marker := filepath.Join(root, markerName)
+	info, err := os.Lstat(marker)
+	if os.IsNotExist(err) {
+		return cfg, nil
+	}
+	if err != nil {
+		return cfg, fmt.Errorf("workspace: inspecting %s: %w", marker, err)
+	}
+	if !info.Mode().IsRegular() {
+		return cfg, fmt.Errorf("workspace: %s is not a regular file", marker)
+	}
+	if _, err := toml.DecodeFile(marker, &cfg); err != nil {
+		return cfg, fmt.Errorf("workspace: reading %s: %w", marker, err)
+	}
+	return cfg, nil
 }
 
 func trustedWorkspaceMarker(dir string, markerInfo os.FileInfo) (bool, error) {
@@ -100,7 +130,7 @@ func canonicalDir(dir string) (string, error) {
 	return filepath.Clean(resolved), nil
 }
 
-func selection(root, cwd, source string) (Selection, error) {
+func selection(root, cwd, source string, outputs []proto.OutputSpec) (Selection, error) {
 	rel, err := filepath.Rel(root, cwd)
 	if err != nil {
 		return Selection{}, fmt.Errorf("workspace: deriving command workdir: %w", err)
@@ -113,5 +143,5 @@ func selection(root, cwd, source string) (Selection, error) {
 	} else {
 		rel = filepath.ToSlash(rel)
 	}
-	return Selection{Root: root, Workdir: rel, Source: source}, nil
+	return Selection{Root: root, Workdir: rel, Source: source, Outputs: outputs}, nil
 }

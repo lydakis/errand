@@ -5,8 +5,10 @@ package snapshot
 
 import (
 	"archive/tar"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -22,6 +24,8 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+var ErrLimitExceeded = errors.New("snapshot limit exceeded")
+
 type GitInfo struct {
 	Repository bool
 	Commit     string
@@ -34,6 +38,8 @@ type SelectOptions struct {
 	// of using the user's home directory. Filesystem roots remain forbidden.
 	IncludeAll bool
 }
+
+const localOutputTransactionPrefix = ".errand-output-"
 
 // SelectFiles returns the relative (slash-separated) paths to snapshot.
 // Precedence: .errandignore if present, else git's view of tracked plus
@@ -187,6 +193,9 @@ func gitListFiles(root string) ([]string, error) {
 		if p == "" {
 			continue
 		}
+		if isLocalOutputTransactionPath(p) {
+			continue
+		}
 		// git can list files that no longer exist (staged deletes)
 		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(p))); err == nil {
 			paths = append(paths, p)
@@ -220,6 +229,12 @@ func walk(root string, matcher *ignore.GitIgnore) ([]string, error) {
 		if rel == "." {
 			return nil
 		}
+		if isLocalOutputTransactionPath(rel) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if pathBase := filepath.Base(p); pathBase == ".git" {
 			if d.IsDir() {
 				return filepath.SkipDir
@@ -239,8 +254,27 @@ func walk(root string, matcher *ignore.GitIgnore) ([]string, error) {
 	return paths, err
 }
 
+func isLocalOutputTransactionPath(rel string) bool {
+	first, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
+	if !strings.HasPrefix(first, localOutputTransactionPrefix) {
+		return false
+	}
+	return proto.ValidULID(strings.TrimPrefix(first, localOutputTransactionPrefix))
+}
+
 // Build lstats and hashes every selected path into a manifest.
 func Build(root string, paths []string) (proto.Manifest, error) {
+	return BuildBounded(root, paths, -1, -1)
+}
+
+// BuildBounded refuses a manifest before hashing a file that would cross the
+// logical-byte or entry ceiling. Negative limits are unbounded.
+func BuildBounded(root string, paths []string, maxBytes int64, maxEntries int) (proto.Manifest, error) {
+	return BuildBoundedContext(context.Background(), root, paths, maxBytes, maxEntries)
+}
+
+// BuildBoundedContext is BuildBounded with cancellation for long hashing work.
+func BuildBoundedContext(ctx context.Context, root string, paths []string, maxBytes int64, maxEntries int) (proto.Manifest, error) {
 	selected := make(map[string]struct{}, len(paths))
 	for _, rel := range paths {
 		selected[rel] = struct{}{}
@@ -254,7 +288,14 @@ func Build(root string, paths []string) (proto.Manifest, error) {
 	}
 	sort.Strings(paths)
 	var m proto.Manifest
+	var bytes int64
 	for _, rel := range paths {
+		if err := ctx.Err(); err != nil {
+			return m, err
+		}
+		if maxEntries >= 0 && len(m.Entries) >= maxEntries {
+			return m, fmt.Errorf("snapshot: %w: manifest exceeds %d entries", ErrLimitExceeded, maxEntries)
+		}
 		abs := filepath.Join(root, filepath.FromSlash(rel))
 		fi, err := os.Lstat(abs)
 		if err != nil {
@@ -274,7 +315,11 @@ func Build(root string, paths []string) (proto.Manifest, error) {
 		case fi.Mode().IsRegular():
 			e.Type = proto.EntryFile
 			e.Size = fi.Size()
-			sum, err := hashFile(abs)
+			if maxBytes >= 0 && e.Size > maxBytes-bytes {
+				return m, fmt.Errorf("snapshot: %w: files exceed %d bytes", ErrLimitExceeded, maxBytes)
+			}
+			bytes += e.Size
+			sum, err := hashFileSizedContext(ctx, abs, fi.Size(), fi.Mode())
 			if err != nil {
 				return m, err
 			}
@@ -294,10 +339,23 @@ func Pack(w io.Writer, root string, m proto.Manifest) error {
 	return PackPartial(w, root, m, nil)
 }
 
+// PackContext is Pack with cancellation for long archive writes.
+func PackContext(ctx context.Context, w io.Writer, root string, m proto.Manifest) error {
+	return PackPartialContext(ctx, w, root, m, nil)
+}
+
 // PackPartial revalidates every entry but writes only selected files.
 // Directories and symlinks are always written.
 func PackPartial(w io.Writer, root string, m proto.Manifest, shipFile func(proto.ManifestEntry) bool) error {
+	return PackPartialContext(context.Background(), w, root, m, shipFile)
+}
+
+// PackPartialContext is PackPartial with cancellation for long archive writes.
+func PackPartialContext(ctx context.Context, w io.Writer, root string, m proto.Manifest, shipFile func(proto.ManifestEntry) bool) error {
 	if len(m.Entries) == 0 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return tar.NewWriter(w).Close()
 	}
 	rootFS, err := os.OpenRoot(root)
@@ -307,6 +365,9 @@ func PackPartial(w io.Writer, root string, m proto.Manifest, shipFile func(proto
 	defer rootFS.Close()
 	tw := tar.NewWriter(w)
 	for _, e := range m.Entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		hdr := &tar.Header{Name: e.Path, Mode: int64(e.Mode)}
 		switch e.Type {
 		case proto.EntryDir:
@@ -361,7 +422,7 @@ func PackPartial(w io.Writer, root string, m proto.Manifest, shipFile func(proto
 				}
 				dest = io.MultiWriter(tw, h)
 			}
-			n, err := io.Copy(dest, io.LimitReader(f, e.Size))
+			n, err := io.Copy(dest, io.LimitReader(&contextReader{ctx: ctx, r: f}, e.Size))
 			if err != nil {
 				f.Close()
 				return err
@@ -387,14 +448,47 @@ func PackPartial(w io.Writer, root string, m proto.Manifest, shipFile func(proto
 }
 
 func hashFile(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", err
+	}
+	return hashFileSized(path, info.Size(), info.Mode())
+}
+
+func hashFileSized(path string, size int64, mode fs.FileMode) (string, error) {
+	return hashFileSizedContext(context.Background(), path, size, mode)
+}
+
+func hashFileSizedContext(ctx context.Context, path string, size int64, mode fs.FileMode) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	n, err := io.Copy(h, io.LimitReader(&contextReader{ctx: ctx, r: f}, size+1))
+	if err != nil {
 		return "", err
 	}
+	after, statErr := f.Stat()
+	if n != size || statErr != nil || after.Size() != size || after.Mode() != mode {
+		return "", fmt.Errorf("snapshot: %s changed during hashing; retry", path)
+	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+type contextReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (r *contextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	n, err := r.r.Read(p)
+	if ctxErr := r.ctx.Err(); ctxErr != nil {
+		return 0, ctxErr
+	}
+	return n, err
 }

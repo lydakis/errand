@@ -126,3 +126,59 @@ func TestDiscoveredRootStillRequiresSnapshotPolicy(t *testing.T) {
 		t.Fatalf("marked non-Git root bypassed snapshot policy: %v", err)
 	}
 }
+
+func TestDiscoverLoadsOutputsFromSelectedMarker(t *testing.T) {
+	root := t.TempDir()
+	cwd := filepath.Join(root, "src", "package")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := "[workspace]\nroot = true\n\n[[outputs]]\npath = 'dist/app'\ncollect = 'always'\napply = 'auto'\n"
+	if err := os.WriteFile(filepath.Join(root, markerName), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	selected, err := Discover(cwd, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected.Outputs) != 1 || selected.Outputs[0].Path != "dist/app" ||
+		selected.Outputs[0].Collect != "always" || selected.Outputs[0].Apply != "auto" {
+		t.Fatalf("selected outputs = %+v", selected.Outputs)
+	}
+}
+
+func TestDiscoverLoadsOutputsFromCurrentProjectConfigWithoutRootMarker(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, markerName), []byte("[[outputs]]\npath = 'report.json'\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	selected, err := Discover(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalRoot, err := canonicalDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.Root != canonicalRoot || len(selected.Outputs) != 1 || selected.Outputs[0].Path != "report.json" {
+		t.Fatalf("Discover() = %+v", selected)
+	}
+}
+
+func TestDiscoverExplicitRootLoadsItsProjectConfig(t *testing.T) {
+	root := t.TempDir()
+	cwd := filepath.Join(root, "src")
+	if err := os.Mkdir(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, markerName), []byte("[[outputs]]\npath = 'dist'\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	selected, err := Discover(cwd, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected.Outputs) != 1 || selected.Outputs[0].Path != "dist" {
+		t.Fatalf("selected outputs = %+v", selected.Outputs)
+	}
+}

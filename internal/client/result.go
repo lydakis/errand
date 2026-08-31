@@ -44,7 +44,7 @@ func exitCode(st proto.JobStatus, stderr io.Writer, handle string) int {
 		if ambiguous {
 			details = append(details, "state ambiguous")
 		}
-		details = appendSecondaryResultFailures(details, res, false, "transaction error: ")
+		details = appendSecondaryResultFailures(details, res, true, "transaction error: ")
 		for _, detail := range details {
 			fmt.Fprintf(stderr, " (%s)", detail)
 		}
@@ -56,7 +56,7 @@ func exitCode(st proto.JobStatus, stderr io.Writer, handle string) int {
 			details = append(details, "state=ambiguous")
 		}
 		details = append(details, fmt.Sprintf("remote_exit=%d", *res.ExitCode))
-		details = appendSecondaryResultFailures(details, res, false, "")
+		details = appendSecondaryResultFailures(details, res, true, "")
 		writeTransactionIncomplete(stderr, details)
 		if *res.ExitCode == 0 {
 			return ExitTransaction
@@ -75,10 +75,8 @@ func exitCode(st proto.JobStatus, stderr io.Writer, handle string) int {
 	}
 }
 
-// appendSecondaryResultFailures preserves the pre-refactor diagnostic shape.
-// Process-outcome branches deliberately omit OutputsOK, and only the signal
-// branch prefixes TransactionError. Change these modes only with a deliberate
-// CLI diagnostics change and matching exact-output tests.
+// appendSecondaryResultFailures renders the transaction layer independently
+// of the process outcome, including incomplete declared outputs.
 func appendSecondaryResultFailures(
 	details []string,
 	res *proto.Result,

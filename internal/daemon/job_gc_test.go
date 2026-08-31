@@ -66,9 +66,14 @@ func postJobGC(t *testing.T, url string, request proto.JobGCRequest) proto.JobGC
 
 func TestJobGCCombinesAgeAndKeepProtections(t *testing.T) {
 	d, ts := testDaemon(t)
+	clientID := "0123456789abcdef0123456789abcdef"
 	now := time.Now()
 	oldest := addGCJob(t, d, proto.StateExited, now.Add(-72*time.Hour), true)
 	older := addGCJob(t, d, proto.StateKilled, now.Add(-48*time.Hour), true)
+	for _, job := range []*Job{oldest, older} {
+		job.Spec.Outputs = []proto.OutputSpec{{Path: "artifact", Collect: proto.OutputCollectAlways}}
+		job.Spec.OutputClientID = clientID
+	}
 	newest := addGCJob(t, d, proto.StateExited, now.Add(-36*time.Hour), true)
 	addGCJob(t, d, proto.StateAmbiguous, now.Add(-96*time.Hour), true)
 	addGCJob(t, d, proto.StateExited, now.Add(-96*time.Hour), false)
@@ -91,6 +96,22 @@ func TestJobGCCombinesAgeAndKeepProtections(t *testing.T) {
 	result := postJobGC(t, ts.URL, proto.JobGCRequest{OlderThanSeconds: &seconds, Keep: &keep})
 	if result.SelectedJobs != 2 || result.RemovedJobs != 2 || result.FailedJobs != 0 {
 		t.Fatalf("GC result = %+v", result)
+	}
+	resp, err := http.Get(ts.URL + "/v0/jobs/collected?client_id=" + clientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var page proto.CollectedJobsPage
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	removed := map[string]bool{}
+	for _, id := range page.JobIDs {
+		removed[id] = true
+	}
+	if len(removed) != 2 || !removed[oldest.ID] || !removed[older.ID] {
+		t.Fatalf("durable collected job IDs = %v, want %s and %s", page.JobIDs, oldest.ID, older.ID)
 	}
 	for _, j := range []*Job{oldest, older} {
 		if _, err := os.Stat(j.Dir); !os.IsNotExist(err) {
@@ -147,6 +168,8 @@ func TestRemoveJobReceiptDistinguishesRemovedSkippedAndProtected(t *testing.T) {
 	}
 	defer d.Close()
 	removed := addGCJob(t, d, proto.StateExited, time.Now().Add(-time.Hour), true)
+	removed.Spec.Outputs = []proto.OutputSpec{{Path: "artifact", Collect: proto.OutputCollectAlways}}
+	removed.Spec.OutputClientID = "0123456789abcdef0123456789abcdef"
 	outcome, cleanupErr, err := d.removeJobReceipt(removed)
 	if err != nil || cleanupErr != nil || outcome != jobRemovalRemoved {
 		t.Fatalf("first removal = %v, cleanup=%v, err=%v", outcome, cleanupErr, err)
@@ -157,6 +180,9 @@ func TestRemoveJobReceiptDistinguishesRemovedSkippedAndProtected(t *testing.T) {
 	}
 	if outcome, raced := d.jobRemovalRace(removed); !raced || outcome != jobRemovalSkipped {
 		t.Fatalf("removed receipt race = %v, raced=%t", outcome, raced)
+	}
+	if marker := d.collected[removed.ID]; !marker.OutputsPending || collectedMarkerExpired(marker, time.Now().Add(7*24*time.Hour)) {
+		t.Fatalf("output collection marker = %+v, want durable pending-output marker", marker)
 	}
 
 	protected := addGCJob(t, d, proto.StateExited, time.Now().Add(-time.Hour), true)
@@ -304,20 +330,118 @@ func TestJobGCOnlyRemovesCallerOwnedReceipts(t *testing.T) {
 	}
 }
 
-func TestJobGCUsesResultModTimeForLegacyReceipt(t *testing.T) {
+func TestCollectedJobsAreOwnerScopedAndPaginated(t *testing.T) {
+	d, err := New(Config{StateDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	identity := Identity{Login: "george@example.com", UserID: 42}
+	owner := identity.Owner()
+	clientID := "0123456789abcdef0123456789abcdef"
+	want := make(map[string]bool, proto.CollectedJobsPageLimit+1)
+	for range proto.CollectedJobsPageLimit + 1 {
+		jobID := proto.NewULID()
+		want[jobID] = true
+		d.collected[jobID] = collectedRecord{
+			Owner: owner, CollectedAt: time.Now(), OutputsPending: true, OutputClientID: clientID,
+		}
+	}
+	d.collected[proto.NewULID()] = collectedRecord{
+		Owner: "other@example.com", CollectedAt: time.Now(), OutputsPending: true, OutputClientID: clientID,
+	}
+	d.collected[proto.NewULID()] = collectedRecord{
+		Owner: owner, CollectedAt: time.Now(), OutputsPending: true,
+		OutputClientID: "fedcba9876543210fedcba9876543210",
+	}
+
+	got := map[string]bool{}
+	cursor := ""
+	for {
+		request := httptest.NewRequest(http.MethodGet,
+			"/v0/jobs/collected?client_id="+clientID+"&cursor="+cursor, nil)
+		recorder := httptest.NewRecorder()
+		d.handleCollectedJobs(recorder, request, identity)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("collected jobs = %s", recorder.Result().Status)
+		}
+		var page proto.CollectedJobsPage
+		if err := json.NewDecoder(recorder.Body).Decode(&page); err != nil {
+			t.Fatal(err)
+		}
+		if len(page.JobIDs) > proto.CollectedJobsPageLimit {
+			t.Fatalf("collected page has %d IDs", len(page.JobIDs))
+		}
+		for _, jobID := range page.JobIDs {
+			got[jobID] = true
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		cursor = page.NextCursor
+	}
+	if len(got) != len(want) {
+		t.Fatalf("collected jobs count = %d, want %d", len(got), len(want))
+	}
+	for jobID := range want {
+		if !got[jobID] {
+			t.Fatalf("collected jobs omitted %s", jobID)
+		}
+	}
+}
+
+func TestCollectedJobsAcknowledgementRetiresExpiredOutputMarker(t *testing.T) {
+	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	clientID := "0123456789abcdef0123456789abcdef"
+	jobID := proto.NewULID()
+	record := collectedRecord{
+		CollectedAt:    time.Now().Add(-collectedMarkerTTL - time.Minute),
+		OutputsPending: true, OutputClientID: clientID,
+	}
+	marker := filepath.Join(d.collectedDir(), jobID+".json")
+	if err := replaceJSONDurable(marker, record); err != nil {
+		t.Fatal(err)
+	}
+	d.collected[jobID] = record
+	body, err := json.Marshal(proto.CollectedJobsAck{ClientID: clientID, JobIDs: []string{jobID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v0/jobs/collected/ack", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	d.handleCollectedJobsAck(recorder, request, Identity{})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("collection acknowledgement = %s: %s", recorder.Result().Status, recorder.Body.String())
+	}
+	var result proto.CollectedJobsAckResult
+	if err := json.NewDecoder(recorder.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Acknowledged != 1 {
+		t.Fatalf("acknowledged markers = %d, want 1", result.Acknowledged)
+	}
+	if _, ok := d.collected[jobID]; ok {
+		t.Fatal("acknowledged expired marker remained in memory")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("acknowledged expired marker remains on disk: %v", err)
+	}
+}
+
+func TestJobGCProtectsReceiptWithoutSettlementTime(t *testing.T) {
 	d, ts := testDaemon(t)
 	j := addGCJob(t, d, proto.StateExited, time.Now(), true)
 	j.mu.Lock()
 	j.result.SettledAt = nil
 	j.mu.Unlock()
-	old := time.Now().Add(-72 * time.Hour)
-	if err := os.Chtimes(filepath.Join(j.Dir, "result.json"), old, old); err != nil {
-		t.Fatal(err)
-	}
 	seconds := int64((24 * time.Hour) / time.Second)
 	result := postJobGC(t, ts.URL, proto.JobGCRequest{OlderThanSeconds: &seconds})
-	if result.RemovedJobs != 1 {
-		t.Fatalf("legacy receipt GC = %+v", result)
+	if result.RemovedJobs != 0 || result.ProtectedJobs != 1 {
+		t.Fatalf("receipt without settlement time GC = %+v", result)
 	}
 }
 
@@ -419,6 +543,64 @@ func TestLoadCollectedPrunesExpiredMarkers(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("expired collection marker remains: %v", err)
+	}
+}
+
+func TestLoadCollectedRetainsPendingOutputMarkersWithinAbandonmentBound(t *testing.T) {
+	stateDir := t.TempDir()
+	collectedDir := filepath.Join(stateDir, "collected")
+	if err := os.MkdirAll(collectedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	id := proto.NewULID()
+	marker := filepath.Join(collectedDir, id+".json")
+	record := collectedRecord{
+		Owner: "george@example.com", CollectedAt: time.Now().Add(-pendingOutputMarkerTTL + time.Minute), OutputsPending: true,
+		OutputClientID: "0123456789abcdef0123456789abcdef",
+	}
+	if err := replaceJSON(marker, record); err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := New(Config{StateDir: stateDir, InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if got, ok := d.collected[id]; !ok || !got.OutputsPending {
+		t.Fatalf("old output collection marker = %+v, loaded=%t", got, ok)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("old output collection marker was removed: %v", err)
+	}
+}
+
+func TestLoadCollectedPrunesAbandonedPendingOutputMarkers(t *testing.T) {
+	stateDir := t.TempDir()
+	collectedDir := filepath.Join(stateDir, "collected")
+	if err := os.MkdirAll(collectedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	id := proto.NewULID()
+	marker := filepath.Join(collectedDir, id+".json")
+	record := collectedRecord{
+		Owner: "george@example.com", CollectedAt: time.Now().Add(-pendingOutputMarkerTTL - time.Minute), OutputsPending: true,
+		OutputClientID: "0123456789abcdef0123456789abcdef",
+	}
+	if err := replaceJSON(marker, record); err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := New(Config{StateDir: stateDir, InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, ok := d.collected[id]; ok {
+		t.Fatal("abandoned pending output marker was loaded")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("abandoned pending output marker remains: %v", err)
 	}
 }
 

@@ -148,7 +148,9 @@ subprocess.Popen(
 `
 	spec := proto.Spec{
 		V: proto.ProtoVersion, Argv: []string{python, "-c", script},
-		Limits: proto.Limits{MaxLogBytes: 1 << 20, MaxRuntimeSec: 2, MaxWorkspaceBytes: 1 << 20},
+		Limits: proto.Limits{
+			MaxLogBytes: 1 << 20, MaxRuntimeSec: 2, MaxWorkspaceBytes: 1 << 20, MaxOutputBytes: 1 << 20,
+		},
 	}
 	j := &Job{
 		ID: id, Dir: dir, Spec: spec, RequestDigest: spec.Digest(),

@@ -328,14 +328,68 @@ func TestJobGCEndpointRequiresGCAction(t *testing.T) {
 			ts := httptest.NewServer(d.Handler())
 			t.Cleanup(ts.Close)
 			keep := 1
-			body, _ := json.Marshal(proto.JobGCRequest{Keep: &keep})
-			resp, err := http.Post(ts.URL+"/v0/jobs/gc", "application/json", bytes.NewReader(body))
+			clientID := "0123456789abcdef0123456789abcdef"
+			jobGCBody, _ := json.Marshal(proto.JobGCRequest{Keep: &keep})
+			ackBody, _ := json.Marshal(proto.CollectedJobsAck{
+				ClientID: clientID, JobIDs: []string{proto.NewULID()},
+			})
+			for _, endpoint := range []struct {
+				method string
+				path   string
+				body   []byte
+			}{
+				{method: http.MethodPost, path: "/v0/jobs/gc", body: jobGCBody},
+				{method: http.MethodGet, path: "/v0/jobs/collected?client_id=" + clientID},
+				{method: http.MethodPost, path: "/v0/jobs/collected/ack", body: ackBody},
+			} {
+				req, err := http.NewRequest(endpoint.method, ts.URL+endpoint.path, bytes.NewReader(endpoint.body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				resp, err := ts.Client().Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				resp.Body.Close()
+				if resp.StatusCode != tt.want {
+					t.Fatalf("%s %s = %s, want %d", endpoint.method, endpoint.path, resp.Status, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestOutputEndpointRequiresReadOwnAction(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		actions []string
+		want    int
+	}{
+		{name: "submit only", actions: []string{proto.ActionSubmit}, want: http.StatusForbidden},
+		{name: "reader", actions: []string{proto.ActionReadOwn}, want: http.StatusNotFound},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			response := map[string]any{
+				"Node":        map[string]any{"Name": "laptop.tailnet.ts.net.", "StableID": "node-1"},
+				"UserProfile": map[string]any{"ID": 42, "LoginName": "george@example.com"},
+				"CapMap": map[string]any{
+					proto.DefaultCapability: []any{map[string]any{"actions": tt.actions}},
+				},
+			}
+			d, err := New(Config{StateDir: t.TempDir(), TailscaledSocket: fakeWhoisSocket(t, response)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer d.Close()
+			ts := httptest.NewServer(d.Handler())
+			defer ts.Close()
+			resp, err := http.Get(ts.URL + "/v0/jobs/" + proto.NewULID() + "/outputs")
 			if err != nil {
 				t.Fatal(err)
 			}
 			resp.Body.Close()
 			if resp.StatusCode != tt.want {
-				t.Fatalf("POST /v0/jobs/gc = %s, want %d", resp.Status, tt.want)
+				t.Fatalf("GET outputs = %s, want %d", resp.Status, tt.want)
 			}
 		})
 	}

@@ -19,6 +19,7 @@ import (
 
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/logio"
+	outputops "github.com/lydakis/errand/internal/outputs"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -42,26 +43,29 @@ type Job struct {
 	Admission     proto.Admission
 	RequestDigest string
 
-	mu            sync.Mutex
-	state         string
-	result        *proto.Result
-	cmd           *exec.Cmd
-	logw          *logio.Writer
-	scope         *processScope
-	killed        string // limit name or signal that terminated the job, if any
-	killSignal    syscall.Signal
-	started       bool
-	startedAt     time.Time
-	reaped        bool
-	startRejected bool
-	deleting      bool
-	logReaders    int
-	done          chan struct{}
-	logReady      chan struct{}
-	logReadyOnce  sync.Once
-	stagingCancel func()
-	stagingDone   chan struct{}
-	stagingOnce   sync.Once
+	mu                  sync.Mutex
+	state               string
+	result              *proto.Result
+	cmd                 *exec.Cmd
+	logw                *logio.Writer
+	scope               *processScope
+	killed              string // limit name or signal that terminated the job, if any
+	killSignal          syscall.Signal
+	started             bool
+	startedAt           time.Time
+	reaped              bool
+	startRejected       bool
+	deleting            bool
+	logReaders          int
+	outputReaders       int
+	done                chan struct{}
+	logReady            chan struct{}
+	logReadyOnce        sync.Once
+	stagingCancel       func()
+	stagingDone         chan struct{}
+	stagingOnce         sync.Once
+	outputCancel        context.CancelFunc
+	outputCancelRequest string
 }
 
 func (j *Job) Status() proto.JobStatus {
@@ -214,6 +218,22 @@ func (j *Job) releaseLogReader() {
 	j.mu.Unlock()
 }
 
+func (j *Job) acquireOutputReader() bool {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.deleting {
+		return false
+	}
+	j.outputReaders++
+	return true
+}
+
+func (j *Job) releaseOutputReader() {
+	j.mu.Lock()
+	j.outputReaders--
+	j.mu.Unlock()
+}
+
 // stage extracts the workspace. settled means a concurrent kill finalized it.
 func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manifest) (settled bool, retErr error) {
 	j.event("admitted", j.Admission.Method)
@@ -244,9 +264,6 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 			return true, nil
 		}
 		return false, extractErr
-	}
-	if err := os.Mkdir(filepath.Join(j.Dir, "out"), 0o700); err != nil {
-		return false, err
 	}
 	totalFiles := 0
 	for _, e := range manifest.Entries {
@@ -410,11 +427,13 @@ func (j *Job) launch(d *Daemon) error {
 		waitErr := cmd.Wait()
 		finishedAt := time.Now()
 		durationMS := finishedAt.Sub(startedAt).Milliseconds()
+		outputCtx := context.Background()
+		var outputCancel context.CancelFunc
+		if len(j.Spec.Outputs) > 0 {
+			outputCtx, outputCancel = outputCollectionContext(startedAt, j.Spec.Limits.MaxRuntimeSec)
+		}
+		j.transitionAfterProcessExit(outputCancel)
 		timer.Stop()
-		j.mu.Lock()
-		j.cmd = nil
-		j.reaped = true
-		j.mu.Unlock()
 
 		scopeKilled, scopeErr := scope.cleanup(2 * time.Second)
 		processCleanupOK := scopeErr == nil
@@ -458,9 +477,60 @@ func (j *Job) launch(d *Daemon) error {
 		} else {
 			res.StartError = waitErr.Error()
 		}
+
+		if len(j.Spec.Outputs) > 0 {
+			var bundle proto.OutputBundle
+			var collected bool
+			var collectErr error
+			if !processCleanupOK {
+				collectErr = errors.New("process scope cleanup incomplete")
+			} else {
+				processSuccess := res.ExitCode != nil && *res.ExitCode == 0
+				bundle, collected, collectErr = outputops.CollectContext(
+					outputCtx, workspace, j.Dir, j.Spec.Outputs, processSuccess, j.Spec.Limits.MaxOutputBytes)
+			}
+			j.mu.Lock()
+			ctxErr := outputCtx.Err()
+			j.outputCancel = nil
+			j.mu.Unlock()
+			outputCancel()
+			if collectErr == nil && ctxErr != nil {
+				collectErr = ctxErr
+				if collected {
+					_ = os.RemoveAll(filepath.Join(j.Dir, outputops.BundleDirectory))
+					collected = false
+				}
+			}
+			if collectErr != nil {
+				res.OutputsOK = false
+				if res.LimitExceeded == "" {
+					res.LimitExceeded = outputCollectionLimit(collectErr)
+				}
+				res.TransactionError = appendTransactionError(res.TransactionError,
+					"collecting outputs: "+collectErr.Error())
+				j.event("output-collection-failed", collectErr.Error())
+			} else if collected {
+				res.Outputs = &proto.OutputSummary{
+					Paths: append([]string(nil), bundle.Paths...), ManifestRoot: bundle.Manifest.RootHash(), Bytes: bundle.Bytes,
+				}
+				j.event("outputs-collected", fmt.Sprintf("root=%s paths=%d bytes=%d",
+					res.Outputs.ManifestRoot, len(bundle.Paths), bundle.Bytes))
+			}
+		}
 		j.finalizeWithScopeOutcome(d, res, false, processCleanupOK)
 	}()
 	return nil
+}
+
+func outputCollectionLimit(err error) string {
+	switch {
+	case errors.Is(err, outputops.ErrLimitExceeded):
+		return "output_bytes"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "runtime"
+	default:
+		return ""
+	}
 }
 
 // settleStartFailure closes the race between start returning an error and
@@ -552,6 +622,10 @@ func (j *Job) limitExceeded(logw *logio.Writer) string {
 	default:
 		return ""
 	}
+}
+
+func outputCollectionContext(startedAt time.Time, maxRuntimeSec int64) (context.Context, context.CancelFunc) {
+	return context.WithDeadline(context.Background(), startedAt.Add(time.Duration(maxRuntimeSec)*time.Second))
 }
 
 func waitForPipeCopies(readers []*os.File, errs <-chan error, timeout time.Duration) error {
@@ -649,6 +723,12 @@ func (j *Job) buildEnv() []string {
 // terminate kills the whole process group, recording why.
 func (j *Job) terminate(reason string, sig syscall.Signal) error {
 	j.mu.Lock()
+	if j.result == nil && j.reaped && j.outputCancel != nil {
+		j.outputCancel()
+		j.mu.Unlock()
+		j.event("output-collection-cancelled", reason)
+		return nil
+	}
 	if j.result != nil || j.reaped || j.startRejected || j.state == proto.StateExited ||
 		j.state == proto.StateKilled || j.state == proto.StateAmbiguous {
 		j.mu.Unlock()
@@ -666,12 +746,16 @@ func (j *Job) terminate(reason string, sig syscall.Signal) error {
 	}
 	j.mu.Unlock()
 	groupErr := syscall.Kill(-cmd.Process.Pid, sig)
-	if groupErr == syscall.ESRCH {
+	processExited := groupErr == syscall.ESRCH
+	if processExited {
 		groupErr = nil
 	}
 	var scopeErr error
 	if scope != nil {
 		scopeErr = scope.signalEscaped(sig, cmd.Process.Pid)
+	}
+	if processExited {
+		j.requestOutputCollectionCancellation(reason)
 	}
 	j.event("terminated", reason)
 	return errors.Join(groupErr, scopeErr)
@@ -680,6 +764,12 @@ func (j *Job) terminate(reason string, sig syscall.Signal) error {
 // Signal forwards a signal to the job's process group.
 func (j *Job) Signal(sig syscall.Signal) error {
 	j.mu.Lock()
+	if j.result == nil && j.reaped && j.outputCancel != nil {
+		j.outputCancel()
+		j.mu.Unlock()
+		j.event("output-collection-cancelled", sig.String())
+		return nil
+	}
 	if j.result != nil || j.reaped || j.startRejected || j.state == proto.StateExited ||
 		j.state == proto.StateKilled || j.state == proto.StateAmbiguous {
 		j.mu.Unlock()
@@ -694,14 +784,55 @@ func (j *Job) Signal(sig syscall.Signal) error {
 	}
 	j.event("signal", sig.String())
 	groupErr := syscall.Kill(-cmd.Process.Pid, sig)
-	if groupErr == syscall.ESRCH {
+	processExited := groupErr == syscall.ESRCH
+	if processExited {
 		groupErr = nil
 	}
 	var scopeErr error
 	if scope != nil {
 		scopeErr = scope.signalEscaped(sig, cmd.Process.Pid)
 	}
+	if processExited {
+		j.requestOutputCollectionCancellation(sig.String())
+	}
 	return errors.Join(groupErr, scopeErr)
+}
+
+func (j *Job) requestOutputCollectionCancellation(reason string) bool {
+	j.mu.Lock()
+	if j.result != nil || len(j.Spec.Outputs) == 0 {
+		j.mu.Unlock()
+		return false
+	}
+	if !j.reaped {
+		if j.outputCancelRequest == "" {
+			j.outputCancelRequest = reason
+		}
+		j.mu.Unlock()
+		return true
+	}
+	cancel := j.outputCancel
+	j.mu.Unlock()
+	if cancel == nil {
+		return false
+	}
+	cancel()
+	j.event("output-collection-cancelled", reason)
+	return true
+}
+
+func (j *Job) transitionAfterProcessExit(outputCancel context.CancelFunc) {
+	j.mu.Lock()
+	j.cmd = nil
+	j.reaped = true
+	j.outputCancel = outputCancel
+	reason := j.outputCancelRequest
+	j.outputCancelRequest = ""
+	j.mu.Unlock()
+	if outputCancel != nil && reason != "" {
+		outputCancel()
+		j.event("output-collection-cancelled", reason)
+	}
 }
 
 // finalize writes the once-only result, cleans up the workspace, and releases

@@ -16,6 +16,8 @@ const (
 	// A marker outlives the complete admissible ID window. Once it expires,
 	// the ULID timestamp is necessarily too old relative to the durable clock.
 	collectedMarkerTTL = jobIDMaxAge + jobIDMaxFutureSkew
+	// Lost client identities cannot acknowledge their output markers.
+	pendingOutputMarkerTTL = proto.OutputReconciliationWindow
 )
 
 type admissionClockRecord struct {

@@ -118,6 +118,12 @@ func (c *admittedJobController) detach(ctx context.Context) bool {
 	}
 }
 
+// releaseAtTerminal restores ordinary local SIGINT behavior after the remote
+// job has settled. A signal that already linearized as remote control wins.
+func (c *admittedJobController) releaseAtTerminal(ctx context.Context) bool {
+	return c.detach(ctx)
+}
+
 // run owns sigCh from admission until the caller's context ends. A 404/409
 // from the first control request can be an admission race, so SIGINT delivery
 // is retried until accepted or the job transaction ends.

@@ -21,6 +21,19 @@ import (
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
+func TestMain(m *testing.M) {
+	stateHome, err := os.MkdirTemp("", "errand-daemon-test-state-")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("XDG_STATE_HOME", stateHome); err != nil {
+		panic(err)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(stateHome)
+	os.Exit(code)
+}
+
 func TestLogLimitResultUsesWriterState(t *testing.T) {
 	w, err := logio.NewWriter(filepath.Join(t.TempDir(), "io.log"), 1, nil)
 	if err != nil {
@@ -50,7 +63,9 @@ func TestLogLimitReceiptKeepsCleanupOutcomeSeparate(t *testing.T) {
 	spec := proto.Spec{
 		V: proto.ProtoVersion, Argv: []string{"/bin/sh", "-c", "printf 0123456789"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.Limits{
-			MaxLogBytes: 4, MaxRuntimeSec: 10, MaxWorkspaceBytes: proto.DefaultLimits().MaxWorkspaceBytes,
+			MaxLogBytes: 4, MaxRuntimeSec: 10,
+			MaxWorkspaceBytes: proto.DefaultLimits().MaxWorkspaceBytes,
+			MaxOutputBytes:    proto.DefaultLimits().MaxOutputBytes,
 		},
 	}
 	id := proto.NewULID()
@@ -316,6 +331,53 @@ func TestEnvironmentBearingRetryFailsClosedAfterRestart(t *testing.T) {
 	}
 }
 
+func TestLoadExistingIsolatesMalformedReceipts(t *testing.T) {
+	stateDir := t.TempDir()
+	jobsDir := filepath.Join(stateDir, "jobs")
+	if err := os.MkdirAll(jobsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	corruptSpecID := proto.NewULID()
+	corruptSpecDir := filepath.Join(jobsDir, corruptSpecID)
+	if err := os.Mkdir(corruptSpecDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(corruptSpecDir, "spec.json"), []byte("{\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	corruptResultID := proto.NewULID()
+	corruptResultDir := filepath.Join(jobsDir, corruptResultID)
+	if err := os.Mkdir(corruptResultDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := json.Marshal(proto.NewReceiptSpec(proto.Spec{
+		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"}, Limits: proto.DefaultLimits(),
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(corruptResultDir, "spec.json"), receipt, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(corruptResultDir, "result.json"), []byte("{\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := New(Config{StateDir: stateDir, InsecureNoAuth: true})
+	if err != nil {
+		t.Fatalf("New() with malformed receipt = %v", err)
+	}
+	defer d.Close()
+	for _, jobID := range []string{corruptSpecID, corruptResultID} {
+		job := d.jobs[jobID]
+		if job == nil || job.state != proto.StateAmbiguous || job.result == nil ||
+			!strings.Contains(job.result.TransactionError, "receipt is unreadable") {
+			t.Fatalf("isolated malformed receipt %s = %+v", jobID, job)
+		}
+	}
+}
+
 func TestEnvironmentlessRetrySurvivesRestart(t *testing.T) {
 	stateDir := t.TempDir()
 	d1, err := New(Config{StateDir: stateDir, InsecureNoAuth: true})
@@ -572,7 +634,9 @@ func TestLimitsRejectedAboveCeiling(t *testing.T) {
 	spec := proto.Spec{
 		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
 		ManifestRoot: m.RootHash(),
-		Limits:       proto.Limits{MaxLogBytes: 1 << 60, MaxRuntimeSec: 1, MaxWorkspaceBytes: 1},
+		Limits: proto.Limits{
+			MaxLogBytes: 1 << 60, MaxRuntimeSec: 1, MaxWorkspaceBytes: 1, MaxOutputBytes: 1,
+		},
 	}
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)

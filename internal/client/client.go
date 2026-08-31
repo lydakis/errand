@@ -63,18 +63,20 @@ var maintenanceHTTP = &http.Client{
 }
 
 type RunOptions struct {
-	PeerURL    string
-	PeerName   string // config alias for handle printing; "" falls back to the host
-	Root       string
-	Argv       []string
-	Env        map[string]string // literal values
-	PassEnv    []string          // names copied from the local environment
-	Workdir    string
-	IncludeAll bool
-	NoSnapshot bool // use a fresh empty workspace without inspecting Root
-	Detach     bool // return after admission, printing the handle on stdout
-	Stdout     io.Writer
-	Stderr     io.Writer
+	PeerURL        string
+	PeerName       string // config alias for handle printing; "" falls back to the host
+	Root           string
+	Argv           []string
+	Env            map[string]string // literal values
+	PassEnv        []string          // names copied from the local environment
+	Workdir        string
+	IncludeAll     bool
+	NoSnapshot     bool // use a fresh empty workspace without inspecting Root
+	Detach         bool // return after admission, printing the handle on stdout
+	Outputs        []proto.OutputSpec
+	outputClientID string
+	Stdout         io.Writer
+	Stderr         io.Writer
 }
 
 // Run performs one job transaction and returns the CLI exit code per the
@@ -131,6 +133,31 @@ func runWithDetachNotifications(
 		errf("%s: %v", prep.stage, prep.err)
 		return ExitTransaction
 	}
+	outputStateInitialized := len(opts.Outputs) > 0
+	submissionStarted := false
+	defer func() {
+		if outputStateInitialized && !submissionStarted {
+			if err := discardUnsubmittedOutputState(opts.PeerURL, jobID); err != nil {
+				errf("removing unsubmitted output state: %v", err)
+			}
+		}
+	}()
+	outputInitCtx, cancelOutputInit := context.WithCancel(interruptCtx)
+	outputInitialized := make(chan error, 1)
+	go func() { outputInitialized <- initializeOutputState(outputInitCtx, &opts, jobID) }()
+	select {
+	case <-sigCh:
+		cancelOutputInit()
+		<-outputInitialized
+		errf("interrupted before submission")
+		return signalExit("interrupt", 2)
+	case err := <-outputInitialized:
+		cancelOutputInit()
+		if err != nil {
+			errf("%v", err)
+			return ExitTransaction
+		}
+	}
 	paths, gitInfo, manifest := prep.paths, prep.gitInfo, prep.manifest
 	files, snapshotBytes := snapshotSize(manifest)
 	if opts.NoSnapshot {
@@ -157,15 +184,17 @@ func runWithDetachNotifications(
 	}
 
 	spec := proto.Spec{
-		V:            proto.ProtoVersion,
-		Argv:         opts.Argv,
-		Env:          env,
-		EnvSources:   envSources,
-		Workdir:      opts.Workdir,
-		ManifestRoot: manifest.RootHash(),
-		Limits:       proto.DefaultLimits(),
-		GitCommit:    gitInfo.Commit,
-		GitDirty:     gitInfo.Dirty,
+		V:              proto.ProtoVersion,
+		Argv:           opts.Argv,
+		Env:            env,
+		EnvSources:     envSources,
+		Workdir:        opts.Workdir,
+		ManifestRoot:   manifest.RootHash(),
+		Limits:         proto.DefaultLimits(),
+		GitCommit:      gitInfo.Commit,
+		GitDirty:       gitInfo.Dirty,
+		Outputs:        opts.Outputs,
+		OutputClientID: opts.outputClientID,
 	}
 
 	type negotiationResult struct {
@@ -205,15 +234,26 @@ func runWithDetachNotifications(
 			shipFiles, files, shipBytes)
 	}
 
+	if outputStateInitialized {
+		if err := markLocalOutputSubmissionStarted(opts.PeerURL, jobID); err != nil {
+			errf("recording output submission state: %v", err)
+			return ExitTransaction
+		}
+	}
 	controller := admitJobController(interruptCtx, sigCh, target)
 	if controller == nil {
 		errf("interrupted before submission")
 		return signalExit("interrupt", 2)
 	}
 
-	status, err := submit(opts, jobID, spec, manifest, plan)
+	submissionStarted = true
+	status, admissionUncertain, err := submit(opts, jobID, spec, manifest, plan)
 	if err != nil {
 		errf("%v", err)
+		if !admissionUncertain && submitDefinitelyRejected(err) {
+			submissionStarted = false
+			return ExitTransaction
+		}
 		errf("the job may have been admitted; handle %s", handle)
 		return ExitTransaction
 	}
@@ -247,7 +287,13 @@ func runWithDetachNotifications(
 		errf("the job may still be running; resume with handle %s", handle)
 		return ExitTransaction
 	}
-	return exitCode(final, opts.Stderr, handle)
+	if !controller.releaseAtTerminal(interruptCtx) {
+		stopInterrupts()
+		<-controller.done
+		errf("interrupted as the job completed; outputs were not fetched; resume with handle %s", handle)
+		return signalExit("interrupt", 2)
+	}
+	return finishTerminalOutputs(opts, jobID, handle, final, true, false)
 }
 
 type snapshotPreparation struct {
@@ -314,11 +360,13 @@ func peerLabel(alias, url string) string {
 
 // AttachOptions identifies an existing job to reattach to.
 type AttachOptions struct {
-	PeerURL  string
-	PeerName string
-	JobID    string
-	Stdout   io.Writer
-	Stderr   io.Writer
+	PeerURL   string
+	PeerName  string
+	JobID     string
+	Apply     bool
+	CallerDir string
+	Stdout    io.Writer
+	Stderr    io.Writer
 }
 
 // Attach resumes following an existing job: it streams the log from the
@@ -372,7 +420,7 @@ func attachWithDetachNotifications(
 		newInterruptTarget(opts.PeerURL, opts.JobID, handle, errf, interruptsControl),
 	)
 
-	runOpts := RunOptions{PeerURL: opts.PeerURL, Stdout: opts.Stdout, Stderr: opts.Stderr}
+	runOpts := RunOptions{PeerURL: opts.PeerURL, Root: opts.CallerDir, Stdout: opts.Stdout, Stderr: opts.Stderr}
 	final, err, detached := streamUntilDetach(runOpts, opts.JobID, status, detach)
 	if detached {
 		return controller.completeDetach(ctx)
@@ -382,7 +430,31 @@ func attachWithDetachNotifications(
 		errf("the job may still be running; resume with handle %s", handle)
 		return ExitTransaction
 	}
-	return exitCode(final, opts.Stderr, handle)
+	if !controller.releaseAtTerminal(ctx) {
+		cancel()
+		<-controller.done
+		errf("interrupted as the job completed; outputs were not fetched; resume with handle %s", handle)
+		return signalExit("interrupt", 2)
+	}
+	return finishTerminalOutputs(runOpts, opts.JobID, handle, final, false, opts.Apply)
+}
+
+func finishTerminalOutputs(opts RunOptions, jobID, handle string, final proto.JobStatus, applyAuto, applyAll bool) int {
+	staged, applied, outputErr := materializeTerminalOutputs(opts, jobID, final, applyAuto, applyAll)
+	if staged != "" {
+		fmt.Fprintf(opts.Stderr, "errand: outputs staged at %s\n", staged)
+	}
+	for _, outputPath := range applied {
+		fmt.Fprintf(opts.Stderr, "errand: applied output %s\n", outputPath)
+	}
+	code := exitCode(final, opts.Stderr, handle)
+	if outputErr != nil {
+		fmt.Fprintf(opts.Stderr, "errand: output transaction failed: %v\n", outputErr)
+		if code == 0 {
+			return ExitTransaction
+		}
+	}
+	return code
 }
 
 func getStatus(peerURL, jobID string) (proto.JobStatus, error) {
@@ -433,11 +505,15 @@ func List(peerURL string) ([]proto.JobListEntry, error) {
 }
 
 func getJSONContext(ctx context.Context, url string, maxBytes int64, label string, dst any) error {
+	return getJSONWithClientContext(ctx, directHTTP, url, maxBytes, label, dst)
+}
+
+func getJSONWithClientContext(ctx context.Context, httpClient *http.Client, url string, maxBytes int64, label string, dst any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
-	resp, err := directHTTP.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -532,36 +608,41 @@ func negotiateSnapshot(ctx context.Context, opts RunOptions, manifest proto.Mani
 	return shipPlan{partial: true, hashes: ship}, nil
 }
 
-func submit(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, error) {
-	status, err := submitAttempts(opts, jobID, spec, manifest, plan)
+func submit(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, bool, error) {
+	status, admissionUncertain, err := submitAttempts(opts, jobID, spec, manifest, plan)
 	var responseErr *submitHTTPError
 	if err == nil || !plan.partial || !errors.As(err, &responseErr) || responseErr.code != proto.ErrorCodeSnapshotCacheMiss {
-		return status, err
+		return status, admissionUncertain, err
 	}
 	stderr := opts.Stderr
 	if stderr == nil {
 		stderr = os.Stderr
 	}
 	fmt.Fprintln(stderr, "errand: runner evicted negotiated blobs; re-shipping the full snapshot")
-	return submitAttempts(opts, jobID, spec, manifest, shipPlan{})
+	status, fallbackUncertain, err := submitAttempts(opts, jobID, spec, manifest, shipPlan{})
+	return status, admissionUncertain || fallbackUncertain, err
 }
 
-func submitAttempts(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, error) {
+func submitAttempts(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, bool, error) {
 	var lastErr error
+	admissionUncertain := false
 	for attempt := 0; attempt < 3; attempt++ {
 		status, retryable, err := submitOnce(opts, jobID, spec, manifest, plan)
 		if err == nil {
-			return status, nil
+			return status, false, nil
 		}
 		lastErr = err
 		if !retryable {
-			return status, err
+			return status, admissionUncertain, err
 		}
+		// A transport failure after the PUT began cannot distinguish a request
+		// that never arrived from an admitted job whose response was lost.
+		admissionUncertain = true
 		if attempt < 2 {
 			time.Sleep(time.Duration(attempt+1) * 200 * time.Millisecond)
 		}
 	}
-	return proto.JobStatus{}, lastErr
+	return proto.JobStatus{}, admissionUncertain, lastErr
 }
 
 func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, bool, error) {
@@ -622,26 +703,42 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 		return status, false, nil
 	case http.StatusTooManyRequests:
 		payload := decodeAPIError(body)
-		if payload.Error == "" {
-			return status, false, fmt.Errorf("runner capacity is full")
+		return status, false, &submitHTTPError{
+			statusCode: resp.StatusCode, status: resp.Status, code: payload.Code,
+			message: payload.Error, capacity: true,
 		}
-		return status, false, fmt.Errorf("runner capacity is full: %s", payload.Error)
 	default:
 		payload := decodeAPIError(body)
 		return status, false, &submitHTTPError{
-			status: resp.Status, code: payload.Code, message: payload.Error,
+			statusCode: resp.StatusCode, status: resp.Status, code: payload.Code, message: payload.Error,
 		}
 	}
 }
 
 type submitHTTPError struct {
-	status  string
-	code    string
-	message string
+	statusCode int
+	status     string
+	code       string
+	message    string
+	capacity   bool
 }
 
 func (e *submitHTTPError) Error() string {
+	if e.capacity {
+		if e.message == "" {
+			return "runner capacity is full"
+		}
+		return "runner capacity is full: " + e.message
+	}
 	return fmt.Sprintf("submit rejected: %s: %s", e.status, e.message)
+}
+
+func submitDefinitelyRejected(err error) bool {
+	var rejected *submitHTTPError
+	if !errors.As(err, &rejected) {
+		return false
+	}
+	return rejected.statusCode >= 400 && rejected.statusCode < 500 && rejected.statusCode != http.StatusRequestTimeout
 }
 
 type streamResult struct {
@@ -862,13 +959,8 @@ func followOnceContext(
 				return st, nil
 			case "error":
 				var remote proto.LogStreamError
-				decodeErr := json.Unmarshal(data.Bytes(), &remote)
-				if decodeErr != nil || remote.Message == "" {
-					var legacyMessage string
-					if legacyErr := json.Unmarshal(data.Bytes(), &legacyMessage); legacyErr != nil || legacyMessage == "" {
-						return proto.JobStatus{}, streamIntegrity(fmt.Errorf("invalid remote log error event"))
-					}
-					remote.Message = legacyMessage
+				if err := json.Unmarshal(data.Bytes(), &remote); err != nil || remote.Message == "" {
+					return proto.JobStatus{}, streamIntegrity(fmt.Errorf("invalid remote log error event"))
 				}
 				remoteErr := fmt.Errorf("remote log replay: %s", remote.Message)
 				if remote.Retryable {

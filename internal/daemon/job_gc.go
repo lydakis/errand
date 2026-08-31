@@ -30,9 +30,11 @@ const (
 )
 
 type collectedRecord struct {
-	Owner         string    `json:"owner,omitempty"`
-	RequestDigest string    `json:"-"`
-	CollectedAt   time.Time `json:"collected_at"`
+	Owner          string    `json:"owner,omitempty"`
+	RequestDigest  string    `json:"-"`
+	CollectedAt    time.Time `json:"collected_at"`
+	OutputsPending bool      `json:"outputs_pending,omitempty"`
+	OutputClientID string    `json:"output_client_id,omitempty"`
 }
 
 func (d *Daemon) loadCollected() error {
@@ -81,6 +83,9 @@ func (d *Daemon) loadCollected() error {
 }
 
 func collectedMarkerExpired(record collectedRecord, now time.Time) bool {
+	if record.OutputsPending {
+		return !now.Before(record.CollectedAt.Add(pendingOutputMarkerTTL))
+	}
 	return !now.Before(record.CollectedAt.Add(collectedMarkerTTL))
 }
 
@@ -276,21 +281,111 @@ func (d *Daemon) handleJobGC(w http.ResponseWriter, r *http.Request, id Identity
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (d *Daemon) handleCollectedJobs(w http.ResponseWriter, r *http.Request, id Identity) {
+	cursor := r.URL.Query().Get("cursor")
+	if cursor != "" && !proto.ValidULID(cursor) {
+		httpError(w, http.StatusBadRequest, "invalid collection cursor")
+		return
+	}
+	clientID := r.URL.Query().Get("client_id")
+	if !proto.ValidOutputClientID(clientID) {
+		httpError(w, http.StatusBadRequest, "invalid output client ID")
+		return
+	}
+	owner := id.Owner()
+	d.mu.Lock()
+	ids := make([]string, 0, len(d.collected))
+	for jobID, record := range d.collected {
+		if record.OutputsPending && record.OutputClientID == clientID &&
+			(d.cfg.InsecureNoAuth || (owner != "" && record.Owner == owner)) {
+			ids = append(ids, jobID)
+		}
+	}
+	d.mu.Unlock()
+	sort.Strings(ids)
+	start := sort.Search(len(ids), func(i int) bool { return ids[i] > cursor })
+	end := min(start+proto.CollectedJobsPageLimit, len(ids))
+	page := proto.CollectedJobsPage{JobIDs: append([]string(nil), ids[start:end]...)}
+	if end < len(ids) {
+		page.NextCursor = ids[end-1]
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (d *Daemon) handleCollectedJobsAck(w http.ResponseWriter, r *http.Request, id Identity) {
+	var request proto.CollectedJobsAck
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
+		httpError(w, http.StatusBadRequest, "decoding collection acknowledgement: "+err.Error())
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		httpError(w, http.StatusBadRequest, "collection acknowledgement must contain one JSON object")
+		return
+	}
+	if !proto.ValidOutputClientID(request.ClientID) {
+		httpError(w, http.StatusBadRequest, "invalid output client ID")
+		return
+	}
+	if len(request.JobIDs) == 0 || len(request.JobIDs) > proto.CollectedJobsPageLimit {
+		httpError(w, http.StatusBadRequest, "collection acknowledgement has an invalid job count")
+		return
+	}
+	seen := make(map[string]struct{}, len(request.JobIDs))
+	result := proto.CollectedJobsAckResult{}
+	owner := id.Owner()
+	for _, jobID := range request.JobIDs {
+		if !proto.ValidULID(jobID) {
+			httpError(w, http.StatusBadRequest, "collection acknowledgement contains an invalid job ID")
+			return
+		}
+		if _, ok := seen[jobID]; ok {
+			continue
+		}
+		seen[jobID] = struct{}{}
+		if err := r.Context().Err(); err != nil {
+			return
+		}
+		d.mu.Lock()
+		record, ok := d.collected[jobID]
+		owned := d.cfg.InsecureNoAuth || (owner != "" && record.Owner == owner)
+		if !ok || !owned || !record.OutputsPending || record.OutputClientID != request.ClientID {
+			d.mu.Unlock()
+			continue
+		}
+		record.OutputsPending = false
+		record.OutputClientID = ""
+		if err := replaceJSONDurable(filepath.Join(d.collectedDir(), jobID+".json"), record); err != nil {
+			d.mu.Unlock()
+			httpError(w, http.StatusInternalServerError, "persisting collection acknowledgement: "+err.Error())
+			return
+		}
+		d.collected[jobID] = record
+		d.mu.Unlock()
+		result.Acknowledged++
+	}
+	if err := d.pruneCollected(r.Context(), d.admissionNow(time.Now())); err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
+		httpError(w, http.StatusInternalServerError, "pruning acknowledged collection markers: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func gcEligibleLocked(j *Job) (time.Time, bool) {
-	if j.deleting || j.logReaders != 0 || j.result == nil ||
+	if j.deleting || j.logReaders != 0 || j.outputReaders != 0 || j.result == nil ||
 		(j.state != proto.StateExited && j.state != proto.StateKilled) ||
 		!j.result.CleanupOK || !j.result.OutputsOK || !j.result.LogsComplete ||
 		j.result.TransactionError != "" {
 		return time.Time{}, false
 	}
-	if j.result.SettledAt != nil && !j.result.SettledAt.IsZero() {
-		return *j.result.SettledAt, true
-	}
-	info, err := os.Stat(filepath.Join(j.Dir, "result.json"))
-	if err != nil {
+	if j.result.SettledAt == nil || j.result.SettledAt.IsZero() {
 		return time.Time{}, false
 	}
-	return info.ModTime(), true
+	return *j.result.SettledAt, true
 }
 
 func (d *Daemon) jobRemovalRace(j *Job) (jobRemovalOutcome, bool) {
@@ -323,7 +418,8 @@ func (d *Daemon) removeJobReceipt(j *Job) (jobRemovalOutcome, error, error) {
 	}
 	record := collectedRecord{
 		Owner: admissionOwner(j.Admission), RequestDigest: j.RequestDigest,
-		CollectedAt: d.admissionNow(time.Now()),
+		CollectedAt: d.admissionNow(time.Now()), OutputsPending: len(j.Spec.Outputs) > 0,
+		OutputClientID: j.Spec.OutputClientID,
 	}
 	marker := filepath.Join(d.collectedDir(), j.ID+".json")
 	if err := replaceJSONDurable(marker, record); err != nil {

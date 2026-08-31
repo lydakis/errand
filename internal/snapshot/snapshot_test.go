@@ -57,6 +57,38 @@ func TestManifestDeterministic(t *testing.T) {
 	}
 }
 
+func TestBuildBoundedRefusesOversizedFileBeforeHashing(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "large.bin", "too large")
+	_, err := BuildBounded(root, []string{"large.bin"}, 3, 10)
+	if !errors.Is(err, ErrLimitExceeded) {
+		t.Fatalf("BuildBounded() error = %v, want limit exceeded", err)
+	}
+}
+
+func TestSelectFilesExcludesLocalOutputTransactions(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "--quiet").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	writeFile(t, root, "kept.txt", "kept")
+	writeFile(t, root, ".errand-output-not-a-transaction/kept.txt", "ordinary user data")
+	writeFile(t, root, ".errand-output-01ARZ3NDEKTSV4RRFFQ69G5FAV/journal.json", "sensitive rollback state")
+	paths, _, err := SelectFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(paths, ".errand-output-01ARZ3NDEKTSV4RRFFQ69G5FAV/journal.json") {
+		t.Fatalf("snapshot included output transaction: %v", paths)
+	}
+	if !slices.Contains(paths, "kept.txt") {
+		t.Fatalf("snapshot omitted ordinary file: %v", paths)
+	}
+	if !slices.Contains(paths, ".errand-output-not-a-transaction/kept.txt") {
+		t.Fatalf("snapshot over-excluded an ordinary prefixed path: %v", paths)
+	}
+}
+
 func TestBuildRecordsImplicitParentDirectoryModes(t *testing.T) {
 	root := t.TempDir()
 	if out, err := exec.Command("git", "-C", root, "init", "--quiet").CombinedOutput(); err != nil {

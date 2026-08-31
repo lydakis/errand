@@ -421,7 +421,7 @@ func TestRestartReconcilesJobsBeforeCacheMaintenance(t *testing.T) {
 	}
 }
 
-func TestCacheDisabledKeepsLegacyBehavior(t *testing.T) {
+func TestCacheDisabledUsesFullSnapshotFlow(t *testing.T) {
 	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true, CacheDisabled: true})
 	if err != nil {
 		t.Fatal(err)

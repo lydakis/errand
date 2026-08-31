@@ -26,6 +26,10 @@ const (
 	ActionGCJobs  = "gc-own"
 
 	ErrorCodeSnapshotCacheMiss = "snapshot_cache_miss"
+
+	// OutputReconciliationWindow bounds how long an unacknowledged runner
+	// marker and its unresolved client-side apply state remain protected.
+	OutputReconciliationWindow = 30 * 24 * time.Hour
 )
 
 type APIError struct {
@@ -61,6 +65,7 @@ type Limits struct {
 	MaxLogBytes       int64 `json:"max_log_bytes"`
 	MaxRuntimeSec     int64 `json:"max_runtime_sec"`
 	MaxWorkspaceBytes int64 `json:"max_workspace_bytes"`
+	MaxOutputBytes    int64 `json:"max_output_bytes"`
 }
 
 func DefaultLimits() Limits {
@@ -68,22 +73,55 @@ func DefaultLimits() Limits {
 		MaxLogBytes:       64 << 20,
 		MaxRuntimeSec:     2 * 60 * 60,
 		MaxWorkspaceBytes: 2 << 30,
+		MaxOutputBytes:    2 << 30,
 	}
+}
+
+const (
+	OutputCollectSuccess = "success"
+	OutputCollectAlways  = "always"
+	OutputApplyAuto      = "auto"
+	OutputApplyManual    = "manual"
+)
+
+// OutputSpec declares one workspace-relative path to retain after execution.
+// Conflict baselines are intentionally client-local and are never part of the
+// request or receipt.
+type OutputSpec struct {
+	Path    string `json:"path" toml:"path"`
+	Collect string `json:"collect" toml:"collect"`
+	Apply   string `json:"apply" toml:"apply"`
+}
+
+// OutputBundle is the immutable metadata stored beside one output archive.
+type OutputBundle struct {
+	V        int      `json:"v"`
+	Paths    []string `json:"paths"`
+	Manifest Manifest `json:"manifest"`
+	Bytes    int64    `json:"bytes"`
+}
+
+type OutputSummary struct {
+	Paths        []string `json:"paths"`
+	ManifestRoot string   `json:"manifest_root"`
+	Bytes        int64    `json:"bytes"`
 }
 
 // Spec is the immutable canonical request. Its digest is the admission
 // identity: same job ID + same digest is a retry, a different digest is a
 // conflict.
 type Spec struct {
-	V            int               `json:"v"`
-	Argv         []string          `json:"argv"`
-	Env          map[string]string `json:"env,omitempty"`
-	EnvSources   map[string]string `json:"env_sources,omitempty"` // name -> literal | passenv
-	Workdir      string            `json:"workdir,omitempty"`     // relative, within workspace
-	ManifestRoot string            `json:"manifest_root"`
-	Limits       Limits            `json:"limits"`
-	GitCommit    string            `json:"git_commit,omitempty"`
-	GitDirty     bool              `json:"git_dirty,omitempty"`
+	V              int               `json:"v"`
+	Argv           []string          `json:"argv"`
+	Env            map[string]string `json:"env,omitempty"`
+	EnvSources     map[string]string `json:"env_sources,omitempty"` // name -> literal | passenv
+	Workdir        string            `json:"workdir,omitempty"`     // relative, within workspace
+	ManifestRoot   string            `json:"manifest_root"`
+	Limits         Limits            `json:"limits"`
+	GitCommit      string            `json:"git_commit,omitempty"`
+	GitDirty       bool              `json:"git_dirty,omitempty"`
+	Outputs        []OutputSpec      `json:"outputs,omitempty"`
+	OutputClientID string            `json:"output_client_id,omitempty"`
 }
 
 func (s Spec) Digest() string {
@@ -103,9 +141,8 @@ type ReceiptSpec struct {
 	Limits         Limits            `json:"limits"`
 	GitCommit      string            `json:"git_commit,omitempty"`
 	GitDirty       bool              `json:"git_dirty,omitempty"`
-	// RequestDigest is read only to migrate receipts written before receipt
-	// version 1. New receipts never populate it because it includes Env values.
-	RequestDigest string `json:"request_digest,omitempty"`
+	Outputs        []OutputSpec      `json:"outputs,omitempty"`
+	OutputClientID string            `json:"output_client_id,omitempty"`
 }
 
 func NewReceiptSpec(s Spec) ReceiptSpec {
@@ -118,14 +155,15 @@ func NewReceiptSpec(s Spec) ReceiptSpec {
 		ReceiptVersion: ReceiptVersion,
 		V:              s.V, Argv: s.Argv, EnvNames: names, EnvSources: s.EnvSources, Workdir: s.Workdir,
 		ManifestRoot: s.ManifestRoot, Limits: s.Limits,
-		GitCommit: s.GitCommit, GitDirty: s.GitDirty,
+		GitCommit: s.GitCommit, GitDirty: s.GitDirty, Outputs: s.Outputs, OutputClientID: s.OutputClientID,
 	}
 }
 
 func (r ReceiptSpec) SpecWithoutEnv() Spec {
 	return Spec{
 		V: r.V, Argv: r.Argv, EnvSources: r.EnvSources, Workdir: r.Workdir, ManifestRoot: r.ManifestRoot,
-		Limits: r.Limits, GitCommit: r.GitCommit, GitDirty: r.GitDirty,
+		Limits: r.Limits, GitCommit: r.GitCommit, GitDirty: r.GitDirty, Outputs: r.Outputs,
+		OutputClientID: r.OutputClientID,
 	}
 }
 
@@ -144,21 +182,22 @@ type Admission struct {
 // Result is written once at terminal completion. Process result and
 // transaction result are separate outcomes.
 type Result struct {
-	State            string     `json:"state,omitempty"`
-	Started          bool       `json:"started"`
-	StartedAt        *time.Time `json:"started_at,omitempty"`
-	FinishedAt       *time.Time `json:"finished_at,omitempty"`
-	SettledAt        *time.Time `json:"settled_at,omitempty"`
-	DurationMS       int64      `json:"duration_ms,omitempty"`
-	ExitCode         *int       `json:"exit_code"` // nil when signaled or never started
-	Signal           string     `json:"signal,omitempty"`
-	SignalNum        int        `json:"signal_num,omitempty"`
-	StartError       string     `json:"start_error,omitempty"`
-	TransactionError string     `json:"transaction_error,omitempty"`
-	LimitExceeded    string     `json:"limit_exceeded,omitempty"` // log_bytes | runtime | workspace_bytes
-	OutputsOK        bool       `json:"outputs_ok"`
-	CleanupOK        bool       `json:"cleanup_ok"`
-	LogsComplete     bool       `json:"logs_complete"`
+	State            string         `json:"state,omitempty"`
+	Started          bool           `json:"started"`
+	StartedAt        *time.Time     `json:"started_at,omitempty"`
+	FinishedAt       *time.Time     `json:"finished_at,omitempty"`
+	SettledAt        *time.Time     `json:"settled_at,omitempty"`
+	DurationMS       int64          `json:"duration_ms,omitempty"`
+	ExitCode         *int           `json:"exit_code"` // nil when signaled or never started
+	Signal           string         `json:"signal,omitempty"`
+	SignalNum        int            `json:"signal_num,omitempty"`
+	StartError       string         `json:"start_error,omitempty"`
+	TransactionError string         `json:"transaction_error,omitempty"`
+	LimitExceeded    string         `json:"limit_exceeded,omitempty"` // log_bytes | runtime | workspace_bytes | output_bytes
+	OutputsOK        bool           `json:"outputs_ok"`
+	Outputs          *OutputSummary `json:"outputs,omitempty"`
+	CleanupOK        bool           `json:"cleanup_ok"`
+	LogsComplete     bool           `json:"logs_complete"`
 }
 
 // ExecutionContext records the top-level execution facts controlled by the
@@ -166,9 +205,6 @@ type Result struct {
 type ExecutionContext struct {
 	Path string   `json:"path,omitempty"`
 	Argv []string `json:"argv"`
-	// PATHSHA256 is read only for receipt migration. New receipts never
-	// populate it because PATH may be an explicitly supplied secret.
-	PATHSHA256 string `json:"path_env_sha256,omitempty"`
 }
 
 type LogFrame struct {
@@ -262,6 +298,30 @@ type JobGCResult struct {
 	CleanupFailures int   `json:"cleanup_failures"`
 	FreedBytes      int64 `json:"freed_bytes"`
 	DryRun          bool  `json:"dry_run"`
+}
+
+type CollectedJobsPage struct {
+	JobIDs     []string `json:"job_ids"`
+	NextCursor string   `json:"next_cursor,omitempty"`
+}
+
+type CollectedJobsAck struct {
+	ClientID string   `json:"client_id"`
+	JobIDs   []string `json:"job_ids"`
+}
+
+type CollectedJobsAckResult struct {
+	Acknowledged int `json:"acknowledged"`
+}
+
+const CollectedJobsPageLimit = 1024
+
+func ValidOutputClientID(id string) bool {
+	if len(id) != 32 {
+		return false
+	}
+	_, err := hex.DecodeString(id)
+	return err == nil
 }
 
 type Facts struct {

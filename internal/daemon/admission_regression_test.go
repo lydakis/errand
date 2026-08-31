@@ -516,9 +516,8 @@ func TestExecutionContextIsPersisted(t *testing.T) {
 	dir := d.jobs[id].Dir
 	d.mu.Unlock()
 	var execution struct {
-		Path       string   `json:"path"`
-		Argv       []string `json:"argv"`
-		PATHSHA256 string   `json:"path_env_sha256"`
+		Path string   `json:"path"`
+		Argv []string `json:"argv"`
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "execution.json"))
 	if err != nil {
@@ -527,121 +526,54 @@ func TestExecutionContextIsPersisted(t *testing.T) {
 	if err := json.Unmarshal(raw, &execution); err != nil {
 		t.Fatal(err)
 	}
-	if execution.Path == "" || len(execution.Argv) == 0 || execution.PATHSHA256 != "" {
+	if execution.Path == "" || len(execution.Argv) == 0 {
 		t.Fatalf("incomplete execution context: %+v", execution)
 	}
 }
 
-func TestLegacyReceiptsAreMigratedWithoutSecretDerivedValues(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		spec any
-	}{
-		{
-			name: "redacted receipt with request digest",
-			spec: proto.ReceiptSpec{
-				V: proto.ProtoVersion, Argv: []string{"tool"},
-				EnvNames:     []string{"PATH", "PIN"},
-				EnvSources:   map[string]string{"PATH": "literal", "PIN": "literal"},
-				ManifestRoot: proto.Manifest{}.RootHash(), Limits: proto.DefaultLimits(),
-				RequestDigest: strings.Repeat("a", 64),
-			},
-		},
-		{
-			name: "raw spec with environment values",
-			spec: proto.Spec{
-				V: proto.ProtoVersion, Argv: []string{"tool"},
-				Env:          map[string]string{"PATH": "secret-bin", "PIN": "0427"},
-				EnvSources:   map[string]string{"PATH": "literal", "PIN": "literal"},
-				ManifestRoot: proto.Manifest{}.RootHash(), Limits: proto.DefaultLimits(),
-			},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			stateDir := t.TempDir()
-			id := proto.NewULID()
-			dir := filepath.Join(stateDir, "jobs", id)
-			if err := os.MkdirAll(dir, 0o700); err != nil {
-				t.Fatal(err)
-			}
-			specRaw, err := json.Marshal(tc.spec)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(dir, "spec.json"), specRaw, 0o600); err != nil {
-				t.Fatal(err)
-			}
-			executionRaw, err := json.Marshal(proto.ExecutionContext{
-				Path: "/workspace/secret-bin/tool", Argv: []string{"tool"},
-				PATHSHA256: strings.Repeat("b", 64),
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(dir, "execution.json"), executionRaw, 0o600); err != nil {
-				t.Fatal(err)
-			}
-			legacyStartError := "fork/exec /workspace/secret-bin/tool: exec format error"
-			resultRaw, err := json.Marshal(proto.Result{
-				State: proto.StateAmbiguous, StartError: legacyStartError,
-				TransactionError: "cleaning rejected admission: permission denied",
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(dir, "result.json"), resultRaw, 0o600); err != nil {
-				t.Fatal(err)
-			}
-			eventRaw, err := json.Marshal(proto.Event{Event: "start-rejected", Detail: legacyStartError})
-			if err != nil {
-				t.Fatal(err)
-			}
-			eventsRaw := append(eventRaw, '\n')
-			if err := os.WriteFile(filepath.Join(dir, "events.ndjson"), eventsRaw, 0o600); err != nil {
-				t.Fatal(err)
-			}
+func TestLoadExistingRejectsNonCurrentReceiptShape(t *testing.T) {
+	stateDir := t.TempDir()
+	id := proto.NewULID()
+	dir := filepath.Join(stateDir, "jobs", id)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(proto.Spec{
+		V: proto.ProtoVersion, Argv: []string{"tool"},
+		ManifestRoot: proto.Manifest{}.RootHash(), Limits: proto.DefaultLimits(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "spec.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := New(Config{StateDir: stateDir, InsecureNoAuth: true}); err == nil {
+		d.Close()
+		t.Fatal("raw request spec was accepted as a current receipt")
+	}
+}
 
-			d, err := New(Config{StateDir: stateDir, InsecureNoAuth: true})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer d.Close()
-			migratedSpec, err := os.ReadFile(filepath.Join(dir, "spec.json"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			migratedExecution, err := os.ReadFile(filepath.Join(dir, "execution.json"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			migratedResult, err := os.ReadFile(filepath.Join(dir, "result.json"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			migratedEvents, err := os.ReadFile(filepath.Join(dir, "events.ndjson"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, forbidden := range []string{"0427", "secret-bin", strings.Repeat("a", 64), strings.Repeat("b", 64), "request_digest", "path_env_sha256"} {
-				if bytes.Contains(migratedSpec, []byte(forbidden)) || bytes.Contains(migratedExecution, []byte(forbidden)) ||
-					bytes.Contains(migratedResult, []byte(forbidden)) || bytes.Contains(migratedEvents, []byte(forbidden)) {
-					t.Fatalf("migrated receipt retained %q\nspec=%s\nexecution=%s\nresult=%s\nevents=%s", forbidden, migratedSpec, migratedExecution, migratedResult, migratedEvents)
-				}
-			}
-			var receipt proto.ReceiptSpec
-			if err := json.Unmarshal(migratedSpec, &receipt); err != nil {
-				t.Fatal(err)
-			}
-			if receipt.ReceiptVersion != proto.ReceiptVersion || !hasEnvName(receipt.EnvNames, "PATH") || !hasEnvName(receipt.EnvNames, "PIN") {
-				t.Fatalf("migration lost redacted metadata: %+v", receipt)
-			}
-			d.mu.Lock()
-			loaded := d.jobs[id]
-			d.mu.Unlock()
-			if loaded == nil || loaded.RequestDigest != "" {
-				t.Fatalf("migration retained secret-derived request identity: %+v", loaded)
-			}
-		})
+func TestLoadExistingRejectsInvalidCurrentResult(t *testing.T) {
+	stateDir := t.TempDir()
+	id := proto.NewULID()
+	dir := filepath.Join(stateDir, "jobs", id)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	spec := proto.Spec{
+		V: proto.ProtoVersion, Argv: []string{"tool"},
+		ManifestRoot: proto.Manifest{}.RootHash(), Limits: proto.DefaultLimits(),
+	}
+	if err := replaceJSON(filepath.Join(dir, "spec.json"), proto.NewReceiptSpec(spec)); err != nil {
+		t.Fatal(err)
+	}
+	if err := replaceJSON(filepath.Join(dir, "result.json"), proto.Result{State: "unknown"}); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := New(Config{StateDir: stateDir, InsecureNoAuth: true}); err == nil {
+		d.Close()
+		t.Fatal("invalid current result was accepted")
 	}
 }
 
@@ -782,7 +714,7 @@ func TestExecutableResolutionUsesEffectiveJobPATH(t *testing.T) {
 		}
 	}
 	d.mu.Unlock()
-	if execution.Path != "" || execution.PATHSHA256 != "" {
+	if execution.Path != "" {
 		t.Fatalf("execution receipt exposed declared PATH metadata: %+v", execution)
 	}
 	if _, err := resolveExecutable("sh", "", t.TempDir()); err == nil {

@@ -21,6 +21,19 @@ import (
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
+func TestMain(m *testing.M) {
+	stateHome, err := os.MkdirTemp("", "errand-client-test-state-")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("XDG_STATE_HOME", stateHome); err != nil {
+		panic(err)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(stateHome)
+	os.Exit(code)
+}
+
 func testInterruptNotifications() interruptNotifications {
 	return newInterruptNotifications(func() {}, func() {})
 }
@@ -73,6 +86,79 @@ func TestControlEndpointsReturnDecodedResponses(t *testing.T) {
 	info, err := Info(server.URL)
 	if err != nil || info.Proto != proto.ProtoVersion || info.Version != "test" {
 		t.Fatalf("Info() = %+v, %v", info, err)
+	}
+}
+
+func TestOutputlessRunSendsCanonicalLimits(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff":
+			http.NotFound(w, r)
+		case r.Method == http.MethodPut:
+			mr, err := r.MultipartReader()
+			if err != nil {
+				t.Errorf("multipart request: %v", err)
+				return
+			}
+			part, err := mr.NextPart()
+			if err != nil || part.FormName() != "spec" {
+				t.Errorf("spec part = %v, %v", part, err)
+				return
+			}
+			var wire map[string]any
+			if err := json.NewDecoder(part).Decode(&wire); err != nil {
+				t.Errorf("decode spec: %v", err)
+				return
+			}
+			limits, _ := wire["limits"].(map[string]any)
+			if got, exists := limits["max_output_bytes"]; !exists || int64(got.(float64)) != proto.DefaultLimits().MaxOutputBytes {
+				t.Errorf("max_output_bytes = %v, want %d", got, proto.DefaultLimits().MaxOutputBytes)
+			}
+			if _, exists := wire["outputs"]; exists {
+				t.Error("output-less request unexpectedly declared outputs")
+			}
+			for {
+				part, err := mr.NextPart()
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				if err != nil {
+					t.Errorf("remaining multipart body: %v", err)
+					return
+				}
+				_, _ = io.Copy(io.Discard, part)
+			}
+			writeJSON := func(value any) { _ = json.NewEncoder(w).Encode(value) }
+			writeJSON(proto.JobStatus{State: proto.StateRunning})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/logs"):
+			w.Header().Set("Content-Type", "text/event-stream")
+			zero := 0
+			status, _ := json.Marshal(proto.JobStatus{State: proto.StateExited, Result: &proto.Result{
+				ExitCode: &zero, OutputsOK: true, CleanupOK: true, LogsComplete: true,
+			}})
+			fmt.Fprintf(w, "event: status\ndata: %s\n\n", status)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	var stderr bytes.Buffer
+	interrupts := make(chan os.Signal, 2)
+	interruptsReleased := atomic.Bool{}
+	if code := runWithDetachNotifications(RunOptions{
+		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+		Stdout: io.Discard, Stderr: &stderr,
+	}, interrupts, newInterruptNotifications(
+		func() { interruptsReleased.Store(true) }, func() {},
+	), nil); code != 0 {
+		t.Fatalf("output-less run exit = %d; stderr: %s", code, stderr.String())
+	}
+	if !interruptsReleased.Load() {
+		t.Fatal("terminal run retained remote SIGINT ownership")
 	}
 }
 
@@ -132,7 +218,7 @@ func TestSignaledExitReportsTransactionFailures(t *testing.T) {
 	}
 }
 
-func TestExitDiagnosticsStayCompatible(t *testing.T) {
+func TestExitDiagnosticsReportAllTransactionFailures(t *testing.T) {
 	zero, seven := 0, 7
 	for name, tc := range map[string]struct {
 		status proto.JobStatus
@@ -143,7 +229,7 @@ func TestExitDiagnosticsStayCompatible(t *testing.T) {
 			status: proto.JobStatus{Result: &proto.Result{
 				ExitCode: &zero, CleanupOK: true, LogsComplete: true,
 			}},
-			want: "errand: transaction incomplete (remote_exit=0)\n",
+			want: "errand: transaction incomplete (remote_exit=0, outputs incomplete)\n",
 			code: ExitTransaction,
 		},
 		"failed process with secondary transaction failures": {
@@ -1065,7 +1151,7 @@ func TestSubmitRetriesSameJobIDAfterLostResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err = submit(RunOptions{PeerURL: server.URL, Root: root}, "same", spec, manifest, shipPlan{})
+	_, _, err = submit(RunOptions{PeerURL: server.URL, Root: root}, "same", spec, manifest, shipPlan{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1153,7 +1239,7 @@ func TestCacheMissGetsIndependentFullSubmitRetryBudget(t *testing.T) {
 	defer server.Close()
 
 	var stderr bytes.Buffer
-	_, err = submit(RunOptions{PeerURL: server.URL, Root: root, Stderr: &stderr}, "same", spec, manifest, shipPlan{partial: true})
+	_, _, err = submit(RunOptions{PeerURL: server.URL, Root: root, Stderr: &stderr}, "same", spec, manifest, shipPlan{partial: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1162,5 +1248,51 @@ func TestCacheMissGetsIndependentFullSubmitRetryBudget(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "re-shipping the full snapshot") {
 		t.Fatalf("fallback diagnostic = %q", stderr.String())
+	}
+}
+
+func TestCacheFallbackPreservesPriorAdmissionUncertainty(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := snapshot.Build(root, []string{"file.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := proto.Spec{
+		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
+		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
+	}
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		switch attempts.Add(1) {
+		case 1:
+			panic(http.ErrAbortHandler)
+		case 2:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "negotiated cache content was evicted",
+				"code":  proto.ErrorCodeSnapshotCacheMiss,
+			})
+		case 3:
+			http.Error(w, "full snapshot rejected", http.StatusBadRequest)
+		default:
+			http.Error(w, "unexpected retry", http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	_, uncertain, err := submit(
+		RunOptions{PeerURL: server.URL, Root: root, Stderr: io.Discard},
+		"same", spec, manifest, shipPlan{partial: true},
+	)
+	if err == nil {
+		t.Fatal("submit unexpectedly succeeded")
+	}
+	if !uncertain {
+		t.Fatal("cache fallback discarded uncertainty from the earlier transport failure")
 	}
 }

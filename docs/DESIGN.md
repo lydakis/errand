@@ -261,10 +261,14 @@ Persistent state comes in three kinds, not one:
 - **Job state** — runtime state is removed per the contract above. Receipts
   remain until their owner explicitly applies a bounded `errand gc jobs`
   policy. New job IDs must carry a ULID timestamp from the preceding 24 hours,
-  with one hour of allowed future clock skew. Before collection markers expire,
-  the runner durably advances a high-water clock that never moves backward
-  across restart. Collection retains a minimal non-secret job-ID marker for 25
-  hours, so clock rollback cannot reopen its ID for execution.
+  with one hour of allowed future clock skew. The runner durably advances a
+  high-water clock that never moves backward across restart. Replay-only
+  collection markers expire after 25 hours. Markers for jobs with declared
+  outputs are scoped to the originating client and retain that minimum
+  lifetime; successful local reconciliation acknowledges the marker so it can
+  retire. Unacknowledged output markers expire after 30 days, bounding state
+  left by lost clients. The markers are minimal and non-secret, and neither
+  permits a collected ID to execute again.
 
 ## The job transaction
 
@@ -282,7 +286,7 @@ io.log           # framed, base64-payload stdout/stderr in daemon-observed order
 result.json      # written once at terminal completion
 scope.json       # transient recovery marker; retained until runtime cleanup
 workspace/       # deleted at cleanup
-out/             # staged outputs (retention: see open questions)
+out/             # immutable output bundle; retained with the job receipt
 ```
 
 A derived `status.json` may exist as a convenience cache; it is never the
@@ -353,6 +357,10 @@ log size, and output size during execution and collection. On hitting the
 log cap the daemon terminates the job with `limit_exceeded`, preserving a
 complete log up to termination; the fidelity contract promises faithful
 output, not best-effort truncation.
+
+The runtime deadline begins when the child starts and remains unchanged through
+output collection. Collection does not receive a fresh runtime budget after the
+process exits.
 
 **Concurrency (milestone 3.5 amendment, 2026-08-30).** A runner executes
 up to `max_jobs` jobs at once (default 1; concurrency is an explicit
@@ -429,8 +437,16 @@ Application is conflict-safe, never silent:
 
 1. Record pre-run hashes of destination paths.
 2. Download into local staging; validate paths and types.
-3. Apply atomically only if destinations are unchanged since the run began.
+3. Preflight every destination, then replace each through same-filesystem
+   renames only if it is still unchanged since the run began. A durable local
+   journal rolls back an interrupted installation or completes its state
+   record before discarding the original files.
 4. On conflict: leave staged, report, let the user resolve.
+
+Client-side baseline and staging records are keyed by runner endpoint plus job
+ID. Pending apply journals are never collected. Pre-admission records follow an
+explicit local GC cutoff; unresolved submitted records receive a 30-day safety
+window before an explicit `gc outputs` may retire them.
 
 ### Exit status: two layers
 
@@ -475,7 +491,8 @@ errand kill [--force] <peer/ulid>
 errand caches                   # snapshot and future named-cache status
 errand gc cache                 # shared cache policy; manage-caches
 errand gc jobs --older-than 30d # caller-owned clean terminal receipts
-errand gc all --older-than 30d  # client composition of both endpoints
+errand gc outputs --older-than 30d # local baselines and downloaded staging
+errand gc all --older-than 30d  # cache, jobs, and local output state
 ```
 
 Without `--detach`: streams, exits per the two-layer status rule — drop-in
@@ -498,7 +515,11 @@ Versioned HTTP+JSON: `PUT /v0/jobs/<ulid>` is idempotent;
 `GET /v0/jobs/<ulid>/logs?follow=1`; the signal and kill routes control owned
 jobs; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;
 `GET /v0/cache` and `POST /v0/cache/gc` inspect and prune the snapshot cache;
-`POST /v0/jobs/gc` applies bounded owner-scoped receipt retention; and
+`POST /v0/jobs/gc` applies bounded owner-scoped receipt retention;
+`GET /v0/jobs/collected` pages through durable owner- and client-scoped
+collection markers so local output GC can reconcile after a lost deletion
+response; `POST /v0/jobs/collected/ack` releases the output hold after that
+reconciliation while preserving the replay-prevention lifetime; and
 `GET /v0/info` returns facts. A negotiated blob disappearing before
 submission returns the machine-readable `snapshot_cache_miss` error code so
 the client can retry the same job ID with a complete snapshot. Curl-debuggable;
@@ -556,7 +577,3 @@ proves the shape on a real daily need.
    sense there (no systemd scopes, no rootless podman by default)?
 2. Privilege separation (`errandd` vs worker account): post-v0, unless
    adversarial receipt integrity gets promoted into the North Star.
-3. Retention for staged outputs on the target: how long does a detached job's
-   future `out/` survive? Receipt retention is explicit through bounded,
-   owner-scoped `errand gc jobs`; ambiguous and cleanup-incomplete receipts are
-   protected.
