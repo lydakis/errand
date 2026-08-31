@@ -138,7 +138,10 @@ applied by each runner before its bounded receipt window, so retained terminal
 jobs cannot hide a long-running job. `--all` includes terminal receipts;
 `--last N` includes all states and applies one global limit after merging.
 `--on` and `--url` explicitly narrow either view to one runner. Bare
-`errand info` follows the same all-configured-peers rule.
+`errand info` and `errand df` follow the same all-configured-peers rule.
+These read-only fleet commands share target selection, concurrent querying,
+partial-failure reporting, and exit semantics. Commands that mutate runner
+state remain explicitly single-runner.
 
 Interactive terminals show wrapped job cards with complete commands. Piped or
 redirected output uses a compact plain table for tools such as `grep` and
@@ -173,8 +176,12 @@ sends SIGKILL. `errand kill HANDLE` requests graceful SIGTERM termination;
 cancelled durably before they start. A submission is rejected as busy only
 when both the configured running slots and bounded queue are full.
 
-Capability-based runners must grant `manage-caches` to use `errand caches` and
-`errand gc cache`. Job receipt collection uses the separate `gc-own` action.
+`errand df` reports logical storage used by each runner's shared snapshot cache
+and the authenticated caller's job receipts, plus local output records and
+download staging. Human output uses readable binary units; `--json` preserves
+raw byte and item counts, cache limits, and cache TTL. Capability-based runners
+must grant `read-own` to use `errand df`; `manage-caches` remains required only
+for `errand gc cache`. Job receipt collection uses the separate `gc-own` action.
 The frozen design's ACL example includes the complete action set.
 
 GC always names its target. Bare `errand gc` only prints usage:

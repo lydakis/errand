@@ -253,7 +253,7 @@ inspection or cleanup failed.
 Persistent state comes in three kinds, not one:
 
 - **Named caches** — errand-owned writable directories with explicit
-  lifecycle: declared in config, listed by `errand caches`, removed by
+  lifecycle: declared in config, measured by `errand df`, removed by
   `errand gc cache`. Project-scoped by default.
 - **Backend stores** — container image layers, the nix store. Managed by
   the runtime, not by `errand gc`; pruning them is the runtime's own
@@ -489,7 +489,7 @@ errand logs <peer/ulid> [-f]    # resumes from last seen seq
 errand attach [--apply] <peer/ulid>
 errand fetch [--apply] <peer/ulid> [path]
 errand kill [--force] <peer/ulid>
-errand caches                   # snapshot and future named-cache status
+errand df [--on X] [--json]    # fleet storage; read-own
 errand gc cache                 # shared cache policy; manage-caches
 errand gc jobs --older-than 30d # caller-owned clean terminal receipts
 errand gc outputs --older-than 30d # local baselines and downloaded staging

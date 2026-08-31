@@ -285,6 +285,21 @@ type CacheStats struct {
 	TTLHours int   `json:"ttl_hours"`
 }
 
+// StorageCategory is a count and logical byte total for one class of
+// Errand-owned state.
+type StorageCategory struct {
+	Items int   `json:"items"`
+	Bytes int64 `json:"bytes"`
+}
+
+// StorageStats is the caller-visible storage inventory on one runner. Jobs
+// includes only receipts owned by the authenticated caller. Cache is nil when
+// the runner's shared snapshot cache is disabled.
+type StorageStats struct {
+	Cache *CacheStats     `json:"cache,omitempty"`
+	Jobs  StorageCategory `json:"jobs"`
+}
+
 type CacheGCResult struct {
 	RemovedBlobs int   `json:"removed_blobs"`
 	FreedBytes   int64 `json:"freed_bytes"`

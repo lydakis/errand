@@ -37,7 +37,7 @@ usage:
   errand fetch [--apply] [--on PEER | --url URL] HANDLE [PATH]
   errand ps [-a | --all] [-n N | --last N] [--json] [--on PEER | --url URL]
   errand kill [--force] [--on PEER | --url URL] HANDLE
-  errand caches [--on PEER | --url URL]
+  errand df [--json] [--on PEER | --url URL]
   errand gc cache [--on PEER | --url URL]
   errand gc jobs [--older-than DURATION] [--keep N] [--dry-run] [--on PEER | --url URL]
   errand gc outputs --older-than DURATION [--dry-run]
@@ -84,8 +84,11 @@ func main() {
 		os.Exit(cmdPs(args[1:]))
 	case "kill":
 		os.Exit(cmdKill(args[1:]))
+	case "df":
+		os.Exit(cmdDf(args[1:]))
 	case "caches":
-		os.Exit(cmdCaches(args[1:]))
+		fmt.Fprintln(os.Stderr, "errand: caches was replaced by df")
+		os.Exit(2)
 	case "gc":
 		os.Exit(cmdGC(args[1:]))
 	case "info":
@@ -417,6 +420,12 @@ type peerQueryResult[T any] struct {
 	err    error
 }
 
+type fleetRead[T any] struct {
+	targets []peerTarget
+	results []peerQueryResult[T]
+	failed  bool
+}
+
 func queryPeerTargets[T any](targets []peerTarget, query func(string) (T, error)) []peerQueryResult[T] {
 	results := make([]peerQueryResult[T], len(targets))
 	var wg sync.WaitGroup
@@ -430,6 +439,40 @@ func queryPeerTargets[T any](targets []peerTarget, query func(string) (T, error)
 	}
 	wg.Wait()
 	return results
+}
+
+// readFleet standardizes the CLI contract for read-only discovery commands:
+// query every configured peer unless explicitly narrowed, preserve partial
+// results, report peer-specific failures, and fail the command if any selected
+// peer could not be read.
+func readFleet[T any](rawURL, on string, stderr io.Writer, query func(string) (T, error)) (fleetRead[T], error) {
+	targets, warnings, err := peerTargets(rawURL, on)
+	if err != nil {
+		return fleetRead[T]{}, err
+	}
+	read := fleetRead[T]{targets: targets, failed: len(warnings) != 0}
+	for _, warning := range warnings {
+		fmt.Fprintf(stderr, "errand: %v\n", warning)
+	}
+	if len(targets) == 0 {
+		return read, fmt.Errorf("no usable peers configured; check ~/.config/errand/config.toml")
+	}
+	for _, result := range queryPeerTargets(targets, query) {
+		if result.err != nil {
+			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
+			read.failed = true
+			continue
+		}
+		read.results = append(read.results, result)
+	}
+	return read, nil
+}
+
+func (r fleetRead[T]) exitCode() int {
+	if r.failed || len(r.results) == 0 {
+		return 1
+	}
+	return 0
 }
 
 // peerTargets fans discovery commands out to every configured peer unless the
@@ -500,33 +543,18 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "errand: --last must not exceed %d\n", proto.MaxJobListEntries)
 		return 2
 	}
-	targets, warnings, err := peerTargets(*rawURL, *on)
-	if err != nil {
-		fmt.Fprintf(stderr, "errand: %v\n", err)
-		return 1
-	}
-	failed := len(warnings) != 0
-	for _, warning := range warnings {
-		fmt.Fprintf(stderr, "errand: %v\n", warning)
-	}
-	if len(targets) == 0 {
-		fmt.Fprintln(stderr, "errand: no usable peers configured; check ~/.config/errand/config.toml")
-		return 1
-	}
-
-	rows := make([]psRow, 0)
-	reached := false
 	list := client.List
 	if !all && last == 0 {
 		list = client.ListActive
 	}
-	for _, result := range queryPeerTargets(targets, list) {
-		if result.err != nil {
-			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
-			failed = true
-			continue
-		}
-		reached = true
+	read, err := readFleet(*rawURL, *on, stderr, list)
+	if err != nil {
+		fmt.Fprintf(stderr, "errand: %v\n", err)
+		return 1
+	}
+
+	rows := make([]psRow, 0)
+	for _, result := range read.results {
 		for _, e := range result.value {
 			rows = append(rows, psRow{Peer: result.target.name, JobListEntry: e})
 		}
@@ -555,13 +583,10 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 		}
 	} else if len(rows) != 0 {
 		writePs(stdout, rows)
-	} else if reached {
-		fmt.Fprintln(stdout, psEmptyMessage(targets, !all && last == 0, failed))
+	} else if len(read.results) != 0 {
+		fmt.Fprintln(stdout, psEmptyMessage(read.targets, !all && last == 0, read.failed))
 	}
-	if !reached || failed {
-		return 1
-	}
-	return 0
+	return read.exitCode()
 }
 
 func psEmptyMessage(targets []peerTarget, activeOnly, partial bool) string {
@@ -580,26 +605,6 @@ func psEmptyMessage(targets []peerTarget, activeOnly, partial bool) string {
 
 func activeJobState(state string) bool {
 	return state == proto.StateStaging || state == proto.StateQueued || state == proto.StateRunning
-}
-
-func cmdCaches(args []string) int {
-	fs := flag.NewFlagSet("caches", flag.ExitOnError)
-	on := fs.String("on", "", "peer name")
-	rawURL := fs.String("url", "", "peer base URL")
-	fs.Parse(args)
-	peerURL, label, err := resolvePeerTarget(*rawURL, *on)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return 1
-	}
-	stats, err := client.CacheStats(peerURL)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return 1
-	}
-	fmt.Printf("%s: %d blobs, %d bytes used of %d (ttl %dh)\n",
-		label, stats.Blobs, stats.Bytes, stats.MaxBytes, stats.TTLHours)
-	return 0
 }
 
 func cmdGC(args []string) int {
@@ -777,26 +782,13 @@ func cmdInfoTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "errand: unexpected info arguments: %s\n", strings.Join(fs.Args(), " "))
 		return 2
 	}
-	targets, warnings, err := peerTargets(*rawURL, *on)
+	read, err := readFleet(*rawURL, *on, stderr, client.Info)
 	if err != nil {
 		fmt.Fprintf(stderr, "errand: %v\n", err)
 		return 1
 	}
-	failed := len(warnings) != 0
-	for _, warning := range warnings {
-		fmt.Fprintf(stderr, "errand: %v\n", warning)
-	}
-	if len(targets) == 0 {
-		fmt.Fprintln(stderr, "errand: no usable peers configured; check ~/.config/errand/config.toml")
-		return 1
-	}
-	infos := make(map[string]proto.Info, len(targets))
-	for _, result := range queryPeerTargets(targets, client.Info) {
-		if result.err != nil {
-			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
-			failed = true
-			continue
-		}
+	infos := make(map[string]proto.Info, len(read.results))
+	for _, result := range read.results {
 		infos[result.target.name] = result.value
 	}
 
@@ -812,10 +804,7 @@ func cmdInfoTo(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	fmt.Fprintln(stdout, string(encoded))
-	if failed || len(infos) == 0 {
-		return 1
-	}
-	return 0
+	return read.exitCode()
 }
 
 func cmdServe(args []string) int {

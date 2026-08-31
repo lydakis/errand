@@ -29,6 +29,7 @@ const ExitTransaction = 120
 
 const (
 	controlRequestTimeout = 15 * time.Second
+	storageRequestTimeout = 2 * time.Minute
 	maintenanceTimeout    = 30 * time.Minute
 	submitRequestTimeout  = 31 * time.Minute
 	streamIdleTimeout     = 2 * time.Minute
@@ -477,6 +478,14 @@ func CacheStats(peerURL string) (proto.CacheStats, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
 	err := getJSONContext(ctx, peerURL+"/v0/cache", 1<<20, "cache stats", &stats)
+	return stats, err
+}
+
+func StorageStats(peerURL string) (proto.StorageStats, error) {
+	var stats proto.StorageStats
+	ctx, cancel := context.WithTimeout(context.Background(), storageRequestTimeout)
+	defer cancel()
+	err := getJSONWithClientContext(ctx, maintenanceHTTP, peerURL+"/v0/storage", 1<<20, "storage stats", &stats)
 	return stats, err
 }
 

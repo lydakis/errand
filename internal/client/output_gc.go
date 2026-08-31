@@ -24,6 +24,35 @@ type OutputGCResult struct {
 	DryRun     bool
 }
 
+// OutputStats reports the local output state that is managed by gc outputs.
+// Bytes uses the same accounting as GC so the inventory and reclaimed-space
+// reports remain comparable.
+func OutputStats() (proto.StorageCategory, error) {
+	return outputStatsWithCollector(collectOutputGCCandidates)
+}
+
+func outputStatsWithCollector(
+	collect func(string, string, map[string]*localOutputCandidate) error,
+) (proto.StorageCategory, error) {
+	root, err := localOutputRoot()
+	if err != nil {
+		return proto.StorageCategory{}, err
+	}
+	candidates := map[string]*localOutputCandidate{}
+	if err := collect(
+		filepath.Join(root, "jobs"),
+		filepath.Join(root, "downloads"),
+		candidates,
+	); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return proto.StorageCategory{}, err
+	}
+	stats := proto.StorageCategory{Items: len(candidates)}
+	for _, candidate := range candidates {
+		stats.Bytes += candidate.bytes
+	}
+	return stats, nil
+}
+
 type localOutputCandidate struct {
 	key           string
 	statePath     string

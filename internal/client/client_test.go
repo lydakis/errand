@@ -55,6 +55,8 @@ func TestControlEndpointsReturnDecodedResponses(t *testing.T) {
 			json.NewEncoder(w).Encode(proto.JobStatus{ID: "job-1", State: proto.StateRunning})
 		case r.Method == http.MethodGet && r.URL.Path == "/v0/cache":
 			json.NewEncoder(w).Encode(proto.CacheStats{Blobs: 3, Bytes: 42})
+		case r.Method == http.MethodGet && r.URL.Path == "/v0/storage":
+			json.NewEncoder(w).Encode(proto.StorageStats{Jobs: proto.StorageCategory{Items: 2, Bytes: 58}})
 		case r.Method == http.MethodPost && r.URL.Path == "/v0/cache/gc":
 			json.NewEncoder(w).Encode(proto.CacheGCResult{RemovedBlobs: 2, FreedBytes: 17})
 		case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs":
@@ -74,6 +76,10 @@ func TestControlEndpointsReturnDecodedResponses(t *testing.T) {
 	stats, err := CacheStats(server.URL)
 	if err != nil || stats.Blobs != 3 || stats.Bytes != 42 {
 		t.Fatalf("CacheStats() = %+v, %v", stats, err)
+	}
+	storage, err := StorageStats(server.URL)
+	if err != nil || storage.Jobs.Items != 2 || storage.Jobs.Bytes != 58 {
+		t.Fatalf("StorageStats() = %+v, %v", storage, err)
 	}
 	gc, err := CacheGC(server.URL)
 	if err != nil || gc.RemovedBlobs != 2 || gc.FreedBytes != 17 {
@@ -200,6 +206,39 @@ func TestCacheGCUsesMaintenanceDeadline(t *testing.T) {
 	}
 	if maintenanceTransport.ResponseHeaderTimeout != maintenanceTimeout {
 		t.Fatalf("maintenance response-header timeout = %v, want %v", maintenanceTransport.ResponseHeaderTimeout, maintenanceTimeout)
+	}
+}
+
+func TestStorageStatsUsesStorageDeadline(t *testing.T) {
+	oldHTTP := maintenanceHTTP
+	t.Cleanup(func() { maintenanceHTTP = oldHTTP })
+
+	var remaining time.Duration
+	maintenanceHTTP = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		deadline, ok := req.Context().Deadline()
+		if !ok {
+			t.Fatal("storage stats request has no deadline")
+		}
+		remaining = time.Until(deadline)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"jobs":{"items":2,"bytes":58}}`)),
+			Request:    req,
+		}, nil
+	})}
+
+	stats, err := StorageStats("http://runner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Jobs.Items != 2 || stats.Jobs.Bytes != 58 {
+		t.Fatalf("StorageStats() = %+v", stats)
+	}
+	if remaining <= controlRequestTimeout || remaining > storageRequestTimeout {
+		t.Fatalf("storage stats deadline = %v, want more than %v and at most %v",
+			remaining, controlRequestTimeout, storageRequestTimeout)
 	}
 }
 

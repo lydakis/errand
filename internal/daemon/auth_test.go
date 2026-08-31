@@ -252,7 +252,7 @@ func TestIdentifyCapabilityAndAllowlist(t *testing.T) {
 	}
 }
 
-func TestCacheEndpointsRequireManageCachesAction(t *testing.T) {
+func TestCacheGCEndpointRequiresManageCachesAction(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
 		actions []string
@@ -279,24 +279,51 @@ func TestCacheEndpointsRequireManageCachesAction(t *testing.T) {
 			ts := httptest.NewServer(d.Handler())
 			t.Cleanup(ts.Close)
 
-			for _, endpoint := range []struct {
-				method string
-				path   string
-			}{
-				{method: http.MethodGet, path: "/v0/cache"},
-				{method: http.MethodPost, path: "/v0/cache/gc"},
-			} {
-				req, err := http.NewRequest(endpoint.method, ts.URL+endpoint.path, nil)
-				if err != nil {
-					t.Fatal(err)
-				}
-				res, err := ts.Client().Do(req)
+			res, err := ts.Client().Post(ts.URL+"/v0/cache/gc", "application/json", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			if res.StatusCode != tt.want {
+				t.Fatalf("POST /v0/cache/gc = %s, want %d", res.Status, tt.want)
+			}
+		})
+	}
+}
+
+func TestCacheInspectionEndpointsRequireReadOwnAction(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		actions []string
+		want    int
+	}{
+		{name: "cache manager", actions: []string{proto.ActionCaches}, want: http.StatusForbidden},
+		{name: "job reader", actions: []string{proto.ActionReadOwn}, want: http.StatusOK},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			response := map[string]any{
+				"Node":        map[string]any{"Name": "laptop.tailnet.ts.net.", "StableID": "node-1"},
+				"UserProfile": map[string]any{"ID": 42, "LoginName": "george@example.com"},
+				"CapMap": map[string]any{
+					proto.DefaultCapability: []any{map[string]any{"actions": tt.actions}},
+				},
+			}
+			d, err := New(Config{StateDir: t.TempDir(), TailscaledSocket: fakeWhoisSocket(t, response)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { d.Close() })
+			ts := httptest.NewServer(d.Handler())
+			t.Cleanup(ts.Close)
+
+			for _, path := range []string{"/v0/cache", "/v0/storage"} {
+				res, err := ts.Client().Get(ts.URL + path)
 				if err != nil {
 					t.Fatal(err)
 				}
 				res.Body.Close()
 				if res.StatusCode != tt.want {
-					t.Fatalf("%s %s = %s, want %d", endpoint.method, endpoint.path, res.Status, tt.want)
+					t.Fatalf("GET %s = %s, want %d", path, res.Status, tt.want)
 				}
 			}
 		})

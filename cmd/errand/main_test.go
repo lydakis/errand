@@ -484,6 +484,93 @@ url = %q
 	}
 }
 
+func TestCmdDfAggregatesConfiguredPeersConcurrently(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	serveStorage := func(stats proto.StorageStats) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v0/storage" {
+				http.NotFound(w, r)
+				return
+			}
+			started <- struct{}{}
+			<-release
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(stats)
+		}))
+	}
+	cabal := serveStorage(proto.StorageStats{
+		Cache: &proto.CacheStats{Blobs: 3, Bytes: 6 << 20, MaxBytes: 5 << 30, TTLHours: 336},
+		Jobs:  proto.StorageCategory{Items: 7, Bytes: 1 << 30},
+	})
+	defer cabal.Close()
+	macMini := serveStorage(proto.StorageStats{
+		Cache: &proto.CacheStats{Blobs: 9, Bytes: 56 << 20, MaxBytes: 5 << 30, TTLHours: 336},
+		Jobs:  proto.StorageCategory{Items: 2, Bytes: 84 << 20},
+	})
+	defer macMini.Close()
+	writeClientConfig(t, fmt.Sprintf(`[peers.cabal]
+url = %q
+[peers.mac-mini]
+url = %q
+	`, cabal.URL, macMini.URL))
+
+	var stdout, stderr bytes.Buffer
+	done := make(chan int, 1)
+	go func() { done <- cmdDfTo(nil, &stdout, &stderr) }()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			close(release)
+			t.Fatal("df did not query configured peers concurrently")
+		}
+	}
+	close(release)
+	if code := <-done; code != 0 {
+		t.Fatalf("df exit = %d; stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{"LOCATION", "CACHE", "JOBS", "OUTPUTS", "TOTAL", "cabal", "mac-mini", "local", "6.0 MiB", "1.0 GiB", "56 MiB", "84 MiB"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("df output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestCmdDfJSONPreservesRawUsageAndNarrowsWithOn(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v0/storage" {
+			http.NotFound(w, r)
+			return
+		}
+		json.NewEncoder(w).Encode(proto.StorageStats{
+			Cache: &proto.CacheStats{Blobs: 3, Bytes: 42, MaxBytes: 100, TTLHours: 24},
+			Jobs:  proto.StorageCategory{Items: 2, Bytes: 58},
+		})
+	}))
+	defer server.Close()
+	writeClientConfig(t, fmt.Sprintf(`[peers.cabal]
+url = %q
+	`, server.URL))
+
+	var stdout, stderr bytes.Buffer
+	if code := cmdDfTo([]string{"--on", "cabal", "--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("df --json exit = %d; stderr=%q", code, stderr.String())
+	}
+	var rows []dfRow
+	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
+		t.Fatalf("decoding df JSON: %v; output=%q", err, stdout.String())
+	}
+	if len(rows) != 2 || rows[0].Location != "cabal" || rows[0].Cache == nil ||
+		rows[0].Cache.Bytes != 42 || rows[0].Jobs.Bytes != 58 || rows[0].TotalBytes != 100 ||
+		rows[1].Location != "local" || rows[1].Outputs == nil {
+		t.Fatalf("df JSON = %+v", rows)
+	}
+}
+
 func TestCmdPsQueuedJobHasAdmissionButNoProcessTiming(t *testing.T) {
 	admitted := time.Date(2026, 8, 30, 14, 0, 0, 0, time.Local)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
