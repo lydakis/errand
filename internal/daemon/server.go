@@ -594,7 +594,6 @@ func (d *Daemon) Handler() http.Handler {
 	mux.HandleFunc("GET /v0/info", d.auth("", d.handleInfo))
 	mux.HandleFunc("GET /v0/jobs", d.auth(proto.ActionReadOwn, d.handleList))
 	mux.HandleFunc("POST /v0/snapshot/diff", d.auth(proto.ActionSubmit, d.handleSnapshotDiff))
-	mux.HandleFunc("GET /v0/cache", d.auth(proto.ActionReadOwn, d.handleCacheStats))
 	mux.HandleFunc("GET /v0/storage", d.auth(proto.ActionReadOwn, d.handleStorageStats))
 	mux.HandleFunc("POST /v0/cache/gc", d.auth(proto.ActionCaches, d.handleCacheGC))
 	mux.HandleFunc("POST /v0/jobs/gc", d.auth(proto.ActionGCJobs, d.handleJobGC))
@@ -669,22 +668,6 @@ func (d *Daemon) handleSnapshotDiff(w http.ResponseWriter, r *http.Request, _ Id
 		return
 	}
 	writeJSON(w, http.StatusOK, proto.SnapshotDiffResponse{Missing: missing})
-}
-
-func (d *Daemon) handleCacheStats(w http.ResponseWriter, r *http.Request, _ Identity) {
-	if d.cache == nil {
-		httpError(w, http.StatusNotFound, "snapshot cache is disabled on this runner")
-		return
-	}
-	stats, err := d.cache.StatsContext(r.Context())
-	if err != nil {
-		if r.Context().Err() != nil {
-			return
-		}
-		httpError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, stats)
 }
 
 func (d *Daemon) handleCacheGC(w http.ResponseWriter, r *http.Request, _ Identity) {

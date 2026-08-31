@@ -53,8 +53,6 @@ func TestControlEndpointsReturnDecodedResponses(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs/job-1":
 			json.NewEncoder(w).Encode(proto.JobStatus{ID: "job-1", State: proto.StateRunning})
-		case r.Method == http.MethodGet && r.URL.Path == "/v0/cache":
-			json.NewEncoder(w).Encode(proto.CacheStats{Blobs: 3, Bytes: 42})
 		case r.Method == http.MethodGet && r.URL.Path == "/v0/storage":
 			json.NewEncoder(w).Encode(proto.StorageStats{Jobs: proto.StorageCategory{Items: 2, Bytes: 58}})
 		case r.Method == http.MethodPost && r.URL.Path == "/v0/cache/gc":
@@ -72,10 +70,6 @@ func TestControlEndpointsReturnDecodedResponses(t *testing.T) {
 	status, err := getStatus(server.URL, "job-1")
 	if err != nil || status.ID != "job-1" || status.State != proto.StateRunning {
 		t.Fatalf("getStatus() = %+v, %v", status, err)
-	}
-	stats, err := CacheStats(server.URL)
-	if err != nil || stats.Blobs != 3 || stats.Bytes != 42 {
-		t.Fatalf("CacheStats() = %+v, %v", stats, err)
 	}
 	storage, err := StorageStats(server.URL)
 	if err != nil || storage.Jobs.Items != 2 || storage.Jobs.Bytes != 58 {

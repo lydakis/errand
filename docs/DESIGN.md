@@ -516,7 +516,8 @@ Versioned HTTP+JSON: `PUT /v0/jobs/<ulid>` is idempotent;
 `GET /v0/jobs/<ulid>` returns status; SSE with event IDs powers
 `GET /v0/jobs/<ulid>/logs?follow=1`; the signal and kill routes control owned
 jobs; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;
-`GET /v0/cache` and `POST /v0/cache/gc` inspect and prune the snapshot cache;
+`GET /v0/storage` reports caller-visible storage, including the snapshot cache;
+`POST /v0/cache/gc` prunes the snapshot cache;
 `POST /v0/jobs/gc` applies bounded owner-scoped receipt retention;
 `GET /v0/jobs/collected` pages through durable owner- and client-scoped
 collection markers so local output GC can reconcile after a lost deletion
@@ -525,8 +526,9 @@ reconciliation while preserving the replay-prevention lifetime; and
 `GET /v0/info` returns facts. A negotiated blob disappearing before
 submission returns the machine-readable `snapshot_cache_miss` error code so
 the client can retry the same job ID with a complete snapshot. Curl-debuggable;
-the version prefix lets daemon and CLI drift during upgrades without lying to
-each other.
+the version prefix provides a clean replacement boundary for incompatible
+protocol revisions. During pre-release v0 development, mixed daemon and CLI
+versions are not a compatibility contract.
 
 ## Non-goals
 

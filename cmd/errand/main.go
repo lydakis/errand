@@ -86,9 +86,6 @@ func main() {
 		os.Exit(cmdKill(args[1:]))
 	case "df":
 		os.Exit(cmdDf(args[1:]))
-	case "caches":
-		fmt.Fprintln(os.Stderr, "errand: caches was replaced by df")
-		os.Exit(2)
 	case "gc":
 		os.Exit(cmdGC(args[1:]))
 	case "info":

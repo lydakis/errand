@@ -473,14 +473,6 @@ func getStatusContext(ctx context.Context, peerURL, jobID string) (proto.JobStat
 	return status, err
 }
 
-func CacheStats(peerURL string) (proto.CacheStats, error) {
-	var stats proto.CacheStats
-	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
-	defer cancel()
-	err := getJSONContext(ctx, peerURL+"/v0/cache", 1<<20, "cache stats", &stats)
-	return stats, err
-}
-
 func StorageStats(peerURL string) (proto.StorageStats, error) {
 	var stats proto.StorageStats
 	ctx, cancel := context.WithTimeout(context.Background(), storageRequestTimeout)

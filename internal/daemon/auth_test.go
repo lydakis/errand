@@ -291,7 +291,7 @@ func TestCacheGCEndpointRequiresManageCachesAction(t *testing.T) {
 	}
 }
 
-func TestCacheInspectionEndpointsRequireReadOwnAction(t *testing.T) {
+func TestStorageInspectionEndpointRequiresReadOwnAction(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
 		actions []string
@@ -316,15 +316,13 @@ func TestCacheInspectionEndpointsRequireReadOwnAction(t *testing.T) {
 			ts := httptest.NewServer(d.Handler())
 			t.Cleanup(ts.Close)
 
-			for _, path := range []string{"/v0/cache", "/v0/storage"} {
-				res, err := ts.Client().Get(ts.URL + path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				res.Body.Close()
-				if res.StatusCode != tt.want {
-					t.Fatalf("GET %s = %s, want %d", path, res.Status, tt.want)
-				}
+			res, err := ts.Client().Get(ts.URL + "/v0/storage")
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			if res.StatusCode != tt.want {
+				t.Fatalf("GET /v0/storage = %s, want %d", res.Status, tt.want)
 			}
 		})
 	}

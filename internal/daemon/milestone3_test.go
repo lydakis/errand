@@ -271,20 +271,21 @@ func TestPartialShipWithColdCacheFailsRetryablyThenFullShipWorks(t *testing.T) {
 	waitTerminal(t, ts.URL, id)
 }
 
-func TestCacheStatsAndGCEndpoints(t *testing.T) {
+func TestStorageStatsAndCacheGCEndpoints(t *testing.T) {
 	d, ts := testDaemon(t)
 	insertContent(t, d.cache, "blob one")
 	insertContent(t, d.cache, "blob two!")
 
-	var stats proto.CacheStats
-	resp, err := http.Get(ts.URL + "/v0/cache")
+	var stats proto.StorageStats
+	resp, err := http.Get(ts.URL + "/v0/storage")
 	if err != nil {
 		t.Fatal(err)
 	}
 	json.NewDecoder(resp.Body).Decode(&stats)
 	resp.Body.Close()
-	if stats.Blobs != 2 || stats.Bytes != int64(len("blob one")+len("blob two!")) {
-		t.Fatalf("cache stats = %+v", stats)
+	if stats.Cache == nil || stats.Cache.Blobs != 2 ||
+		stats.Cache.Bytes != int64(len("blob one")+len("blob two!")) {
+		t.Fatalf("storage stats = %+v", stats)
 	}
 
 	d.cache.mu.Lock()
@@ -343,14 +344,14 @@ func TestCacheReadCancellationStopsHandlers(t *testing.T) {
 		"snapshot diff": {
 			path: "/v0/snapshot/diff", body: `{"blobs":[]}`,
 		},
-		"cache stats": {path: "/v0/cache"},
+		"storage stats": {path: "/v0/storage"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			d, _ := testDaemon(t)
 			if name == "snapshot diff" {
 				tc.handler = d.handleSnapshotDiff
 			} else {
-				tc.handler = d.handleCacheStats
+				tc.handler = d.handleStorageStats
 			}
 			d.cache.mu.Lock()
 			locked := true
