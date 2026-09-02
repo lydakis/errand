@@ -17,7 +17,7 @@ type dfRow struct {
 	Location   string                 `json:"location"`
 	Cache      *proto.CacheStats      `json:"cache,omitempty"`
 	Jobs       proto.StorageCategory  `json:"jobs"`
-	Outputs    *proto.StorageCategory `json:"outputs,omitempty"`
+	Changes    *proto.StorageCategory `json:"changes,omitempty"`
 	TotalBytes int64                  `json:"total_bytes"`
 }
 
@@ -54,13 +54,13 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 		row.TotalBytes += row.Jobs.Bytes
 		rows = append(rows, row)
 	}
-	outputs, err := client.OutputStats()
+	changes, err := client.ChangeStats()
 	if err != nil {
-		fmt.Fprintf(stderr, "errand: local outputs: %v\n", err)
+		fmt.Fprintf(stderr, "errand: local changes: %v\n", err)
 		read.failed = true
 	} else {
 		rows = append(rows, dfRow{
-			Location: "local", Outputs: &outputs, TotalBytes: outputs.Bytes,
+			Location: "local", Changes: &changes, TotalBytes: changes.Bytes,
 		})
 	}
 
@@ -79,7 +79,7 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 
 func writeDf(w io.Writer, rows []dfRow) {
 	tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-	fmt.Fprintln(tw, "LOCATION\tCACHE\tJOBS\tOUTPUTS\tTOTAL")
+	fmt.Fprintln(tw, "LOCATION\tCACHE\tJOBS\tCHANGES\tTOTAL")
 	for _, row := range rows {
 		cache := "-"
 		if row.Cache != nil {
@@ -92,12 +92,12 @@ func writeDf(w io.Writer, rows []dfRow) {
 		if row.Location != "local" {
 			jobs = formatByteSize(row.Jobs.Bytes)
 		}
-		outputs := "-"
-		if row.Outputs != nil {
-			outputs = formatByteSize(row.Outputs.Bytes)
+		changes := "-"
+		if row.Changes != nil {
+			changes = formatByteSize(row.Changes.Bytes)
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
-			terminalSafeField(row.Location), cache, jobs, outputs, formatByteSize(row.TotalBytes))
+			terminalSafeField(row.Location), cache, jobs, changes, formatByteSize(row.TotalBytes))
 	}
 	_ = tw.Flush()
 }

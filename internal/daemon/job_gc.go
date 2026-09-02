@@ -33,8 +33,8 @@ type collectedRecord struct {
 	Owner          string    `json:"owner,omitempty"`
 	RequestDigest  string    `json:"-"`
 	CollectedAt    time.Time `json:"collected_at"`
-	OutputsPending bool      `json:"outputs_pending,omitempty"`
-	OutputClientID string    `json:"output_client_id,omitempty"`
+	ChangesPending bool      `json:"changes_pending,omitempty"`
+	ChangeClientID string    `json:"change_client_id,omitempty"`
 }
 
 func (d *Daemon) loadCollected() error {
@@ -83,8 +83,8 @@ func (d *Daemon) loadCollected() error {
 }
 
 func collectedMarkerExpired(record collectedRecord, now time.Time) bool {
-	if record.OutputsPending {
-		return !now.Before(record.CollectedAt.Add(pendingOutputMarkerTTL))
+	if record.ChangesPending {
+		return !now.Before(record.CollectedAt.Add(pendingChangeMarkerTTL))
 	}
 	return !now.Before(record.CollectedAt.Add(collectedMarkerTTL))
 }
@@ -288,15 +288,15 @@ func (d *Daemon) handleCollectedJobs(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	clientID := r.URL.Query().Get("client_id")
-	if !proto.ValidOutputClientID(clientID) {
-		httpError(w, http.StatusBadRequest, "invalid output client ID")
+	if !proto.ValidChangeClientID(clientID) {
+		httpError(w, http.StatusBadRequest, "invalid change client ID")
 		return
 	}
 	owner := id.Owner()
 	d.mu.Lock()
 	ids := make([]string, 0, len(d.collected))
 	for jobID, record := range d.collected {
-		if record.OutputsPending && record.OutputClientID == clientID &&
+		if record.ChangesPending && record.ChangeClientID == clientID &&
 			(d.cfg.InsecureNoAuth || (owner != "" && record.Owner == owner)) {
 			ids = append(ids, jobID)
 		}
@@ -324,8 +324,8 @@ func (d *Daemon) handleCollectedJobsAck(w http.ResponseWriter, r *http.Request, 
 		httpError(w, http.StatusBadRequest, "collection acknowledgement must contain one JSON object")
 		return
 	}
-	if !proto.ValidOutputClientID(request.ClientID) {
-		httpError(w, http.StatusBadRequest, "invalid output client ID")
+	if !proto.ValidChangeClientID(request.ClientID) {
+		httpError(w, http.StatusBadRequest, "invalid change client ID")
 		return
 	}
 	if len(request.JobIDs) == 0 || len(request.JobIDs) > proto.CollectedJobsPageLimit {
@@ -350,12 +350,12 @@ func (d *Daemon) handleCollectedJobsAck(w http.ResponseWriter, r *http.Request, 
 		d.mu.Lock()
 		record, ok := d.collected[jobID]
 		owned := d.cfg.InsecureNoAuth || (owner != "" && record.Owner == owner)
-		if !ok || !owned || !record.OutputsPending || record.OutputClientID != request.ClientID {
+		if !ok || !owned || !record.ChangesPending || record.ChangeClientID != request.ClientID {
 			d.mu.Unlock()
 			continue
 		}
-		record.OutputsPending = false
-		record.OutputClientID = ""
+		record.ChangesPending = false
+		record.ChangeClientID = ""
 		if err := replaceJSONDurable(filepath.Join(d.collectedDir(), jobID+".json"), record); err != nil {
 			d.mu.Unlock()
 			httpError(w, http.StatusInternalServerError, "persisting collection acknowledgement: "+err.Error())
@@ -376,9 +376,9 @@ func (d *Daemon) handleCollectedJobsAck(w http.ResponseWriter, r *http.Request, 
 }
 
 func gcEligibleLocked(j *Job) (time.Time, bool) {
-	if j.deleting || j.logReaders != 0 || j.outputReaders != 0 || j.result == nil ||
+	if j.deleting || j.logReaders != 0 || j.changeReaders != 0 || j.result == nil ||
 		(j.state != proto.StateExited && j.state != proto.StateKilled) ||
-		!j.result.CleanupOK || !j.result.OutputsOK || !j.result.LogsComplete ||
+		!j.result.CleanupOK || !j.result.ChangesOK || !j.result.LogsComplete ||
 		j.result.TransactionError != "" {
 		return time.Time{}, false
 	}
@@ -418,8 +418,8 @@ func (d *Daemon) removeJobReceipt(j *Job) (jobRemovalOutcome, error, error) {
 	}
 	record := collectedRecord{
 		Owner: admissionOwner(j.Admission), RequestDigest: j.RequestDigest,
-		CollectedAt: d.admissionNow(time.Now()), OutputsPending: len(j.Spec.Outputs) > 0,
-		OutputClientID: j.Spec.OutputClientID,
+		CollectedAt: d.admissionNow(time.Now()), ChangesPending: j.result.Changes != nil,
+		ChangeClientID: j.Spec.ChangeClientID,
 	}
 	marker := filepath.Join(d.collectedDir(), j.ID+".json")
 	if err := replaceJSONDurable(marker, record); err != nil {

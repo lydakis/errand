@@ -29,9 +29,9 @@ const (
 
 	ErrorCodeSnapshotCacheMiss = "snapshot_cache_miss"
 
-	// OutputReconciliationWindow bounds how long an unacknowledged runner
+	// ChangeReconciliationWindow bounds how long an unacknowledged runner
 	// marker and its unresolved client-side apply state remain protected.
-	OutputReconciliationWindow = 30 * 24 * time.Hour
+	ChangeReconciliationWindow = 30 * 24 * time.Hour
 )
 
 type APIError struct {
@@ -63,11 +63,19 @@ func (m Manifest) RootHash() string {
 	return digest(m)
 }
 
+// SelectionPolicy freezes the ignore rules used to choose newly created paths
+// for retention. Submitted manifest paths remain eligible regardless of these
+// rules so their modification or deletion is always observable.
+type SelectionPolicy struct {
+	Prefix string   `json:"prefix,omitempty"`
+	Ignore []string `json:"ignore,omitempty"`
+}
+
 type Limits struct {
 	MaxLogBytes       int64 `json:"max_log_bytes"`
 	MaxRuntimeSec     int64 `json:"max_runtime_sec"`
 	MaxWorkspaceBytes int64 `json:"max_workspace_bytes"`
-	MaxOutputBytes    int64 `json:"max_output_bytes"`
+	MaxChangeBytes    int64 `json:"max_change_bytes"`
 }
 
 func DefaultLimits() Limits {
@@ -75,38 +83,43 @@ func DefaultLimits() Limits {
 		MaxLogBytes:       64 << 20,
 		MaxRuntimeSec:     2 * 60 * 60,
 		MaxWorkspaceBytes: 2 << 30,
-		MaxOutputBytes:    2 << 30,
+		MaxChangeBytes:    2 << 30,
 	}
 }
 
-const (
-	OutputCollectSuccess = "success"
-	OutputCollectAlways  = "always"
-	OutputApplyAuto      = "auto"
-	OutputApplyManual    = "manual"
-)
-
-// OutputSpec declares one workspace-relative path to retain after execution.
-// Conflict baselines are intentionally client-local and are never part of the
-// request or receipt.
-type OutputSpec struct {
-	Path    string `json:"path" toml:"path"`
-	Collect string `json:"collect" toml:"collect"`
-	Apply   string `json:"apply" toml:"apply"`
+// ChangeBundle is the immutable metadata stored beside the submitted and
+// completed workspace archives for one job.
+type ChangeBundle struct {
+	V              int      `json:"v"`
+	BaselineRoot   string   `json:"baseline_root"`
+	Paths          []string `json:"paths"`
+	MetadataPaths  []string `json:"metadata_paths,omitempty"`
+	BaseManifest   Manifest `json:"base_manifest"`
+	RemoteManifest Manifest `json:"remote_manifest"`
+	Bytes          int64    `json:"bytes"`
 }
 
-// OutputBundle is the immutable metadata stored beside one output archive.
-type OutputBundle struct {
-	V        int      `json:"v"`
-	Paths    []string `json:"paths"`
-	Manifest Manifest `json:"manifest"`
-	Bytes    int64    `json:"bytes"`
+func (b ChangeBundle) RootHash() string { return digest(b) }
+
+type ChangeSummary struct {
+	Paths          []string `json:"paths,omitempty"`
+	PathsTruncated bool     `json:"paths_truncated,omitempty"`
+	PathCount      int      `json:"path_count"`
+	BundleRoot     string   `json:"bundle_root"`
+	Bytes          int64    `json:"bytes"`
 }
 
-type OutputSummary struct {
-	Paths        []string `json:"paths"`
-	ManifestRoot string   `json:"manifest_root"`
-	Bytes        int64    `json:"bytes"`
+func (s ChangeSummary) Matches(bundle ChangeBundle) bool {
+	if s.BundleRoot != bundle.RootHash() || s.Bytes != bundle.Bytes || s.PathCount != len(bundle.Paths) ||
+		len(s.Paths) > len(bundle.Paths) || s.PathsTruncated != (len(s.Paths) != len(bundle.Paths)) {
+		return false
+	}
+	for i := range s.Paths {
+		if s.Paths[i] != bundle.Paths[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // Spec is the immutable canonical request. Its digest is the admission
@@ -122,8 +135,9 @@ type Spec struct {
 	Limits         Limits            `json:"limits"`
 	GitCommit      string            `json:"git_commit,omitempty"`
 	GitDirty       bool              `json:"git_dirty,omitempty"`
-	Outputs        []OutputSpec      `json:"outputs,omitempty"`
-	OutputClientID string            `json:"output_client_id,omitempty"`
+	NoSnapshot     bool              `json:"no_snapshot,omitempty"`
+	ChangeClientID string            `json:"change_client_id,omitempty"`
+	Selection      SelectionPolicy   `json:"selection_policy,omitempty"`
 }
 
 func (s Spec) Digest() string {
@@ -143,13 +157,21 @@ type ReceiptSpec struct {
 	Limits         Limits            `json:"limits"`
 	GitCommit      string            `json:"git_commit,omitempty"`
 	GitDirty       bool              `json:"git_dirty,omitempty"`
-	Outputs        []OutputSpec      `json:"outputs,omitempty"`
-	OutputClientID string            `json:"output_client_id,omitempty"`
+	NoSnapshot     bool              `json:"no_snapshot,omitempty"`
+	ChangeClientID string            `json:"change_client_id,omitempty"`
+	Selection      SelectionPolicy   `json:"selection_policy,omitempty"`
 }
 
 func NewReceiptSpec(s Spec) ReceiptSpec {
-	names := make([]string, 0, len(s.Env))
+	namesSet := make(map[string]struct{}, len(s.Env)+len(s.EnvSources))
 	for name := range s.Env {
+		namesSet[name] = struct{}{}
+	}
+	for name := range s.EnvSources {
+		namesSet[name] = struct{}{}
+	}
+	names := make([]string, 0, len(namesSet))
+	for name := range namesSet {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -157,15 +179,16 @@ func NewReceiptSpec(s Spec) ReceiptSpec {
 		ReceiptVersion: ReceiptVersion,
 		V:              s.V, Argv: s.Argv, EnvNames: names, EnvSources: s.EnvSources, Workdir: s.Workdir,
 		ManifestRoot: s.ManifestRoot, Limits: s.Limits,
-		GitCommit: s.GitCommit, GitDirty: s.GitDirty, Outputs: s.Outputs, OutputClientID: s.OutputClientID,
+		GitCommit: s.GitCommit, GitDirty: s.GitDirty, NoSnapshot: s.NoSnapshot,
+		ChangeClientID: s.ChangeClientID, Selection: s.Selection,
 	}
 }
 
 func (r ReceiptSpec) SpecWithoutEnv() Spec {
 	return Spec{
 		V: r.V, Argv: r.Argv, EnvSources: r.EnvSources, Workdir: r.Workdir, ManifestRoot: r.ManifestRoot,
-		Limits: r.Limits, GitCommit: r.GitCommit, GitDirty: r.GitDirty, Outputs: r.Outputs,
-		OutputClientID: r.OutputClientID,
+		Limits: r.Limits, GitCommit: r.GitCommit, GitDirty: r.GitDirty, NoSnapshot: r.NoSnapshot,
+		ChangeClientID: r.ChangeClientID, Selection: r.Selection,
 	}
 }
 
@@ -198,9 +221,9 @@ type Result struct {
 	SignalNum        int            `json:"signal_num,omitempty"`
 	StartError       string         `json:"start_error,omitempty"`
 	TransactionError string         `json:"transaction_error,omitempty"`
-	LimitExceeded    string         `json:"limit_exceeded,omitempty"` // log_bytes | runtime | workspace_bytes | output_bytes
-	OutputsOK        bool           `json:"outputs_ok"`
-	Outputs          *OutputSummary `json:"outputs,omitempty"`
+	LimitExceeded    string         `json:"limit_exceeded,omitempty"` // log_bytes | runtime | workspace_bytes | change_bytes | change_entries | change_deadline
+	ChangesOK        bool           `json:"changes_ok"`
+	Changes          *ChangeSummary `json:"changes,omitempty"`
 	CleanupOK        bool           `json:"cleanup_ok"`
 	LogsComplete     bool           `json:"logs_complete"`
 }
@@ -239,6 +262,17 @@ type JobStatus struct {
 	State  string  `json:"state"`
 	Digest string  `json:"digest,omitempty"`
 	Result *Result `json:"result,omitempty"`
+}
+
+// JobDetails is the owner-visible status view for one job. Spec is the
+// durable non-secret request representation, never the runtime environment.
+type JobDetails struct {
+	JobStatus
+	Spec       ReceiptSpec `json:"spec"`
+	AdmittedAt time.Time   `json:"admitted_at"`
+	StartedAt  *time.Time  `json:"started_at,omitempty"`
+	DurationMS int64       `json:"duration_ms,omitempty"`
+	Project    string      `json:"project,omitempty"`
 }
 
 // JobListEntry is one row of a runner's job listing: enough to identify,
@@ -338,7 +372,7 @@ type CollectedJobsAckResult struct {
 
 const CollectedJobsPageLimit = 1024
 
-func ValidOutputClientID(id string) bool {
+func ValidChangeClientID(id string) bool {
 	if len(id) != 32 {
 		return false
 	}

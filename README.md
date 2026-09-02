@@ -7,7 +7,7 @@ elsewhere.
 
 > **Status: milestone 4.** The transactional core works end to end over a
 > tailnet, including durable detached jobs, restart reconciliation,
-> content-addressed snapshot reuse, and conflict-safe declared outputs. The
+> content-addressed snapshot reuse, and conflict-safe workspace change capture. The
 > v0 design is frozen in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Quickstart
@@ -41,8 +41,10 @@ directory requires an explicit `.errandignore` policy or `--include-all`.
 Errand always refuses a filesystem root, and snapshotting your home directory
 requires `--include-all`. The client prints the selected file count and byte
 total before remote admission. Use `--no-snapshot` when a command needs no
-local files; Errand then skips local inspection and runs it in an empty remote
-workspace. Because that workspace is empty, `--workdir` may only name its root.
+local files; Errand then skips local content inspection and runs it in an empty
+remote workspace. Errand still records the invocation directory's identity so
+retained changes can be applied there safely. Because the remote workspace is
+empty, `--workdir` may only name its root.
 
 For a workspace containing several repositories, place this marker and an
 explicit `.errandignore` at the shared root:
@@ -104,31 +106,44 @@ returns 0 for the detach action; it is not the unfinished job's exit status.
 Non-terminal EOF is ignored, so scripts remain attached unless they request
 `--detach` explicitly.
 
-Detached jobs, `ps`, `attach`, `kill`, workspace-root discovery, declared
-output collection and conflict-safe application, snapshot-cache inspection,
-and cache and receipt GC are implemented. Planned v0 commands still include
-fact-based peer selection, named-cache management, and pairing.
+Detached jobs, `ps`, `attach`, `kill`, workspace-root discovery, automatic
+workspace change capture and conflict-safe application, snapshot caching,
+fleet storage reporting, and cache and receipt GC are implemented. Planned v0
+commands still include fact-based peer selection, named-cache management, and pairing.
 
-Declare outputs in the selected workspace's `.errand.toml`:
+After every command, Errand compares the final remote workspace with the
+submitted snapshot and retains every snapshot-representable created, modified,
+or deleted path. No declaration is required. Every submitted path is compared.
+New paths are retained only when allowed by the ignore policy frozen during
+snapshot selection, so a remote command cannot widen retention by rewriting
+`.errandignore` or `.gitignore`. Git metadata, Errand apply transactions, and
+transient filesystem nodes such as sockets are excluded.
+Failed commands retain their changes too,
+which makes reports, traces, and partial build products available for
+inspection. A `--no-snapshot` job starts from an empty baseline, so every file
+it creates is retained.
 
-```toml
-[[outputs]]
-path = "dist/app"
-collect = "success" # success | always
-apply = "auto"      # auto | manual
-```
+A foreground run reports retained changes and the job handle but does not
+download them. `errand status HANDLE` lists the changed paths. `errand attach
+HANDLE` follows logs and status only; it never downloads or applies workspace
+changes. `errand fetch HANDLE [PATH]`
+stages all changes or any retained path. Applying a selected path requires a
+retained change root or an ancestor of one; `errand fetch --apply HANDLE [PATH]`
+performs a three-way merge from the submitted snapshot, the current local
+workspace, and the completed remote workspace. Errand applies the result only
+when the entire selected merge is clean. On conflict, the working tree remains
+untouched and the staged base and remote trees remain available. Deletions use
+the same merge rules;
+fetching only deleted paths returns the retained `bundle.json` tombstone
+metadata because no file exists to return. A different machine can fetch
+and inspect changes, but cannot apply them without the originating machine's
+workspace identity record. Change records are scoped by runner endpoint and
+job ID, so one peer cannot reuse another peer's apply state.
 
-The originating attached run downloads every collected output into the local
-Errand state directory. `apply = "auto"` replaces the declared local path only
-when it is unchanged from the pre-submission baseline. A later `attach` stages
-only; `errand fetch --apply HANDLE [PATH]` or `errand attach --apply HANDLE`
-explicitly applies outputs. The
-optional path selects one declared output. A different machine can fetch and
-inspect outputs, but cannot apply them without the original machine's local
-baseline record. Output paths must be clean workspace-relative paths and may
-not enter `.git` metadata. Local baseline and download records are scoped by
-both runner endpoint and job ID, so one peer can never reuse another peer's
-apply state.
+Git is not required for non-Git snapshots, running jobs, status, logs, or plain
+fetches. Applying changes needs `git merge-file` on the client only when both
+the local and remote sides changed the same text file and a true three-way text
+merge is required. Missing Git fails that apply safely before installation.
 
 ## Job state and control
 
@@ -151,8 +166,22 @@ when a listed job runs below its workspace root. Git sources are shown as a
 short commit plus `+dirty` when applicable; `errand ps --json` retains exact
 structured project, workdir, commit, and manifest metadata, including
 truncation flags. Running durations are measured on the runner, so caller and
-runner clock offsets do not distort them. Receipts made by older clients have
-no project label and display `-`.
+runner clock offsets do not distort them.
+
+`errand status HANDLE` shows one job's complete human-readable execution view:
+runner, state, command, timing, process and transaction outcomes, retained-log
+availability, retained workspace changes, and relevant next
+commands. `errand status --json HANDLE` emits the same owner-visible data as
+structured JSON. `ps` remains the multi-job listing; `attach`, `fetch`, and
+`kill` remain the actions on a selected job.
+
+Client-side workspace identities, downloads, and apply transactions are
+stored under `$XDG_STATE_HOME/errand`, or `~/.local/state/errand` when
+`XDG_STATE_HOME` is unset. `XDG_STATE_HOME` must be absolute and can point to a
+writable private location in restricted agent environments. Errand avoids
+changing an already-secure directory. It attempts to tighten excess read access
+but only refuses to proceed when ownership, missing owner access, or permissions
+writable by another user would make the state untrustworthy.
 
 The remote job states have deliberately narrow meanings:
 
@@ -177,7 +206,7 @@ cancelled durably before they start. A submission is rejected as busy only
 when both the configured running slots and bounded queue are full.
 
 `errand df` reports logical storage used by each runner's shared snapshot cache
-and the authenticated caller's job receipts, plus local output records and
+and the authenticated caller's job receipts, plus local change records and
 download staging. Human output uses readable binary units; `--json` preserves
 raw byte and item counts, cache limits, and cache TTL. Capability-based runners
 must grant `read-own` to use `errand df`; `manage-caches` remains required only
@@ -190,19 +219,20 @@ GC always names its target. Bare `errand gc` only prints usage:
 errand gc cache
 errand gc jobs --older-than 30d --keep 500
 errand gc jobs --dry-run --older-than 30d
-errand gc outputs --older-than 30d
+errand gc changes --older-than 30d
 errand gc all --older-than 30d --keep 500
 ```
 
 Job GC only removes the caller's clean `exited` or `killed` receipts. Clean
-means cleanup, logs, and outputs all completed with no transaction error.
+means cleanup, logs, and workspace-change retention all completed with no
+transaction error.
 Active, queued, ambiguous, incomplete, and actively replayed receipts are
 protected. When both retention bounds are present, a receipt must be older
 than the cutoff and outside the newest `keep` receipts to be removed. `all` is
 client-side composition of the separately authorized cache and job endpoints
-plus local output-state collection. `gc outputs` removes old local baseline
-records, verified downloads, and interrupted download staging; pending apply
-transactions are always protected. Records whose submission never began follow
+plus local change-state collection. `gc changes` removes old local workspace
+identity records, verified downloads, and interrupted download staging;
+pending apply transactions are always protected. Records whose submission never began follow
 the requested `--older-than` boundary. Unresolved submitted jobs remain
 protected for 30 days, after which an explicit local GC may retire abandoned
 state.
@@ -211,10 +241,10 @@ collection markers, so a lost deletion response does not strand local records.
 New job IDs must carry a ULID timestamp from the preceding 24 hours, with one
 hour of allowed future clock skew. The runner durably advances a high-water
 clock that never moves backward across restart. Replay-only collection markers
-expire after 25 hours. Markers for jobs with declared outputs are scoped to the
+expire after 25 hours. Markers for jobs with retained changes are scoped to the
 originating client and retain that minimum lifetime; after the client reconciles
 its local state, it acknowledges the marker so it can retire. Unacknowledged
-output markers expire after 30 days, bounding abandoned client state. The
+change markers expire after 30 days, bounding abandoned client state. The
 markers are small and non-secret, and they never permit a collected ID to
 execute again.
 

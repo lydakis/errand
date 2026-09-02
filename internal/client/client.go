@@ -75,10 +75,10 @@ type RunOptions struct {
 	Workdir        string
 	Project        string
 	IncludeAll     bool
-	NoSnapshot     bool // use a fresh empty workspace without inspecting Root
+	NoSnapshot     bool // use a fresh empty workspace without inspecting Root contents
 	Detach         bool // return after admission, printing the handle on stdout
-	Outputs        []proto.OutputSpec
-	outputClientID string
+	changeClientID string
+	selectionGuard *snapshot.SelectionGuard
 	Stdout         io.Writer
 	Stderr         io.Writer
 }
@@ -137,26 +137,29 @@ func runWithDetachNotifications(
 		errf("%s: %v", prep.stage, prep.err)
 		return ExitTransaction
 	}
-	outputStateInitialized := len(opts.Outputs) > 0
+	opts.selectionGuard = prep.guard
+	changeStateInitialized := true
 	submissionStarted := false
 	defer func() {
-		if outputStateInitialized && !submissionStarted {
-			if err := discardUnsubmittedOutputState(opts.PeerURL, jobID); err != nil {
-				errf("removing unsubmitted output state: %v", err)
+		if changeStateInitialized && !submissionStarted {
+			if err := discardUnsubmittedChangeState(opts.PeerURL, jobID); err != nil {
+				errf("removing unsubmitted change state: %v", err)
 			}
 		}
 	}()
-	outputInitCtx, cancelOutputInit := context.WithCancel(interruptCtx)
-	outputInitialized := make(chan error, 1)
-	go func() { outputInitialized <- initializeOutputState(outputInitCtx, &opts, jobID) }()
+	changeInitCtx, cancelChangeInit := context.WithCancel(interruptCtx)
+	changeInitialized := make(chan error, 1)
+	go func() {
+		changeInitialized <- initializeChangeState(changeInitCtx, &opts, jobID, prep.manifest.RootHash())
+	}()
 	select {
 	case <-sigCh:
-		cancelOutputInit()
-		<-outputInitialized
+		cancelChangeInit()
+		<-changeInitialized
 		errf("interrupted before submission")
 		return signalExit("interrupt", 2)
-	case err := <-outputInitialized:
-		cancelOutputInit()
+	case err := <-changeInitialized:
+		cancelChangeInit()
 		if err != nil {
 			errf("%v", err)
 			return ExitTransaction
@@ -197,8 +200,9 @@ func runWithDetachNotifications(
 		Limits:         proto.DefaultLimits(),
 		GitCommit:      gitInfo.Commit,
 		GitDirty:       gitInfo.Dirty,
-		Outputs:        opts.Outputs,
-		OutputClientID: opts.outputClientID,
+		NoSnapshot:     opts.NoSnapshot,
+		ChangeClientID: opts.changeClientID,
+		Selection:      prep.selection,
 	}
 
 	type negotiationResult struct {
@@ -238,9 +242,9 @@ func runWithDetachNotifications(
 			shipFiles, files, shipBytes)
 	}
 
-	if outputStateInitialized {
-		if err := markLocalOutputSubmissionStarted(opts.PeerURL, jobID); err != nil {
-			errf("recording output submission state: %v", err)
+	if changeStateInitialized {
+		if err := markLocalChangeSubmissionStarted(opts.PeerURL, jobID); err != nil {
+			errf("recording change submission state: %v", err)
 			return ExitTransaction
 		}
 	}
@@ -294,25 +298,27 @@ func runWithDetachNotifications(
 	if !controller.releaseAtTerminal(interruptCtx) {
 		stopInterrupts()
 		<-controller.done
-		errf("interrupted as the job completed; outputs were not fetched; resume with handle %s", handle)
+		errf("interrupted as the job completed; inspect or fetch workspace changes with handle %s", handle)
 		return signalExit("interrupt", 2)
 	}
-	return finishTerminalOutputs(opts, jobID, handle, final, true, false)
+	return finishTerminalChanges(opts, jobID, handle, final)
 }
 
 type snapshotPreparation struct {
-	paths    []string
-	gitInfo  snapshot.GitInfo
-	manifest proto.Manifest
-	stage    string
-	err      error
+	paths     []string
+	gitInfo   snapshot.GitInfo
+	selection proto.SelectionPolicy
+	manifest  proto.Manifest
+	guard     *snapshot.SelectionGuard
+	stage     string
+	err       error
 }
 
 func prepareSnapshot(root string, includeAll, noSnapshot bool) snapshotPreparation {
 	if noSnapshot {
 		return snapshotPreparation{}
 	}
-	paths, gitInfo, err := snapshot.SelectFilesWithOptions(root, snapshot.SelectOptions{IncludeAll: includeAll})
+	paths, gitInfo, selection, guard, err := snapshot.SelectFilesGuarded(root, snapshot.SelectOptions{IncludeAll: includeAll})
 	if err != nil {
 		return snapshotPreparation{stage: "selecting files", err: err}
 	}
@@ -320,7 +326,7 @@ func prepareSnapshot(root string, includeAll, noSnapshot bool) snapshotPreparati
 	if err != nil {
 		return snapshotPreparation{stage: "building manifest", err: err}
 	}
-	return snapshotPreparation{paths: paths, gitInfo: gitInfo, manifest: manifest}
+	return snapshotPreparation{paths: paths, gitInfo: gitInfo, selection: selection, manifest: manifest, guard: guard}
 }
 
 func snapshotSize(manifest proto.Manifest) (int, int64) {
@@ -364,13 +370,11 @@ func peerLabel(alias, url string) string {
 
 // AttachOptions identifies an existing job to reattach to.
 type AttachOptions struct {
-	PeerURL   string
-	PeerName  string
-	JobID     string
-	Apply     bool
-	CallerDir string
-	Stdout    io.Writer
-	Stderr    io.Writer
+	PeerURL  string
+	PeerName string
+	JobID    string
+	Stdout   io.Writer
+	Stderr   io.Writer
 }
 
 // Attach resumes following an existing job: it streams the log from the
@@ -424,7 +428,7 @@ func attachWithDetachNotifications(
 		newInterruptTarget(opts.PeerURL, opts.JobID, handle, errf, interruptsControl),
 	)
 
-	runOpts := RunOptions{PeerURL: opts.PeerURL, Root: opts.CallerDir, Stdout: opts.Stdout, Stderr: opts.Stderr}
+	runOpts := RunOptions{PeerURL: opts.PeerURL, Stdout: opts.Stdout, Stderr: opts.Stderr}
 	final, err, detached := streamUntilDetach(runOpts, opts.JobID, status, detach)
 	if detached {
 		return controller.completeDetach(ctx)
@@ -437,23 +441,23 @@ func attachWithDetachNotifications(
 	if !controller.releaseAtTerminal(ctx) {
 		cancel()
 		<-controller.done
-		errf("interrupted as the job completed; outputs were not fetched; resume with handle %s", handle)
+		errf("interrupted as the job completed; inspect with handle %s", handle)
 		return signalExit("interrupt", 2)
 	}
-	return finishTerminalOutputs(runOpts, opts.JobID, handle, final, false, opts.Apply)
+	return finishTerminalChanges(runOpts, opts.JobID, handle, final)
 }
 
-func finishTerminalOutputs(opts RunOptions, jobID, handle string, final proto.JobStatus, applyAuto, applyAll bool) int {
-	staged, applied, outputErr := materializeTerminalOutputs(opts, jobID, final, applyAuto, applyAll)
-	if staged != "" {
-		fmt.Fprintf(opts.Stderr, "errand: outputs staged at %s\n", staged)
-	}
-	for _, outputPath := range applied {
-		fmt.Fprintf(opts.Stderr, "errand: applied output %s\n", outputPath)
+func finishTerminalChanges(opts RunOptions, jobID, handle string, final proto.JobStatus) int {
+	changeErr := markLocalChangeTerminal(opts.PeerURL, jobID)
+	if final.Result != nil && final.Result.Changes != nil {
+		changes := final.Result.Changes
+		fmt.Fprintf(opts.Stderr,
+			"errand: %d workspace changes retained (%d bytes); fetch with errand fetch %s\n",
+			changes.PathCount, changes.Bytes, handle)
 	}
 	code := exitCode(final, opts.Stderr, handle)
-	if outputErr != nil {
-		fmt.Fprintf(opts.Stderr, "errand: output transaction failed: %v\n", outputErr)
+	if changeErr != nil {
+		fmt.Fprintf(opts.Stderr, "errand: recording terminal workspace state failed: %v\n", changeErr)
 		if code == 0 {
 			return ExitTransaction
 		}
@@ -468,9 +472,21 @@ func getStatus(peerURL, jobID string) (proto.JobStatus, error) {
 }
 
 func getStatusContext(ctx context.Context, peerURL, jobID string) (proto.JobStatus, error) {
-	var status proto.JobStatus
-	err := getJSONContext(ctx, peerURL+"/v0/jobs/"+jobID, 1<<20, "job lookup", &status)
-	return status, err
+	details, err := getJobDetailsContext(ctx, peerURL, jobID)
+	return details.JobStatus, err
+}
+
+// GetJobDetails returns the owner-visible, non-secret description of one job.
+func GetJobDetails(peerURL, jobID string) (proto.JobDetails, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
+	defer cancel()
+	return getJobDetailsContext(ctx, peerURL, jobID)
+}
+
+func getJobDetailsContext(ctx context.Context, peerURL, jobID string) (proto.JobDetails, error) {
+	var details proto.JobDetails
+	err := getJSONContext(ctx, peerURL+"/v0/jobs/"+jobID, 1<<20, "job lookup", &details)
+	return details, err
 }
 
 func StorageStats(peerURL string) (proto.StorageStats, error) {
@@ -665,6 +681,9 @@ func submitAttempts(opts RunOptions, jobID string, spec proto.Spec, manifest pro
 
 func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, bool, error) {
 	var status proto.JobStatus
+	if err := opts.selectionGuard.Verify(); err != nil {
+		return status, false, err
+	}
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	go func() {
@@ -692,6 +711,9 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 				shipFile = plan.ships
 			}
 			if err := snapshot.PackPartial(part, opts.Root, manifest, shipFile); err != nil {
+				return err
+			}
+			if err := opts.selectionGuard.Verify(); err != nil {
 				return err
 			}
 			return mw.Close()

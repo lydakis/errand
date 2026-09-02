@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestOutputStatsReportsLocalStateAndDownloads(t *testing.T) {
+func TestChangeStatsReportsLocalStateAndDownloads(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", root)
 	stateRoot := filepath.Join(root, "errand")
@@ -19,29 +19,29 @@ func TestOutputStatsReportsLocalStateAndDownloads(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(stateRoot, "jobs", "record.json"), []byte("state"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(stateRoot, "downloads", "orphan", "output"), []byte("download"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(stateRoot, "downloads", "orphan", "change"), []byte("download"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	stats, err := OutputStats()
+	stats, err := ChangeStats()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if stats.Items != 2 || stats.Bytes < int64(len("state")+len("download")) {
-		t.Fatalf("output stats = %+v", stats)
+		t.Fatalf("change stats = %+v", stats)
 	}
 }
 
-func TestOutputStatsKeepsKnownUsageWhenAnotherCandidateDisappears(t *testing.T) {
+func TestChangeStatsKeepsKnownUsageWhenAnotherCandidateDisappears(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	stats, err := outputStatsWithCollector(func(_, _ string, candidates map[string]*localOutputCandidate) error {
-		candidates["kept"] = &localOutputCandidate{bytes: 42}
+	stats, err := changeStatsWithCollector(func(_, _ string, candidates map[string]*localChangeCandidate) error {
+		candidates["kept"] = &localChangeCandidate{bytes: 42}
 		return &os.PathError{Op: "lstat", Path: "vanished", Err: os.ErrNotExist}
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if stats.Items != 1 || stats.Bytes != 42 {
-		t.Fatalf("output stats = %+v", stats)
+		t.Fatalf("change stats = %+v", stats)
 	}
 }

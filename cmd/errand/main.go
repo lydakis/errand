@@ -20,7 +20,6 @@ import (
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/daemon"
-	outputops "github.com/lydakis/errand/internal/outputs"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/workspace"
 )
@@ -33,14 +32,15 @@ usage:
   errand [--on PEER | --url URL] [--detach] [--env K=V]... [--passenv K]...
          [--workspace-root PATH] [--workdir REL]
          [--include-all | --no-snapshot] -- CMD [ARG...]
-  errand attach [--apply] [--on PEER | --url URL] HANDLE
+  errand attach [--on PEER | --url URL] HANDLE
   errand fetch [--apply] [--on PEER | --url URL] HANDLE [PATH]
   errand ps [-a | --all] [-n N | --last N] [--json] [--on PEER | --url URL]
+  errand status [--json] [--on PEER | --url URL] HANDLE
   errand kill [--force] [--on PEER | --url URL] HANDLE
   errand df [--json] [--on PEER | --url URL]
   errand gc cache [--on PEER | --url URL]
   errand gc jobs [--older-than DURATION] [--keep N] [--dry-run] [--on PEER | --url URL]
-  errand gc outputs --older-than DURATION [--dry-run]
+  errand gc changes --older-than DURATION [--dry-run]
   errand gc all --older-than DURATION [--keep N] [--on PEER | --url URL]
   errand serve [--config PATH] [--listen ADDR] [--state-dir DIR] [--allow-user LOGIN]...
   errand info [--on PEER | --url URL]
@@ -82,6 +82,8 @@ func main() {
 		os.Exit(cmdFetch(args[1:]))
 	case "ps":
 		os.Exit(cmdPs(args[1:]))
+	case "status":
+		os.Exit(cmdStatus(args[1:]))
 	case "kill":
 		os.Exit(cmdKill(args[1:]))
 	case "df":
@@ -113,7 +115,7 @@ func cmdRun(args []string) int {
 	workdir := fs.String("workdir", "", "working directory, relative to the workspace root")
 	workspaceRoot := fs.String("workspace-root", "", "snapshot root containing the current directory")
 	includeAll := fs.Bool("include-all", false, "allow an otherwise refused broad snapshot (never permits a filesystem root)")
-	noSnapshot := fs.Bool("no-snapshot", false, "run in an empty remote workspace without inspecting local files")
+	noSnapshot := fs.Bool("no-snapshot", false, "run in an empty remote workspace without inspecting local file contents")
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
 	var envs, passenvs stringList
 	fs.Var(&envs, "env", "set K=V in the job environment (repeatable)")
@@ -167,15 +169,14 @@ func cmdRun(args []string) int {
 		}
 		env[k] = v
 	}
-	root := ""
-	var declaredOutputs []proto.OutputSpec
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		return client.ExitTransaction
+	}
+	root := cwd
 	project := ""
 	if !*noSnapshot {
-		cwd, cwdErr := os.Getwd()
-		if cwdErr != nil {
-			fmt.Fprintf(os.Stderr, "errand: %v\n", cwdErr)
-			return client.ExitTransaction
-		}
 		selected, discoverErr := workspace.Discover(cwd, *workspaceRoot)
 		if discoverErr != nil {
 			fmt.Fprintf(os.Stderr, "errand: %v\n", discoverErr)
@@ -183,11 +184,6 @@ func cmdRun(args []string) int {
 		}
 		root = selected.Root
 		project = selected.Project
-		declaredOutputs, err = outputops.NormalizeSpecs(selected.Outputs)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-			return 2
-		}
 		if *workdir == "" {
 			*workdir = selected.Workdir
 		}
@@ -210,7 +206,6 @@ func cmdRun(args []string) int {
 		IncludeAll: *includeAll,
 		NoSnapshot: *noSnapshot,
 		Detach:     *detach,
-		Outputs:    declaredOutputs,
 	})
 }
 
@@ -298,7 +293,6 @@ func resolveHandle(handleArg, rawURL, on string) (peerURL, label, jobID string, 
 
 func cmdAttach(args []string) int {
 	fs := flag.NewFlagSet("attach", flag.ExitOnError)
-	apply := fs.Bool("apply", false, "apply all declared outputs using the original local baselines")
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	fs.Parse(args)
@@ -311,27 +305,19 @@ func cmdAttach(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
-	callerDir := ""
-	if *apply {
-		callerDir, err = os.Getwd()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "errand: resolving current workspace: %v\n", err)
-			return client.ExitTransaction
-		}
-	}
 	return client.Attach(client.AttachOptions{
-		PeerURL: peerURL, PeerName: label, JobID: jobID, Apply: *apply, CallerDir: callerDir,
+		PeerURL: peerURL, PeerName: label, JobID: jobID,
 	})
 }
 
 func cmdFetch(args []string) int {
 	fs := flag.NewFlagSet("fetch", flag.ExitOnError)
-	apply := fs.Bool("apply", false, "apply all declared outputs using the original local baselines")
+	apply := fs.Bool("apply", false, "apply retained workspace changes with a clean-or-refuse three-way merge")
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	fs.Parse(args)
 	if fs.NArg() < 1 || fs.NArg() > 2 {
-		fmt.Fprintln(os.Stderr, "errand fetch: HANDLE (peer/ULID) and at most one declared PATH are required")
+		fmt.Fprintln(os.Stderr, "errand fetch: HANDLE (peer/ULID) and at most one changed PATH are required")
 		return 2
 	}
 	peerURL, _, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
@@ -339,9 +325,9 @@ func cmdFetch(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
-	outputPath := ""
+	changePath := ""
 	if fs.NArg() == 2 {
-		outputPath = fs.Arg(1)
+		changePath = fs.Arg(1)
 	}
 	callerDir := ""
 	if *apply {
@@ -351,18 +337,18 @@ func cmdFetch(args []string) int {
 			return client.ExitTransaction
 		}
 	}
-	staged, err := client.FetchOutputs(client.OutputFetchOptions{
-		PeerURL: peerURL, JobID: jobID, Apply: *apply, OutputPath: outputPath, CallerDir: callerDir,
+	staged, err := client.FetchChanges(client.ChangeFetchOptions{
+		PeerURL: peerURL, JobID: jobID, Apply: *apply, Path: changePath, CallerDir: callerDir,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		if staged != "" {
-			fmt.Fprintf(os.Stderr, "errand: outputs remain staged at %s\n", staged)
+			fmt.Fprintf(os.Stderr, "errand: workspace changes remain staged at %s\n", staged)
 		}
 		return client.ExitTransaction
 	}
 	if *apply {
-		fmt.Fprintf(os.Stderr, "errand: outputs applied from %s\n", staged)
+		fmt.Fprintf(os.Stderr, "errand: workspace changes applied from %s\n", staged)
 	} else {
 		fmt.Fprintln(os.Stdout, staged)
 	}
@@ -610,7 +596,7 @@ func cmdGC(args []string) int {
 
 func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: errand gc cache|jobs|outputs|all [options]")
+		fmt.Fprintln(stderr, "usage: errand gc cache|jobs|changes|all [options]")
 		return 2
 	}
 	target := args[0]
@@ -625,8 +611,8 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "errand: unexpected gc arguments: %s\n", strings.Join(fs.Args(), " "))
 		return 2
 	}
-	if target != "cache" && target != "jobs" && target != "outputs" && target != "all" {
-		fmt.Fprintf(stderr, "errand: unknown gc target %q; want cache, jobs, outputs, or all\n", target)
+	if target != "cache" && target != "jobs" && target != "changes" && target != "all" {
+		fmt.Fprintf(stderr, "errand: unknown gc target %q; want cache, jobs, changes, or all\n", target)
 		return 2
 	}
 	if target == "cache" && (*olderThan != "" || *keep != -1 || *dryRun) {
@@ -637,8 +623,8 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "errand: --dry-run applies only to gc jobs")
 		return 2
 	}
-	if target == "outputs" && *keep != -1 {
-		fmt.Fprintln(stderr, "errand: --keep does not apply to local output state")
+	if target == "changes" && *keep != -1 {
+		fmt.Fprintln(stderr, "errand: --keep does not apply to local change state")
 		return 2
 	}
 	var jobRequest proto.JobGCRequest
@@ -670,13 +656,13 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		}
 		jobRequest.DryRun = *dryRun
 	}
-	if target == "outputs" {
+	if target == "changes" {
 		if *rawURL != "" || *on != "" {
-			fmt.Fprintln(stderr, "errand: --on and --url do not apply to local output state")
+			fmt.Fprintln(stderr, "errand: --on and --url do not apply to local change state")
 			return 2
 		}
 		if *olderThan == "" {
-			fmt.Fprintln(stderr, "errand: gc outputs requires --older-than")
+			fmt.Fprintln(stderr, "errand: gc changes requires --older-than")
 			return 2
 		}
 		duration, err := parseRetentionDuration(*olderThan)
@@ -687,11 +673,11 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		retentionDuration = duration
 	}
 	if target == "all" && retentionDuration == 0 {
-		fmt.Fprintln(stderr, "errand: gc all requires --older-than so local output state has an explicit retention boundary")
+		fmt.Fprintln(stderr, "errand: gc all requires --older-than so local change state has an explicit retention boundary")
 		return 2
 	}
 	peerURL, label := "", "local"
-	if target != "outputs" {
+	if target != "changes" {
 		var err error
 		peerURL, label, err = resolvePeerTarget(*rawURL, *on)
 		if err != nil {
@@ -727,22 +713,22 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 			failed = true
 		}
 		if !*dryRun {
-			if err := client.ReconcileCollectedJobOutputs(peerURL); err != nil {
-				fmt.Fprintf(stderr, "errand: reconciling removed job outputs: %v\n", err)
+			if err := client.ReconcileCollectedJobChanges(peerURL); err != nil {
+				fmt.Fprintf(stderr, "errand: reconciling removed job changes: %v\n", err)
 				failed = true
 			}
 		}
 	}
-	if target == "outputs" || target == "all" {
-		result, err := client.OutputGC(retentionDuration, *dryRun)
+	if target == "changes" || target == "all" {
+		result, err := client.ChangeGC(retentionDuration, *dryRun)
 		if err != nil {
-			fmt.Fprintf(stderr, "errand: local output gc: %v\n", err)
+			fmt.Fprintf(stderr, "errand: local change gc: %v\n", err)
 			failed = true
 		} else if result.DryRun {
-			fmt.Fprintf(stdout, "local outputs: would remove %d records and free %d bytes (%d protected, %d failed)\n",
+			fmt.Fprintf(stdout, "local changes: would remove %d records and free %d bytes (%d protected, %d failed)\n",
 				result.Removed, result.FreedBytes, result.Protected, result.Failed)
 		} else {
-			fmt.Fprintf(stdout, "local outputs: removed %d records, freed %d bytes (%d protected, %d failed)\n",
+			fmt.Fprintf(stdout, "local changes: removed %d records, freed %d bytes (%d protected, %d failed)\n",
 				result.Removed, result.FreedBytes, result.Protected, result.Failed)
 		}
 		if err == nil && result.Failed != 0 {

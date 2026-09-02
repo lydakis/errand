@@ -114,7 +114,7 @@ func TestRunWithoutSnapshotPreservesCachedBlobs(t *testing.T) {
 	var stderr bytes.Buffer
 	code := client.Run(client.RunOptions{
 		PeerURL:    ts.URL,
-		Root:       filepath.Join(t.TempDir(), "does-not-exist"),
+		Root:       t.TempDir(),
 		Argv:       []string{"/bin/sh", "-c", "exit 0"},
 		NoSnapshot: true,
 		Stdout:     io.Discard,
@@ -217,7 +217,7 @@ func TestSnapshotDiffReportsOnlyMissing(t *testing.T) {
 func TestPartialShipWithColdCacheFailsRetryablyThenFullShipWorks(t *testing.T) {
 	_, ts := testDaemon(t)
 	root := workspaceWith(t, map[string]string{"a.txt": "content a", "b.txt": "content b"})
-	paths, _, err := snapshot.SelectFilesWithOptions(root, snapshot.SelectOptions{IncludeAll: true})
+	paths, _, _, err := snapshot.SelectFilesWithOptions(root, snapshot.SelectOptions{IncludeAll: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestPartialShipWithColdCacheFailsRetryablyThenFullShipWorks(t *testing.T) {
 	}
 	spec := proto.Spec{
 		V: proto.ProtoVersion, Argv: []string{"/bin/sh", "-c", "true"},
-		ManifestRoot: m.RootHash(), Limits: proto.DefaultLimits(),
+		ManifestRoot: m.RootHash(), Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
 	}
 	id := proto.NewULID()
 

@@ -5,6 +5,7 @@ package snapshot
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,15 +17,19 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
-	ignore "github.com/sabhiram/go-gitignore"
-
+	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
 )
 
-var ErrLimitExceeded = errors.New("snapshot limit exceeded")
+var (
+	ErrLimitExceeded      = errors.New("snapshot limit exceeded")
+	ErrByteLimitExceeded  = fmt.Errorf("%w: byte limit exceeded", ErrLimitExceeded)
+	ErrEntryLimitExceeded = fmt.Errorf("%w: entry limit exceeded", ErrLimitExceeded)
+)
 
 type GitInfo struct {
 	Repository bool
@@ -39,58 +44,110 @@ type SelectOptions struct {
 	IncludeAll bool
 }
 
-const localOutputTransactionPrefix = ".errand-output-"
+// SelectionGuard binds packing to the selection policy and repository state
+// used to build the manifest. It catches policy sources that change after
+// hashing, including ignored .gitignore files that are not themselves packed.
+type SelectionGuard struct {
+	root    string
+	opts    SelectOptions
+	paths   []string
+	gitInfo GitInfo
+	policy  proto.SelectionPolicy
+}
+
+const localChangeTransactionPrefix = ".errand-change-"
 
 // SelectFiles returns the relative (slash-separated) paths to snapshot.
 // Precedence: .errandignore if present, else git's view of tracked plus
 // untracked-unignored files. A recursive non-Git snapshot requires an explicit
 // policy or override. .git is never shipped.
-func SelectFiles(root string) ([]string, GitInfo, error) {
+func SelectFiles(root string) ([]string, GitInfo, proto.SelectionPolicy, error) {
 	return SelectFilesWithOptions(root, SelectOptions{})
 }
 
-func SelectFilesWithOptions(root string, opts SelectOptions) ([]string, GitInfo, error) {
+func SelectFilesWithOptions(root string, opts SelectOptions) ([]string, GitInfo, proto.SelectionPolicy, error) {
 	if err := validateSnapshotRoot(root, opts); err != nil {
-		return nil, GitInfo{}, err
+		return nil, GitInfo{}, proto.SelectionPolicy{}, err
 	}
 	if _, err := os.Lstat(filepath.Join(root, ".errandignore")); err == nil {
 		// The explicit snapshot policy takes precedence even if repository
 		// metadata is incomplete. Git information remains best-effort metadata.
 		data, err := os.ReadFile(filepath.Join(root, ".errandignore"))
 		if err != nil {
-			return nil, GitInfo{}, fmt.Errorf("snapshot: reading .errandignore: %w", err)
+			return nil, GitInfo{}, proto.SelectionPolicy{}, fmt.Errorf("snapshot: reading .errandignore: %w", err)
 		}
 		gi, _ := gitInfo(root)
-		matcher := ignore.CompileIgnoreLines(strings.Split(string(data), "\n")...)
+		policy := proto.SelectionPolicy{Ignore: policyLines(data)}
+		matcher, err := pathpolicy.Compile(policy)
+		if err != nil {
+			return nil, gi, proto.SelectionPolicy{}, fmt.Errorf("snapshot: compiling .errandignore: %w", err)
+		}
 		paths, err := walk(root, matcher)
-		return paths, gi, err
+		if err != nil {
+			return nil, gi, proto.SelectionPolicy{}, err
+		}
+		after, err := os.ReadFile(filepath.Join(root, ".errandignore"))
+		if err != nil {
+			return nil, gi, proto.SelectionPolicy{}, fmt.Errorf("snapshot: re-reading .errandignore: %w", err)
+		}
+		if !bytes.Equal(data, after) {
+			return nil, gi, proto.SelectionPolicy{}, fmt.Errorf("snapshot: .errandignore changed while selecting files")
+		}
+		return paths, gi, policy, nil
 	} else if !os.IsNotExist(err) {
-		return nil, GitInfo{}, fmt.Errorf("snapshot: inspecting .errandignore: %w", err)
+		return nil, GitInfo{}, proto.SelectionPolicy{}, fmt.Errorf("snapshot: inspecting .errandignore: %w", err)
 	}
 	gi, err := gitInfo(root)
 	if err != nil {
-		return nil, gi, err
+		return nil, gi, proto.SelectionPolicy{}, err
 	}
 	return selectFilesWithOptions(root, gi, gitListFiles, opts)
 }
 
-func selectFiles(root string, gi GitInfo, listGitFiles func(string) ([]string, error)) ([]string, GitInfo, error) {
+func SelectFilesGuarded(root string, opts SelectOptions) ([]string, GitInfo, proto.SelectionPolicy, *SelectionGuard, error) {
+	paths, gitInfo, policy, err := SelectFilesWithOptions(root, opts)
+	if err != nil {
+		return nil, GitInfo{}, proto.SelectionPolicy{}, nil, err
+	}
+	guard := &SelectionGuard{
+		root: root, opts: opts, paths: slices.Clone(paths), gitInfo: gitInfo,
+		policy: proto.SelectionPolicy{Prefix: policy.Prefix, Ignore: slices.Clone(policy.Ignore)},
+	}
+	return paths, gitInfo, policy, guard, nil
+}
+
+func (g *SelectionGuard) Verify() error {
+	if g == nil {
+		return nil
+	}
+	paths, gitInfo, policy, err := SelectFilesWithOptions(g.root, g.opts)
+	if err != nil {
+		return fmt.Errorf("snapshot: revalidating selection policy: %w", err)
+	}
+	if gitInfo != g.gitInfo || !slices.Equal(paths, g.paths) || policy.Prefix != g.policy.Prefix ||
+		!slices.Equal(policy.Ignore, g.policy.Ignore) {
+		return fmt.Errorf("snapshot: selection policy changed after manifest construction; retry")
+	}
+	return nil
+}
+
+func selectFiles(root string, gi GitInfo, listGitFiles func(string) ([]string, error)) ([]string, GitInfo, proto.SelectionPolicy, error) {
 	return selectFilesWithOptions(root, gi, listGitFiles, SelectOptions{})
 }
 
-func selectFilesWithOptions(root string, gi GitInfo, listGitFiles func(string) ([]string, error), opts SelectOptions) ([]string, GitInfo, error) {
+func selectFilesWithOptions(root string, gi GitInfo, listGitFiles func(string) ([]string, error), opts SelectOptions) ([]string, GitInfo, proto.SelectionPolicy, error) {
 	if gi.Repository {
-		paths, err := listGitFiles(root)
+		paths, policy, err := stableGitSelection(root, listGitFiles)
 		if err != nil {
-			return nil, gi, fmt.Errorf("snapshot: listing git files: %w", err)
+			return nil, gi, proto.SelectionPolicy{}, fmt.Errorf("snapshot: listing git files: %w", err)
 		}
-		return paths, gi, nil
+		return paths, gi, policy, nil
 	}
 	if !opts.IncludeAll {
-		return nil, gi, fmt.Errorf("snapshot: %q is not a Git worktree and has no .errandignore; add an explicit policy or pass --include-all", root)
+		return nil, gi, proto.SelectionPolicy{}, fmt.Errorf("snapshot: %q is not a Git worktree and has no .errandignore; add an explicit policy or pass --include-all", root)
 	}
-	paths, err := walkWithIgnore(root)
-	return paths, gi, err
+	paths, err := walk(root, nil)
+	return paths, gi, proto.SelectionPolicy{}, err
 }
 
 func validateSnapshotRoot(root string, opts SelectOptions) error {
@@ -193,7 +250,10 @@ func gitListFiles(root string) ([]string, error) {
 		if p == "" {
 			continue
 		}
-		if isLocalOutputTransactionPath(p) {
+		if pathContainsGitMetadata(p) {
+			continue
+		}
+		if isLocalChangeTransactionPath(p) {
 			continue
 		}
 		// git can list files that no longer exist (staged deletes)
@@ -205,17 +265,264 @@ func gitListFiles(root string) ([]string, error) {
 	return paths, nil
 }
 
-func walkWithIgnore(root string) ([]string, error) {
-	var matcher *ignore.GitIgnore
-	if data, err := os.ReadFile(filepath.Join(root, ".errandignore")); err == nil {
-		matcher = ignore.CompileIgnoreLines(strings.Split(string(data), "\n")...)
-	} else if !os.IsNotExist(err) {
-		return nil, fmt.Errorf("snapshot: reading .errandignore: %w", err)
+func stableGitSelection(root string, listGitFiles func(string) ([]string, error)) ([]string, proto.SelectionPolicy, error) {
+	paths, err := listGitFiles(root)
+	if err != nil {
+		return nil, proto.SelectionPolicy{}, err
 	}
-	return walk(root, matcher)
+	policy, err := gitSelectionPolicy(root, paths)
+	if err != nil {
+		return nil, proto.SelectionPolicy{}, err
+	}
+	afterPaths, err := listGitFiles(root)
+	if err != nil {
+		return nil, proto.SelectionPolicy{}, err
+	}
+	afterPolicy, err := gitSelectionPolicy(root, afterPaths)
+	if err != nil {
+		return nil, proto.SelectionPolicy{}, err
+	}
+	if !slices.Equal(paths, afterPaths) || policy.Prefix != afterPolicy.Prefix ||
+		!slices.Equal(policy.Ignore, afterPolicy.Ignore) {
+		return nil, proto.SelectionPolicy{}, fmt.Errorf("Git selection policy changed while selecting files")
+	}
+	return paths, policy, nil
 }
 
-func walk(root string, matcher *ignore.GitIgnore) ([]string, error) {
+func gitSelectionPolicy(root string, _ []string) (proto.SelectionPolicy, error) {
+	worktreeRoot, prefix, err := gitWorktreeContext(root)
+	if err != nil {
+		return proto.SelectionPolicy{}, err
+	}
+	var patterns []string
+	if global, ok, err := gitConfigPath(root, "core.excludesFile"); err != nil {
+		return proto.SelectionPolicy{}, err
+	} else if ok {
+		if !filepath.IsAbs(global) {
+			global = filepath.Join(worktreeRoot, global)
+		}
+		lines, err := optionalPolicyFileFollowingSymlinks(global, "")
+		if err != nil {
+			return proto.SelectionPolicy{}, err
+		}
+		patterns = append(patterns, lines...)
+	}
+	infoPath, err := gitPath(root, "info/exclude")
+	if err != nil {
+		return proto.SelectionPolicy{}, err
+	}
+	lines, err := optionalPolicyFileFollowingSymlinks(infoPath, "")
+	if err != nil {
+		return proto.SelectionPolicy{}, err
+	}
+	patterns = append(patterns, lines...)
+
+	ignoreFiles, err := gitIgnorePolicyFiles(root, worktreeRoot, prefix)
+	if err != nil {
+		return proto.SelectionPolicy{}, err
+	}
+	sort.Slice(ignoreFiles, func(i, j int) bool {
+		leftDepth := strings.Count(ignoreFiles[i], "/")
+		rightDepth := strings.Count(ignoreFiles[j], "/")
+		if leftDepth != rightDepth {
+			return leftDepth < rightDepth
+		}
+		return ignoreFiles[i] < ignoreFiles[j]
+	})
+	for _, ignoreFile := range ignoreFiles {
+		base := path.Dir(ignoreFile)
+		if base == "." {
+			base = ""
+		}
+		lines, err := optionalPolicyFile(filepath.Join(worktreeRoot, filepath.FromSlash(ignoreFile)), base)
+		if err != nil {
+			return proto.SelectionPolicy{}, err
+		}
+		patterns = append(patterns, lines...)
+	}
+	policy := proto.SelectionPolicy{Prefix: prefix, Ignore: patterns}
+	if _, err := pathpolicy.Compile(policy); err != nil {
+		return proto.SelectionPolicy{}, err
+	}
+	return policy, nil
+}
+
+func gitIgnorePolicyFiles(root, worktreeRoot, prefix string) ([]string, error) {
+	files := make(map[string]struct{})
+	for base := ""; ; {
+		name := path.Join(base, ".gitignore")
+		if _, err := os.Lstat(filepath.Join(worktreeRoot, filepath.FromSlash(name))); err == nil {
+			files[name] = struct{}{}
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+		if base == prefix {
+			break
+		}
+		remainder := prefix
+		if base != "" {
+			remainder = strings.TrimPrefix(prefix, base+"/")
+		}
+		next := strings.SplitN(remainder, "/", 2)[0]
+		if base == "" {
+			base = next
+		} else {
+			base = path.Join(base, next)
+		}
+	}
+	commands := [][]string{
+		{"ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ".gitignore", ":(glob)**/.gitignore"},
+		{"ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", ".gitignore", ":(glob)**/.gitignore"},
+	}
+	for _, args := range commands {
+		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).Output()
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range strings.Split(string(out), "\x00") {
+			if name != "" {
+				if prefix != "" {
+					name = path.Join(prefix, name)
+				}
+				files[name] = struct{}{}
+			}
+		}
+	}
+	result := make([]string, 0, len(files))
+	for name := range files {
+		result = append(result, name)
+	}
+	return result, nil
+}
+
+func gitWorktreeContext(root string) (string, string, error) {
+	out, err := exec.Command("git", "-C", root, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", "", err
+	}
+	worktreeRoot := filepath.Clean(strings.TrimSuffix(string(out), "\n"))
+	worktreeRoot, err = filepath.EvalSymlinks(worktreeRoot)
+	if err != nil {
+		return "", "", err
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", "", err
+	}
+	absRoot, err = filepath.EvalSymlinks(absRoot)
+	if err != nil {
+		return "", "", err
+	}
+	prefix, err := filepath.Rel(worktreeRoot, absRoot)
+	if err != nil || prefix == ".." || strings.HasPrefix(prefix, ".."+string(filepath.Separator)) {
+		return "", "", fmt.Errorf("snapshot root %q is outside Git worktree %q", absRoot, worktreeRoot)
+	}
+	if prefix == "." {
+		prefix = ""
+	} else {
+		prefix = filepath.ToSlash(prefix)
+	}
+	return worktreeRoot, prefix, nil
+}
+
+func gitConfigPath(root, key string) (string, bool, error) {
+	out, err := exec.Command("git", "-C", root, "config", "--path", "--get", key).Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	value := strings.TrimSuffix(string(out), "\n")
+	if value == "" {
+		return "", false, nil
+	}
+	return value, true, nil
+}
+
+func gitPath(root, name string) (string, error) {
+	out, err := exec.Command("git", "-C", root, "rev-parse", "--git-path", name).Output()
+	if err != nil {
+		return "", err
+	}
+	value := strings.TrimSuffix(string(out), "\n")
+	if !filepath.IsAbs(value) {
+		value = filepath.Join(root, value)
+	}
+	return value, nil
+}
+
+func optionalPolicyFile(name, base string) ([]string, error) {
+	return optionalPolicyFileWithStat(name, base, os.Lstat)
+}
+
+func optionalPolicyFileFollowingSymlinks(name, base string) ([]string, error) {
+	return optionalPolicyFileWithStat(name, base, os.Stat)
+}
+
+func optionalPolicyFileWithStat(name, base string, stat func(string) (fs.FileInfo, error)) ([]string, error) {
+	info, err := stat(name)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, nil
+	}
+	data, err := os.ReadFile(name)
+	if err != nil {
+		return nil, err
+	}
+	lines := policyLines(data)
+	if base == "" {
+		return lines, nil
+	}
+	for i := range lines {
+		lines[i] = rebaseIgnorePattern(base, lines[i])
+	}
+	return lines, nil
+}
+
+func policyLines(data []byte) []string {
+	lines := strings.Split(string(data), "\n")
+	compacted := lines[:0]
+	for _, line := range lines {
+		line = strings.TrimSuffix(line, "\r")
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		compacted = append(compacted, line)
+	}
+	return compacted
+}
+
+func rebaseIgnorePattern(base, pattern string) string {
+	if pattern == "" || strings.HasPrefix(pattern, "#") {
+		return pattern
+	}
+	if base == "" {
+		return pattern
+	}
+	prefix := ""
+	body := pattern
+	if strings.HasPrefix(body, "!") {
+		prefix = "!"
+		body = strings.TrimPrefix(body, "!")
+	}
+	if strings.HasPrefix(body, "/") {
+		return prefix + "/" + base + "/" + strings.TrimPrefix(body, "/")
+	}
+	withoutDirectorySlash := strings.TrimSuffix(body, "/")
+	if !strings.Contains(withoutDirectorySlash, "/") {
+		return prefix + "/" + base + "/**/" + body
+	}
+	return prefix + "/" + base + "/" + body
+}
+
+func walk(root string, matcher *pathpolicy.Matcher) ([]string, error) {
 	var paths []string
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -229,19 +536,19 @@ func walk(root string, matcher *ignore.GitIgnore) ([]string, error) {
 		if rel == "." {
 			return nil
 		}
-		if isLocalOutputTransactionPath(rel) {
+		if isLocalChangeTransactionPath(rel) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if pathBase := filepath.Base(p); pathBase == ".git" {
+		if pathContainsGitMetadata(rel) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if matcher != nil && matcher.MatchesPath(rel) {
+		if matcher != nil && matcher.Ignored(rel, d.IsDir()) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -254,12 +561,21 @@ func walk(root string, matcher *ignore.GitIgnore) ([]string, error) {
 	return paths, err
 }
 
-func isLocalOutputTransactionPath(rel string) bool {
+func isLocalChangeTransactionPath(rel string) bool {
 	first, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
-	if !strings.HasPrefix(first, localOutputTransactionPrefix) {
+	if !strings.HasPrefix(first, localChangeTransactionPrefix) {
 		return false
 	}
-	return proto.ValidULID(strings.TrimPrefix(first, localOutputTransactionPrefix))
+	return proto.ValidULID(strings.TrimPrefix(first, localChangeTransactionPrefix))
+}
+
+func pathContainsGitMetadata(rel string) bool {
+	for _, component := range strings.Split(filepath.ToSlash(rel), "/") {
+		if strings.EqualFold(component, ".git") {
+			return true
+		}
+	}
+	return false
 }
 
 // Build lstats and hashes every selected path into a manifest.
@@ -294,7 +610,7 @@ func BuildBoundedContext(ctx context.Context, root string, paths []string, maxBy
 			return m, err
 		}
 		if maxEntries >= 0 && len(m.Entries) >= maxEntries {
-			return m, fmt.Errorf("snapshot: %w: manifest exceeds %d entries", ErrLimitExceeded, maxEntries)
+			return m, fmt.Errorf("snapshot: %w: manifest exceeds %d entries", ErrEntryLimitExceeded, maxEntries)
 		}
 		abs := filepath.Join(root, filepath.FromSlash(rel))
 		fi, err := os.Lstat(abs)
@@ -316,7 +632,7 @@ func BuildBoundedContext(ctx context.Context, root string, paths []string, maxBy
 			e.Type = proto.EntryFile
 			e.Size = fi.Size()
 			if maxBytes >= 0 && e.Size > maxBytes-bytes {
-				return m, fmt.Errorf("snapshot: %w: files exceed %d bytes", ErrLimitExceeded, maxBytes)
+				return m, fmt.Errorf("snapshot: %w: files exceed %d bytes", ErrByteLimitExceeded, maxBytes)
 			}
 			bytes += e.Size
 			sum, err := hashFileSizedContext(ctx, abs, fi.Size(), fi.Mode())
@@ -341,7 +657,13 @@ func Pack(w io.Writer, root string, m proto.Manifest) error {
 
 // PackContext is Pack with cancellation for long archive writes.
 func PackContext(ctx context.Context, w io.Writer, root string, m proto.Manifest) error {
-	return PackPartialContext(ctx, w, root, m, nil)
+	return packPartialContext(ctx, w, root, m, nil, nil)
+}
+
+// PackContextWithPhysicalModes packs logical manifest modes while validating
+// temporary on-disk modes used to read a private tree.
+func PackContextWithPhysicalModes(ctx context.Context, w io.Writer, root string, m proto.Manifest, physicalModes map[string]uint32) error {
+	return packPartialContext(ctx, w, root, m, nil, physicalModes)
 }
 
 // PackPartial revalidates every entry but writes only selected files.
@@ -352,6 +674,10 @@ func PackPartial(w io.Writer, root string, m proto.Manifest, shipFile func(proto
 
 // PackPartialContext is PackPartial with cancellation for long archive writes.
 func PackPartialContext(ctx context.Context, w io.Writer, root string, m proto.Manifest, shipFile func(proto.ManifestEntry) bool) error {
+	return packPartialContext(ctx, w, root, m, shipFile, nil)
+}
+
+func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.Manifest, shipFile func(proto.ManifestEntry) bool, physicalModes map[string]uint32) error {
 	if len(m.Entries) == 0 {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -369,10 +695,14 @@ func PackPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			return err
 		}
 		hdr := &tar.Header{Name: e.Path, Mode: int64(e.Mode)}
+		expectedMode := e.Mode
+		if mode, ok := physicalModes[e.Path]; ok {
+			expectedMode = mode
+		}
 		switch e.Type {
 		case proto.EntryDir:
 			fi, err := rootFS.Lstat(e.Path)
-			if err != nil || !fi.IsDir() || uint32(fi.Mode().Perm()) != e.Mode {
+			if err != nil || !fi.IsDir() || uint32(fi.Mode().Perm()) != expectedMode {
 				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			hdr.Typeflag = tar.TypeDir
@@ -382,7 +712,7 @@ func PackPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			}
 		case proto.EntrySymlink:
 			fi, err := rootFS.Lstat(e.Path)
-			if err != nil || fi.Mode()&fs.ModeSymlink == 0 || uint32(fi.Mode().Perm()) != e.Mode {
+			if err != nil || fi.Mode()&fs.ModeSymlink == 0 || uint32(fi.Mode().Perm()) != expectedMode {
 				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			target, err := rootFS.Readlink(e.Path)
@@ -399,7 +729,7 @@ func PackPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if err != nil {
 				return fmt.Errorf("snapshot: %s vanished during pack: %w", e.Path, err)
 			}
-			if !fi.Mode().IsRegular() || fi.Size() != e.Size || uint32(fi.Mode().Perm()) != e.Mode {
+			if !fi.Mode().IsRegular() || fi.Size() != e.Size || uint32(fi.Mode().Perm()) != expectedMode {
 				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			f, err := rootFS.Open(e.Path)
@@ -407,7 +737,7 @@ func PackPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 				return fmt.Errorf("snapshot: %s changed during pack; retry: %w", e.Path, err)
 			}
 			opened, err := f.Stat()
-			if err != nil || !opened.Mode().IsRegular() || opened.Size() != e.Size || uint32(opened.Mode().Perm()) != e.Mode {
+			if err != nil || !opened.Mode().IsRegular() || opened.Size() != e.Size || uint32(opened.Mode().Perm()) != expectedMode {
 				f.Close()
 				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
 			}
@@ -439,7 +769,7 @@ func PackPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			}
 			if n != e.Size || hex.EncodeToString(h.Sum(nil)) != e.SHA256 ||
 				extraN != 0 || extraErr != io.EOF || statErr != nil || !closed.Mode().IsRegular() ||
-				closed.Size() != e.Size || uint32(closed.Mode().Perm()) != e.Mode {
+				closed.Size() != e.Size || uint32(closed.Mode().Perm()) != expectedMode {
 				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
 			}
 		}

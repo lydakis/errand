@@ -28,7 +28,7 @@ func exitCode(st proto.JobStatus, stderr io.Writer, handle string) int {
 		return ExitTransaction
 	}
 
-	transactionOK := !ambiguous && res.CleanupOK && res.OutputsOK && res.LimitExceeded == "" &&
+	transactionOK := !ambiguous && res.CleanupOK && res.ChangesOK && res.LimitExceeded == "" &&
 		res.StartError == "" && res.TransactionError == "" && res.LogsComplete
 	switch {
 	case res.StartError != "":
@@ -76,15 +76,15 @@ func exitCode(st proto.JobStatus, stderr io.Writer, handle string) int {
 }
 
 // appendSecondaryResultFailures renders the transaction layer independently
-// of the process outcome, including incomplete declared outputs.
+// of the process outcome, including incomplete workspace change retention.
 func appendSecondaryResultFailures(
 	details []string,
 	res *proto.Result,
-	includeOutputs bool,
+	includeChanges bool,
 	transactionPrefix string,
 ) []string {
-	if includeOutputs && !res.OutputsOK {
-		details = append(details, "outputs incomplete")
+	if includeChanges && !res.ChangesOK {
+		details = append(details, "workspace changes incomplete")
 	}
 	if !res.CleanupOK {
 		details = append(details, "cleanup failed")

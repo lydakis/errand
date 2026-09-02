@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,10 +51,13 @@ func TestSubmitRejectsMismatchedDigestHeader(t *testing.T) {
 
 func TestProjectMetadataIsOptionalAndBounded(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPut, "/v0/jobs/"+proto.NewULID(), nil)
-	r.Header.Set("X-Errand-Project", strings.Repeat("x", maxListProjectBytes+1))
+	if got, truncated := projectMetadata(r); got != "" || truncated {
+		t.Fatalf("missing project metadata = %q, %v", got, truncated)
+	}
+	r.Header.Set("X-Errand-Project-B64", base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("x", maxListProjectBytes+1))))
 	got, truncated := projectMetadata(r)
 	if len(got) > maxListProjectBytes || !strings.HasSuffix(got, "…") || !truncated {
-		t.Fatalf("bounded legacy project metadata = %q (%d bytes)", got, len(got))
+		t.Fatalf("bounded project metadata = %q (%d bytes)", got, len(got))
 	}
 
 	r.Header.Set("X-Errand-Project-B64", "not valid base64 %%%")
@@ -65,7 +69,7 @@ func TestProjectMetadataIsOptionalAndBounded(t *testing.T) {
 func TestRejectedUploadDoesNotBurnJobID(t *testing.T) {
 	_, ts := testDaemon(t)
 	root := workspaceWith(t, map[string]string{"input.txt": "ok"})
-	paths, _, err := snapshot.SelectFiles(root)
+	paths, _, _, err := snapshot.SelectFiles(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +132,7 @@ func (r *blockingReader) Close() error {
 
 func TestKillDuringStagingPreventsExecution(t *testing.T) {
 	root := workspaceWith(t, map[string]string{"input.txt": "ok"})
-	paths, _, err := snapshot.SelectFiles(root)
+	paths, _, _, err := snapshot.SelectFiles(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +199,7 @@ func TestKillDuringStagingPreventsExecution(t *testing.T) {
 
 func TestKillDuringCacheInsertionPreventsExecution(t *testing.T) {
 	root := workspaceWith(t, map[string]string{"input.txt": "cache me"})
-	paths, _, err := snapshot.SelectFiles(root)
+	paths, _, _, err := snapshot.SelectFiles(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +249,7 @@ func TestKillDuringCacheInsertionPreventsExecution(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		events, _ := os.ReadFile(filepath.Join(j.Dir, "events.ndjson"))
-		if strings.Contains(string(events), "workspace-extracted") {
+		if strings.Contains(string(events), "change-base-captured") {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -381,7 +385,7 @@ func TestResultWriteFailureIsAmbiguous(t *testing.T) {
 	j := &Job{ID: proto.NewULID(), Dir: dir, state: proto.StateRunning, done: make(chan struct{})}
 	d := &Daemon{jobs: map[string]*Job{j.ID: j}, running: map[string]*Job{j.ID: j}}
 	code := 0
-	j.finalize(d, &proto.Result{ExitCode: &code, OutputsOK: true, LogsComplete: true}, false)
+	j.finalize(d, &proto.Result{ExitCode: &code, ChangesOK: true, LogsComplete: true}, false)
 	if got := j.Status().State; got != StateAmbiguous {
 		t.Fatalf("state after result write failure = %q, want %q", got, StateAmbiguous)
 	}
@@ -407,7 +411,7 @@ func TestFinalizeRemovesWorkspaceWithRestrictiveDirectoryModes(t *testing.T) {
 	d := &Daemon{jobs: map[string]*Job{id: j}, running: map[string]*Job{id: j}}
 	code := 0
 	j.finalize(d, &proto.Result{
-		ExitCode: &code, OutputsOK: true, LogsComplete: true, CleanupOK: true,
+		ExitCode: &code, ChangesOK: true, LogsComplete: true, CleanupOK: true,
 	}, false)
 
 	status := j.Status()
@@ -664,7 +668,7 @@ func TestProcessStartErrorDoesNotExposeDeclaredPATH(t *testing.T) {
 	if err := os.Chmod(filepath.Join(root, "secret-dir", "tool"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	paths, _, err := snapshot.SelectFiles(root)
+	paths, _, _, err := snapshot.SelectFiles(root)
 	if err != nil {
 		t.Fatal(err)
 	}

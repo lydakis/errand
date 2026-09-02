@@ -1,6 +1,6 @@
-//go:build darwin
+//go:build linux
 
-package outputs
+package changes
 
 import (
 	"os"
@@ -9,5 +9,5 @@ import (
 )
 
 func renameNoReplace(fromDir *os.File, from string, toDir *os.File, to string) error {
-	return unix.RenameatxNp(int(fromDir.Fd()), from, int(toDir.Fd()), to, unix.RENAME_EXCL)
+	return unix.Renameat2(int(fromDir.Fd()), from, int(toDir.Fd()), to, unix.RENAME_NOREPLACE)
 }

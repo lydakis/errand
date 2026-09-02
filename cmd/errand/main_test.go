@@ -47,7 +47,7 @@ func TestCmdRunRejectsWorkspaceRootWithoutSnapshot(t *testing.T) {
 
 func TestCmdGCRequiresExplicitTarget(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := cmdGCTo(nil, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "cache|jobs|outputs|all") {
+	if code := cmdGCTo(nil, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "cache|jobs|changes|all") {
 		t.Fatalf("bare gc = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
@@ -57,6 +57,15 @@ func TestCmdGCRejectsUnexpectedArguments(t *testing.T) {
 	if code := cmdGCTo([]string{"cache", "unexpected"}, &stdout, &stderr); code != 2 ||
 		!strings.Contains(stderr.String(), "unexpected gc arguments") {
 		t.Fatalf("gc extra args = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestCmdGCChangesUsesExplicitLocalTarget(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	var stdout, stderr bytes.Buffer
+	if code := cmdGCTo([]string{"changes", "--older-than", "1d", "--dry-run"}, &stdout, &stderr); code != 0 ||
+		!strings.Contains(stdout.String(), "local changes: would remove 0 records") {
+		t.Fatalf("gc changes = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
 
@@ -92,8 +101,8 @@ func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
 			})
 		case "/v0/jobs/collected":
 			collectedCalls++
-			if !proto.ValidOutputClientID(r.URL.Query().Get("client_id")) {
-				t.Errorf("invalid output client ID %q", r.URL.Query().Get("client_id"))
+			if !proto.ValidChangeClientID(r.URL.Query().Get("client_id")) {
+				t.Errorf("invalid change client ID %q", r.URL.Query().Get("client_id"))
 			}
 			json.NewEncoder(w).Encode(proto.CollectedJobsPage{JobIDs: []string{jobID}})
 		case "/v0/jobs/collected/ack":
@@ -532,7 +541,7 @@ url = %q
 		t.Fatalf("df exit = %d; stderr=%q", code, stderr.String())
 	}
 	out := stdout.String()
-	for _, want := range []string{"LOCATION", "CACHE", "JOBS", "OUTPUTS", "TOTAL", "cabal", "mac-mini", "local", "6.0 MiB", "1.0 GiB", "56 MiB", "84 MiB"} {
+	for _, want := range []string{"LOCATION", "CACHE", "JOBS", "CHANGES", "TOTAL", "cabal", "mac-mini", "local", "6.0 MiB", "1.0 GiB", "56 MiB", "84 MiB"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("df output missing %q:\n%s", want, out)
 		}
@@ -564,9 +573,12 @@ url = %q
 	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
 		t.Fatalf("decoding df JSON: %v; output=%q", err, stdout.String())
 	}
+	if !strings.Contains(stdout.String(), `"changes"`) {
+		t.Fatalf("df JSON does not expose local changes: %s", stdout.String())
+	}
 	if len(rows) != 2 || rows[0].Location != "cabal" || rows[0].Cache == nil ||
 		rows[0].Cache.Bytes != 42 || rows[0].Jobs.Bytes != 58 || rows[0].TotalBytes != 100 ||
-		rows[1].Location != "local" || rows[1].Outputs == nil {
+		rows[1].Location != "local" || rows[1].Changes == nil {
 		t.Fatalf("df JSON = %+v", rows)
 	}
 }

@@ -40,7 +40,7 @@ func testInterruptNotifications() interruptNotifications {
 
 func TestSignalExitUsesSignalNumber(t *testing.T) {
 	code := exitCode(proto.JobStatus{Result: &proto.Result{
-		Signal: "segmentation fault", OutputsOK: true, CleanupOK: true, LogsComplete: true,
+		Signal: "segmentation fault", ChangesOK: true, CleanupOK: true, LogsComplete: true,
 	}}, &bytes.Buffer{}, "peer/job")
 	if code != 139 {
 		t.Fatalf("SIGSEGV exit = %d, want 139", code)
@@ -115,11 +115,8 @@ func TestOutputlessRunSendsCanonicalLimits(t *testing.T) {
 				return
 			}
 			limits, _ := wire["limits"].(map[string]any)
-			if got, exists := limits["max_output_bytes"]; !exists || int64(got.(float64)) != proto.DefaultLimits().MaxOutputBytes {
-				t.Errorf("max_output_bytes = %v, want %d", got, proto.DefaultLimits().MaxOutputBytes)
-			}
-			if _, exists := wire["outputs"]; exists {
-				t.Error("output-less request unexpectedly declared outputs")
+			if got, exists := limits["max_change_bytes"]; !exists || int64(got.(float64)) != proto.DefaultLimits().MaxChangeBytes {
+				t.Errorf("max_change_bytes = %v, want %d", got, proto.DefaultLimits().MaxChangeBytes)
 			}
 			for {
 				part, err := mr.NextPart()
@@ -138,7 +135,7 @@ func TestOutputlessRunSendsCanonicalLimits(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			zero := 0
 			status, _ := json.Marshal(proto.JobStatus{State: proto.StateExited, Result: &proto.Result{
-				ExitCode: &zero, OutputsOK: true, CleanupOK: true, LogsComplete: true,
+				ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true,
 			}})
 			fmt.Fprintf(w, "event: status\ndata: %s\n\n", status)
 		default:
@@ -239,7 +236,7 @@ func TestStorageStatsUsesStorageDeadline(t *testing.T) {
 func TestSignaledExitReportsTransactionFailures(t *testing.T) {
 	var stderr bytes.Buffer
 	code := exitCode(proto.JobStatus{Result: &proto.Result{
-		Signal: "killed", SignalNum: 9, OutputsOK: true,
+		Signal: "killed", SignalNum: 9, ChangesOK: true,
 		CleanupOK: false, LogsComplete: false, TransactionError: "scope cleanup failed",
 	}}, &stderr, "peer/job")
 	if code != 137 {
@@ -258,16 +255,16 @@ func TestExitDiagnosticsReportAllTransactionFailures(t *testing.T) {
 		want   string
 		code   int
 	}{
-		"successful process with incomplete outputs": {
+		"successful process with incomplete changes": {
 			status: proto.JobStatus{Result: &proto.Result{
 				ExitCode: &zero, CleanupOK: true, LogsComplete: true,
 			}},
-			want: "errand: transaction incomplete (remote_exit=0, outputs incomplete)\n",
+			want: "errand: transaction incomplete (remote_exit=0, workspace changes incomplete)\n",
 			code: ExitTransaction,
 		},
 		"failed process with secondary transaction failures": {
 			status: proto.JobStatus{Result: &proto.Result{
-				ExitCode: &seven, OutputsOK: true, CleanupOK: false, LogsComplete: false,
+				ExitCode: &seven, ChangesOK: true, CleanupOK: false, LogsComplete: false,
 				LimitExceeded: "runtime", TransactionError: "persisting result failed",
 			}},
 			want: "errand: transaction incomplete (remote_exit=7, cleanup failed, limit exceeded: runtime, logs truncated, persisting result failed)\n",
@@ -323,7 +320,7 @@ func TestInterruptIsForwardedBeforeSubmitResponse(t *testing.T) {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/logs"):
 			w.Header().Set("Content-Type", "text/event-stream")
 			status := proto.JobStatus{State: proto.StateKilled, Result: &proto.Result{
-				Signal: "interrupt", SignalNum: 2, OutputsOK: true, CleanupOK: true, LogsComplete: true,
+				Signal: "interrupt", SignalNum: 2, ChangesOK: true, CleanupOK: true, LogsComplete: true,
 			}}
 			payload, _ := json.Marshal(status)
 			fmt.Fprintf(w, "event: status\ndata: %s\n\n", payload)
@@ -668,6 +665,58 @@ func TestAttachCanDetachWithoutControllingTheRemoteJob(t *testing.T) {
 	}
 }
 
+func TestAttachDoesNotFetchTerminalWorkspaceChanges(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	jobID := proto.NewULID()
+	var changeRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs/"+jobID:
+			_ = json.NewEncoder(w).Encode(proto.JobStatus{ID: jobID, State: proto.StateRunning})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/logs"):
+			w.Header().Set("Content-Type", "text/event-stream")
+			zero := 0
+			status, _ := json.Marshal(proto.JobStatus{ID: jobID, State: proto.StateExited, Result: &proto.Result{
+				ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true,
+				Changes: &proto.ChangeSummary{PathCount: 1, Paths: []string{"artifact"}},
+			}})
+			fmt.Fprintf(w, "event: status\ndata: %s\n\n", status)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/changes"):
+			changeRequests.Add(1)
+			http.Error(w, "attach must not fetch changes", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	if err := saveLocalChangeState(localChangeState{
+		JobID: jobID, PeerURL: server.URL, Root: t.TempDir(), ManifestRoot: (proto.Manifest{}).RootHash(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	code := attachWithDetachNotifications(AttachOptions{
+		PeerURL: server.URL, JobID: jobID, Stdout: io.Discard, Stderr: &stderr,
+	}, make(chan os.Signal, 2), testInterruptNotifications(), nil)
+	if code != 0 {
+		t.Fatalf("attach exit = %d; stderr: %s", code, stderr.String())
+	}
+	if got := changeRequests.Load(); got != 0 {
+		t.Fatalf("attach made %d workspace change requests", got)
+	}
+	if strings.Contains(stderr.String(), "workspace changes staged") {
+		t.Fatalf("attach staged workspace changes: %s", stderr.String())
+	}
+	state, err := loadLocalChangeState(server.URL, jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Terminal {
+		t.Fatal("attach did not settle the local terminal state")
+	}
+}
+
 func TestDetachOnEOFIsTTYOnly(t *testing.T) {
 	if ch := detachOnEOFContext(context.Background(), strings.NewReader(""), false); ch != nil {
 		t.Fatal("non-TTY EOF enabled interactive detachment")
@@ -972,13 +1021,13 @@ func TestControlJSONGetCancelsAStalledResponseBody(t *testing.T) {
 func TestAmbiguousResultReportsTransactionExplanation(t *testing.T) {
 	var stderr bytes.Buffer
 	code := exitCode(proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{
-		State: proto.StateAmbiguous, StartError: "exec format error", OutputsOK: false, CleanupOK: false, LogsComplete: false,
+		State: proto.StateAmbiguous, StartError: "exec format error", ChangesOK: false, CleanupOK: false, LogsComplete: false,
 		TransactionError: "execution state unknown; not replayed",
 	}}, &stderr, "cabal/job")
 	if code != ExitTransaction {
 		t.Fatalf("ambiguous result exit = %d, want %d", code, ExitTransaction)
 	}
-	want := "errand: transaction incomplete (cabal/job, state=ambiguous, start error: exec format error, outputs incomplete, cleanup failed, logs truncated, execution state unknown; not replayed)\n"
+	want := "errand: transaction incomplete (cabal/job, state=ambiguous, start error: exec format error, workspace changes incomplete, cleanup failed, logs truncated, execution state unknown; not replayed)\n"
 	if got := stderr.String(); got != want {
 		t.Fatalf("ambiguous transaction report = %q, want %q", got, want)
 	}
@@ -991,17 +1040,17 @@ func TestAmbiguousStatePreservesRecordedNonzeroProcessOutcome(t *testing.T) {
 		want   int
 	}{
 		"exit": {
-			result: &proto.Result{State: proto.StateAmbiguous, ExitCode: &codeSeven, OutputsOK: true, CleanupOK: true,
+			result: &proto.Result{State: proto.StateAmbiguous, ExitCode: &codeSeven, ChangesOK: true, CleanupOK: true,
 				LogsComplete: true, TransactionError: "persisting result failed"},
 			want: 7,
 		},
 		"signal": {
-			result: &proto.Result{State: proto.StateAmbiguous, Signal: "killed", SignalNum: 9, OutputsOK: true,
+			result: &proto.Result{State: proto.StateAmbiguous, Signal: "killed", SignalNum: 9, ChangesOK: true,
 				CleanupOK: true, LogsComplete: true, TransactionError: "persisting result failed"},
 			want: 137,
 		},
 		"start": {
-			result: &proto.Result{State: proto.StateAmbiguous, StartError: "exec format error", OutputsOK: true,
+			result: &proto.Result{State: proto.StateAmbiguous, StartError: "exec format error", ChangesOK: true,
 				CleanupOK: true, LogsComplete: true, TransactionError: "rollback failed"},
 			want: ExitTransaction,
 		},
@@ -1026,7 +1075,7 @@ func TestAmbiguousStatePreservesRecordedNonzeroProcessOutcome(t *testing.T) {
 func TestAmbiguousSuccessfulExitRemainsTransactionFailure(t *testing.T) {
 	zero := 0
 	code := exitCode(proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{
-		State: proto.StateAmbiguous, ExitCode: &zero, OutputsOK: true, CleanupOK: true,
+		State: proto.StateAmbiguous, ExitCode: &zero, ChangesOK: true, CleanupOK: true,
 		LogsComplete: true, TransactionError: "persisting result failed",
 	}}, io.Discard, "cabal/job")
 	if code != ExitTransaction {
@@ -1042,7 +1091,7 @@ func TestTerminalJobLogReplayFailureIsTransactionFailure(t *testing.T) {
 	code := 0
 	_, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{
 		ID: "job", State: proto.StateExited,
-		Result: &proto.Result{ExitCode: &code, OutputsOK: true, CleanupOK: true, LogsComplete: true},
+		Result: &proto.Result{ExitCode: &code, ChangesOK: true, CleanupOK: true, LogsComplete: true},
 	})
 	if err == nil {
 		t.Fatal("terminal log replay failure was discarded")
@@ -1063,7 +1112,7 @@ func TestTerminalJobRetriesTransientLogReplay(t *testing.T) {
 	code := 0
 	final, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{
 		ID: "job", State: proto.StateExited,
-		Result: &proto.Result{ExitCode: &code, OutputsOK: true, CleanupOK: true, LogsComplete: true},
+		Result: &proto.Result{ExitCode: &code, ChangesOK: true, CleanupOK: true, LogsComplete: true},
 	})
 	if err != nil {
 		t.Fatal(err)

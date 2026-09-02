@@ -67,7 +67,7 @@ func forceKill(t *testing.T, url, id string) {
 
 func blockedSubmit(t *testing.T, url, id, root string, argv []string) (<-chan struct{}, func(), <-chan *http.Response) {
 	t.Helper()
-	paths, _, err := snapshot.SelectFiles(root)
+	paths, _, _, err := snapshot.SelectFiles(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func blockedSubmit(t *testing.T, url, id, root string, argv []string) (<-chan st
 	}
 	spec := proto.Spec{
 		V: proto.ProtoVersion, Argv: argv,
-		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
+		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
 	}
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
@@ -416,7 +416,7 @@ func TestCancellationBetweenStageAndQueueSettlesWithoutWaitingForSlot(t *testing
 func TestIdleLaunchFailureSettlesDurableReceipt(t *testing.T) {
 	d, ts := concurrencyDaemon(t, 1, 1)
 	root := workspaceWith(t, map[string]string{"f": "x"})
-	paths, _, err := snapshot.SelectFiles(root)
+	paths, _, _, err := snapshot.SelectFiles(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,6 +495,12 @@ func TestRestartSettlesPersistedQueuedJobAsNeverStarted(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(dir, "change-base"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".change-base-partial"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	spec := proto.Spec{V: proto.ProtoVersion, Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits()}
 	j := &Job{ID: id, Dir: dir, Spec: spec, Admission: proto.Admission{Time: time.Now()}}
 	if err := j.writeJSON("spec.json", proto.NewReceiptSpec(spec)); err != nil {
@@ -520,6 +526,11 @@ func TestRestartSettlesPersistedQueuedJobAsNeverStarted(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, queuedMarkerName)); err != nil {
 		t.Fatalf("queued evidence was removed before durable settlement: %v", err)
+	}
+	for _, name := range []string{"change-base", ".change-base-partial"} {
+		if _, err := os.Lstat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Fatalf("queued restart retained %s: %v", name, err)
+		}
 	}
 }
 

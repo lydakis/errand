@@ -26,8 +26,9 @@ import (
 	"time"
 
 	"github.com/lydakis/errand/internal/archive"
+	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/logio"
-	outputops "github.com/lydakis/errand/internal/outputs"
+	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -37,7 +38,7 @@ const (
 	maxSpecBytes          = 1 << 20
 	maxManifestBytes      = 64 << 20
 	defaultUploadOverhead = 1 << 30
-	outputStreamIdleLimit = 2 * time.Minute
+	changeStreamIdleLimit = 2 * time.Minute
 )
 
 const (
@@ -99,7 +100,7 @@ func New(cfg Config) (*Daemon, error) {
 		cfg.MaxLimits = proto.DefaultLimits()
 	}
 	if cfg.MaxLimits.MaxLogBytes <= 0 || cfg.MaxLimits.MaxRuntimeSec <= 0 ||
-		cfg.MaxLimits.MaxWorkspaceBytes <= 0 || cfg.MaxLimits.MaxOutputBytes <= 0 {
+		cfg.MaxLimits.MaxWorkspaceBytes <= 0 || cfg.MaxLimits.MaxChangeBytes <= 0 {
 		return nil, fmt.Errorf("runner limit ceilings must be positive")
 	}
 	if cfg.MaxUploadBytes == 0 {
@@ -299,8 +300,8 @@ func (d *Daemon) loadExisting() error {
 			continue
 		}
 		dir := filepath.Join(d.jobsDir(), ent.Name())
-		if err := outputops.CleanupTemps(dir); err != nil {
-			return fmt.Errorf("cleaning interrupted output collection %s: %w", ent.Name(), err)
+		if err := changeops.CleanupTemps(dir); err != nil {
+			return fmt.Errorf("cleaning interrupted change collection %s: %w", ent.Name(), err)
 		}
 		j := &Job{
 			ID: ent.Name(), Dir: dir, done: make(chan struct{}),
@@ -376,7 +377,7 @@ func isolateUnreadableReceipt(j *Job, name string, decodeErr error) {
 	detail := fmt.Sprintf("receipt is unreadable: %s: %v", name, decodeErr)
 	res := &proto.Result{
 		State: proto.StateAmbiguous, SettledAt: &settledAt,
-		OutputsOK: false, CleanupOK: len(cleanupErrs) == 0, LogsComplete: false,
+		ChangesOK: false, CleanupOK: len(cleanupErrs) == 0, LogsComplete: false,
 		TransactionError: detail,
 	}
 	if len(cleanupErrs) > 0 {
@@ -422,6 +423,9 @@ func cleanupPersistedRuntime(j *Job) (killed []int, cleanupErrs []string) {
 	if err := removeOwnedTree(workspace); err != nil {
 		return killed, []string{"removing workspace: " + err.Error()}
 	}
+	if err := removeOwnedTree(filepath.Join(j.Dir, "change-base")); err != nil {
+		return killed, []string{"removing submitted change base: " + err.Error()}
+	}
 	// queued.json distinguishes a job that cannot have started from one whose
 	// execution is ambiguous. Remove it before scope.json so no crash can leave
 	// the unsafe marker-without-scope combination after a process may have run.
@@ -451,13 +455,16 @@ func (d *Daemon) reconcileQueued(j *Job) {
 	startError := "daemon restarted while job was queued; command never started"
 	var cleanupErrs []string
 	if err := removeOwnedTree(filepath.Join(j.Dir, "workspace")); err != nil {
-		cleanupErrs = []string{"removing workspace: " + err.Error()}
+		cleanupErrs = append(cleanupErrs, "removing workspace: "+err.Error())
+	}
+	if err := removeOwnedTree(filepath.Join(j.Dir, "change-base")); err != nil {
+		cleanupErrs = append(cleanupErrs, "removing submitted change base: "+err.Error())
 	}
 	settledAt := time.Now()
 	res := &proto.Result{
 		State: proto.StateExited, StartError: startError,
 		SettledAt: &settledAt,
-		OutputsOK: true, CleanupOK: len(cleanupErrs) == 0, LogsComplete: true,
+		ChangesOK: true, CleanupOK: len(cleanupErrs) == 0, LogsComplete: true,
 	}
 	if len(cleanupErrs) > 0 {
 		res.TransactionError = "cleanup: " + strings.Join(cleanupErrs, "; ")
@@ -509,27 +516,30 @@ func (d *Daemon) reconcileUnfinished(j *Job) {
 	res := &proto.Result{
 		State: StateAmbiguous, TransactionError: detail,
 		SettledAt: &settledAt,
-		OutputsOK: len(j.Spec.Outputs) == 0, CleanupOK: len(cleanupErrs) == 0, LogsComplete: false,
+		ChangesOK: false, CleanupOK: len(cleanupErrs) == 0, LogsComplete: false,
 	}
-	if len(j.Spec.Outputs) > 0 {
-		bundle, outputErr := outputops.Load(j.Dir)
-		if outputErr == nil {
-			archiveFile, err := outputops.OpenArchive(j.Dir)
-			if err == nil {
-				err = archiveFile.Close()
-			}
-			outputErr = err
+	bundle, changeErr := changeops.Load(j.Dir)
+	if changeErr == nil {
+		baseArchive, err := changeops.OpenBaseArchive(j.Dir)
+		if err == nil {
+			err = baseArchive.Close()
 		}
-		switch {
-		case outputErr == nil:
-			res.OutputsOK = true
-			res.Outputs = &proto.OutputSummary{
-				Paths: append([]string(nil), bundle.Paths...), ManifestRoot: bundle.Manifest.RootHash(), Bytes: bundle.Bytes,
+		if err == nil {
+			remoteArchive, openErr := changeops.OpenRemoteArchive(j.Dir)
+			if openErr == nil {
+				openErr = remoteArchive.Close()
 			}
-		case !errors.Is(outputErr, os.ErrNotExist):
-			res.TransactionError = appendTransactionError(res.TransactionError,
-				"recovering committed outputs: "+outputErr.Error())
+			err = openErr
 		}
+		changeErr = err
+	}
+	switch {
+	case changeErr == nil:
+		res.ChangesOK = true
+		res.Changes = summarizeChangeBundle(bundle)
+	case !errors.Is(changeErr, os.ErrNotExist):
+		res.TransactionError = appendTransactionError(res.TransactionError,
+			"recovering committed workspace changes: "+changeErr.Error())
 	}
 	if len(cleanupErrs) > 0 {
 		res.TransactionError = appendTransactionError(res.TransactionError,
@@ -602,7 +612,7 @@ func (d *Daemon) Handler() http.Handler {
 	mux.HandleFunc("PUT /v0/jobs/{id}", d.auth(proto.ActionSubmit, d.handleSubmit))
 	mux.HandleFunc("GET /v0/jobs/{id}", d.auth(proto.ActionReadOwn, d.handleStatus))
 	mux.HandleFunc("GET /v0/jobs/{id}/logs", d.auth(proto.ActionReadOwn, d.handleLogs))
-	mux.HandleFunc("GET /v0/jobs/{id}/outputs", d.auth(proto.ActionReadOwn, d.handleOutputs))
+	mux.HandleFunc("GET /v0/jobs/{id}/changes", d.auth(proto.ActionReadOwn, d.handleChanges))
 	mux.HandleFunc("POST /v0/jobs/{id}/signal", d.auth(proto.ActionKillOwn, d.handleSignal))
 	mux.HandleFunc("POST /v0/jobs/{id}/kill", d.auth(proto.ActionKillOwn, d.handleKill))
 	return mux
@@ -801,6 +811,7 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 	}
 	j := &Job{
 		ID: jobID, Dir: tmpDir, Spec: spec, RequestDigest: digest,
+		baseline: manifest,
 		Admission: proto.Admission{
 			Time: time.Now(), UserID: id.UserID, UserLogin: id.Login,
 			NodeID: id.NodeID, NodeName: id.Node,
@@ -882,7 +893,7 @@ func (d *Daemon) queueStaged(j *Job) (cancelled bool, err error) {
 	if j.killed != "" {
 		res := &proto.Result{
 			Signal: j.killSignal.String(), SignalNum: int(j.killSignal),
-			OutputsOK: true, LogsComplete: true,
+			ChangesOK: true, LogsComplete: true,
 		}
 		d.removeQueuedLocked(j)
 		j.mu.Unlock()
@@ -915,7 +926,7 @@ func (d *Daemon) launchDequeued(j *Job) {
 		if res == nil {
 			res = &proto.Result{
 				State: proto.StateExited, StartError: err.Error(),
-				OutputsOK: true, LogsComplete: true,
+				ChangesOK: true, LogsComplete: true,
 			}
 		}
 		j.finalize(d, res, true)
@@ -927,7 +938,7 @@ func (d *Daemon) launchDequeued(j *Job) {
 func (d *Daemon) cancelBeforeStart(ctx context.Context, j *Job, reason string, sig syscall.Signal) (bool, error) {
 	d.mu.Lock()
 	j.mu.Lock()
-	if j.result == nil && j.reaped && j.outputCancel != nil {
+	if j.result == nil && j.reaped && j.changeCancel != nil {
 		j.mu.Unlock()
 		d.mu.Unlock()
 		return false, nil
@@ -1041,7 +1052,7 @@ func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 		result := &proto.Result{
 			State: proto.StateAmbiguous, StartError: startMessage,
 			SettledAt:        &settledAt,
-			TransactionError: rollbackErr.Error(), OutputsOK: true,
+			TransactionError: rollbackErr.Error(), ChangesOK: true,
 			CleanupOK: false, LogsComplete: true,
 		}
 		// A failed recursive removal can already have deleted the receipt files
@@ -1086,6 +1097,22 @@ func validateSpec(s proto.Spec, maxLimits proto.Limits) error {
 	if len(s.Argv) == 0 || s.Argv[0] == "" {
 		return fmt.Errorf("spec has empty argv")
 	}
+	if s.NoSnapshot && s.ManifestRoot != (proto.Manifest{}).RootHash() {
+		return fmt.Errorf("no-snapshot spec must use the empty manifest root")
+	}
+	if s.NoSnapshot && (s.Selection.Prefix != "" || len(s.Selection.Ignore) != 0) {
+		return fmt.Errorf("no-snapshot spec must use an empty selection policy")
+	}
+	if _, err := pathpolicy.Compile(s.Selection); err != nil {
+		return fmt.Errorf("invalid selection policy: %w", err)
+	}
+	receiptRaw, err := json.Marshal(proto.NewReceiptSpec(s))
+	if err != nil {
+		return fmt.Errorf("encoding receipt spec: %w", err)
+	}
+	if len(receiptRaw) > maxReceiptSpecBytes {
+		return fmt.Errorf("spec metadata exceeds %d bytes", maxReceiptSpecBytes)
+	}
 	for name, source := range s.EnvSources {
 		if _, ok := s.Env[name]; !ok {
 			return fmt.Errorf("environment source for undeclared variable %q", name)
@@ -1113,34 +1140,18 @@ func validateSpec(s proto.Spec, maxLimits proto.Limits) error {
 			return fmt.Errorf("git commit must be hexadecimal")
 		}
 	}
-	normalizedOutputs, err := outputops.NormalizeSpecs(s.Outputs)
-	if err != nil {
-		return err
-	}
-	if len(normalizedOutputs) != len(s.Outputs) {
-		return fmt.Errorf("output declarations are not canonical")
-	}
-	for i := range normalizedOutputs {
-		if normalizedOutputs[i] != s.Outputs[i] {
-			return fmt.Errorf("output declarations are not canonical")
-		}
-	}
 	l := s.Limits
-	if l.MaxLogBytes <= 0 || l.MaxRuntimeSec <= 0 || l.MaxWorkspaceBytes <= 0 || l.MaxOutputBytes <= 0 {
+	if l.MaxLogBytes <= 0 || l.MaxRuntimeSec <= 0 || l.MaxWorkspaceBytes <= 0 || l.MaxChangeBytes <= 0 {
 		return fmt.Errorf("spec limits must be positive")
 	}
 	if l.MaxLogBytes > maxLimits.MaxLogBytes ||
 		l.MaxRuntimeSec > maxLimits.MaxRuntimeSec ||
 		l.MaxWorkspaceBytes > maxLimits.MaxWorkspaceBytes ||
-		l.MaxOutputBytes > maxLimits.MaxOutputBytes {
+		l.MaxChangeBytes > maxLimits.MaxChangeBytes {
 		return fmt.Errorf("spec limits exceed this runner's ceiling")
 	}
-	if len(s.Outputs) > 0 {
-		if !proto.ValidOutputClientID(s.OutputClientID) {
-			return fmt.Errorf("declared outputs require a valid output_client_id")
-		}
-	} else if s.OutputClientID != "" {
-		return fmt.Errorf("output_client_id requires declared outputs")
+	if !proto.ValidChangeClientID(s.ChangeClientID) {
+		return fmt.Errorf("spec requires a valid change_client_id")
 	}
 	return nil
 }
@@ -1214,15 +1225,16 @@ func (d *Daemon) handleList(w http.ResponseWriter, r *http.Request, id Identity)
 }
 
 func projectMetadata(r *http.Request) (string, bool) {
-	project := r.Header.Get("X-Errand-Project")
-	truncated := r.Header.Get("X-Errand-Project-Truncated") == "1"
-	if encoded := r.Header.Get("X-Errand-Project-B64"); encoded != "" {
-		decoded, err := base64.RawURLEncoding.DecodeString(encoded)
-		if err != nil {
-			return "", false
-		}
-		project = string(decoded)
+	encoded := r.Header.Get("X-Errand-Project-B64")
+	if encoded == "" {
+		return "", false
 	}
+	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", false
+	}
+	project := string(decoded)
+	truncated := r.Header.Get("X-Errand-Project-Truncated") == "1"
 	project = strings.ToValidUTF8(project, "�")
 	project, bounded := boundedListField(project, maxListProjectBytes)
 	return project, truncated || bounded
@@ -1230,7 +1242,18 @@ func projectMetadata(r *http.Request) (string, bool) {
 
 func (d *Daemon) handleStatus(w http.ResponseWriter, r *http.Request, id Identity) {
 	if j := d.lookup(w, r, id); j != nil {
-		writeJSON(w, http.StatusOK, j.Status())
+		body, err := json.Marshal(j.Details())
+		if err != nil {
+			httpError(w, http.StatusInternalServerError, "encoding job details")
+			return
+		}
+		if len(body)+1 > maxDetailResponseBytes {
+			httpError(w, http.StatusInternalServerError, "job details exceed response limit")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(append(body, '\n'))
 	}
 }
 
@@ -1315,45 +1338,51 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	flusher.Flush()
 }
 
-// handleOutputs streams one immutable output bundle while holding a receipt
+// handleChanges streams one immutable change bundle while holding a receipt
 // reader reservation, so job GC cannot remove either multipart part mid-read.
-func (d *Daemon) handleOutputs(w http.ResponseWriter, r *http.Request, id Identity) {
+func (d *Daemon) handleChanges(w http.ResponseWriter, r *http.Request, id Identity) {
 	j := d.lookup(w, r, id)
 	if j == nil {
 		return
 	}
-	if !j.acquireOutputReader() {
+	if !j.acquireChangeReader() {
 		httpError(w, http.StatusNotFound, "no such job")
 		return
 	}
-	defer j.releaseOutputReader()
+	defer j.releaseChangeReader()
 
 	status := j.Status()
 	if status.Result == nil {
 		httpError(w, http.StatusConflict, "job is not terminal")
 		return
 	}
-	if status.Result.Outputs == nil {
-		httpError(w, http.StatusNotFound, "job has no collected outputs")
+	if status.Result.Changes == nil {
+		httpError(w, http.StatusNotFound, "job produced no workspace changes")
 		return
 	}
-	bundle, err := outputops.Load(j.Dir)
+	bundle, err := changeops.Load(j.Dir)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, "loading output bundle: "+err.Error())
+		httpError(w, http.StatusInternalServerError, "loading change bundle: "+err.Error())
 		return
 	}
-	if !outputSummaryMatches(*status.Result.Outputs, bundle) {
-		httpError(w, http.StatusInternalServerError, "output bundle does not match the terminal receipt")
+	if !status.Result.Changes.Matches(bundle) {
+		httpError(w, http.StatusInternalServerError, "change bundle does not match the terminal receipt")
 		return
 	}
-	archiveFile, err := outputops.OpenArchive(j.Dir)
+	baseArchive, err := changeops.OpenBaseArchive(j.Dir)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, "opening output archive: "+err.Error())
+		httpError(w, http.StatusInternalServerError, "opening base change archive: "+err.Error())
 		return
 	}
-	defer archiveFile.Close()
+	defer baseArchive.Close()
+	remoteArchive, err := changeops.OpenRemoteArchive(j.Dir)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "opening remote change archive: "+err.Error())
+		return
+	}
+	defer remoteArchive.Close()
 
-	stream := newIdleDeadlineWriter(w, outputStreamIdleLimit)
+	stream := newIdleDeadlineWriter(w, changeStreamIdleLimit)
 	defer stream.clear()
 	mw := multipart.NewWriter(stream)
 	w.Header().Set("Content-Type", mw.FormDataContentType())
@@ -1366,11 +1395,18 @@ func (d *Daemon) handleOutputs(w http.ResponseWriter, r *http.Request, id Identi
 	if err := json.NewEncoder(bundlePart).Encode(bundle); err != nil {
 		return
 	}
-	archivePart, err := mw.CreateFormFile("archive", "outputs.tar")
+	basePart, err := mw.CreateFormFile("base", "base.tar")
 	if err != nil {
 		return
 	}
-	if _, err := io.Copy(archivePart, archiveFile); err != nil {
+	if _, err := io.Copy(basePart, baseArchive); err != nil {
+		return
+	}
+	remotePart, err := mw.CreateFormFile("remote", "remote.tar")
+	if err != nil {
+		return
+	}
+	if _, err := io.Copy(remotePart, remoteArchive); err != nil {
 		return
 	}
 	if err := mw.Close(); err != nil {
@@ -1423,18 +1459,6 @@ func (w *idleDeadlineWriter) flush() error {
 
 func (w *idleDeadlineWriter) clear() {
 	_ = w.controller.SetWriteDeadline(time.Time{})
-}
-
-func outputSummaryMatches(summary proto.OutputSummary, bundle proto.OutputBundle) bool {
-	if summary.ManifestRoot != bundle.Manifest.RootHash() || summary.Bytes != bundle.Bytes || len(summary.Paths) != len(bundle.Paths) {
-		return false
-	}
-	for i := range summary.Paths {
-		if summary.Paths[i] != bundle.Paths[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func retryableLogFileError(err error) bool {

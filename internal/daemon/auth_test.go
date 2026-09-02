@@ -384,7 +384,7 @@ func TestJobGCEndpointRequiresGCAction(t *testing.T) {
 	}
 }
 
-func TestOutputEndpointRequiresReadOwnAction(t *testing.T) {
+func TestChangeEndpointRequiresReadOwnAction(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
 		actions []string
@@ -408,13 +408,13 @@ func TestOutputEndpointRequiresReadOwnAction(t *testing.T) {
 			defer d.Close()
 			ts := httptest.NewServer(d.Handler())
 			defer ts.Close()
-			resp, err := http.Get(ts.URL + "/v0/jobs/" + proto.NewULID() + "/outputs")
+			resp, err := http.Get(ts.URL + "/v0/jobs/" + proto.NewULID() + "/changes")
 			if err != nil {
 				t.Fatal(err)
 			}
 			resp.Body.Close()
 			if resp.StatusCode != tt.want {
-				t.Fatalf("GET outputs = %s, want %d", resp.Status, tt.want)
+				t.Fatalf("GET changes = %s, want %d", resp.Status, tt.want)
 			}
 		})
 	}
@@ -577,7 +577,7 @@ func TestIdempotentSubmitRejectsDifferentOwner(t *testing.T) {
 	manifest := proto.Manifest{}
 	spec := proto.Spec{
 		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
-		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
+		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
 	}
 	d := &Daemon{
 		cfg: Config{MaxUploadBytes: 1 << 20, MaxLimits: proto.DefaultLimits()},
@@ -613,7 +613,7 @@ func TestIdempotentSubmitChecksOwnerBeforeUnavailableDigest(t *testing.T) {
 	spec := proto.Spec{
 		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
 		Env: map[string]string{"PIN": "0427"}, EnvSources: map[string]string{"PIN": "literal"},
-		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
+		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
 	}
 	d := &Daemon{
 		cfg: Config{MaxUploadBytes: 1 << 20, MaxLimits: proto.DefaultLimits()},

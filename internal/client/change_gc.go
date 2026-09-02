@@ -5,17 +5,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	outputops "github.com/lydakis/errand/internal/outputs"
+	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/proto"
 )
 
-type OutputGCResult struct {
+type ChangeGCResult struct {
 	Selected   int
 	Removed    int
 	Protected  int
@@ -24,21 +23,21 @@ type OutputGCResult struct {
 	DryRun     bool
 }
 
-// OutputStats reports the local output state that is managed by gc outputs.
+// ChangeStats reports the local change state that is managed by gc changes.
 // Bytes uses the same accounting as GC so the inventory and reclaimed-space
 // reports remain comparable.
-func OutputStats() (proto.StorageCategory, error) {
-	return outputStatsWithCollector(collectOutputGCCandidates)
+func ChangeStats() (proto.StorageCategory, error) {
+	return changeStatsWithCollector(collectChangeGCCandidates)
 }
 
-func outputStatsWithCollector(
-	collect func(string, string, map[string]*localOutputCandidate) error,
+func changeStatsWithCollector(
+	collect func(string, string, map[string]*localChangeCandidate) error,
 ) (proto.StorageCategory, error) {
-	root, err := localOutputRoot()
+	root, err := localChangeRoot()
 	if err != nil {
 		return proto.StorageCategory{}, err
 	}
-	candidates := map[string]*localOutputCandidate{}
+	candidates := map[string]*localChangeCandidate{}
 	if err := collect(
 		filepath.Join(root, "jobs"),
 		filepath.Join(root, "downloads"),
@@ -53,7 +52,7 @@ func outputStatsWithCollector(
 	return stats, nil
 }
 
-type localOutputCandidate struct {
+type localChangeCandidate struct {
 	key           string
 	statePath     string
 	downloadPaths []string
@@ -61,24 +60,24 @@ type localOutputCandidate struct {
 	bytes         int64
 }
 
-const unresolvedOutputStateProtection = proto.OutputReconciliationWindow
+const unresolvedChangeStateProtection = proto.ChangeReconciliationWindow
 
-// OutputGC removes old local baseline records and downloaded output staging.
+// ChangeGC removes old local workspace identity records and downloaded change staging.
 // Pending apply transactions are always protected; unresolved submitted jobs
 // are protected for the runner's bounded reconciliation window.
-func OutputGC(olderThan time.Duration, dryRun bool) (OutputGCResult, error) {
-	result := OutputGCResult{DryRun: dryRun}
+func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
+	result := ChangeGCResult{DryRun: dryRun}
 	if olderThan < time.Second {
-		return result, fmt.Errorf("local output retention must be at least 1s")
+		return result, fmt.Errorf("local change retention must be at least 1s")
 	}
-	root, err := localOutputRoot()
+	root, err := localChangeRoot()
 	if err != nil {
 		return result, err
 	}
-	candidates := map[string]*localOutputCandidate{}
+	candidates := map[string]*localChangeCandidate{}
 	jobs := filepath.Join(root, "jobs")
 	downloads := filepath.Join(root, "downloads")
-	if err := collectOutputGCCandidates(jobs, downloads, candidates); err != nil {
+	if err := collectChangeGCCandidates(jobs, downloads, candidates); err != nil {
 		return result, err
 	}
 	cutoff := time.Now().Add(-olderThan)
@@ -87,7 +86,7 @@ func OutputGC(olderThan time.Duration, dryRun bool) (OutputGCResult, error) {
 			continue
 		}
 		result.Selected++
-		unlock, acquired, lockErr := tryAcquireLocalOutputLock(localOutputTransferLockName(candidate.key))
+		unlock, acquired, lockErr := tryAcquireLocalChangeLock(localChangeTransferLockName(candidate.key))
 		if lockErr != nil {
 			result.Failed++
 			continue
@@ -96,7 +95,7 @@ func OutputGC(olderThan time.Duration, dryRun bool) (OutputGCResult, error) {
 			result.Protected++
 			continue
 		}
-		removed, eligible, protected, removeErr := collectLocalOutputCandidate(candidate, cutoff, dryRun)
+		removed, eligible, protected, removeErr := collectLocalChangeCandidate(candidate, cutoff, dryRun)
 		unlock()
 		if removeErr != nil {
 			result.Failed++
@@ -133,40 +132,42 @@ func syncExistingLocalDirectory(path string) error {
 	return err
 }
 
-func collectLocalOutputCandidate(candidate *localOutputCandidate, cutoff time.Time, dryRun bool) (removed, eligible, protected bool, err error) {
+func collectLocalChangeCandidate(candidate *localChangeCandidate, cutoff time.Time, dryRun bool) (removed, eligible, protected bool, err error) {
 	eligible = true
-	var state localOutputState
+	var state localChangeState
 	if candidate.statePath != "" {
-		state, err = loadLocalOutputStateFile(candidate.statePath, candidate.key)
+		state, err = loadLocalChangeStateFile(candidate.statePath, candidate.key)
 		if err != nil {
 			return false, false, false, err
 		}
-		pending, pendingErr := localOutputTransactionExists(state)
+		pending, unavailable, pendingErr := localChangeTransactionExists(state)
 		if pendingErr != nil {
 			return false, false, false, pendingErr
 		}
-		if pending || (!state.Terminal && state.SubmissionStarted &&
-			!candidate.modified.Before(time.Now().Add(-unresolvedOutputStateProtection))) {
+		if pending || (unavailable && !candidate.modified.Before(time.Now().Add(-unresolvedChangeStateProtection))) ||
+			(!state.Terminal && state.SubmissionStarted &&
+				!candidate.modified.Before(time.Now().Add(-unresolvedChangeStateProtection))) {
 			return false, true, true, nil
 		}
 	}
 	remove := func() error {
 		if candidate.statePath != "" {
-			current, err := loadLocalOutputStateFile(candidate.statePath, candidate.key)
+			current, err := loadLocalChangeStateFile(candidate.statePath, candidate.key)
 			if err != nil {
 				return err
 			}
-			pending, pendingErr := localOutputTransactionExists(current)
+			pending, unavailable, pendingErr := localChangeTransactionExists(current)
 			if pendingErr != nil {
 				return pendingErr
 			}
-			if pending || (!current.Terminal && current.SubmissionStarted &&
-				!candidate.modified.Before(time.Now().Add(-unresolvedOutputStateProtection))) {
+			if pending || (unavailable && !candidate.modified.Before(time.Now().Add(-unresolvedChangeStateProtection))) ||
+				(!current.Terminal && current.SubmissionStarted &&
+					!candidate.modified.Before(time.Now().Add(-unresolvedChangeStateProtection))) {
 				protected = true
 				return nil
 			}
 		}
-		expired, err := localOutputCandidateExpired(candidate, cutoff)
+		expired, err := localChangeCandidateExpired(candidate, cutoff)
 		if err != nil {
 			return err
 		}
@@ -178,7 +179,7 @@ func collectLocalOutputCandidate(candidate *localOutputCandidate, cutoff time.Ti
 			return nil
 		}
 		for _, downloadPath := range candidate.downloadPaths {
-			if err := os.RemoveAll(downloadPath); err != nil {
+			if err := changeops.RemoveTree(downloadPath); err != nil {
 				return err
 			}
 		}
@@ -192,7 +193,7 @@ func collectLocalOutputCandidate(candidate *localOutputCandidate, cutoff time.Ti
 	if candidate.statePath == "" {
 		err = remove()
 	} else if _, statErr := os.Stat(state.Root); statErr == nil {
-		err = withWorkspaceOutputLock(state.Root, remove)
+		err = withWorkspaceChangeLock(state.Root, remove)
 	} else if os.IsNotExist(statErr) {
 		err = remove()
 	} else {
@@ -201,18 +202,18 @@ func collectLocalOutputCandidate(candidate *localOutputCandidate, cutoff time.Ti
 	return err == nil && eligible && !protected, eligible, protected, err
 }
 
-func localOutputTransactionExists(state localOutputState) (bool, error) {
+func localChangeTransactionExists(state localChangeState) (exists, unavailable bool, err error) {
 	if state.Pending == "" {
-		return false, nil
+		return false, false, nil
 	}
-	exists, err := outputops.WorkspaceContainsApplyTransaction(state.Root, state.Pending, state.RootID)
+	exists, err = changeops.WorkspaceContainsApplyTransaction(state.Root, state.Pending, state.RootID)
 	if os.IsNotExist(err) {
-		return true, nil
+		return false, true, nil
 	}
-	return exists, err
+	return exists, false, err
 }
 
-func localOutputCandidateExpired(candidate *localOutputCandidate, cutoff time.Time) (bool, error) {
+func localChangeCandidateExpired(candidate *localChangeCandidate, cutoff time.Time) (bool, error) {
 	paths := make([]string, 0, 1+len(candidate.downloadPaths))
 	if candidate.statePath != "" {
 		paths = append(paths, candidate.statePath)
@@ -233,14 +234,14 @@ func localOutputCandidateExpired(candidate *localOutputCandidate, cutoff time.Ti
 	return true, nil
 }
 
-// ReconcileCollectedJobOutputs replays durable runner collection markers so a
-// lost GC response cannot strand local output state as unresolved.
-func ReconcileCollectedJobOutputs(peerURL string) error {
+// ReconcileCollectedJobChanges replays durable runner collection markers so a
+// lost GC response cannot strand local change state as unresolved.
+func ReconcileCollectedJobChanges(peerURL string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), maintenanceTimeout)
 	defer cancel()
-	clientID, err := localOutputClientID()
+	clientID, err := localChangeClientID()
 	if err != nil {
-		return fmt.Errorf("loading local output client identity: %w", err)
+		return fmt.Errorf("loading local change client identity: %w", err)
 	}
 	cursor := ""
 	for {
@@ -280,7 +281,7 @@ func ReconcileCollectedJobOutputs(peerURL string) error {
 }
 
 func reconcileCollectedJobIDs(peerURL string, jobIDs []string) error {
-	root, err := localOutputRoot()
+	root, err := localChangeRoot()
 	if err != nil {
 		return err
 	}
@@ -295,13 +296,13 @@ func reconcileCollectedJobIDs(peerURL string, jobIDs []string) error {
 			continue
 		}
 		seen[jobID] = struct{}{}
-		key := localOutputKey(peerURL, jobID)
-		unlock, lockErr := acquireLocalOutputLock(localOutputTransferLockName(key))
+		key := localChangeKey(peerURL, jobID)
+		unlock, lockErr := acquireLocalChangeLock(localChangeTransferLockName(key))
 		if lockErr != nil {
 			failures = append(failures, fmt.Errorf("reconciling %s: %w", jobID, lockErr))
 			continue
 		}
-		reconcileErr := reconcileRemovedJobOutput(root, key)
+		reconcileErr := reconcileRemovedJobChange(root, key)
 		unlock()
 		if reconcileErr != nil {
 			failures = append(failures, fmt.Errorf("reconciling %s: %w", jobID, reconcileErr))
@@ -310,9 +311,9 @@ func reconcileCollectedJobIDs(peerURL string, jobIDs []string) error {
 	return errors.Join(failures...)
 }
 
-func reconcileRemovedJobOutput(root, key string) error {
+func reconcileRemovedJobChange(root, key string) error {
 	statePath := filepath.Join(root, "jobs", key+".json")
-	state, stateErr := loadLocalOutputStateFile(statePath, key)
+	state, stateErr := loadLocalChangeStateFile(statePath, key)
 	if os.IsNotExist(stateErr) {
 		return nil
 	}
@@ -320,7 +321,7 @@ func reconcileRemovedJobOutput(root, key string) error {
 		return stateErr
 	}
 	settle := func() error {
-		current, currentErr := loadLocalOutputStateFile(statePath, key)
+		current, currentErr := loadLocalChangeStateFile(statePath, key)
 		if os.IsNotExist(currentErr) {
 			return nil
 		}
@@ -332,21 +333,21 @@ func reconcileRemovedJobOutput(root, key string) error {
 			return err
 		}
 		current.Terminal = true
-		if err := saveLocalOutputState(current); err != nil {
+		if err := saveLocalChangeState(current); err != nil {
 			return err
 		}
 		return os.Chtimes(statePath, info.ModTime(), info.ModTime())
 	}
 	_, statErr := os.Stat(state.Root)
 	if statErr == nil {
-		return withWorkspaceOutputLock(state.Root, settle)
+		return withWorkspaceChangeLock(state.Root, settle)
 	} else if os.IsNotExist(statErr) {
 		return settle()
 	}
 	return statErr
 }
 
-func collectOutputGCCandidates(jobs, downloads string, candidates map[string]*localOutputCandidate) error {
+func collectChangeGCCandidates(jobs, downloads string, candidates map[string]*localChangeCandidate) error {
 	if entries, err := os.ReadDir(jobs); err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
@@ -371,12 +372,17 @@ func collectOutputGCCandidates(jobs, downloads string, candidates map[string]*lo
 			if err != nil {
 				return err
 			}
-			key := localOutputCandidateKey(entry.Name())
+			key := localChangeCandidateKey(entry.Name())
 			candidate := candidateFor(candidates, key)
 			downloadPath := filepath.Join(downloads, entry.Name())
 			candidate.downloadPaths = append(candidate.downloadPaths, downloadPath)
 			candidate.modified = laterTime(candidate.modified, info.ModTime())
-			size, err := localTreeSize(downloadPath)
+			unlock, err := acquireLocalChangeLock(localChangeTransferLockName(key))
+			if err != nil {
+				return err
+			}
+			size, err := changeops.TreeSize(downloadPath)
+			unlock()
 			if err != nil {
 				return err
 			}
@@ -388,15 +394,15 @@ func collectOutputGCCandidates(jobs, downloads string, candidates map[string]*lo
 	return nil
 }
 
-func localOutputCandidateKey(name string) string {
-	if validLocalOutputKey(name) {
+func localChangeCandidateKey(name string) string {
+	if validLocalChangeKey(name) {
 		return name
 	}
-	if strings.HasPrefix(name, ".outputs-") {
-		rest := strings.TrimPrefix(name, ".outputs-")
-		if len(rest) > localOutputKeyLength && rest[localOutputKeyLength] == '-' {
-			key := rest[:localOutputKeyLength]
-			if validLocalOutputKey(key) {
+	if strings.HasPrefix(name, ".changes-") {
+		rest := strings.TrimPrefix(name, ".changes-")
+		if len(rest) > localChangeKeyLength && rest[localChangeKeyLength] == '-' {
+			key := rest[:localChangeKeyLength]
+			if validLocalChangeKey(key) {
 				return key
 			}
 		}
@@ -404,35 +410,19 @@ func localOutputCandidateKey(name string) string {
 	return name
 }
 
-func validLocalOutputKey(key string) bool {
-	if len(key) != localOutputKeyLength || key[32] != '-' || !proto.ValidULID(key[33:]) {
+func validLocalChangeKey(key string) bool {
+	if len(key) != localChangeKeyLength || key[32] != '-' || !proto.ValidULID(key[33:]) {
 		return false
 	}
 	_, err := hex.DecodeString(key[:32])
 	return err == nil
 }
 
-func candidateFor(candidates map[string]*localOutputCandidate, key string) *localOutputCandidate {
+func candidateFor(candidates map[string]*localChangeCandidate, key string) *localChangeCandidate {
 	if candidates[key] == nil {
-		candidates[key] = &localOutputCandidate{key: key}
+		candidates[key] = &localChangeCandidate{key: key}
 	}
 	return candidates[key]
-}
-
-func localTreeSize(root string) (int64, error) {
-	var total int64
-	err := filepath.WalkDir(root, func(_ string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		total += info.Size()
-		return nil
-	})
-	return total, err
 }
 
 func laterTime(a, b time.Time) time.Time {

@@ -171,7 +171,7 @@ func TestRestartRetriesRetainedScopeForTerminalJob(t *testing.T) {
 	zero := 0
 	resultBefore := write("result.json", proto.Result{
 		State: proto.StateExited, Started: true, ExitCode: &zero,
-		OutputsOK: true, CleanupOK: false, LogsComplete: true,
+		ChangesOK: true, CleanupOK: false, LogsComplete: true,
 		TransactionError: "process scope cleanup incomplete; recovery record retained",
 	})
 
@@ -233,7 +233,7 @@ func TestFinalizeIncludesScopeRecordRemovalInCleanupResult(t *testing.T) {
 	j := &Job{ID: id, Dir: dir, state: proto.StateRunning, done: make(chan struct{}), logReady: make(chan struct{})}
 	d.running[j.ID] = j
 	code := 0
-	res := &proto.Result{Started: true, ExitCode: &code, OutputsOK: true, CleanupOK: true, LogsComplete: true}
+	res := &proto.Result{Started: true, ExitCode: &code, ChangesOK: true, CleanupOK: true, LogsComplete: true}
 	j.finalize(d, res, false)
 	if res.CleanupOK {
 		t.Fatalf("scope record removal failure left cleanup_ok=true: %+v", res)
@@ -269,7 +269,7 @@ func TestFinalizeRetainsScopeRecordAfterProcessCleanupFailure(t *testing.T) {
 	j := &Job{ID: id, Dir: dir, state: proto.StateRunning, done: make(chan struct{}), logReady: make(chan struct{})}
 	d.running[j.ID] = j
 	code := 0
-	res := &proto.Result{Started: true, ExitCode: &code, OutputsOK: true, CleanupOK: false, LogsComplete: true}
+	res := &proto.Result{Started: true, ExitCode: &code, ChangesOK: true, CleanupOK: false, LogsComplete: true}
 	j.finalizeWithScopeOutcome(d, res, false, false)
 	if _, err := os.Lstat(scopePath); err != nil {
 		t.Fatalf("failed process cleanup lost its recovery locator: %v", err)

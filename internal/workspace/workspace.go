@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/lydakis/errand/internal/proto"
 )
 
 const markerName = ".errand.toml"
@@ -18,14 +17,12 @@ type Selection struct {
 	Workdir string
 	Project string
 	Source  string
-	Outputs []proto.OutputSpec
 }
 
 type projectConfig struct {
 	Workspace struct {
 		Root bool `toml:"root"`
 	} `toml:"workspace"`
-	Outputs []proto.OutputSpec `toml:"outputs"`
 }
 
 // Discover selects an explicit root, the nearest marked ancestor, or cwd.
@@ -44,14 +41,12 @@ func Discover(cwd, explicit string) (Selection, error) {
 		if err != nil {
 			return Selection{}, fmt.Errorf("workspace: resolving --workspace-root: %w", err)
 		}
-		cfg, err := readExplicitConfig(root)
-		if err != nil {
+		if _, err := readExplicitConfig(root); err != nil {
 			return Selection{}, err
 		}
-		return selection(root, cwd, "--workspace-root", cfg.Outputs)
+		return selection(root, cwd, "--workspace-root")
 	}
 
-	var fallbackOutputs []proto.OutputSpec
 	for dir := cwd; ; dir = filepath.Dir(dir) {
 		marker := filepath.Join(dir, markerName)
 		if markerInfo, err := os.Stat(marker); err == nil {
@@ -65,10 +60,7 @@ func Discover(cwd, explicit string) (Selection, error) {
 					return Selection{}, fmt.Errorf("workspace: reading %s: %w", marker, err)
 				}
 				if cfg.Workspace.Root {
-					return selection(dir, cwd, marker, cfg.Outputs)
-				}
-				if dir == cwd {
-					fallbackOutputs = cfg.Outputs
+					return selection(dir, cwd, marker)
 				}
 			}
 		}
@@ -77,7 +69,7 @@ func Discover(cwd, explicit string) (Selection, error) {
 			break
 		}
 	}
-	return selection(cwd, cwd, "current directory", fallbackOutputs)
+	return selection(cwd, cwd, "current directory")
 }
 
 func readExplicitConfig(root string) (projectConfig, error) {
@@ -132,7 +124,7 @@ func canonicalDir(dir string) (string, error) {
 	return filepath.Clean(resolved), nil
 }
 
-func selection(root, cwd, source string, outputs []proto.OutputSpec) (Selection, error) {
+func selection(root, cwd, source string) (Selection, error) {
 	rel, err := filepath.Rel(root, cwd)
 	if err != nil {
 		return Selection{}, fmt.Errorf("workspace: deriving command workdir: %w", err)
@@ -149,7 +141,7 @@ func selection(root, cwd, source string, outputs []proto.OutputSpec) (Selection,
 	if rel != "" && !hasGitMetadata(root) {
 		project = strings.SplitN(rel, "/", 2)[0]
 	}
-	return Selection{Root: root, Workdir: rel, Project: project, Source: source, Outputs: outputs}, nil
+	return Selection{Root: root, Workdir: rel, Project: project, Source: source}, nil
 }
 
 func hasGitMetadata(root string) bool {

@@ -16,9 +16,8 @@ Atlas Surface — never the other way around.
 errand's unit of value is not a connection, it is a transaction:
 
 > Capture a workspace snapshot, authorize the caller, execute once —
-> without replay on retry — stream an ordered result, return declared
-> artifacts safely, clean up what errand owns, and leave an append-only
-> receipt.
+> without replay on retry — stream an ordered result, retain workspace
+> changes safely, clean up what errand owns, and leave an append-only receipt.
 
 Everything below serves that. Without those properties errand is ssh plus
 tar; with them it is a tool.
@@ -221,11 +220,6 @@ image   = "rust:1.86"          # receipt records the resolved digest
 pass = ["RUST_BACKTRACE"]      # forwarded from initiator by name only
 set  = { CI = "1" }
 
-[[outputs]]
-path    = "target/release/atlasctl"
-collect = "success"            # success | always   (target-side collection)
-apply   = "auto"               # auto | manual      (client-side application)
-
 [[cache]]
 name  = "cargo-registry"
 path  = "/usr/local/cargo/registry"
@@ -263,10 +257,10 @@ Persistent state comes in three kinds, not one:
   policy. New job IDs must carry a ULID timestamp from the preceding 24 hours,
   with one hour of allowed future clock skew. The runner durably advances a
   high-water clock that never moves backward across restart. Replay-only
-  collection markers expire after 25 hours. Markers for jobs with declared
-  outputs are scoped to the originating client and retain that minimum
+  collection markers expire after 25 hours. Markers for jobs with retained
+  workspace changes are scoped to the originating client and retain that minimum
   lifetime; successful local reconciliation acknowledges the marker so it can
-  retire. Unacknowledged output markers expire after 30 days, bounding state
+  retire. Unacknowledged change markers expire after 30 days, bounding state
   left by lost clients. The markers are minimal and non-secret, and neither
   permits a collected ID to execute again.
 
@@ -286,7 +280,7 @@ io.log           # framed, base64-payload stdout/stderr in daemon-observed order
 result.json      # written once at terminal completion
 scope.json       # transient recovery marker; retained until runtime cleanup
 workspace/       # deleted at cleanup
-out/             # immutable output bundle; retained with the job receipt
+changes/         # immutable workspace-change bundle; retained with the job receipt
 ```
 
 A derived `status.json` may exist as a convenience cache; it is never the
@@ -328,7 +322,7 @@ becomes a requirement — in which case it belongs in milestone 1.
   daemon drained them. Reconnect resumes via `Last-Event-ID`. Plain
   `stdout.log`/`stderr.log` are derived views.
 - **Separate outcomes.** `result.json` distinguishes
-  `{exit_code, signal, outputs_ok, cleanup_ok, logs_complete}` — a job can
+  `{exit_code, signal, changes_ok, cleanup_ok, logs_complete}` — a job can
   succeed while collection or cleanup fails, and the receipt says which.
 - **Signals behave like signals.** Ctrl-C forwards SIGINT; a second Ctrl-C
   or `errand kill --force` escalates. If contact is lost mid-signal, the
@@ -353,13 +347,13 @@ becomes a requirement — in which case it belongs in milestone 1.
 
 Limits are **fixed at admission and enforced at the relevant execution
 phase**: upload size at admission; workspace expansion at unpack; runtime,
-log size, and output size during execution and collection. On hitting the
+log size, and retained-change size during execution and collection. On hitting the
 log cap the daemon terminates the job with `limit_exceeded`, preserving a
 complete log up to termination; the fidelity contract promises faithful
-output, not best-effort truncation.
+process output, not best-effort truncation.
 
 The runtime deadline begins when the child starts and remains unchanged through
-output collection. Collection does not receive a fresh runtime budget after the
+workspace-change collection. Collection does not receive a fresh runtime budget after the
 process exits.
 
 **Concurrency (milestone 3.5 amendment, 2026-08-30).** A runner executes
@@ -398,12 +392,14 @@ Both limits are per-machine choices for the operator who knows its workloads.
   Filesystem roots are always refused; the user's home directory requires the
   override even when a policy file exists. The client prints the selected file
   count and total bytes before admission.
-- `--no-snapshot` explicitly skips local filesystem inspection and transfer.
-  The job still receives an errand-owned workspace, but it starts empty, so a
-  non-root `--workdir` is rejected locally.
-- Manifest is `.errandignore`, initialized from git ignore rules but
-  allowing explicit include/exclude — ignored files are sometimes required
-  (generated sources), tracked files are sometimes unwanted.
+- `--no-snapshot` explicitly skips local content inspection and transfer. The
+  client still records the invocation directory's identity and the empty
+  manifest root so retained changes can be applied only to that originating
+  workspace. The job receives an errand-owned workspace, but it starts empty,
+  so a non-root `--workdir` is rejected locally.
+- Selection uses explicit `.errandignore` rules when present, otherwise Git's
+  tracked, untracked, and ignore hierarchy. The effective ignore rules are
+  frozen into the request for new-path retention.
 - The snapshot is consistent or refused: packing builds a manifest of
   path, type, mode, size, and content hash; files that change mid-pack are
   detected and the snapshot **fails with a retry prompt** rather than
@@ -419,46 +415,65 @@ Both limits are per-machine choices for the operator who knows its workloads.
   symlinks escaping the workspace, and unsafe hardlinks. A strange archive
   must not write outside `workspace/`.
 
-## Outputs
+## Workspace changes
 
-Collection (target-side) and application (client-side) are separate:
+Retention (target-side) and application (client-side) are separate. After the
+process and its scope settle, the target compares the final workspace with the
+submitted manifest and durably retains the minimal roots of every creation,
+modification, and deletion. This happens on successful and failed commands and
+requires no path declaration. Every submitted path remains eligible so its
+modification or deletion is observable. Newly created paths are eligible only
+when allowed by the selection policy frozen into the request during snapshot
+preparation. The command cannot widen retention by editing ignore files. For
+`--no-snapshot`, the baseline and selection policy are empty, so every
+representable generated path is retained.
 
-- `collect = success | always` — when the target gathers the output into
-  `out/`. Failure artifacts (test reports, crash dumps, traces) use
-  `collect = "always"`; they are usually the point.
-- `apply = auto | manual` — whether an attached client applies it to the
-  local tree. Detached jobs can't apply anything (the initiating process is
-  gone): outputs stage on the target, and a later `attach --apply` or
-  `fetch --apply` applies them after baseline validation. Attaching from a
-  different or non-matching workspace only stages locally, never
-  overwrites.
+Retention uses the same representable filesystem boundary as snapshots. Git
+metadata, Errand apply transactions, and transient nodes such as sockets are
+excluded without invalidating other retained changes.
+
+Attached, detached, and foreground jobs use the same retention path. Completion
+reports the retained-change summary and handle without downloading the bundle.
+`attach` follows logs and status only. An explicit `fetch` downloads immutable
+staging. The client mutates the working tree only for an explicit
+`fetch --apply`; a different or non-matching workspace can stage changes but
+cannot apply them.
 
 Application is conflict-safe, never silent:
 
-1. Record pre-run hashes of destination paths.
-2. Download into local staging; validate paths and types.
-3. Preflight every destination, then replace each through same-filesystem
-   renames only if it is still unchanged since the run began. A durable local
-   journal rolls back an interrupted installation or completes its state
-   record before discarding the original files.
-4. On conflict: leave staged, report, let the user resolve.
+1. Retain the submitted base tree and completed remote tree for every changed
+   root.
+2. Download both trees into local staging; validate paths, types, and content.
+3. Three-way merge the submitted base, current local workspace, and completed
+   remote tree entirely outside the working tree.
+4. If every selected change merges cleanly, install the complete result through
+   same-filesystem renames. A durable local journal rolls back an interrupted
+   installation or completes its state record before discarding original files.
+5. On conflict, leave the working tree untouched, retain staging, and report
+   the conflicting paths.
 
-Client-side baseline and staging records are keyed by runner endpoint plus job
+This is a path-based merge with Git-compatible text merge behavior. It does not
+attempt rename detection or maintain an Errand-specific conflict index.
+Git is otherwise optional. The client invokes `git merge-file` only when apply
+must merge a text file changed on both the local and remote sides; a missing
+binary aborts safely before the installation transaction.
+
+Client-side workspace identity and staging records are keyed by runner endpoint plus job
 ID. Pending apply journals are never collected. Pre-admission records follow an
 explicit local GC cutoff; unresolved submitted records receive a 30-day safety
-window before an explicit `gc outputs` may retire them.
+window before an explicit `gc changes` may retire them.
 
 ### Exit status: two layers
 
 - **Process result:** the remote exit code or signal, recorded exactly in
   `result.json`.
-- **Transaction result:** whether execution, required output
-  collection/application, and cleanup completed.
+- **Transaction result:** whether execution, workspace change retention, and
+  cleanup completed.
 
 CLI behavior: when the transaction succeeds, the CLI exits as the remote
-process did. If the remote process exits 0 but a required `apply = auto`
-output fails to apply (or cleanup fails), the CLI returns an errand-level
-nonzero status and prints `remote_exit=0` — otherwise
+process did. If the remote process exits 0 but change retention or cleanup
+fails, the CLI returns an errand-level nonzero status and prints
+`remote_exit=0` — otherwise
 `errand -- cargo build && ./target/release/thing` would happily run a stale
 binary, which violates local-likeness worse than remapping the status. If
 contact is lost before a terminal result, the CLI returns an errand-level
@@ -486,14 +501,14 @@ errand peers pair | revoke      # LAN identity ceremony
 errand ps [-a | --all] [-n N | --last N] [--on X] [--json] # N <= 200
 errand info [--on X]           # all configured peers unless narrowed
 errand logs <peer/ulid> [-f]    # resumes from last seen seq
-errand attach [--apply] <peer/ulid>
+errand attach <peer/ulid>
 errand fetch [--apply] <peer/ulid> [path]
 errand kill [--force] <peer/ulid>
 errand df [--on X] [--json]    # fleet storage; read-own
 errand gc cache                 # shared cache policy; manage-caches
 errand gc jobs --older-than 30d # caller-owned clean terminal receipts
-errand gc outputs --older-than 30d # local baselines and downloaded staging
-errand gc all --older-than 30d  # cache, jobs, and local output state
+errand gc changes --older-than 30d # local workspace identities and downloaded staging
+errand gc all --older-than 30d  # cache, jobs, and local change state
 ```
 
 Without `--detach`: streams, exits per the two-layer status rule — drop-in
@@ -513,15 +528,17 @@ reports the effective URL rather than preserving a misleading alias.
 Versioned HTTP+JSON: `PUT /v0/jobs/<ulid>` is idempotent;
 `GET /v0/jobs` returns the caller's bounded newest-first listing, while
 `GET /v0/jobs?active=1` filters active jobs before applying that bound;
-`GET /v0/jobs/<ulid>` returns status; SSE with event IDs powers
+`GET /v0/jobs/<ulid>` returns status plus the durable non-secret request
+details used by `errand status`; SSE with event IDs powers
 `GET /v0/jobs/<ulid>/logs?follow=1`; the signal and kill routes control owned
 jobs; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;
 `GET /v0/storage` reports caller-visible storage, including the snapshot cache;
 `POST /v0/cache/gc` prunes the snapshot cache;
 `POST /v0/jobs/gc` applies bounded owner-scoped receipt retention;
+`GET /v0/jobs/<ulid>/changes` transfers the immutable retained workspace-change bundle;
 `GET /v0/jobs/collected` pages through durable owner- and client-scoped
-collection markers so local output GC can reconcile after a lost deletion
-response; `POST /v0/jobs/collected/ack` releases the output hold after that
+collection markers so local change GC can reconcile after a lost deletion
+response; `POST /v0/jobs/collected/ack` releases the change hold after that
 reconciliation while preserving the replay-prevention lifetime; and
 `GET /v0/info` returns facts. A negotiated blob disappearing before
 submission returns the machine-readable `snapshot_cache_miss` error code so
@@ -565,8 +582,8 @@ versions are not a compatibility contract.
    unchanged; what persists is cache with an explicit lifecycle. This is
    what makes a tight edit-run loop cheap instead of a full re-ship per
    run.
-4. Output collection and conflict-safe application (`collect`/`apply`,
-   staging, `fetch --apply`); failure-artifact retention.
+4. Automatic workspace-change retention, staging, and conflict-safe
+   `fetch --apply`; failure-artifact retention.
 5. Rootless container backend + named-cache model.
 6. LAN pairing with PAKE and pinned device identities.
 7. Nix backend.

@@ -49,10 +49,56 @@ func TestLogLimitResultUsesWriterState(t *testing.T) {
 	}
 }
 
+func TestStatusEndpointIncludesNonSecretRequestDetails(t *testing.T) {
+	_, ts := testDaemon(t)
+	root := workspaceWith(t, map[string]string{"artifact": "baseline"})
+	paths, _, _, err := snapshot.SelectFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := snapshot.Build(root, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := proto.NewULID()
+	spec := proto.Spec{
+		V: proto.ProtoVersion, Argv: []string{"/bin/sh", "-c", "sleep 1"},
+		Env: map[string]string{"TOKEN": "secret"}, EnvSources: map[string]string{"TOKEN": "literal"},
+		Workdir: "build", ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
+		ChangeClientID: strings.Repeat("a", 32),
+	}
+	resp := rawSubmitSpec(t, ts.URL, id, root, spec, manifest)
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("submit status = %s: %s", resp.Status, body)
+	}
+	resp.Body.Close()
+	_ = waitTerminal(t, ts.URL, id)
+
+	resp, err = http.Get(ts.URL + "/v0/jobs/" + id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var details proto.JobDetails
+	if err := json.NewDecoder(resp.Body).Decode(&details); err != nil {
+		t.Fatal(err)
+	}
+	if details.ID != id || details.AdmittedAt.IsZero() || len(details.Spec.Argv) != 3 ||
+		len(details.Spec.EnvNames) != 1 || details.Spec.EnvNames[0] != "TOKEN" {
+		t.Fatalf("status details = %+v", details)
+	}
+	raw, _ := json.Marshal(details)
+	if bytes.Contains(raw, []byte("secret")) {
+		t.Fatalf("status exposed runtime environment: %s", raw)
+	}
+}
+
 func TestLogLimitReceiptKeepsCleanupOutcomeSeparate(t *testing.T) {
 	_, ts := testDaemon(t)
 	root := workspaceWith(t, nil)
-	paths, _, err := snapshot.SelectFiles(root)
+	paths, _, _, err := snapshot.SelectFiles(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +111,7 @@ func TestLogLimitReceiptKeepsCleanupOutcomeSeparate(t *testing.T) {
 		ManifestRoot: manifest.RootHash(), Limits: proto.Limits{
 			MaxLogBytes: 4, MaxRuntimeSec: 10,
 			MaxWorkspaceBytes: proto.DefaultLimits().MaxWorkspaceBytes,
-			MaxOutputBytes:    proto.DefaultLimits().MaxOutputBytes,
+			MaxChangeBytes:    proto.DefaultLimits().MaxChangeBytes,
 		},
 	}
 	id := proto.NewULID()
@@ -109,7 +155,7 @@ func workspaceWith(t *testing.T, files map[string]string) string {
 // rawSubmit drives the wire protocol directly so tests control the job ID.
 func rawSubmit(t *testing.T, url, id, root string, argv []string) *http.Response {
 	t.Helper()
-	paths, _, err := snapshot.SelectFiles(root)
+	paths, _, _, err := snapshot.SelectFiles(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,6 +172,9 @@ func rawSubmit(t *testing.T, url, id, root string, argv []string) *http.Response
 
 func rawSubmitSpec(t *testing.T, url, id, root string, spec proto.Spec, m proto.Manifest) *http.Response {
 	t.Helper()
+	if spec.ChangeClientID == "" {
+		spec.ChangeClientID = testChangeClientID
+	}
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
 	p, _ := mw.CreateFormField("spec")
@@ -232,12 +281,15 @@ func TestProjectMetadataCannotBlockRun(t *testing.T) {
 	}
 }
 
-func TestRunWithoutSnapshotDoesNotInspectLocalRoot(t *testing.T) {
+func TestRunWithoutSnapshotUsesEmptyRemoteWorkspace(t *testing.T) {
 	_, ts := testDaemon(t)
-	missingRoot := filepath.Join(t.TempDir(), "does-not-exist")
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "local-only"), []byte("not uploaded"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	var stderr bytes.Buffer
 	code := client.Run(client.RunOptions{
-		PeerURL: ts.URL, Root: missingRoot, NoSnapshot: true,
+		PeerURL: ts.URL, Root: root, NoSnapshot: true,
 		Argv:   []string{"/bin/sh", "-c", `test -z "$(/usr/bin/find . -mindepth 1 -print -quit)"`},
 		Stdout: io.Discard, Stderr: &stderr,
 	})
@@ -298,7 +350,7 @@ func TestAtMostOnceAdmission(t *testing.T) {
 func TestEnvironmentBearingRetrySameDaemon(t *testing.T) {
 	_, ts := testDaemon(t)
 	root := workspaceWith(t, nil)
-	paths, _, err := snapshot.SelectFiles(root)
+	paths, _, _, err := snapshot.SelectFiles(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +383,7 @@ func TestEnvironmentBearingRetryFailsClosedAfterRestart(t *testing.T) {
 	}
 	ts1 := httptest.NewServer(d1.Handler())
 	root := workspaceWith(t, nil)
-	paths, _, err := snapshot.SelectFiles(root)
+	paths, _, _, err := snapshot.SelectFiles(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -672,13 +724,13 @@ func TestUploadLimitCannotUndercutWorkspaceLimit(t *testing.T) {
 func TestLimitsRejectedAboveCeiling(t *testing.T) {
 	_, ts := testDaemon(t)
 	root := workspaceWith(t, nil)
-	paths, _, _ := snapshot.SelectFiles(root)
+	paths, _, _, _ := snapshot.SelectFiles(root)
 	m, _ := snapshot.Build(root, paths)
 	spec := proto.Spec{
 		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
 		ManifestRoot: m.RootHash(),
 		Limits: proto.Limits{
-			MaxLogBytes: 1 << 60, MaxRuntimeSec: 1, MaxWorkspaceBytes: 1, MaxOutputBytes: 1,
+			MaxLogBytes: 1 << 60, MaxRuntimeSec: 1, MaxWorkspaceBytes: 1, MaxChangeBytes: 1,
 		},
 	}
 	var body bytes.Buffer

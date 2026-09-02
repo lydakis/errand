@@ -26,7 +26,7 @@ func addGCJob(t *testing.T, d *Daemon, state string, settledAt time.Time, cleanu
 	}
 	result := &proto.Result{
 		State: state, SettledAt: &settledAt,
-		OutputsOK: true, CleanupOK: cleanupOK, LogsComplete: true,
+		ChangesOK: true, CleanupOK: cleanupOK, LogsComplete: true,
 	}
 	if err := replaceJSON(filepath.Join(dir, "result.json"), result); err != nil {
 		t.Fatal(err)
@@ -71,8 +71,8 @@ func TestJobGCCombinesAgeAndKeepProtections(t *testing.T) {
 	oldest := addGCJob(t, d, proto.StateExited, now.Add(-72*time.Hour), true)
 	older := addGCJob(t, d, proto.StateKilled, now.Add(-48*time.Hour), true)
 	for _, job := range []*Job{oldest, older} {
-		job.Spec.Outputs = []proto.OutputSpec{{Path: "artifact", Collect: proto.OutputCollectAlways}}
-		job.Spec.OutputClientID = clientID
+		job.Spec.ChangeClientID = clientID
+		job.result.Changes = &proto.ChangeSummary{Paths: []string{"artifact"}, PathCount: 1, BundleRoot: strings.Repeat("a", 64)}
 	}
 	newest := addGCJob(t, d, proto.StateExited, now.Add(-36*time.Hour), true)
 	addGCJob(t, d, proto.StateAmbiguous, now.Add(-96*time.Hour), true)
@@ -143,10 +143,10 @@ func TestJobGCProtectsActiveLogReader(t *testing.T) {
 func TestJobGCProtectsTransactionIncompleteReceipts(t *testing.T) {
 	d, ts := testDaemon(t)
 	logs := addGCJob(t, d, proto.StateExited, time.Now().Add(-48*time.Hour), true)
-	outputs := addGCJob(t, d, proto.StateExited, time.Now().Add(-48*time.Hour), true)
+	changes := addGCJob(t, d, proto.StateExited, time.Now().Add(-48*time.Hour), true)
 	transaction := addGCJob(t, d, proto.StateKilled, time.Now().Add(-48*time.Hour), true)
 	logs.result.LogsComplete = false
-	outputs.result.OutputsOK = false
+	changes.result.ChangesOK = false
 	transaction.result.TransactionError = "persisting logs failed"
 
 	keep := 0
@@ -154,7 +154,7 @@ func TestJobGCProtectsTransactionIncompleteReceipts(t *testing.T) {
 	if result.SelectedJobs != 0 || result.ProtectedJobs != 3 || result.RemovedJobs != 0 {
 		t.Fatalf("incomplete receipt GC = %+v", result)
 	}
-	for _, j := range []*Job{logs, outputs, transaction} {
+	for _, j := range []*Job{logs, changes, transaction} {
 		if _, err := os.Stat(j.Dir); err != nil {
 			t.Fatalf("incomplete receipt %s was removed: %v", j.ID, err)
 		}
@@ -168,8 +168,8 @@ func TestRemoveJobReceiptDistinguishesRemovedSkippedAndProtected(t *testing.T) {
 	}
 	defer d.Close()
 	removed := addGCJob(t, d, proto.StateExited, time.Now().Add(-time.Hour), true)
-	removed.Spec.Outputs = []proto.OutputSpec{{Path: "artifact", Collect: proto.OutputCollectAlways}}
-	removed.Spec.OutputClientID = "0123456789abcdef0123456789abcdef"
+	removed.Spec.ChangeClientID = "0123456789abcdef0123456789abcdef"
+	removed.result.Changes = &proto.ChangeSummary{Paths: []string{"artifact"}, PathCount: 1, BundleRoot: strings.Repeat("a", 64)}
 	outcome, cleanupErr, err := d.removeJobReceipt(removed)
 	if err != nil || cleanupErr != nil || outcome != jobRemovalRemoved {
 		t.Fatalf("first removal = %v, cleanup=%v, err=%v", outcome, cleanupErr, err)
@@ -181,8 +181,8 @@ func TestRemoveJobReceiptDistinguishesRemovedSkippedAndProtected(t *testing.T) {
 	if outcome, raced := d.jobRemovalRace(removed); !raced || outcome != jobRemovalSkipped {
 		t.Fatalf("removed receipt race = %v, raced=%t", outcome, raced)
 	}
-	if marker := d.collected[removed.ID]; !marker.OutputsPending || collectedMarkerExpired(marker, time.Now().Add(7*24*time.Hour)) {
-		t.Fatalf("output collection marker = %+v, want durable pending-output marker", marker)
+	if marker := d.collected[removed.ID]; !marker.ChangesPending || collectedMarkerExpired(marker, time.Now().Add(7*24*time.Hour)) {
+		t.Fatalf("change collection marker = %+v, want durable pending-change marker", marker)
 	}
 
 	protected := addGCJob(t, d, proto.StateExited, time.Now().Add(-time.Hour), true)
@@ -344,15 +344,15 @@ func TestCollectedJobsAreOwnerScopedAndPaginated(t *testing.T) {
 		jobID := proto.NewULID()
 		want[jobID] = true
 		d.collected[jobID] = collectedRecord{
-			Owner: owner, CollectedAt: time.Now(), OutputsPending: true, OutputClientID: clientID,
+			Owner: owner, CollectedAt: time.Now(), ChangesPending: true, ChangeClientID: clientID,
 		}
 	}
 	d.collected[proto.NewULID()] = collectedRecord{
-		Owner: "other@example.com", CollectedAt: time.Now(), OutputsPending: true, OutputClientID: clientID,
+		Owner: "other@example.com", CollectedAt: time.Now(), ChangesPending: true, ChangeClientID: clientID,
 	}
 	d.collected[proto.NewULID()] = collectedRecord{
-		Owner: owner, CollectedAt: time.Now(), OutputsPending: true,
-		OutputClientID: "fedcba9876543210fedcba9876543210",
+		Owner: owner, CollectedAt: time.Now(), ChangesPending: true,
+		ChangeClientID: "fedcba9876543210fedcba9876543210",
 	}
 
 	got := map[string]bool{}
@@ -390,7 +390,7 @@ func TestCollectedJobsAreOwnerScopedAndPaginated(t *testing.T) {
 	}
 }
 
-func TestCollectedJobsAcknowledgementRetiresExpiredOutputMarker(t *testing.T) {
+func TestCollectedJobsAcknowledgementRetiresExpiredChangeMarker(t *testing.T) {
 	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true})
 	if err != nil {
 		t.Fatal(err)
@@ -400,7 +400,7 @@ func TestCollectedJobsAcknowledgementRetiresExpiredOutputMarker(t *testing.T) {
 	jobID := proto.NewULID()
 	record := collectedRecord{
 		CollectedAt:    time.Now().Add(-collectedMarkerTTL - time.Minute),
-		OutputsPending: true, OutputClientID: clientID,
+		ChangesPending: true, ChangeClientID: clientID,
 	}
 	marker := filepath.Join(d.collectedDir(), jobID+".json")
 	if err := replaceJSONDurable(marker, record); err != nil {
@@ -546,7 +546,7 @@ func TestLoadCollectedPrunesExpiredMarkers(t *testing.T) {
 	}
 }
 
-func TestLoadCollectedRetainsPendingOutputMarkersWithinAbandonmentBound(t *testing.T) {
+func TestLoadCollectedRetainsPendingChangeMarkersWithinAbandonmentBound(t *testing.T) {
 	stateDir := t.TempDir()
 	collectedDir := filepath.Join(stateDir, "collected")
 	if err := os.MkdirAll(collectedDir, 0o700); err != nil {
@@ -555,8 +555,8 @@ func TestLoadCollectedRetainsPendingOutputMarkersWithinAbandonmentBound(t *testi
 	id := proto.NewULID()
 	marker := filepath.Join(collectedDir, id+".json")
 	record := collectedRecord{
-		Owner: "george@example.com", CollectedAt: time.Now().Add(-pendingOutputMarkerTTL + time.Minute), OutputsPending: true,
-		OutputClientID: "0123456789abcdef0123456789abcdef",
+		Owner: "george@example.com", CollectedAt: time.Now().Add(-pendingChangeMarkerTTL + time.Minute), ChangesPending: true,
+		ChangeClientID: "0123456789abcdef0123456789abcdef",
 	}
 	if err := replaceJSON(marker, record); err != nil {
 		t.Fatal(err)
@@ -567,15 +567,15 @@ func TestLoadCollectedRetainsPendingOutputMarkersWithinAbandonmentBound(t *testi
 		t.Fatal(err)
 	}
 	defer d.Close()
-	if got, ok := d.collected[id]; !ok || !got.OutputsPending {
-		t.Fatalf("old output collection marker = %+v, loaded=%t", got, ok)
+	if got, ok := d.collected[id]; !ok || !got.ChangesPending {
+		t.Fatalf("old change collection marker = %+v, loaded=%t", got, ok)
 	}
 	if _, err := os.Stat(marker); err != nil {
-		t.Fatalf("old output collection marker was removed: %v", err)
+		t.Fatalf("old change collection marker was removed: %v", err)
 	}
 }
 
-func TestLoadCollectedPrunesAbandonedPendingOutputMarkers(t *testing.T) {
+func TestLoadCollectedPrunesAbandonedPendingChangeMarkers(t *testing.T) {
 	stateDir := t.TempDir()
 	collectedDir := filepath.Join(stateDir, "collected")
 	if err := os.MkdirAll(collectedDir, 0o700); err != nil {
@@ -584,8 +584,8 @@ func TestLoadCollectedPrunesAbandonedPendingOutputMarkers(t *testing.T) {
 	id := proto.NewULID()
 	marker := filepath.Join(collectedDir, id+".json")
 	record := collectedRecord{
-		Owner: "george@example.com", CollectedAt: time.Now().Add(-pendingOutputMarkerTTL - time.Minute), OutputsPending: true,
-		OutputClientID: "0123456789abcdef0123456789abcdef",
+		Owner: "george@example.com", CollectedAt: time.Now().Add(-pendingChangeMarkerTTL - time.Minute), ChangesPending: true,
+		ChangeClientID: "0123456789abcdef0123456789abcdef",
 	}
 	if err := replaceJSON(marker, record); err != nil {
 		t.Fatal(err)
@@ -597,10 +597,10 @@ func TestLoadCollectedPrunesAbandonedPendingOutputMarkers(t *testing.T) {
 	}
 	defer d.Close()
 	if _, ok := d.collected[id]; ok {
-		t.Fatal("abandoned pending output marker was loaded")
+		t.Fatal("abandoned pending change marker was loaded")
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
-		t.Fatalf("abandoned pending output marker remains: %v", err)
+		t.Fatalf("abandoned pending change marker remains: %v", err)
 	}
 }
 

@@ -18,18 +18,22 @@ import (
 	"unicode/utf8"
 
 	"github.com/lydakis/errand/internal/archive"
+	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/logio"
-	outputops "github.com/lydakis/errand/internal/outputs"
 	"github.com/lydakis/errand/internal/proto"
 )
 
 const (
-	maxListCommandBytes  = 512
-	maxListWorkdirBytes  = 384
-	maxListProjectBytes  = 128
-	maxListDigestBytes   = 64
-	maxListResponseBytes = 1 << 20
-	queuedMarkerName     = "queued.json"
+	maxListCommandBytes    = 512
+	maxListWorkdirBytes    = 384
+	maxListProjectBytes    = 128
+	maxListDigestBytes     = 64
+	maxListResponseBytes   = 1 << 20
+	maxDetailResponseBytes = 1 << 20
+	maxReceiptSpecBytes    = 256 << 10
+	maxChangePreviewPaths  = 256
+	maxChangePreviewBytes  = 32 << 10
+	queuedMarkerName       = "queued.json"
 )
 
 type queuedRecord struct {
@@ -43,6 +47,7 @@ type Job struct {
 	Spec          proto.Spec
 	Admission     proto.Admission
 	RequestDigest string
+	baseline      proto.Manifest
 
 	mu                  sync.Mutex
 	state               string
@@ -58,21 +63,70 @@ type Job struct {
 	startRejected       bool
 	deleting            bool
 	logReaders          int
-	outputReaders       int
+	changeReaders       int
 	done                chan struct{}
 	logReady            chan struct{}
 	logReadyOnce        sync.Once
 	stagingCancel       func()
 	stagingDone         chan struct{}
 	stagingOnce         sync.Once
-	outputCancel        context.CancelFunc
-	outputCancelRequest string
+	changeCancel        context.CancelFunc
+	changeCancelRequest string
 }
 
 func (j *Job) Status() proto.JobStatus {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	return j.statusLocked()
+}
+
+func (j *Job) statusLocked() proto.JobStatus {
 	return proto.JobStatus{ID: j.ID, State: j.state, Result: j.result}
+}
+
+func (j *Job) Details() proto.JobDetails {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	details := proto.JobDetails{
+		JobStatus:  j.statusLocked(),
+		Spec:       proto.NewReceiptSpec(j.Spec),
+		AdmittedAt: j.Admission.Time,
+		Project:    j.Admission.Project,
+	}
+	if !j.startedAt.IsZero() {
+		startedAt := j.startedAt
+		details.StartedAt = &startedAt
+		elapsed := time.Since(startedAt)
+		if elapsed < 0 {
+			elapsed = 0
+		}
+		details.DurationMS = elapsed.Milliseconds()
+	}
+	if j.result != nil {
+		details.StartedAt = j.result.StartedAt
+		details.DurationMS = j.result.DurationMS
+	}
+	return details
+}
+
+func summarizeChangeBundle(bundle proto.ChangeBundle) *proto.ChangeSummary {
+	previewCapacity := len(bundle.Paths)
+	if previewCapacity > maxChangePreviewPaths {
+		previewCapacity = maxChangePreviewPaths
+	}
+	paths := make([]string, 0, previewCapacity)
+	used := 0
+	for _, changePath := range bundle.Paths {
+		if len(paths) >= maxChangePreviewPaths || len(changePath) > maxChangePreviewBytes-used {
+			break
+		}
+		paths = append(paths, changePath)
+		used += len(changePath)
+	}
+	return &proto.ChangeSummary{
+		Paths: paths, PathsTruncated: len(paths) != len(bundle.Paths), PathCount: len(bundle.Paths),
+		BundleRoot: bundle.RootHash(), Bytes: bundle.Bytes,
+	}
 }
 
 // summary is the job's listing row. Spec and result fields are read under
@@ -222,19 +276,19 @@ func (j *Job) releaseLogReader() {
 	j.mu.Unlock()
 }
 
-func (j *Job) acquireOutputReader() bool {
+func (j *Job) acquireChangeReader() bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.deleting {
 		return false
 	}
-	j.outputReaders++
+	j.changeReaders++
 	return true
 }
 
-func (j *Job) releaseOutputReader() {
+func (j *Job) releaseChangeReader() {
 	j.mu.Lock()
-	j.outputReaders--
+	j.changeReaders--
 	j.mu.Unlock()
 }
 
@@ -276,6 +330,10 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 		}
 	}
 	j.event("workspace-extracted", fmt.Sprintf("root=%s cached=%d/%d", manifest.RootHash(), len(cachedPaths), totalFiles))
+	if err := changeops.CaptureWorkspaceBaseContext(stagingCtx, workspace, j.Dir, manifest); err != nil {
+		return false, fmt.Errorf("capturing submitted workspace for change merging: %w", err)
+	}
+	j.event("change-base-captured", manifest.RootHash())
 	if d.cache != nil {
 		for _, e := range manifest.Entries {
 			if e.Type != proto.EntryFile || cachedPaths[e.Path] {
@@ -431,13 +489,9 @@ func (j *Job) launch(d *Daemon) error {
 		waitErr := cmd.Wait()
 		finishedAt := time.Now()
 		durationMS := finishedAt.Sub(startedAt).Milliseconds()
-		outputCtx := context.Background()
-		var outputCancel context.CancelFunc
-		if len(j.Spec.Outputs) > 0 {
-			outputCtx, outputCancel = outputCollectionContext(startedAt, j.Spec.Limits.MaxRuntimeSec)
-		}
-		j.transitionAfterProcessExit(outputCancel)
+		changeCtx, changeCancel := changeCollectionContext(finishedAt)
 		timer.Stop()
+		j.transitionAfterProcessExit(changeCancel)
 
 		scopeKilled, scopeErr := scope.cleanup(2 * time.Second)
 		processCleanupOK := scopeErr == nil
@@ -455,7 +509,7 @@ func (j *Job) launch(d *Daemon) error {
 
 		res := &proto.Result{
 			Started: true, StartedAt: &startedAt, FinishedAt: &finishedAt, DurationMS: durationMS,
-			OutputsOK: true, CleanupOK: processCleanupOK && pipeErr == nil,
+			ChangesOK: true, CleanupOK: processCleanupOK && pipeErr == nil,
 		}
 		res.LogsComplete = logw.Complete() && pipeErr == nil
 		res.LimitExceeded = j.limitExceeded(logw)
@@ -482,43 +536,34 @@ func (j *Job) launch(d *Daemon) error {
 			res.StartError = waitErr.Error()
 		}
 
-		if len(j.Spec.Outputs) > 0 {
-			var bundle proto.OutputBundle
+		{
+			var bundle proto.ChangeBundle
 			var collected bool
 			var collectErr error
 			if !processCleanupOK {
 				collectErr = errors.New("process scope cleanup incomplete")
 			} else {
-				processSuccess := res.ExitCode != nil && *res.ExitCode == 0
-				bundle, collected, collectErr = outputops.CollectContext(
-					outputCtx, workspace, j.Dir, j.Spec.Outputs, processSuccess, j.Spec.Limits.MaxOutputBytes)
+				bundle, collected, collectErr = changeops.CollectWorkspaceChangesContext(
+					changeCtx, workspace, j.Dir, j.baseline, j.Spec.Selection, j.Spec.Limits.MaxChangeBytes)
 			}
 			j.mu.Lock()
-			ctxErr := outputCtx.Err()
-			j.outputCancel = nil
+			ctxErr := changeCtx.Err()
+			j.changeCancel = nil
 			j.mu.Unlock()
-			outputCancel()
-			if collectErr == nil && ctxErr != nil {
-				collectErr = ctxErr
-				if collected {
-					_ = os.RemoveAll(filepath.Join(j.Dir, outputops.BundleDirectory))
-					collected = false
-				}
-			}
+			changeCancel()
+			collected, collectErr = settleChangeCollection(j.Dir, collected, collectErr, ctxErr)
 			if collectErr != nil {
-				res.OutputsOK = false
+				res.ChangesOK = false
 				if res.LimitExceeded == "" {
-					res.LimitExceeded = outputCollectionLimit(collectErr)
+					res.LimitExceeded = changeCollectionLimit(collectErr)
 				}
 				res.TransactionError = appendTransactionError(res.TransactionError,
-					"collecting outputs: "+collectErr.Error())
-				j.event("output-collection-failed", collectErr.Error())
+					"collecting changes: "+collectErr.Error())
+				j.event("change-collection-failed", collectErr.Error())
 			} else if collected {
-				res.Outputs = &proto.OutputSummary{
-					Paths: append([]string(nil), bundle.Paths...), ManifestRoot: bundle.Manifest.RootHash(), Bytes: bundle.Bytes,
-				}
-				j.event("outputs-collected", fmt.Sprintf("root=%s paths=%d bytes=%d",
-					res.Outputs.ManifestRoot, len(bundle.Paths), bundle.Bytes))
+				res.Changes = summarizeChangeBundle(bundle)
+				j.event("workspace-changes-retained", fmt.Sprintf("root=%s paths=%d bytes=%d",
+					res.Changes.BundleRoot, len(bundle.Paths), bundle.Bytes))
 			}
 		}
 		j.finalizeWithScopeOutcome(d, res, false, processCleanupOK)
@@ -526,12 +571,24 @@ func (j *Job) launch(d *Daemon) error {
 	return nil
 }
 
-func outputCollectionLimit(err error) string {
+func settleChangeCollection(jobDir string, collected bool, collectErr, ctxErr error) (bool, error) {
+	if collected {
+		// Publication is the collection commit point. Later cleanup or deadline
+		// errors must not destroy an already durable bundle.
+		return true, nil
+	}
+	collectErr = errors.Join(collectErr, ctxErr)
+	return collected, collectErr
+}
+
+func changeCollectionLimit(err error) string {
 	switch {
-	case errors.Is(err, outputops.ErrLimitExceeded):
-		return "output_bytes"
+	case errors.Is(err, changeops.ErrEntryLimitExceeded):
+		return "change_entries"
+	case errors.Is(err, changeops.ErrByteLimitExceeded), errors.Is(err, changeops.ErrLimitExceeded):
+		return "change_bytes"
 	case errors.Is(err, context.DeadlineExceeded):
-		return "runtime"
+		return "change_deadline"
 	default:
 		return ""
 	}
@@ -546,7 +603,7 @@ func (j *Job) settleStartFailure() *proto.Result {
 	if !j.started && j.killed != "" {
 		return &proto.Result{
 			Signal: j.killSignal.String(), SignalNum: int(j.killSignal),
-			OutputsOK: true, LogsComplete: true,
+			ChangesOK: true, LogsComplete: true,
 		}
 	}
 	j.startRejected = true
@@ -628,8 +685,10 @@ func (j *Job) limitExceeded(logw *logio.Writer) string {
 	}
 }
 
-func outputCollectionContext(startedAt time.Time, maxRuntimeSec int64) (context.Context, context.CancelFunc) {
-	return context.WithDeadline(context.Background(), startedAt.Add(time.Duration(maxRuntimeSec)*time.Second))
+const changeCollectionTimeout = 5 * time.Minute
+
+func changeCollectionContext(finishedAt time.Time) (context.Context, context.CancelFunc) {
+	return context.WithDeadline(context.Background(), finishedAt.Add(changeCollectionTimeout))
 }
 
 func waitForPipeCopies(readers []*os.File, errs <-chan error, timeout time.Duration) error {
@@ -699,7 +758,7 @@ func (j *Job) cancelledBeforeStart() *proto.Result {
 	}
 	return &proto.Result{
 		Signal: j.killSignal.String(), SignalNum: int(j.killSignal),
-		OutputsOK: true, LogsComplete: true,
+		ChangesOK: true, LogsComplete: true,
 	}
 }
 
@@ -727,10 +786,14 @@ func (j *Job) buildEnv() []string {
 // terminate kills the whole process group, recording why.
 func (j *Job) terminate(reason string, sig syscall.Signal) error {
 	j.mu.Lock()
-	if j.result == nil && j.reaped && j.outputCancel != nil {
-		j.outputCancel()
+	if j.result == nil && j.reaped && j.changeCancel != nil {
+		if reason == "runtime" {
+			j.mu.Unlock()
+			return nil
+		}
+		j.changeCancel()
 		j.mu.Unlock()
-		j.event("output-collection-cancelled", reason)
+		j.event("change-collection-cancelled", reason)
 		return nil
 	}
 	if j.result != nil || j.reaped || j.startRejected || j.state == proto.StateExited ||
@@ -759,7 +822,7 @@ func (j *Job) terminate(reason string, sig syscall.Signal) error {
 		scopeErr = scope.signalEscaped(sig, cmd.Process.Pid)
 	}
 	if processExited {
-		j.requestOutputCollectionCancellation(reason)
+		j.requestChangeCollectionCancellation(reason)
 	}
 	j.event("terminated", reason)
 	return errors.Join(groupErr, scopeErr)
@@ -768,10 +831,10 @@ func (j *Job) terminate(reason string, sig syscall.Signal) error {
 // Signal forwards a signal to the job's process group.
 func (j *Job) Signal(sig syscall.Signal) error {
 	j.mu.Lock()
-	if j.result == nil && j.reaped && j.outputCancel != nil {
-		j.outputCancel()
+	if j.result == nil && j.reaped && j.changeCancel != nil {
+		j.changeCancel()
 		j.mu.Unlock()
-		j.event("output-collection-cancelled", sig.String())
+		j.event("change-collection-cancelled", sig.String())
 		return nil
 	}
 	if j.result != nil || j.reaped || j.startRejected || j.state == proto.StateExited ||
@@ -797,45 +860,48 @@ func (j *Job) Signal(sig syscall.Signal) error {
 		scopeErr = scope.signalEscaped(sig, cmd.Process.Pid)
 	}
 	if processExited {
-		j.requestOutputCollectionCancellation(sig.String())
+		j.requestChangeCollectionCancellation(sig.String())
 	}
 	return errors.Join(groupErr, scopeErr)
 }
 
-func (j *Job) requestOutputCollectionCancellation(reason string) bool {
+func (j *Job) requestChangeCollectionCancellation(reason string) bool {
+	if reason == "runtime" {
+		return false
+	}
 	j.mu.Lock()
-	if j.result != nil || len(j.Spec.Outputs) == 0 {
+	if j.result != nil {
 		j.mu.Unlock()
 		return false
 	}
 	if !j.reaped {
-		if j.outputCancelRequest == "" {
-			j.outputCancelRequest = reason
+		if j.changeCancelRequest == "" {
+			j.changeCancelRequest = reason
 		}
 		j.mu.Unlock()
 		return true
 	}
-	cancel := j.outputCancel
+	cancel := j.changeCancel
 	j.mu.Unlock()
 	if cancel == nil {
 		return false
 	}
 	cancel()
-	j.event("output-collection-cancelled", reason)
+	j.event("change-collection-cancelled", reason)
 	return true
 }
 
-func (j *Job) transitionAfterProcessExit(outputCancel context.CancelFunc) {
+func (j *Job) transitionAfterProcessExit(changeCancel context.CancelFunc) {
 	j.mu.Lock()
 	j.cmd = nil
 	j.reaped = true
-	j.outputCancel = outputCancel
-	reason := j.outputCancelRequest
-	j.outputCancelRequest = ""
+	j.changeCancel = changeCancel
+	reason := j.changeCancelRequest
+	j.changeCancelRequest = ""
 	j.mu.Unlock()
-	if outputCancel != nil && reason != "" {
-		outputCancel()
-		j.event("output-collection-cancelled", reason)
+	if changeCancel != nil && reason != "" {
+		changeCancel()
+		j.event("change-collection-cancelled", reason)
 	}
 }
 
@@ -851,6 +917,7 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	// digest and redacted receipt retain idempotency without retaining secrets.
 	j.mu.Lock()
 	j.Spec.Env = nil
+	j.baseline = proto.Manifest{}
 	j.mu.Unlock()
 
 	var workspaceErr error
@@ -859,6 +926,7 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	} else {
 		res.TransactionError = appendTransactionError(res.TransactionError, "workspace retained for process recovery")
 	}
+	baseErr := removeOwnedTree(filepath.Join(j.Dir, "change-base"))
 	// The scope record is runtime state, not receipt: once the job is
 	// settled there is nothing left for reconciliation to find. Retain it
 	// after failed scope cleanup so a restart can still locate survivors.
@@ -872,13 +940,17 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 		j.event("workspace-remove-failed", workspaceErr.Error())
 		res.TransactionError = appendTransactionError(res.TransactionError, "removing workspace: "+workspaceErr.Error())
 	}
+	if baseErr != nil {
+		j.event("change-base-remove-failed", baseErr.Error())
+		res.TransactionError = appendTransactionError(res.TransactionError, "removing submitted change base: "+baseErr.Error())
+	}
 	if scopeRecordErr != nil {
 		j.event("scope-record-remove-failed", scopeRecordErr.Error())
 		res.TransactionError = appendTransactionError(res.TransactionError, "removing process scope record: "+scopeRecordErr.Error())
 	}
 	// A queued marker on a never-started job is receipt evidence. Retaining it
 	// closes the crash gap between cleanup and the durable terminal result.
-	cleanupOK := workspaceErr == nil && scopeCleanupOK && scopeRecordErr == nil
+	cleanupOK := workspaceErr == nil && baseErr == nil && scopeCleanupOK && scopeRecordErr == nil
 	if neverRan {
 		res.CleanupOK = cleanupOK
 	} else {
