@@ -25,8 +25,9 @@ type rule struct {
 }
 
 type Matcher struct {
-	prefix string
-	rules  []rule
+	prefix   string
+	rules    []rule
+	caseFold bool
 }
 
 func Compile(policy proto.SelectionPolicy) (*Matcher, error) {
@@ -57,7 +58,7 @@ func Compile(policy proto.SelectionPolicy) (*Matcher, error) {
 			rules = append(rules, compiled)
 		}
 	}
-	return &Matcher{prefix: policy.Prefix, rules: rules}, nil
+	return &Matcher{prefix: policy.Prefix, rules: rules, caseFold: policy.CaseFold}, nil
 }
 
 func validatePrefix(prefix string) error {
@@ -93,59 +94,29 @@ func compileRule(pattern string) (rule, bool, error) {
 	if pattern == "" {
 		return rule{}, false, nil
 	}
-	compiled.components = strings.Split(pattern, "/")
-	for i, component := range compiled.components {
-		if component == "**" {
-			continue
-		}
-		component = normalizeClassNegation(component)
-		component = normalizePOSIXClasses(component)
-		if _, err := filepath.Match(component, ""); err != nil {
-			return rule{}, false, fmt.Errorf("invalid selection policy pattern %q: %w", pattern, err)
-		}
-		compiled.components[i] = component
-	}
+	compiled.components = splitPattern(pattern)
 	return compiled, true, nil
 }
 
-func normalizePOSIXClasses(pattern string) string {
-	classes := map[string]string{
-		"alnum":  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-		"alpha":  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-		"blank":  " \t",
-		"cntrl":  asciiRange(1, 31) + string(rune(127)),
-		"digit":  "0123456789",
-		"graph":  asciiRange(33, 126),
-		"lower":  "abcdefghijklmnopqrstuvwxyz",
-		"print":  asciiRange(32, 126),
-		"punct":  `!"#$%&'()*+,-./:;<=>?@[\]^_` + "`" + `{|}~`,
-		"space":  " \t\v\f\r\n",
-		"upper":  "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-		"xdigit": "0123456789ABCDEFabcdef",
-	}
-	for name, characters := range classes {
-		pattern = strings.ReplaceAll(pattern, "[:"+name+":]", escapeClassCharacters(characters))
-	}
-	return pattern
-}
-
-func asciiRange(first, last byte) string {
-	result := make([]byte, 0, int(last-first)+1)
-	for char := first; char <= last; char++ {
-		result = append(result, char)
-	}
-	return string(result)
-}
-
-func escapeClassCharacters(characters string) string {
-	var result strings.Builder
-	for _, char := range characters {
-		if char == '\\' || char == ']' || char == '-' || char == '^' {
-			result.WriteByte('\\')
+func splitPattern(pattern string) []string {
+	var components []string
+	start := 0
+	for i := 0; i < len(pattern); i++ {
+		if pattern[i] != '/' {
+			continue
 		}
-		result.WriteRune(char)
+		component := pattern[start:i]
+		backslashes := 0
+		for j := len(component) - 1; j >= 0 && component[j] == '\\'; j-- {
+			backslashes++
+		}
+		if backslashes%2 == 1 {
+			component = component[:len(component)-1]
+		}
+		components = append(components, component)
+		start = i + 1
 	}
-	return result.String()
+	return append(components, pattern[start:])
 }
 
 func trimUnescapedTrailingSpaces(pattern string) string {
@@ -162,30 +133,6 @@ func trimUnescapedTrailingSpaces(pattern string) string {
 	return pattern
 }
 
-func normalizeClassNegation(pattern string) string {
-	var result strings.Builder
-	escaped := false
-	for i := 0; i < len(pattern); i++ {
-		char := pattern[i]
-		if escaped {
-			result.WriteByte(char)
-			escaped = false
-			continue
-		}
-		if char == '\\' {
-			result.WriteByte(char)
-			escaped = true
-			continue
-		}
-		result.WriteByte(char)
-		if char == '[' && i+1 < len(pattern) && pattern[i+1] == '!' {
-			result.WriteByte('^')
-			i++
-		}
-	}
-	return result.String()
-}
-
 func (m *Matcher) Ignored(name string, directory bool) bool {
 	if m == nil {
 		return false
@@ -200,7 +147,7 @@ func (m *Matcher) Ignored(name string, directory bool) bool {
 		currentIsDirectory := i < len(parts)-1 || directory
 		matchedIgnored := false
 		for _, rule := range m.rules {
-			if (!rule.directoryOnly || currentIsDirectory) && rule.matchesParts(parts[:i+1]) {
+			if (!rule.directoryOnly || currentIsDirectory) && rule.matchesParts(parts[:i+1], m.caseFold) {
 				matchedIgnored = !rule.negated
 			}
 		}
@@ -209,17 +156,17 @@ func (m *Matcher) Ignored(name string, directory bool) bool {
 	return ignored
 }
 
-func (r rule) matchesParts(parts []string) bool {
+func (r rule) matchesParts(parts []string, caseFold bool) bool {
 	if !r.anchored {
 		parts = parts[len(parts)-1:]
 	}
-	return matchComponents(r.components, parts)
+	return matchComponents(r.components, parts, caseFold)
 }
 
-func matchComponents(pattern, name []string) bool {
+func matchComponents(pattern, name []string, caseFold bool) bool {
 	hasDoubleStar := false
 	for _, component := range pattern {
-		if component == "**" {
+		if isDoubleStar(component) {
 			hasDoubleStar = true
 			break
 		}
@@ -229,8 +176,7 @@ func matchComponents(pattern, name []string) bool {
 			return false
 		}
 		for i := range pattern {
-			matched, err := filepath.Match(pattern[i], name[i])
-			if err != nil || !matched {
+			if !matchSegment(pattern[i], name[i], caseFold) {
 				return false
 			}
 		}
@@ -253,7 +199,7 @@ func matchComponents(pattern, name []string) bool {
 		switch {
 		case patternIndex == len(pattern):
 			matched = nameIndex == len(name)
-		case pattern[patternIndex] == "**":
+		case isDoubleStar(pattern[patternIndex]):
 			if patternIndex == len(pattern)-1 {
 				matched = nameIndex < len(name)
 			} else {
@@ -261,11 +207,195 @@ func matchComponents(pattern, name []string) bool {
 					(nameIndex < len(name) && match(patternIndex, nameIndex+1))
 			}
 		case nameIndex < len(name):
-			componentMatched, err := filepath.Match(pattern[patternIndex], name[nameIndex])
-			matched = err == nil && componentMatched && match(patternIndex+1, nameIndex+1)
+			matched = matchSegment(pattern[patternIndex], name[nameIndex], caseFold) &&
+				match(patternIndex+1, nameIndex+1)
 		}
 		memo[key] = matched
 		return matched
 	}
 	return match(0, 0)
+}
+
+func isDoubleStar(component string) bool {
+	return len(component) >= 2 && strings.Trim(component, "*") == ""
+}
+
+func matchSegment(pattern, name string, caseFold bool) bool {
+	patternIndex, nameIndex := 0, 0
+	starPattern, starName := -1, -1
+	for nameIndex < len(name) {
+		if patternIndex < len(pattern) {
+			switch pattern[patternIndex] {
+			case '*':
+				for patternIndex < len(pattern) && pattern[patternIndex] == '*' {
+					patternIndex++
+				}
+				starPattern, starName = patternIndex, nameIndex
+				continue
+			case '?':
+				patternIndex++
+				nameIndex++
+				continue
+			case '\\':
+				if patternIndex+1 < len(pattern) &&
+					equalByte(pattern[patternIndex+1], name[nameIndex], caseFold) {
+					patternIndex += 2
+					nameIndex++
+					continue
+				}
+			case '[':
+				classMatched, next, valid := matchClass(pattern, patternIndex, name[nameIndex], caseFold)
+				if valid && classMatched {
+					patternIndex = next
+					nameIndex++
+					continue
+				}
+			default:
+				if equalByte(pattern[patternIndex], name[nameIndex], caseFold) {
+					patternIndex++
+					nameIndex++
+					continue
+				}
+			}
+		}
+		if starPattern < 0 {
+			return false
+		}
+		starName++
+		nameIndex = starName
+		patternIndex = starPattern
+	}
+	for patternIndex < len(pattern) && pattern[patternIndex] == '*' {
+		patternIndex++
+	}
+	return patternIndex == len(pattern)
+}
+
+func matchClass(pattern string, start int, value byte, caseFold bool) (bool, int, bool) {
+	i := start + 1
+	if i == len(pattern) {
+		return false, 0, false
+	}
+	negated := pattern[i] == '!' || pattern[i] == '^'
+	if negated {
+		i++
+	}
+	matched := false
+	var previous byte
+	if i < len(pattern) && pattern[i] == ']' {
+		matched = equalByte(']', value, caseFold)
+		previous = ']'
+		i++
+	}
+	for i < len(pattern) && pattern[i] != ']' {
+		current := pattern[i]
+		switch {
+		case current == '\\':
+			i++
+			if i == len(pattern) {
+				return false, 0, false
+			}
+			current = pattern[i]
+			matched = matched || equalByte(current, value, caseFold)
+			previous = current
+		case current == '-' && previous != 0 && i+1 < len(pattern) && pattern[i+1] != ']':
+			i++
+			end := pattern[i]
+			if end == '\\' {
+				i++
+				if i == len(pattern) {
+					return false, 0, false
+				}
+				end = pattern[i]
+			}
+			matched = matched || inRange(value, previous, end, caseFold)
+			previous = 0
+		case current == '[' && i+1 < len(pattern) && pattern[i+1] == ':':
+			end := strings.Index(pattern[i+2:], ":]")
+			if end < 0 {
+				matched = matched || equalByte('[', value, caseFold)
+				previous = '['
+				break
+			}
+			end += i + 2
+			classMatched, valid := matchPOSIXClass(pattern[i+2:end], value, caseFold)
+			if !valid {
+				return false, 0, false
+			}
+			matched = matched || classMatched
+			i = end + 1
+			previous = 0
+		default:
+			matched = matched || equalByte(current, value, caseFold)
+			previous = current
+		}
+		i++
+	}
+	if i == len(pattern) {
+		return false, 0, false
+	}
+	if negated {
+		matched = !matched
+	}
+	return matched, i + 1, true
+}
+
+func equalByte(left, right byte, caseFold bool) bool {
+	return foldASCII(left, caseFold) == foldASCII(right, caseFold)
+}
+
+func foldASCII(value byte, enabled bool) byte {
+	if enabled && value >= 'A' && value <= 'Z' {
+		return value + ('a' - 'A')
+	}
+	return value
+}
+
+func inRange(value, start, end byte, caseFold bool) bool {
+	foldedValue := foldASCII(value, caseFold)
+	foldedStart := foldASCII(start, caseFold)
+	foldedEnd := foldASCII(end, caseFold)
+	if foldedValue >= foldedStart && foldedValue <= foldedEnd {
+		return true
+	}
+	return caseFold && value >= 'a' && value <= 'z' && value-('a'-'A') >= start && value-('a'-'A') <= end
+}
+
+func matchPOSIXClass(name string, value byte, caseFold bool) (bool, bool) {
+	switch name {
+	case "alnum":
+		return isASCIIAlpha(value) || isASCIIDigit(value), true
+	case "alpha":
+		return isASCIIAlpha(value), true
+	case "blank":
+		return value == ' ' || value == '\t', true
+	case "cntrl":
+		return value <= 0x1f || value == 0x7f, true
+	case "digit":
+		return isASCIIDigit(value), true
+	case "graph":
+		return value > 0x20 && value <= 0x7e, true
+	case "lower":
+		return value >= 'a' && value <= 'z' || caseFold && value >= 'A' && value <= 'Z', true
+	case "print":
+		return value >= 0x20 && value <= 0x7e, true
+	case "punct":
+		return value > 0x20 && value <= 0x7e && !isASCIIAlpha(value) && !isASCIIDigit(value), true
+	case "space":
+		return value == ' ' || value == '\t' || value == '\n' || value == '\r' || value == '\f' || value == '\v', true
+	case "upper":
+		return value >= 'A' && value <= 'Z' || caseFold && value >= 'a' && value <= 'z', true
+	case "xdigit":
+		return isASCIIDigit(value) || value >= 'a' && value <= 'f' || value >= 'A' && value <= 'F', true
+	default:
+		return false, false
+	}
+}
+
+func isASCIIAlpha(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
+}
+
+func isASCIIDigit(value byte) bool {
+	return value >= '0' && value <= '9'
 }

@@ -389,6 +389,65 @@ func TestGitSelectionPolicyResolvesRelativeConfiguredExcludesFromWorktree(t *tes
 	}
 }
 
+func TestGitSelectionPolicyFreezesDefaultXDGExcludes(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	xdg := filepath.Join(home, "xdg")
+	if err := os.MkdirAll(filepath.Join(xdg, "git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(xdg, "git"), "ignore", "global-secret\n")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, "empty-gitconfig"))
+	t.Setenv("GIT_CONFIG_SYSTEM", filepath.Join(home, "empty-system-gitconfig"))
+	if out, err := exec.Command("git", "-C", root, "init", "--quiet").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	writeFile(t, root, "keep", "kept")
+	writeFile(t, root, "global-secret", "ignored")
+	paths, _, policy, err := SelectFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(paths, "global-secret") {
+		t.Fatalf("Git selected its default global exclusion: %v", paths)
+	}
+	matcher, err := pathpolicy.Compile(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !matcher.Ignored("global-secret", false) {
+		t.Fatalf("frozen policy lost the default XDG exclude: %+v", policy)
+	}
+}
+
+func TestGitSelectionPolicyFreezesIgnoreCase(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "--quiet").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", root, "config", "core.ignoreCase", "true").CombinedOutput(); err != nil {
+		t.Fatalf("git config core.ignoreCase: %v: %s", err, out)
+	}
+	writeFile(t, root, ".gitignore", "SECRET\n")
+	writeFile(t, root, "keep", "kept")
+	_, _, policy, err := SelectFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !policy.CaseFold {
+		t.Fatalf("selection policy did not freeze core.ignoreCase: %+v", policy)
+	}
+	matcher, err := pathpolicy.Compile(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !matcher.Ignored("secret", false) {
+		t.Fatal("case-folded Git policy did not ignore a differently cased remote path")
+	}
+}
+
 func TestGitSelectionPolicyFollowsInfoExcludeSymlink(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	root := t.TempDir()
@@ -639,6 +698,36 @@ func TestRebasedNestedIgnorePatternStaysInsideItsDirectory(t *testing.T) {
 	} {
 		if got := matcher.Ignored(test.path, false); got != test.ignored {
 			t.Errorf("Ignored(%q) = %t, want %t (policy %v)", test.path, got, test.ignored, policy.Ignore)
+		}
+	}
+}
+
+func TestRebasedNestedIgnorePatternEscapesDirectoryMetacharacters(t *testing.T) {
+	policy := proto.SelectionPolicy{Ignore: []string{
+		rebaseIgnorePattern("packages/pkg[1]", "secret"),
+		rebaseIgnorePattern("packages/star*dir", "artifact"),
+		rebaseIgnorePattern("packages/question?dir", "cache"),
+	}}
+	matcher, err := pathpolicy.Compile(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{
+		"packages/pkg[1]/secret",
+		"packages/star*dir/artifact",
+		"packages/question?dir/cache",
+	} {
+		if !matcher.Ignored(name, false) {
+			t.Errorf("rebased rule did not match literal directory path %q (policy %v)", name, policy.Ignore)
+		}
+	}
+	for _, name := range []string{
+		"packages/pkg1/secret",
+		"packages/starXYZdir/artifact",
+		"packages/questionXdir/cache",
+	} {
+		if matcher.Ignored(name, false) {
+			t.Errorf("rebased rule escaped its literal directory path and matched %q (policy %v)", name, policy.Ignore)
 		}
 	}
 }

@@ -1100,7 +1100,7 @@ func validateSpec(s proto.Spec, maxLimits proto.Limits) error {
 	if s.NoSnapshot && s.ManifestRoot != (proto.Manifest{}).RootHash() {
 		return fmt.Errorf("no-snapshot spec must use the empty manifest root")
 	}
-	if s.NoSnapshot && (s.Selection.Prefix != "" || len(s.Selection.Ignore) != 0) {
+	if s.NoSnapshot && !s.Selection.IsZero() {
 		return fmt.Errorf("no-snapshot spec must use an empty selection policy")
 	}
 	if _, err := pathpolicy.Compile(s.Selection); err != nil {

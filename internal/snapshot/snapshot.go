@@ -111,7 +111,9 @@ func SelectFilesGuarded(root string, opts SelectOptions) ([]string, GitInfo, pro
 	}
 	guard := &SelectionGuard{
 		root: root, opts: opts, paths: slices.Clone(paths), gitInfo: gitInfo,
-		policy: proto.SelectionPolicy{Prefix: policy.Prefix, Ignore: slices.Clone(policy.Ignore)},
+		policy: proto.SelectionPolicy{
+			Prefix: policy.Prefix, Ignore: slices.Clone(policy.Ignore), CaseFold: policy.CaseFold,
+		},
 	}
 	return paths, gitInfo, policy, guard, nil
 }
@@ -125,6 +127,7 @@ func (g *SelectionGuard) Verify() error {
 		return fmt.Errorf("snapshot: revalidating selection policy: %w", err)
 	}
 	if gitInfo != g.gitInfo || !slices.Equal(paths, g.paths) || policy.Prefix != g.policy.Prefix ||
+		policy.CaseFold != g.policy.CaseFold ||
 		!slices.Equal(policy.Ignore, g.policy.Ignore) {
 		return fmt.Errorf("snapshot: selection policy changed after manifest construction; retry")
 	}
@@ -283,6 +286,7 @@ func stableGitSelection(root string, listGitFiles func(string) ([]string, error)
 		return nil, proto.SelectionPolicy{}, err
 	}
 	if !slices.Equal(paths, afterPaths) || policy.Prefix != afterPolicy.Prefix ||
+		policy.CaseFold != afterPolicy.CaseFold ||
 		!slices.Equal(policy.Ignore, afterPolicy.Ignore) {
 		return nil, proto.SelectionPolicy{}, fmt.Errorf("Git selection policy changed while selecting files")
 	}
@@ -300,6 +304,16 @@ func gitSelectionPolicy(root string, _ []string) (proto.SelectionPolicy, error) 
 	} else if ok {
 		if !filepath.IsAbs(global) {
 			global = filepath.Join(worktreeRoot, global)
+		}
+		lines, err := optionalPolicyFileFollowingSymlinks(global, "")
+		if err != nil {
+			return proto.SelectionPolicy{}, err
+		}
+		patterns = append(patterns, lines...)
+	} else {
+		global, err := defaultGitExcludesPath()
+		if err != nil {
+			return proto.SelectionPolicy{}, err
 		}
 		lines, err := optionalPolicyFileFollowingSymlinks(global, "")
 		if err != nil {
@@ -340,7 +354,11 @@ func gitSelectionPolicy(root string, _ []string) (proto.SelectionPolicy, error) 
 		}
 		patterns = append(patterns, lines...)
 	}
-	policy := proto.SelectionPolicy{Prefix: prefix, Ignore: patterns}
+	caseFold, err := gitConfigBool(root, "core.ignoreCase")
+	if err != nil {
+		return proto.SelectionPolicy{}, err
+	}
+	policy := proto.SelectionPolicy{Prefix: prefix, Ignore: patterns, CaseFold: caseFold}
 	if _, err := pathpolicy.Compile(policy); err != nil {
 		return proto.SelectionPolicy{}, err
 	}
@@ -441,6 +459,29 @@ func gitConfigPath(root, key string) (string, bool, error) {
 	return value, true, nil
 }
 
+func gitConfigBool(root, key string) (bool, error) {
+	out, err := exec.Command("git", "-C", root, "config", "--type=bool", "--get", key).Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return false, nil
+		}
+		return false, err
+	}
+	return strings.TrimSuffix(string(out), "\n") == "true", nil
+}
+
+func defaultGitExcludesPath() (string, error) {
+	if configHome := os.Getenv("XDG_CONFIG_HOME"); configHome != "" {
+		return filepath.Join(configHome, "git", "ignore"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config", "git", "ignore"), nil
+}
+
 func gitPath(root, name string) (string, error) {
 	out, err := exec.Command("git", "-C", root, "rev-parse", "--git-path", name).Output()
 	if err != nil {
@@ -506,6 +547,7 @@ func rebaseIgnorePattern(base, pattern string) string {
 	if base == "" {
 		return pattern
 	}
+	base = escapeIgnorePatternPath(base)
 	prefix := ""
 	body := pattern
 	if strings.HasPrefix(body, "!") {
@@ -520,6 +562,19 @@ func rebaseIgnorePattern(base, pattern string) string {
 		return prefix + "/" + base + "/**/" + body
 	}
 	return prefix + "/" + base + "/" + body
+}
+
+func escapeIgnorePatternPath(name string) string {
+	var escaped strings.Builder
+	escaped.Grow(len(name))
+	for i := 0; i < len(name); i++ {
+		switch name[i] {
+		case '\\', '*', '?', '[', ']':
+			escaped.WriteByte('\\')
+		}
+		escaped.WriteByte(name[i])
+	}
+	return escaped.String()
 }
 
 func walk(root string, matcher *pathpolicy.Matcher) ([]string, error) {

@@ -448,6 +448,10 @@ func TestValidateSpecRequiresClientIdentityAndBoundedChanges(t *testing.T) {
 	if err := validateSpec(spec, proto.DefaultLimits()); err == nil || !strings.Contains(err.Error(), "empty selection policy") {
 		t.Fatalf("no-snapshot selection policy validation = %v", err)
 	}
+	spec.Selection = proto.SelectionPolicy{CaseFold: true}
+	if err := validateSpec(spec, proto.DefaultLimits()); err == nil || !strings.Contains(err.Error(), "empty selection policy") {
+		t.Fatalf("no-snapshot case-fold policy validation = %v", err)
+	}
 	spec.NoSnapshot = false
 	spec.Selection = proto.SelectionPolicy{}
 	spec.Limits.MaxChangeBytes++

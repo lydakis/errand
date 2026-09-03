@@ -67,8 +67,13 @@ func (m Manifest) RootHash() string {
 // for retention. Submitted manifest paths remain eligible regardless of these
 // rules so their modification or deletion is always observable.
 type SelectionPolicy struct {
-	Prefix string   `json:"prefix,omitempty"`
-	Ignore []string `json:"ignore,omitempty"`
+	Prefix   string   `json:"prefix,omitempty"`
+	Ignore   []string `json:"ignore,omitempty"`
+	CaseFold bool     `json:"case_fold,omitempty"`
+}
+
+func (p SelectionPolicy) IsZero() bool {
+	return p.Prefix == "" && len(p.Ignore) == 0 && !p.CaseFold
 }
 
 type Limits struct {
