@@ -33,7 +33,7 @@ func TestReconciliationSettlesOrphanedJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/sleep", "30"},
+		Argv:   []string{"/bin/sleep", "30"},
 		Limits: proto.DefaultLimits(),
 	}
 	writeReceipt := func(name string, v any) {
@@ -109,7 +109,7 @@ func TestReconciliationRetainsMalformedScopeRecordAndReportsCleanupFailure(t *te
 	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	spec := proto.Spec{V: proto.ProtoVersion, Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits()}
+	spec := proto.Spec{Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits()}
 	for name, value := range map[string]any{
 		"spec.json":  proto.NewReceiptSpec(spec),
 		"scope.json": scopeRecord{Token: "not-a-production-token"},
@@ -164,7 +164,7 @@ func TestRestartRetriesRetainedScopeForTerminalJob(t *testing.T) {
 		}
 		return b
 	}
-	spec := proto.Spec{V: proto.ProtoVersion, Argv: []string{"/bin/sleep", "30"}, Limits: proto.DefaultLimits()}
+	spec := proto.Spec{Argv: []string{"/bin/sleep", "30"}, Limits: proto.DefaultLimits()}
 	write("spec.json", proto.NewReceiptSpec(spec))
 	write("admission.json", proto.Admission{Method: "insecure-test", Time: time.Now()})
 	write("scope.json", scopeRecord{Token: token})
@@ -292,7 +292,7 @@ func TestReconciliationWithoutScopeRecordStillSettles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	spec := proto.Spec{V: proto.ProtoVersion, Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits()}
+	spec := proto.Spec{Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits()}
 	b, _ := json.MarshalIndent(proto.NewReceiptSpec(spec), "", "  ")
 	if err := os.WriteFile(filepath.Join(dir, "spec.json"), b, 0o600); err != nil {
 		t.Fatal(err)

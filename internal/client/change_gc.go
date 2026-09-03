@@ -255,27 +255,27 @@ func ReconcileCollectedJobChanges(peerURL string) error {
 	}
 	cursor := ""
 	for {
-		var page proto.CollectedJobsPage
-		endpoint := strings.TrimSuffix(peerURL, "/") + "/v0/jobs/collected?client_id=" + clientID
+		var page proto.ChangeReconciliationPage
+		endpoint := strings.TrimSuffix(peerURL, "/") + "/v0/change-reconciliation?client_id=" + clientID
 		if cursor != "" {
 			endpoint += "&cursor=" + cursor
 		}
-		if err := getJSONWithClientContext(ctx, maintenanceHTTP, endpoint, 1<<20, "collected jobs", &page); err != nil {
+		if err := getJSONWithClientContext(ctx, maintenanceHTTP, endpoint, 1<<20, "change reconciliation", &page); err != nil {
 			return err
 		}
-		if len(page.JobIDs) > proto.CollectedJobsPageLimit {
-			return fmt.Errorf("collected jobs page exceeds %d IDs", proto.CollectedJobsPageLimit)
+		if len(page.JobIDs) > proto.ChangeReconciliationPageLimit {
+			return fmt.Errorf("change reconciliation page exceeds %d IDs", proto.ChangeReconciliationPageLimit)
 		}
 		if err := reconcileCollectedJobIDs(peerURL, page.JobIDs); err != nil {
 			return err
 		}
 		if len(page.JobIDs) > 0 {
-			var acknowledged proto.CollectedJobsAckResult
+			var acknowledged proto.ChangeReconciliationAckResult
 			if err := postJSONResultContextTimeout(
 				ctx, maintenanceHTTP, maintenanceTimeout,
-				strings.TrimSuffix(peerURL, "/")+"/v0/jobs/collected/ack",
-				proto.CollectedJobsAck{ClientID: clientID, JobIDs: page.JobIDs},
-				"collection acknowledgement", &acknowledged,
+				strings.TrimSuffix(peerURL, "/")+"/v0/change-reconciliation/ack",
+				proto.ChangeReconciliationAck{ClientID: clientID, JobIDs: page.JobIDs},
+				"change reconciliation acknowledgement", &acknowledged,
 			); err != nil {
 				return err
 			}

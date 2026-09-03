@@ -131,7 +131,6 @@ func (s ChangeSummary) Matches(bundle ChangeBundle) bool {
 // identity: same job ID + same digest is a retry, a different digest is a
 // conflict.
 type Spec struct {
-	V              int               `json:"v"`
 	Argv           []string          `json:"argv"`
 	Env            map[string]string `json:"env,omitempty"`
 	EnvSources     map[string]string `json:"env_sources,omitempty"` // name -> literal | passenv
@@ -153,7 +152,6 @@ func (s Spec) Digest() string {
 // derived from the runtime environment is persisted.
 type ReceiptSpec struct {
 	ReceiptVersion int               `json:"receipt_version"`
-	V              int               `json:"v"`
 	Argv           []string          `json:"argv"`
 	EnvNames       []string          `json:"env_names,omitempty"`
 	EnvSources     map[string]string `json:"env_sources,omitempty"`
@@ -182,7 +180,7 @@ func NewReceiptSpec(s Spec) ReceiptSpec {
 	sort.Strings(names)
 	return ReceiptSpec{
 		ReceiptVersion: ReceiptVersion,
-		V:              s.V, Argv: s.Argv, EnvNames: names, EnvSources: s.EnvSources, Workdir: s.Workdir,
+		Argv:           s.Argv, EnvNames: names, EnvSources: s.EnvSources, Workdir: s.Workdir,
 		ManifestRoot: s.ManifestRoot, Limits: s.Limits,
 		GitCommit: s.GitCommit, GitDirty: s.GitDirty, NoSnapshot: s.NoSnapshot,
 		ChangeClientID: s.ChangeClientID, Selection: s.Selection,
@@ -191,7 +189,7 @@ func NewReceiptSpec(s Spec) ReceiptSpec {
 
 func (r ReceiptSpec) SpecWithoutEnv() Spec {
 	return Spec{
-		V: r.V, Argv: r.Argv, EnvSources: r.EnvSources, Workdir: r.Workdir, ManifestRoot: r.ManifestRoot,
+		Argv: r.Argv, EnvSources: r.EnvSources, Workdir: r.Workdir, ManifestRoot: r.ManifestRoot,
 		Limits: r.Limits, GitCommit: r.GitCommit, GitDirty: r.GitDirty, NoSnapshot: r.NoSnapshot,
 		ChangeClientID: r.ChangeClientID, Selection: r.Selection,
 	}
@@ -361,21 +359,21 @@ type JobGCResult struct {
 	DryRun          bool  `json:"dry_run"`
 }
 
-type CollectedJobsPage struct {
+type ChangeReconciliationPage struct {
 	JobIDs     []string `json:"job_ids"`
 	NextCursor string   `json:"next_cursor,omitempty"`
 }
 
-type CollectedJobsAck struct {
+type ChangeReconciliationAck struct {
 	ClientID string   `json:"client_id"`
 	JobIDs   []string `json:"job_ids"`
 }
 
-type CollectedJobsAckResult struct {
+type ChangeReconciliationAckResult struct {
 	Acknowledged int `json:"acknowledged"`
 }
 
-const CollectedJobsPageLimit = 1024
+const ChangeReconciliationPageLimit = 1024
 
 func ValidChangeClientID(id string) bool {
 	if len(id) != 32 {

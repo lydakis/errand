@@ -193,7 +193,7 @@ func submitChangeJob(t *testing.T, d *Daemon, url, root string, argv []string) (
 	}
 	id := proto.NewULID()
 	resp := rawSubmitSpec(t, url, id, root, proto.Spec{
-		V: proto.ProtoVersion, Argv: argv, ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
+		Argv: argv, ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 		ChangeClientID: testChangeClientID, Selection: selection,
 	}, manifest)
 	if resp.StatusCode != http.StatusCreated {
@@ -431,7 +431,7 @@ func TestRestartMarksUnfinishedChangeCollectionIncomplete(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeJobFixture(t, dir, proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
+		Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
 	})
 	d, err := New(Config{StateDir: stateDir, InsecureNoAuth: true})
 	if err != nil {
@@ -462,7 +462,7 @@ func TestRestartPublishesBundleCommittedBeforeResult(t *testing.T) {
 		t.Fatalf("collect = %+v, %t, %v", bundle, collected, err)
 	}
 	writeJobFixture(t, dir, proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
+		Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
 	})
 	d, err := New(Config{StateDir: stateDir, InsecureNoAuth: true})
 	if err != nil {
@@ -497,7 +497,7 @@ func writeJobFixture(t *testing.T, dir string, spec proto.Spec) {
 func TestValidateSpecRequiresClientIdentityAndBoundedChanges(t *testing.T) {
 	manifest := proto.Manifest{}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/true"}, ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
+		Argv: []string{"/bin/true"}, ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	if err := validateSpec(spec, proto.DefaultLimits()); err == nil || !strings.Contains(err.Error(), "change_client_id") {
 		t.Fatalf("missing client identity validation = %v", err)
@@ -557,7 +557,7 @@ func TestChangeByteLimitIsRecorded(t *testing.T) {
 	limits.MaxChangeBytes = 3
 	id := proto.NewULID()
 	resp := rawSubmitSpec(t, ts.URL, id, root, proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/sh", "-c", "printf large > result.txt"},
+		Argv:         []string{"/bin/sh", "-c", "printf large > result.txt"},
 		ManifestRoot: manifest.RootHash(), Limits: limits, ChangeClientID: testChangeClientID,
 	}, manifest)
 	resp.Body.Close()

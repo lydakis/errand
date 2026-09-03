@@ -281,10 +281,10 @@ func (d *Daemon) handleJobGC(w http.ResponseWriter, r *http.Request, id Identity
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (d *Daemon) handleCollectedJobs(w http.ResponseWriter, r *http.Request, id Identity) {
+func (d *Daemon) handleChangeReconciliation(w http.ResponseWriter, r *http.Request, id Identity) {
 	cursor := r.URL.Query().Get("cursor")
 	if cursor != "" && !proto.ValidULID(cursor) {
-		httpError(w, http.StatusBadRequest, "invalid collection cursor")
+		httpError(w, http.StatusBadRequest, "invalid change reconciliation cursor")
 		return
 	}
 	clientID := r.URL.Query().Get("client_id")
@@ -304,40 +304,40 @@ func (d *Daemon) handleCollectedJobs(w http.ResponseWriter, r *http.Request, id 
 	d.mu.Unlock()
 	sort.Strings(ids)
 	start := sort.Search(len(ids), func(i int) bool { return ids[i] > cursor })
-	end := min(start+proto.CollectedJobsPageLimit, len(ids))
-	page := proto.CollectedJobsPage{JobIDs: append([]string(nil), ids[start:end]...)}
+	end := min(start+proto.ChangeReconciliationPageLimit, len(ids))
+	page := proto.ChangeReconciliationPage{JobIDs: append([]string(nil), ids[start:end]...)}
 	if end < len(ids) {
 		page.NextCursor = ids[end-1]
 	}
 	writeJSON(w, http.StatusOK, page)
 }
 
-func (d *Daemon) handleCollectedJobsAck(w http.ResponseWriter, r *http.Request, id Identity) {
-	var request proto.CollectedJobsAck
+func (d *Daemon) handleChangeReconciliationAck(w http.ResponseWriter, r *http.Request, id Identity) {
+	var request proto.ChangeReconciliationAck
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 64<<10))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
-		httpError(w, http.StatusBadRequest, "decoding collection acknowledgement: "+err.Error())
+		httpError(w, http.StatusBadRequest, "decoding change reconciliation acknowledgement: "+err.Error())
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		httpError(w, http.StatusBadRequest, "collection acknowledgement must contain one JSON object")
+		httpError(w, http.StatusBadRequest, "change reconciliation acknowledgement must contain one JSON object")
 		return
 	}
 	if !proto.ValidChangeClientID(request.ClientID) {
 		httpError(w, http.StatusBadRequest, "invalid change client ID")
 		return
 	}
-	if len(request.JobIDs) == 0 || len(request.JobIDs) > proto.CollectedJobsPageLimit {
-		httpError(w, http.StatusBadRequest, "collection acknowledgement has an invalid job count")
+	if len(request.JobIDs) == 0 || len(request.JobIDs) > proto.ChangeReconciliationPageLimit {
+		httpError(w, http.StatusBadRequest, "change reconciliation acknowledgement has an invalid job count")
 		return
 	}
 	seen := make(map[string]struct{}, len(request.JobIDs))
-	result := proto.CollectedJobsAckResult{}
+	result := proto.ChangeReconciliationAckResult{}
 	owner := id.Owner()
 	for _, jobID := range request.JobIDs {
 		if !proto.ValidULID(jobID) {
-			httpError(w, http.StatusBadRequest, "collection acknowledgement contains an invalid job ID")
+			httpError(w, http.StatusBadRequest, "change reconciliation acknowledgement contains an invalid job ID")
 			return
 		}
 		if _, ok := seen[jobID]; ok {

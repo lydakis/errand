@@ -62,8 +62,8 @@ func TestStatusEndpointIncludesNonSecretRequestDetails(t *testing.T) {
 	}
 	id := proto.NewULID()
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/sh", "-c", "sleep 1"},
-		Env: map[string]string{"TOKEN": "secret"}, EnvSources: map[string]string{"TOKEN": "literal"},
+		Argv: []string{"/bin/sh", "-c", "sleep 1"},
+		Env:  map[string]string{"TOKEN": "secret"}, EnvSources: map[string]string{"TOKEN": "literal"},
 		Workdir: "build", ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 		ChangeClientID: strings.Repeat("a", 32),
 	}
@@ -107,7 +107,7 @@ func TestLogLimitReceiptKeepsCleanupOutcomeSeparate(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/sh", "-c", "printf 0123456789"},
+		Argv:         []string{"/bin/sh", "-c", "printf 0123456789"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.Limits{
 			MaxLogBytes: 4, MaxRuntimeSec: 10,
 			MaxWorkspaceBytes: proto.DefaultLimits().MaxWorkspaceBytes,
@@ -164,7 +164,7 @@ func rawSubmit(t *testing.T, url, id, root string, argv []string) *http.Response
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: argv,
+		Argv:         argv,
 		ManifestRoot: m.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	return rawSubmitSpec(t, url, id, root, spec, m)
@@ -359,8 +359,8 @@ func TestEnvironmentBearingRetrySameDaemon(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"},
-		Env: map[string]string{"PIN": "0427"}, EnvSources: map[string]string{"PIN": "literal"},
+		Argv: []string{"/usr/bin/true"},
+		Env:  map[string]string{"PIN": "0427"}, EnvSources: map[string]string{"PIN": "literal"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	id := proto.NewULID()
@@ -392,8 +392,8 @@ func TestEnvironmentBearingRetryFailsClosedAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"},
-		Env: map[string]string{"PIN": "0427"}, EnvSources: map[string]string{"PIN": "literal"},
+		Argv: []string{"/usr/bin/true"},
+		Env:  map[string]string{"PIN": "0427"}, EnvSources: map[string]string{"PIN": "literal"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	id := proto.NewULID()
@@ -447,7 +447,7 @@ func TestLoadExistingIsolatesMalformedReceipts(t *testing.T) {
 		t.Fatal(err)
 	}
 	receipt, err := json.Marshal(proto.NewReceiptSpec(proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"}, Limits: proto.DefaultLimits(),
+		Argv: []string{"/usr/bin/true"}, Limits: proto.DefaultLimits(),
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -512,7 +512,7 @@ func TestTerminalLogReplayAlwaysPrecedesStatus(t *testing.T) {
 	resp.Body.Close()
 	waitTerminal(t, ts.URL, id)
 	for i := 0; i < 20; i++ {
-		resp, err := http.Get(ts.URL + "/v0/jobs/" + id + "/logs?follow=1&from=0")
+		resp, err := http.Get(ts.URL + "/v0/jobs/" + id + "/logs?from=0")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -542,7 +542,7 @@ func TestMissingTerminalLogProducesStreamError(t *testing.T) {
 	if err := os.Remove(logPath); err != nil {
 		t.Fatal(err)
 	}
-	resp, err := http.Get(ts.URL + "/v0/jobs/" + id + "/logs?follow=1&from=0")
+	resp, err := http.Get(ts.URL + "/v0/jobs/" + id + "/logs?from=0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -585,7 +585,7 @@ func TestDirectoryAtTerminalLogPathProducesPermanentStreamError(t *testing.T) {
 	if err := os.Mkdir(logPath, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	resp, err := http.Get(ts.URL + "/v0/jobs/" + id + "/logs?follow=1&from=0")
+	resp, err := http.Get(ts.URL + "/v0/jobs/" + id + "/logs?from=0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -629,6 +629,9 @@ func TestBusyAndForceKill(t *testing.T) {
 		t.Fatal(err)
 	}
 	kr.Body.Close()
+	if kr.StatusCode != http.StatusNoContent {
+		t.Fatalf("force kill = %s, want 204", kr.Status)
+	}
 	st := waitTerminal(t, ts.URL, longID)
 	if st.Result == nil || st.Result.Signal == "" {
 		t.Fatalf("force-killed job should record a signal, got %+v", st.Result)
@@ -727,7 +730,7 @@ func TestLimitsRejectedAboveCeiling(t *testing.T) {
 	paths, _, _, _ := snapshot.SelectFiles(root)
 	m, _ := snapshot.Build(root, paths)
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
+		Argv:         []string{"/bin/true"},
 		ManifestRoot: m.RootHash(),
 		Limits: proto.Limits{
 			MaxLogBytes: 1 << 60, MaxRuntimeSec: 1, MaxWorkspaceBytes: 1, MaxChangeBytes: 1,

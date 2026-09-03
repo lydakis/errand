@@ -547,21 +547,21 @@ Versioned HTTP+JSON: `PUT /v0/jobs/<ulid>` is idempotent;
 `GET /v0/jobs?active=1` filters active jobs before applying that bound;
 `GET /v0/jobs/<ulid>` returns status plus the durable non-secret request
 details used by `errand status`; SSE with event IDs powers
-`GET /v0/jobs/<ulid>/logs?follow=1`; the signal and kill routes control owned
-jobs; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;
+`GET /v0/jobs/<ulid>/logs?from=<sequence>`; the signal and kill routes control owned
+jobs and return `204 No Content` on success; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;
 `GET /v0/storage` reports caller-visible storage, including the snapshot cache;
 `POST /v0/cache/gc` prunes the snapshot cache;
 `POST /v0/jobs/gc` applies bounded owner-scoped receipt retention;
 `GET /v0/jobs/<ulid>/changes` transfers the immutable retained workspace-change bundle;
-`GET /v0/jobs/collected` pages through durable owner- and client-scoped
+`GET /v0/change-reconciliation` pages through durable owner- and client-scoped
 collection markers so local change GC can reconcile after a lost deletion
-response; `POST /v0/jobs/collected/ack` releases the change hold after that
+response; `POST /v0/change-reconciliation/ack` releases the change hold after that
 reconciliation while preserving the replay-prevention lifetime; and
 `GET /v0/info` returns facts. A negotiated blob disappearing before
 submission returns the machine-readable `snapshot_cache_miss` error code so
 the client can retry the same job ID with a complete snapshot. Curl-debuggable;
-the version prefix provides a clean replacement boundary for incompatible
-protocol revisions. During pre-release v0 development, mixed daemon and CLI
+the route prefix is the request-protocol version; receipt and change-bundle
+versions apply only to their persisted formats. During pre-release v0 development, mixed daemon and CLI
 versions are not a compatibility contract.
 
 ## Non-goals

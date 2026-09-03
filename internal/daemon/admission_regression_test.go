@@ -27,7 +27,7 @@ import (
 func TestSubmitRejectsMismatchedDigestHeader(t *testing.T) {
 	_, ts := testDaemon(t)
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"},
+		Argv:   []string{"/usr/bin/true"},
 		Limits: proto.DefaultLimits(),
 	}
 	var body bytes.Buffer
@@ -78,7 +78,7 @@ func TestRejectedUploadDoesNotBurnJobID(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"},
+		Argv:         []string{"/usr/bin/true"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}
 
@@ -149,7 +149,7 @@ func TestKillDuringStagingPreventsExecution(t *testing.T) {
 	j := &Job{
 		ID: filepath.Base(jobDir), Dir: jobDir,
 		Spec: proto.Spec{
-			V: proto.ProtoVersion, Argv: []string{"/usr/bin/touch", marker},
+			Argv:         []string{"/usr/bin/touch", marker},
 			ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 		},
 		Admission: proto.Admission{Method: "insecure-test"},
@@ -226,7 +226,7 @@ func TestKillDuringCacheInsertionPreventsExecution(t *testing.T) {
 	j := &Job{
 		ID: filepath.Base(jobDir), Dir: jobDir,
 		Spec: proto.Spec{
-			V: proto.ProtoVersion, Argv: []string{"/usr/bin/touch", marker},
+			Argv:         []string{"/usr/bin/touch", marker},
 			ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 		},
 		Admission: proto.Admission{Method: "insecure-test"},
@@ -293,7 +293,7 @@ func TestKillCannotBeAcknowledgedAfterStartRejected(t *testing.T) {
 	j := &Job{
 		ID: filepath.Base(jobDir), Dir: jobDir,
 		Spec: proto.Spec{
-			V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"},
+			Argv:   []string{"/usr/bin/true"},
 			Limits: proto.DefaultLimits(),
 		},
 		Admission: proto.Admission{Method: "insecure-test"},
@@ -349,7 +349,7 @@ func TestKillCompletedJobIsRejected(t *testing.T) {
 
 func TestUnsafeWorkdirRejectedBeforeAdmission(t *testing.T) {
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"}, Workdir: "../escape",
+		Argv: []string{"/usr/bin/true"}, Workdir: "../escape",
 		Limits: proto.DefaultLimits(),
 	}
 	if err := validateSpec(spec, proto.DefaultLimits()); err == nil {
@@ -359,7 +359,7 @@ func TestUnsafeWorkdirRejectedBeforeAdmission(t *testing.T) {
 
 func TestInvalidGitCommitRejectedBeforeAdmission(t *testing.T) {
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"}, GitCommit: "not-a-full-git-object-id",
+		Argv: []string{"/usr/bin/true"}, GitCommit: "not-a-full-git-object-id",
 		Limits: proto.DefaultLimits(),
 	}
 	if err := validateSpec(spec, proto.DefaultLimits()); err == nil {
@@ -369,8 +369,8 @@ func TestInvalidGitCommitRejectedBeforeAdmission(t *testing.T) {
 
 func TestEnvironmentProvenanceIsRequired(t *testing.T) {
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"},
-		Env: map[string]string{"API_TOKEN": "secret"}, Limits: proto.DefaultLimits(),
+		Argv: []string{"/usr/bin/true"},
+		Env:  map[string]string{"API_TOKEN": "secret"}, Limits: proto.DefaultLimits(),
 	}
 	if err := validateSpec(spec, proto.DefaultLimits()); err == nil || !strings.Contains(err.Error(), "missing provenance") {
 		t.Fatalf("missing environment provenance error = %v", err)
@@ -471,7 +471,7 @@ func TestAbortAdmissionRetainsAmbiguousJobWhenCleanupFails(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(jobsDir, 0o700) })
 
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/usr/bin/true"},
+		Argv:         []string{"/usr/bin/true"},
 		ManifestRoot: proto.Manifest{}.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	j := &Job{
@@ -557,7 +557,7 @@ func TestLoadExistingRejectsNonCurrentReceiptShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw, err := json.Marshal(proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"tool"},
+		Argv:         []string{"tool"},
 		ManifestRoot: proto.Manifest{}.RootHash(), Limits: proto.DefaultLimits(),
 	})
 	if err != nil {
@@ -580,7 +580,7 @@ func TestLoadExistingRejectsInvalidCurrentResult(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"tool"},
+		Argv:         []string{"tool"},
 		ManifestRoot: proto.Manifest{}.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	if err := replaceJSON(filepath.Join(dir, "spec.json"), proto.NewReceiptSpec(spec)); err != nil {
@@ -677,8 +677,8 @@ func TestProcessStartErrorDoesNotExposeDeclaredPATH(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"tool"},
-		Env: map[string]string{"PATH": "secret-dir"}, EnvSources: map[string]string{"PATH": "literal"},
+		Argv: []string{"tool"},
+		Env:  map[string]string{"PATH": "secret-dir"}, EnvSources: map[string]string{"PATH": "literal"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	id := proto.NewULID()

@@ -226,7 +226,7 @@ func TestPartialShipWithColdCacheFailsRetryablyThenFullShipWorks(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/sh", "-c", "true"},
+		Argv:         []string{"/bin/sh", "-c", "true"},
 		ManifestRoot: m.RootHash(), Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
 	}
 	id := proto.NewULID()
@@ -391,7 +391,7 @@ func TestRestartReconcilesJobsBeforeCacheMaintenance(t *testing.T) {
 	if err := os.MkdirAll(workspace, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	spec := proto.Spec{V: proto.ProtoVersion, Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits()}
+	spec := proto.Spec{Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits()}
 	raw, err := json.Marshal(proto.NewReceiptSpec(spec))
 	if err != nil {
 		t.Fatal(err)

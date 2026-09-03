@@ -97,12 +97,12 @@ func TestJobGCCombinesAgeAndKeepProtections(t *testing.T) {
 	if result.SelectedJobs != 2 || result.RemovedJobs != 2 || result.FailedJobs != 0 {
 		t.Fatalf("GC result = %+v", result)
 	}
-	resp, err := http.Get(ts.URL + "/v0/jobs/collected?client_id=" + clientID)
+	resp, err := http.Get(ts.URL + "/v0/change-reconciliation?client_id=" + clientID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	var page proto.CollectedJobsPage
+	var page proto.ChangeReconciliationPage
 	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +330,7 @@ func TestJobGCOnlyRemovesCallerOwnedReceipts(t *testing.T) {
 	}
 }
 
-func TestCollectedJobsAreOwnerScopedAndPaginated(t *testing.T) {
+func TestChangeReconciliationIsOwnerScopedAndPaginated(t *testing.T) {
 	d, err := New(Config{StateDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
@@ -339,8 +339,8 @@ func TestCollectedJobsAreOwnerScopedAndPaginated(t *testing.T) {
 	identity := Identity{Login: "george@example.com", UserID: 42}
 	owner := identity.Owner()
 	clientID := "0123456789abcdef0123456789abcdef"
-	want := make(map[string]bool, proto.CollectedJobsPageLimit+1)
-	for range proto.CollectedJobsPageLimit + 1 {
+	want := make(map[string]bool, proto.ChangeReconciliationPageLimit+1)
+	for range proto.ChangeReconciliationPageLimit + 1 {
 		jobID := proto.NewULID()
 		want[jobID] = true
 		d.collected[jobID] = collectedRecord{
@@ -359,17 +359,17 @@ func TestCollectedJobsAreOwnerScopedAndPaginated(t *testing.T) {
 	cursor := ""
 	for {
 		request := httptest.NewRequest(http.MethodGet,
-			"/v0/jobs/collected?client_id="+clientID+"&cursor="+cursor, nil)
+			"/v0/change-reconciliation?client_id="+clientID+"&cursor="+cursor, nil)
 		recorder := httptest.NewRecorder()
-		d.handleCollectedJobs(recorder, request, identity)
+		d.handleChangeReconciliation(recorder, request, identity)
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("collected jobs = %s", recorder.Result().Status)
 		}
-		var page proto.CollectedJobsPage
+		var page proto.ChangeReconciliationPage
 		if err := json.NewDecoder(recorder.Body).Decode(&page); err != nil {
 			t.Fatal(err)
 		}
-		if len(page.JobIDs) > proto.CollectedJobsPageLimit {
+		if len(page.JobIDs) > proto.ChangeReconciliationPageLimit {
 			t.Fatalf("collected page has %d IDs", len(page.JobIDs))
 		}
 		for _, jobID := range page.JobIDs {
@@ -390,7 +390,7 @@ func TestCollectedJobsAreOwnerScopedAndPaginated(t *testing.T) {
 	}
 }
 
-func TestCollectedJobsAcknowledgementRetiresExpiredChangeMarker(t *testing.T) {
+func TestChangeReconciliationAcknowledgementRetiresExpiredChangeMarker(t *testing.T) {
 	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true})
 	if err != nil {
 		t.Fatal(err)
@@ -407,17 +407,17 @@ func TestCollectedJobsAcknowledgementRetiresExpiredChangeMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 	d.collected[jobID] = record
-	body, err := json.Marshal(proto.CollectedJobsAck{ClientID: clientID, JobIDs: []string{jobID}})
+	body, err := json.Marshal(proto.ChangeReconciliationAck{ClientID: clientID, JobIDs: []string{jobID}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodPost, "/v0/jobs/collected/ack", bytes.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/v0/change-reconciliation/ack", bytes.NewReader(body))
 	recorder := httptest.NewRecorder()
-	d.handleCollectedJobsAck(recorder, request, Identity{})
+	d.handleChangeReconciliationAck(recorder, request, Identity{})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("collection acknowledgement = %s: %s", recorder.Result().Status, recorder.Body.String())
 	}
-	var result proto.CollectedJobsAckResult
+	var result proto.ChangeReconciliationAckResult
 	if err := json.NewDecoder(recorder.Body).Decode(&result); err != nil {
 		t.Fatal(err)
 	}

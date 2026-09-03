@@ -138,6 +138,9 @@ func TestOutputlessRunSendsCanonicalLimits(t *testing.T) {
 			writeJSON := func(value any) { _ = json.NewEncoder(w).Encode(value) }
 			writeJSON(proto.JobStatus{State: proto.StateRunning})
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/logs"):
+			if r.URL.Query().Has("follow") {
+				t.Error("log request exposed an unused follow option")
+			}
 			w.Header().Set("Content-Type", "text/event-stream")
 			zero := 0
 			status, _ := json.Marshal(proto.JobStatus{State: proto.StateExited, Result: &proto.Result{
@@ -1745,7 +1748,7 @@ func TestSubmitRetriesSameJobIDAfterLostResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
+		Argv:         []string{"/bin/true"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	var attempts atomic.Int32
@@ -1775,7 +1778,7 @@ func TestSubmitBusyReportsCapacityInsteadOfSingleJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
+		Argv:         []string{"/bin/true"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1818,7 +1821,7 @@ func TestCacheMissGetsIndependentFullSubmitRetryBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
+		Argv:         []string{"/bin/true"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	var attempts atomic.Int32
@@ -1869,7 +1872,7 @@ func TestCacheFallbackPreservesPriorAdmissionUncertainty(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
+		Argv:         []string{"/bin/true"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}
 	var attempts atomic.Int32

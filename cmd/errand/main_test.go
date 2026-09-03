@@ -136,15 +136,15 @@ func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
 			json.NewEncoder(w).Encode(proto.JobGCResult{
 				SelectedJobs: 3, RemovedJobs: 3, FreedBytes: 20,
 			})
-		case "/v0/jobs/collected":
+		case "/v0/change-reconciliation":
 			collectedCalls++
 			if !proto.ValidChangeClientID(r.URL.Query().Get("client_id")) {
 				t.Errorf("invalid change client ID %q", r.URL.Query().Get("client_id"))
 			}
-			json.NewEncoder(w).Encode(proto.CollectedJobsPage{JobIDs: []string{jobID}})
-		case "/v0/jobs/collected/ack":
+			json.NewEncoder(w).Encode(proto.ChangeReconciliationPage{JobIDs: []string{jobID}})
+		case "/v0/change-reconciliation/ack":
 			acknowledgementCalls++
-			json.NewEncoder(w).Encode(proto.CollectedJobsAckResult{Acknowledged: 1})
+			json.NewEncoder(w).Encode(proto.ChangeReconciliationAckResult{Acknowledged: 1})
 		default:
 			http.NotFound(w, r)
 		}
@@ -163,8 +163,8 @@ func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
 func TestCmdGCRoundsFractionalSecondsUp(t *testing.T) {
 	var gotSeconds int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v0/jobs/collected" {
-			json.NewEncoder(w).Encode(proto.CollectedJobsPage{})
+		if r.URL.Path == "/v0/change-reconciliation" {
+			json.NewEncoder(w).Encode(proto.ChangeReconciliationPage{})
 			return
 		}
 		var request proto.JobGCRequest

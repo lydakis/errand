@@ -355,7 +355,7 @@ func TestJobGCEndpointRequiresGCAction(t *testing.T) {
 			keep := 1
 			clientID := "0123456789abcdef0123456789abcdef"
 			jobGCBody, _ := json.Marshal(proto.JobGCRequest{Keep: &keep})
-			ackBody, _ := json.Marshal(proto.CollectedJobsAck{
+			ackBody, _ := json.Marshal(proto.ChangeReconciliationAck{
 				ClientID: clientID, JobIDs: []string{proto.NewULID()},
 			})
 			for _, endpoint := range []struct {
@@ -364,8 +364,8 @@ func TestJobGCEndpointRequiresGCAction(t *testing.T) {
 				body   []byte
 			}{
 				{method: http.MethodPost, path: "/v0/jobs/gc", body: jobGCBody},
-				{method: http.MethodGet, path: "/v0/jobs/collected?client_id=" + clientID},
-				{method: http.MethodPost, path: "/v0/jobs/collected/ack", body: ackBody},
+				{method: http.MethodGet, path: "/v0/change-reconciliation?client_id=" + clientID},
+				{method: http.MethodPost, path: "/v0/change-reconciliation/ack", body: ackBody},
 			} {
 				req, err := http.NewRequest(endpoint.method, ts.URL+endpoint.path, bytes.NewReader(endpoint.body))
 				if err != nil {
@@ -576,7 +576,7 @@ func TestIdempotentSubmitRejectsDifferentOwner(t *testing.T) {
 	jobID := proto.NewULID()
 	manifest := proto.Manifest{}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
+		Argv:         []string{"/bin/true"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
 	}
 	d := &Daemon{
@@ -611,8 +611,8 @@ func TestIdempotentSubmitChecksOwnerBeforeUnavailableDigest(t *testing.T) {
 	jobID := proto.NewULID()
 	manifest := proto.Manifest{}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/bin/true"},
-		Env: map[string]string{"PIN": "0427"}, EnvSources: map[string]string{"PIN": "literal"},
+		Argv: []string{"/bin/true"},
+		Env:  map[string]string{"PIN": "0427"}, EnvSources: map[string]string{"PIN": "literal"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
 	}
 	d := &Daemon{

@@ -76,7 +76,7 @@ func blockedSubmit(t *testing.T, url, id, root string, argv []string) (<-chan st
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: argv,
+		Argv:         argv,
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(), ChangeClientID: testChangeClientID,
 	}
 	pr, pw := io.Pipe()
@@ -353,7 +353,7 @@ func TestPreStartSignalWaitsForDurableSettlement(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("signal handler did not return after durable settlement")
 	}
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusNoContent {
 		t.Fatalf("signal response = %d: %s", rec.Code, rec.Body.String())
 	}
 	if _, err := os.Stat(filepath.Join(dir, "result.json")); err != nil {
@@ -425,7 +425,7 @@ func TestIdleLaunchFailureSettlesDurableReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := proto.Spec{
-		V: proto.ProtoVersion, Argv: []string{"/definitely/not/a/real/executable"},
+		Argv:         []string{"/definitely/not/a/real/executable"},
 		Env:          map[string]string{"API_TOKEN": "launch-failure-secret"},
 		EnvSources:   map[string]string{"API_TOKEN": "literal"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
@@ -501,7 +501,7 @@ func TestRestartSettlesPersistedQueuedJobAsNeverStarted(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, ".change-base-partial"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	spec := proto.Spec{V: proto.ProtoVersion, Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits()}
+	spec := proto.Spec{Argv: []string{"/bin/true"}, Limits: proto.DefaultLimits()}
 	j := &Job{ID: id, Dir: dir, Spec: spec, Admission: proto.Admission{Time: time.Now()}}
 	if err := j.writeJSON("spec.json", proto.NewReceiptSpec(spec)); err != nil {
 		t.Fatal(err)

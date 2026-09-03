@@ -607,8 +607,8 @@ func (d *Daemon) Handler() http.Handler {
 	mux.HandleFunc("GET /v0/storage", d.auth(proto.ActionReadOwn, d.handleStorageStats))
 	mux.HandleFunc("POST /v0/cache/gc", d.auth(proto.ActionCaches, d.handleCacheGC))
 	mux.HandleFunc("POST /v0/jobs/gc", d.auth(proto.ActionGCJobs, d.handleJobGC))
-	mux.HandleFunc("GET /v0/jobs/collected", d.auth(proto.ActionGCJobs, d.handleCollectedJobs))
-	mux.HandleFunc("POST /v0/jobs/collected/ack", d.auth(proto.ActionGCJobs, d.handleCollectedJobsAck))
+	mux.HandleFunc("GET /v0/change-reconciliation", d.auth(proto.ActionGCJobs, d.handleChangeReconciliation))
+	mux.HandleFunc("POST /v0/change-reconciliation/ack", d.auth(proto.ActionGCJobs, d.handleChangeReconciliationAck))
 	mux.HandleFunc("PUT /v0/jobs/{id}", d.auth(proto.ActionSubmit, d.handleSubmit))
 	mux.HandleFunc("GET /v0/jobs/{id}", d.auth(proto.ActionReadOwn, d.handleStatus))
 	mux.HandleFunc("GET /v0/jobs/{id}/logs", d.auth(proto.ActionReadOwn, d.handleLogs))
@@ -1091,9 +1091,6 @@ func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 }
 
 func validateSpec(s proto.Spec, maxLimits proto.Limits) error {
-	if s.V != proto.ProtoVersion {
-		return fmt.Errorf("unsupported spec version %d", s.V)
-	}
 	if len(s.Argv) == 0 || s.Argv[0] == "" {
 		return fmt.Errorf("spec has empty argv")
 	}
@@ -1492,14 +1489,14 @@ func (d *Daemon) handleSignal(w http.ResponseWriter, r *http.Request, id Identit
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"ok": "cancelled before start"})
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if err := j.Signal(sig); err != nil {
 		httpError(w, http.StatusConflict, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"ok": "signaled"})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (d *Daemon) handleKill(w http.ResponseWriter, r *http.Request, id Identity) {
@@ -1518,14 +1515,14 @@ func (d *Daemon) handleKill(w http.ResponseWriter, r *http.Request, id Identity)
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"ok": "cancelled before start"})
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if err := j.terminate("user-kill", sig); err != nil {
 		httpError(w, http.StatusConflict, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"ok": "killed"})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- helpers ---

@@ -1676,17 +1676,17 @@ func TestReconcileCollectedJobChangesCollectsUnobservedTerminalJob(t *testing.T)
 	jobID := proto.NewULID()
 	var collectedCalls, acknowledgementCalls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v0/jobs/collected" {
-			if r.URL.Path == "/v0/jobs/collected/ack" && r.Method == http.MethodPost {
+		if r.URL.Path != "/v0/change-reconciliation" {
+			if r.URL.Path == "/v0/change-reconciliation/ack" && r.Method == http.MethodPost {
 				acknowledgementCalls++
-				var request proto.CollectedJobsAck
+				var request proto.ChangeReconciliationAck
 				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 					t.Error(err)
 				}
 				if !proto.ValidChangeClientID(request.ClientID) || len(request.JobIDs) != 1 || request.JobIDs[0] != jobID {
 					t.Errorf("collection acknowledgement = %+v", request)
 				}
-				json.NewEncoder(w).Encode(proto.CollectedJobsAckResult{Acknowledged: 1})
+				json.NewEncoder(w).Encode(proto.ChangeReconciliationAckResult{Acknowledged: 1})
 				return
 			}
 			http.NotFound(w, r)
@@ -1697,13 +1697,13 @@ func TestReconcileCollectedJobChangesCollectsUnobservedTerminalJob(t *testing.T)
 		}
 		collectedCalls++
 		if r.URL.Query().Get("cursor") == "" {
-			json.NewEncoder(w).Encode(proto.CollectedJobsPage{JobIDs: []string{jobID}, NextCursor: jobID})
+			json.NewEncoder(w).Encode(proto.ChangeReconciliationPage{JobIDs: []string{jobID}, NextCursor: jobID})
 			return
 		}
 		if r.URL.Query().Get("cursor") != jobID {
 			t.Errorf("collection cursor = %q, want %q", r.URL.Query().Get("cursor"), jobID)
 		}
-		json.NewEncoder(w).Encode(proto.CollectedJobsPage{})
+		json.NewEncoder(w).Encode(proto.ChangeReconciliationPage{})
 	}))
 	defer server.Close()
 	if err := saveLocalChangeState(localChangeState{

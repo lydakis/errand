@@ -192,7 +192,6 @@ func runWithDetachNotifications(
 	}
 
 	spec := proto.Spec{
-		V:              proto.ProtoVersion,
 		Argv:           opts.Argv,
 		Env:            env,
 		EnvSources:     envSources,
@@ -1050,7 +1049,7 @@ func followOnceContext(
 	jobID string,
 	last *int64,
 ) (proto.JobStatus, error) {
-	url := fmt.Sprintf("%s/v0/jobs/%s/logs?follow=1&from=%d", opts.PeerURL, jobID, *last)
+	url := fmt.Sprintf("%s/v0/jobs/%s/logs?from=%d", opts.PeerURL, jobID, *last)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return proto.JobStatus{}, err
