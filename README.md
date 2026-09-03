@@ -5,10 +5,10 @@ get the result back: same command, same working tree, logs streaming to
 your terminal, real exit code. The heat, watts, and minutes are spent
 elsewhere.
 
-> **Status: milestone 4.** The transactional core works end to end over a
+> **Status: milestone 4.5.** The transactional core works end to end over a
 > tailnet, including durable detached jobs, restart reconciliation,
-> content-addressed snapshot reuse, and conflict-safe workspace change capture. The
-> v0 design is frozen in [docs/DESIGN.md](docs/DESIGN.md).
+> content-addressed snapshot reuse, conflict-safe workspace change capture, and
+> attached TCP forwarding. The v0 design is in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Quickstart
 
@@ -21,6 +21,7 @@ errand info                   # measured facts from every configured peer
 errand -- python3 -m unittest # runs your working tree over there
 errand --apply -- gofmt -w .  # applies retained changes only after clean success
 errand --no-snapshot -- uname -a # runs in a fresh empty remote workspace
+errand --forward 3000 -- pnpm dev # localhost:3000 reaches remote port 3000
 # Ctrl-D detaches without stopping the remote job; Ctrl-C interrupts it
 job=$(errand --detach -- make build)
 edit=$(errand --detach --apply -- sh -c 'printf fixed > report.txt')
@@ -28,6 +29,7 @@ errand ps                     # active jobs across configured peers
 errand ps --last 20           # latest jobs across all states (maximum 200)
 errand ps --all --json        # terminal receipt data for clients
 errand attach "$job"          # replay logs and follow to completion
+errand attach --forward 8080:3000 "$job" # add a forward while attached
 errand gc jobs --dry-run --older-than 30d --keep 500
 ```
 
@@ -109,7 +111,9 @@ One binary, symmetric peers, no controller. Transport and identity come
 from your [tailnet](https://tailscale.com) (WhoIs + ACL capability grants;
 errand stores zero credentials) or, later, from direct LAN pairing with
 pinned device keys. The current execution backend runs directly on the
-host. Rootless containers and Nix devshells are planned.
+host. Rootless containers and Nix devshells are planned. Symmetry means that
+each machine can send work to other peers and receive work from them; Errand
+rejects a client connection to a runner on the same machine.
 
 ```
 errand -- cargo test                   # configured default peer
@@ -123,10 +127,23 @@ returns 0 for the detach action; it is not the unfinished job's exit status.
 Non-terminal EOF is ignored, so scripts remain attached unless they request
 `--detach` explicitly.
 
+`--forward [LOCAL:]REMOTE` opens TCP listeners on IPv4 and IPv6 local loopback for the
+attached session. It is repeatable and can be added when initially running a
+job or on any later `attach`. Omitting `LOCAL` uses the remote port locally.
+Ctrl-D closes the attachment's listeners and active connections without
+stopping the job. Forwarding is not remembered, and `--detach --forward` is
+rejected because no attached client would remain to own the listener. Host
+jobs share the runner's loopback network, so Errand cannot prove that a
+listening service belongs to the selected host job. Capability-based runners
+require the separate `forward-own` action. Forwarded connections carry bytes
+in both directions while open; EOF or reset on either side closes that
+connection.
+
 Detached jobs, `ps`, `attach`, `kill`, workspace-root discovery, automatic
-workspace change capture and conflict-safe application, snapshot caching,
-fleet storage reporting, and cache and receipt GC are implemented. Planned v0
-commands still include fact-based peer selection, named-cache management, and pairing.
+workspace change capture and conflict-safe application, TCP forwarding,
+snapshot caching, fleet storage reporting, and cache and receipt GC are
+implemented. Planned v0 commands still include fact-based peer selection,
+named-cache management, and pairing.
 
 After every command, Errand compares the final remote workspace with the
 submitted snapshot and retains every snapshot-representable created, modified,

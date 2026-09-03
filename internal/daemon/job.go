@@ -64,14 +64,29 @@ type Job struct {
 	deleting            bool
 	logReaders          int
 	changeReaders       int
+	forwardReaders      int
 	done                chan struct{}
 	logReady            chan struct{}
 	logReadyOnce        sync.Once
+	executionDone       chan struct{}
+	executionDoneOnce   sync.Once
+	endpoint            JobEndpoint
 	stagingCancel       func()
 	stagingDone         chan struct{}
 	stagingOnce         sync.Once
 	changeCancel        context.CancelFunc
 	changeCancelRequest string
+}
+
+func newJob(id, dir string) *Job {
+	return &Job{
+		ID: id, Dir: dir,
+		done:          make(chan struct{}),
+		logReady:      make(chan struct{}),
+		executionDone: make(chan struct{}),
+		endpoint:      hostJobEndpoint{},
+		stagingDone:   make(chan struct{}),
+	}
 }
 
 func (j *Job) Status() proto.JobStatus {
@@ -292,6 +307,30 @@ func (j *Job) releaseChangeReader() {
 	j.mu.Unlock()
 }
 
+func (j *Job) acquireForwardReader() bool {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.deleting {
+		return false
+	}
+	j.forwardReaders++
+	return true
+}
+
+func (j *Job) releaseForwardReader() {
+	j.mu.Lock()
+	j.forwardReaders--
+	j.mu.Unlock()
+}
+
+func (j *Job) markExecutionDone() {
+	j.executionDoneOnce.Do(func() {
+		if j.executionDone != nil {
+			close(j.executionDone)
+		}
+	})
+}
+
 // stage extracts the workspace. settled means a concurrent kill finalized it.
 func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manifest) (settled bool, retErr error) {
 	j.event("admitted", j.Admission.Method)
@@ -487,6 +526,7 @@ func (j *Job) launch(d *Daemon) error {
 
 	go func() {
 		waitErr := cmd.Wait()
+		j.markExecutionDone()
 		finishedAt := time.Now()
 		durationMS := finishedAt.Sub(startedAt).Milliseconds()
 		changeCtx, changeCancel := changeCollectionContext(finishedAt)
@@ -913,6 +953,7 @@ func (j *Job) finalize(d *Daemon, res *proto.Result, neverRan bool) {
 }
 
 func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, scopeCleanupOK bool) {
+	j.markExecutionDone()
 	// Runtime values are no longer needed once settlement begins. The request
 	// digest and redacted receipt retain idempotency without retaining secrets.
 	j.mu.Lock()

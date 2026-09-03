@@ -37,11 +37,12 @@ properties are what make the round-trip trustworthy.
 
 - Transported faithfully: argv, the workspace snapshot, explicitly declared
   environment values, relative working directory, stdout/stderr in
-  daemon-observed order, selected signals, exit status.
+  daemon-observed order, selected signals, exit status, and explicitly
+  attached local TCP forwards.
 - Not reproduced: ambient local environment, an interactive terminal
-  (no stdin, no PTY — non-interactive only), the local network, the local
-  platform. Results are native to the *target*; a binary built on x86 Linux
-  is an x86 Linux binary, and the receipt says so.
+  (no stdin, no PTY — non-interactive only), ambient local network access, or
+  the local platform. Results are native to the *target*; a binary built on
+  x86 Linux is an x86 Linux binary, and the receipt says so.
 - Command means **argv**, executed directly. Shell composition is explicit:
   `errand -- sh -lc 'cargo test && cargo clippy'`.
 
@@ -67,8 +68,10 @@ properties are what make the round-trip trustworthy.
 
 One Go binary. Every machine that installs it can both delegate and receive;
 there is no controller. This is a **symmetric peer-to-peer runner, not a
-mesh**: no forwarding, no gossip, no shared scheduler, no distributed
-membership — and none should be accidentally grown.
+mesh**: no peer relaying, no gossip, no shared scheduler, no distributed
+membership — and none should be accidentally grown. Symmetry describes the
+two roles, not self-execution: a client may target other peers, but a runner
+rejects connections originating from its own machine. Run local work directly.
 
 Peers are **explicit** in personal config; `errand peers` probes configured
 peers' `/v0/info`; `--where` searches only those. No tailnet scanning.
@@ -140,26 +143,27 @@ required:
   "ip":  ["tcp:7443"],
   "app": {
     "lydakis.dev/cap/errand": [
-      { "actions": ["submit", "read-own", "kill-own", "manage-caches", "gc-own"] }
+      { "actions": ["submit", "read-own", "kill-own", "forward-own", "manage-caches", "gc-own"] }
     ]
   }
 }]
 ```
 
 The capability carries an **action schema from day one** (not a boolean):
-`submit`, `read-own`, `kill-own`, `manage-caches`, `gc-own`, and later
-`read-all`.
+`submit`, `read-own`, `kill-own`, `forward-own`, `manage-caches`, `gc-own`,
+and later `read-all`.
 Matching grants are additive; errand merges capability objects
 deliberately (union of actions).
 
-Authorization is checked on submission **and on every** logs, fetch,
-signal, kill, and listing request. Revocation prevents further control and
-retrieval; it does not retroactively kill an already-admitted job (that
-would be a different guarantee, possible later).
+Authorization is checked on submission **and on every** logs, fetch, forward,
+signal, kill, and listing request. Revocation prevents new control, retrieval,
+and forwarding; it does not retroactively kill an already-admitted job (that
+would be a different guarantee, possible later). Active forwarding requests
+end when their transport connection closes.
 
 ### Ownership
 
-`read-own` / `kill-own` need a defined owner principal:
+`read-own` / `kill-own` / `forward-own` need a defined owner principal:
 
 - **Tailnet:** the authenticated Tailscale *user* when WhoIs provides one
   (so a job submitted from the phone can be attached from the laptop),
@@ -204,6 +208,22 @@ full powers. The container backend constrains ordinary filesystem writes to
 the workspace and declared mounts — it still consumes CPU, memory, disk,
 and network, can mutate declared caches, and shares the host kernel. That
 is cleanliness for trusted code, not containment of hostile code.
+
+Backend-specific networking sits behind one job-endpoint seam:
+
+```go
+type JobEndpoint interface {
+    DialTCP(context.Context, uint16) (net.Conn, error)
+}
+```
+
+The host and nix adapters dial the runner's loopback network while the job is
+running. That network is shared: Errand cannot claim the selected job owns the
+listening socket, and concurrent host jobs cannot both bind the same port. This
+matches the trusted host execution model, where a submission grant already
+permits the job to access runner-local services. Container and future Atlas
+adapters instead dial loopback inside the job's network environment. The CLI
+and tunnel transport do not depend on those runtime details.
 
 Per-project defaults (portable, in the repo):
 
@@ -335,10 +355,10 @@ becomes a requirement — in which case it belongs in milestone 1.
   client prints the peer-qualified handle and admits the process may still
   be running.
 - **Attachment is local and reversible.** On an interactive terminal, Ctrl-D
-  stops only the local log follower, prints the reattach command, and exits 0
-  for successful detachment. It never signals the remote job. Non-terminal
-  EOF is ignored so scripts retain attached exit-code fidelity unless they
-  explicitly use `--detach`.
+  stops local log following and any local port listeners for that attachment,
+  prints the reattach command, and exits 0 for successful detachment. It never
+  signals the remote job. Non-terminal EOF is ignored so scripts retain
+  attached exit-code fidelity unless they explicitly use `--detach`.
 - **Durability and reconciliation:** jobs survive *caller* disconnection.
   Before starting a process the daemon persists an unguessable inherited
   scope marker. After a daemon restart it terminates surviving scoped
@@ -348,6 +368,63 @@ becomes a requirement — in which case it belongs in milestone 1.
   target reboot is reconciled with the same conservative ambiguous outcome.
   If terminal cleanup was incomplete, the retained scope marker and workspace
   are retried on later daemon starts without rewriting the immutable result.
+
+### Attached TCP forwarding (milestone 4.5 amendment, 2026-09-03)
+
+Port forwarding extends an attached job session without becoming durable job
+policy or another top-level command:
+
+```text
+errand --forward 3000 -- pnpm dev
+errand --forward 8080:3000 -- pnpm dev
+errand attach --forward 3000 HANDLE
+errand attach --forward 8080:3000 HANDLE
+```
+
+`--forward [LOCAL:]REMOTE` is repeatable. Omitting `LOCAL` uses the same port
+locally. The run form is shorthand for submitting and opening the initial
+attached session with those forwards. A job may be submitted without any
+forwards and gain or change them on any later attachment. Forward mappings are
+local session state: they are not written to `spec.json`, remembered for later
+attachments, or displayed by `status`.
+
+The client binds both IPv4 and IPv6 local loopback when the platform supports
+them. It binds every requested local port before submission or attachment so a
+collision fails without admitting a new job or partially opening a session.
+Each accepted TCP connection creates one separately authenticated,
+owner-checked, full-duplex request to the runner.
+The runner accepts it only with `forward-own`, only for the named job, and only
+while that job is running. Staging, queued, and terminal jobs refuse tunnel
+connections immediately. The local listener remains open, so clients may retry
+after the job starts.
+
+Detaching with Ctrl-D closes the local listeners and their connections without
+signaling the job. Ctrl-C retains the normal attached-job meaning: it sends
+SIGINT, a second Ctrl-C force-kills, and the forwarding session closes as the
+job settles. A client that wants forwarding after detaching invokes `attach`
+again with the desired mappings. `--detach --forward` is rejected because no
+attached client would remain to own the local listeners.
+
+There is no readiness probe. If the application is not listening, the accepted
+local connection closes without a noisy session diagnostic; the listener stays
+available for the next connection. Bytes are relayed without application-level
+inspection, so HTTP, WebSockets, and development-server hot reload need no
+protocol-specific behavior. EOF or reset from either endpoint closes the whole
+forwarded connection; independent TCP half-closes are not part of the initial
+HTTP tunnel contract. Unexpected forward failures are local session diagnostics
+and never rewrite the remote process result. Local bind failure on the initial
+run occurs before submission.
+
+The initial surface deliberately excludes port inference, automatic browser
+opening, reverse forwards, UDP, Unix sockets, SOCKS, HTTPS termination, public
+or LAN binds, background local tunnels, and automatic remote-port allocation.
+The ordinary two-hour runtime limit and runner capacity rules are unchanged: a
+development server occupies one running slot until it exits or is stopped.
+
+Forward mappings and individual TCP connections are not receipt state. The
+daemon does not append an event for every browser or hot-reload connection and
+does not retain forwarded bytes. It keeps only the transient connection state
+needed to close tunnels when the job or request ends.
 
 ### Limits
 
@@ -559,6 +636,8 @@ jobs and return `204 No Content` on success; `POST /v0/snapshot/diff` negotiates
 `POST /v0/cache/gc` prunes the snapshot cache;
 `POST /v0/jobs/gc` applies bounded owner-scoped receipt retention;
 `GET /v0/jobs/<ulid>/changes` transfers the immutable retained workspace-change bundle;
+`POST /v0/jobs/<ulid>/ports/<port>/connect` carries one authenticated
+full-duplex TCP connection in its request and response bodies;
 `GET /v0/change-reconciliation` pages through durable owner- and client-scoped
 collection markers so local change GC can reconcile after a lost deletion
 response; `POST /v0/change-reconciliation/ack` releases the change hold after that
@@ -574,6 +653,8 @@ versions are not a compatibility contract.
 
 - Not a CI system: no triggers, no pipelines, no DAGs.
 - Not interactive: no stdin, no PTY, no full-screen programs in v0.
+- No reverse port forwarding, UDP forwarding, public listeners, or persistent
+  service exposure. Attached TCP forwards are client-initiated and ephemeral.
 - Not a security boundary against hostile code — see the grant-equals-shell
   belief and Receipt trust. Containment of hostile workloads is Atlas's
   job.
@@ -608,6 +689,9 @@ versions are not a compatibility contract.
 4. Automatic workspace-change retention, staging, success-only apply defaults,
    clean-or-refuse merging, explicit conflict materialization, and
    failure-artifact retention.
+   **Milestone 4.5 amendment:** attached TCP forwarding over the existing
+   authenticated transport, with host-loopback support and a backend-owned
+   job-endpoint seam for later isolated runtimes.
 5. Rootless container backend + named-cache model.
 6. LAN pairing with PAKE and pinned device identities.
 7. Nix backend.

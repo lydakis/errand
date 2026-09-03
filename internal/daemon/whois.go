@@ -126,6 +126,34 @@ func acceptedDestinationIP(localAddr net.Addr) (string, error) {
 	return ip.String(), nil
 }
 
+func sameHostConnection(remoteAddr string, localAddr net.Addr) bool {
+	remoteHost, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return false
+	}
+	remoteIP, err := netip.ParseAddr(remoteHost)
+	if err != nil || remoteIP.Zone() != "" {
+		return false
+	}
+	destination, err := acceptedDestinationIP(localAddr)
+	if err != nil {
+		return false
+	}
+	return remoteIP.Unmap().String() == destination
+}
+
+func unsupportedSelfTarget(remoteAddr string, localAddr net.Addr) bool {
+	if !sameHostConnection(remoteAddr, localAddr) {
+		return false
+	}
+	destination, err := acceptedDestinationIP(localAddr)
+	if err != nil {
+		return false
+	}
+	ip, err := netip.ParseAddr(destination)
+	return err == nil && !ip.IsLoopback()
+}
+
 func supportsDestinationScopedWhois(raw string) bool {
 	parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(raw), "v"), ".")
 	if len(parts) < 2 {

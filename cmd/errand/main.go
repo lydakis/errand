@@ -29,11 +29,12 @@ var version = "0.1.0-dev"
 const usage = `errand — a personal job runner for machines you own
 
 usage:
-  errand [--on PEER | --url URL] [--detach] [--apply | --no-apply]
+  errand [--on PEER | --url URL] [--detach] [--forward [LOCAL:]REMOTE]...
+         [--apply | --no-apply]
          [--env K=V]... [--passenv K]...
          [--workspace-root PATH] [--workdir REL]
          [--include-all | --no-snapshot] -- CMD [ARG...]
-  errand attach [--on PEER | --url URL] HANDLE
+  errand attach [--forward [LOCAL:]REMOTE]... [--on PEER | --url URL] HANDLE
   errand fetch [--apply [--conflicts]] [--on PEER | --url URL] HANDLE [PATH]
   errand ps [-a | --all] [-n N | --last N] [--json] [--on PEER | --url URL]
   errand status [--json] [--on PEER | --url URL] HANDLE
@@ -118,6 +119,52 @@ type stringList []string
 func (s *stringList) String() string     { return strings.Join(*s, ",") }
 func (s *stringList) Set(v string) error { *s = append(*s, v); return nil }
 
+type portForwardList []client.PortForward
+
+func (p *portForwardList) String() string {
+	values := make([]string, 0, len(*p))
+	for _, forward := range *p {
+		if forward.Local == forward.Remote {
+			values = append(values, strconv.Itoa(int(forward.Remote)))
+		} else {
+			values = append(values, fmt.Sprintf("%d:%d", forward.Local, forward.Remote))
+		}
+	}
+	return strings.Join(values, ",")
+}
+
+func (p *portForwardList) Set(value string) error {
+	localText, remoteText, hasLocal := strings.Cut(value, ":")
+	if !hasLocal {
+		remoteText = localText
+	}
+	if localText == "" || remoteText == "" || strings.Contains(remoteText, ":") {
+		return fmt.Errorf("--forward wants [LOCAL:]REMOTE, got %q", value)
+	}
+	parse := func(label, text string) (uint16, error) {
+		port, err := strconv.ParseUint(text, 10, 16)
+		if err != nil || port == 0 {
+			return 0, fmt.Errorf("%s port %q must be between 1 and 65535", label, text)
+		}
+		return uint16(port), nil
+	}
+	local, err := parse("local", localText)
+	if err != nil {
+		return err
+	}
+	remote, err := parse("remote", remoteText)
+	if err != nil {
+		return err
+	}
+	for _, existing := range *p {
+		if existing.Local == local {
+			return fmt.Errorf("local port %d is forwarded more than once", local)
+		}
+	}
+	*p = append(*p, client.PortForward{Local: local, Remote: remote})
+	return nil
+}
+
 func cmdRun(args []string) int {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	on := fs.String("on", "", "peer name from ~/.config/errand/config.toml")
@@ -129,7 +176,9 @@ func cmdRun(args []string) int {
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
 	apply := fs.Bool("apply", false, "apply retained workspace changes after successful completion")
 	noApply := fs.Bool("no-apply", false, "do not apply retained workspace changes after the run")
+	var forwards portForwardList
 	var envs, passenvs stringList
+	fs.Var(&forwards, "forward", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
 	fs.Var(&envs, "env", "set K=V in the job environment (repeatable)")
 	fs.Var(&passenvs, "passenv", "forward the named local env var (repeatable)")
 	fs.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
@@ -160,6 +209,10 @@ func cmdRun(args []string) int {
 	}
 	if *apply && *noApply {
 		fmt.Fprintln(os.Stderr, "errand: --apply and --no-apply are mutually exclusive")
+		return 2
+	}
+	if *detach && len(forwards) != 0 {
+		fmt.Fprintln(os.Stderr, "errand: --detach and --forward are mutually exclusive")
 		return 2
 	}
 	if *noSnapshot && *workspaceRoot != "" {
@@ -248,6 +301,7 @@ func cmdRun(args []string) int {
 		NoSnapshot:     *noSnapshot,
 		Detach:         *detach,
 		ApplyOnSuccess: applyOnSuccess,
+		Forwards:       forwards,
 	})
 }
 
@@ -357,6 +411,8 @@ func cmdAttach(args []string) int {
 	fs := flag.NewFlagSet("attach", flag.ExitOnError)
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
+	var forwards portForwardList
+	fs.Var(&forwards, "forward", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "errand attach: exactly one HANDLE (peer/ULID) is required")
@@ -368,7 +424,7 @@ func cmdAttach(args []string) int {
 		return 2
 	}
 	return client.Attach(client.AttachOptions{
-		PeerURL: peerURL, PeerName: label, JobID: jobID,
+		PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards,
 	})
 }
 

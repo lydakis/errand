@@ -158,9 +158,18 @@ func TestResolveListenUsesTailscaleLocalAPIAddress(t *testing.T) {
 	}
 }
 
-func TestResolveListenLeavesExplicitAddressAlone(t *testing.T) {
-	got, err := ResolveListen("127.0.0.1:7443", filepath.Join(t.TempDir(), "missing.sock"))
-	if err != nil || got != "127.0.0.1:7443" {
+func TestResolveListenRejectsLoopback(t *testing.T) {
+	for _, address := range []string{"127.0.0.1:7443", "[::1]:7443", "localhost:7443"} {
+		if got, err := ResolveListen(address, filepath.Join(t.TempDir(), "missing.sock")); err == nil {
+			t.Fatalf("loopback listener %q resolved to %q, want an error", address, got)
+		}
+	}
+}
+
+func TestResolveListenLeavesExplicitRemoteAddressAlone(t *testing.T) {
+	const address = "100.101.102.103:7443"
+	got, err := ResolveListen(address, filepath.Join(t.TempDir(), "missing.sock"))
+	if err != nil || got != address {
 		t.Fatalf("explicit listener = %q, %v", got, err)
 	}
 }

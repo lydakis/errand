@@ -303,11 +303,9 @@ func (d *Daemon) loadExisting() error {
 		if err := changeops.CleanupTemps(dir); err != nil {
 			return fmt.Errorf("cleaning interrupted change collection %s: %w", ent.Name(), err)
 		}
-		j := &Job{
-			ID: ent.Name(), Dir: dir, done: make(chan struct{}),
-			logReady: make(chan struct{}),
-		}
+		j := newJob(ent.Name(), dir)
 		close(j.done)
+		j.markExecutionDone()
 		j.markLogReady()
 		if admRaw, err := os.ReadFile(filepath.Join(dir, "admission.json")); err == nil {
 			json.Unmarshal(admRaw, &j.Admission)
@@ -613,6 +611,7 @@ func (d *Daemon) Handler() http.Handler {
 	mux.HandleFunc("GET /v0/jobs/{id}", d.auth(proto.ActionReadOwn, d.handleStatus))
 	mux.HandleFunc("GET /v0/jobs/{id}/logs", d.auth(proto.ActionReadOwn, d.handleLogs))
 	mux.HandleFunc("GET /v0/jobs/{id}/changes", d.auth(proto.ActionReadOwn, d.handleChanges))
+	mux.HandleFunc("POST /v0/jobs/{id}/ports/{port}/connect", d.auth(proto.ActionForwardOwn, d.handleForward))
 	mux.HandleFunc("POST /v0/jobs/{id}/signal", d.auth(proto.ActionKillOwn, d.handleSignal))
 	mux.HandleFunc("POST /v0/jobs/{id}/kill", d.auth(proto.ActionKillOwn, d.handleKill))
 	return mux
@@ -625,6 +624,10 @@ type handlerFunc func(http.ResponseWriter, *http.Request, Identity)
 func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		localAddr, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+		if !d.cfg.InsecureNoAuth && unsupportedSelfTarget(r.RemoteAddr, localAddr) {
+			httpError(w, http.StatusForbidden, "self-targeting is not supported; choose another peer")
+			return
+		}
 		id, err := d.identify(r.RemoteAddr, localAddr)
 		if err != nil {
 			httpError(w, http.StatusForbidden, err.Error())
@@ -820,20 +823,17 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	j := &Job{
-		ID: jobID, Dir: tmpDir, Spec: spec, RequestDigest: digest,
-		baseline: manifest,
-		Admission: proto.Admission{
-			Time: time.Now(), UserID: id.UserID, UserLogin: id.Login,
-			NodeID: id.NodeID, NodeName: id.Node,
-			RemoteAddr: r.RemoteAddr, Method: id.Method,
-			Project: project, ProjectTruncated: projectTruncated, Facts: measureFacts(),
-		},
-		state:       proto.StateStaging,
-		done:        make(chan struct{}),
-		logReady:    make(chan struct{}),
-		stagingDone: make(chan struct{}),
+	j := newJob(jobID, tmpDir)
+	j.Spec = spec
+	j.RequestDigest = digest
+	j.baseline = manifest
+	j.Admission = proto.Admission{
+		Time: time.Now(), UserID: id.UserID, UserLogin: id.Login,
+		NodeID: id.NodeID, NodeName: id.Node,
+		RemoteAddr: r.RemoteAddr, Method: id.Method,
+		Project: project, ProjectTruncated: projectTruncated, Facts: measureFacts(),
 	}
+	j.state = proto.StateStaging
 	if err := j.writeJSON("spec.json", proto.NewReceiptSpec(spec)); err == nil {
 		err = j.writeJSON("admission.json", j.Admission)
 	}

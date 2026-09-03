@@ -382,7 +382,7 @@ func (d *Daemon) handleChangeReconciliationAck(w http.ResponseWriter, r *http.Re
 }
 
 func gcEligibleLocked(j *Job) (time.Time, bool) {
-	if j.deleting || j.logReaders != 0 || j.changeReaders != 0 || j.result == nil ||
+	if j.deleting || j.logReaders != 0 || j.changeReaders != 0 || j.forwardReaders != 0 || j.result == nil ||
 		(j.state != proto.StateExited && j.state != proto.StateKilled) ||
 		!j.result.CleanupOK || !j.result.ChangesOK || !j.result.LogsComplete ||
 		j.result.TransactionError != "" {

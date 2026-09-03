@@ -148,6 +148,12 @@ func ResolveListen(listen, tailscaledSocket string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("listen %q: %w", listen, err)
 	}
+	if strings.EqualFold(host, "localhost") {
+		return "", fmt.Errorf("listen %q: loopback runners are not supported", listen)
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return "", fmt.Errorf("listen %q: loopback runners are not supported", listen)
+	}
 	if host != "tailnet" {
 		return listen, nil
 	}

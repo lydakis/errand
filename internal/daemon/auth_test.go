@@ -171,6 +171,58 @@ func TestAcceptedDestinationIP(t *testing.T) {
 	}
 }
 
+func TestSameHostConnection(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		remote string
+		local  net.Addr
+		want   bool
+	}{
+		{name: "tailnet self", remote: "100.101.102.103:52123", local: stringAddr("100.101.102.103:7443"), want: true},
+		{name: "loopback self", remote: "127.0.0.1:52123", local: stringAddr("127.0.0.1:7443"), want: true},
+		{name: "mapped self", remote: "[::ffff:100.101.102.103]:52123", local: stringAddr("100.101.102.103:7443"), want: true},
+		{name: "other peer", remote: "100.101.102.104:52123", local: stringAddr("100.101.102.103:7443")},
+		{name: "malformed remote", remote: "not-an-address", local: stringAddr("100.101.102.103:7443")},
+		{name: "missing local", remote: "100.101.102.103:52123"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sameHostConnection(tt.remote, tt.local); got != tt.want {
+				t.Fatalf("sameHostConnection(%q, %v) = %v, want %v", tt.remote, tt.local, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHandlerRejectsSelfTarget(t *testing.T) {
+	d := &Daemon{}
+	called := false
+	handler := d.auth("", func(http.ResponseWriter, *http.Request, Identity) { called = true })
+	req := httptest.NewRequest(http.MethodGet, "/v0/info", nil)
+	req.RemoteAddr = "100.101.102.103:52123"
+	req = req.WithContext(context.WithValue(req.Context(), http.LocalAddrContextKey, stringAddr("100.101.102.103:7443")))
+	w := httptest.NewRecorder()
+	handler(w, req)
+	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "self-targeting is not supported") {
+		t.Fatalf("self-target response = %d %q, want 403 self-targeting error", w.Code, w.Body.String())
+	}
+	if called {
+		t.Fatal("self-target request reached the endpoint")
+	}
+}
+
+func TestInsecureTestHandlerAllowsSameHost(t *testing.T) {
+	d := &Daemon{cfg: Config{InsecureNoAuth: true}}
+	called := false
+	handler := d.auth("", func(http.ResponseWriter, *http.Request, Identity) { called = true })
+	req := httptest.NewRequest(http.MethodGet, "/v0/info", nil)
+	req.RemoteAddr = "127.0.0.1:52123"
+	req = req.WithContext(context.WithValue(req.Context(), http.LocalAddrContextKey, stringAddr("127.0.0.1:7443")))
+	handler(httptest.NewRecorder(), req)
+	if !called {
+		t.Fatal("insecure in-process test request was rejected as a self-target")
+	}
+}
+
 func TestDestinationScopedWhoIsVersionGate(t *testing.T) {
 	for _, tt := range []struct {
 		version string
@@ -416,6 +468,43 @@ func TestChangeEndpointRequiresReadOwnAction(t *testing.T) {
 			resp.Body.Close()
 			if resp.StatusCode != tt.want {
 				t.Fatalf("GET changes = %s, want %d", resp.Status, tt.want)
+			}
+		})
+	}
+}
+
+func TestForwardEndpointRequiresForwardOwnAction(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		actions []string
+		want    int
+	}{
+		{name: "read only", actions: []string{proto.ActionReadOwn}, want: http.StatusForbidden},
+		{name: "forwarder", actions: []string{proto.ActionForwardOwn}, want: http.StatusNotFound},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			response := map[string]any{
+				"Node":        map[string]any{"Name": "laptop.tailnet.ts.net.", "StableID": "node-1"},
+				"UserProfile": map[string]any{"ID": 42, "LoginName": "george@example.com"},
+				"CapMap": map[string]any{
+					proto.DefaultCapability: []any{map[string]any{"actions": tt.actions}},
+				},
+			}
+			d, err := New(Config{StateDir: t.TempDir(), TailscaledSocket: fakeWhoisSocket(t, response)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer d.Close()
+			ts := httptest.NewServer(d.Handler())
+			defer ts.Close()
+			resp, err := http.Post(ts.URL+"/v0/jobs/"+proto.NewULID()+"/ports/3000/connect",
+				"application/octet-stream", http.NoBody)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			if resp.StatusCode != tt.want {
+				t.Fatalf("POST forward = %s, want %d", resp.Status, tt.want)
 			}
 		})
 	}

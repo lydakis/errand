@@ -21,11 +21,12 @@ const (
 	// looks for in a caller's WhoIs capability map.
 	DefaultCapability = "lydakis.dev/cap/errand"
 
-	ActionSubmit  = "submit"
-	ActionReadOwn = "read-own"
-	ActionKillOwn = "kill-own"
-	ActionCaches  = "manage-caches"
-	ActionGCJobs  = "gc-own"
+	ActionSubmit     = "submit"
+	ActionReadOwn    = "read-own"
+	ActionKillOwn    = "kill-own"
+	ActionForwardOwn = "forward-own"
+	ActionCaches     = "manage-caches"
+	ActionGCJobs     = "gc-own"
 
 	ErrorCodeSnapshotCacheMiss = "snapshot_cache_miss"
 

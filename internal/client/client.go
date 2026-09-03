@@ -78,6 +78,7 @@ type RunOptions struct {
 	NoSnapshot     bool // use a fresh empty workspace without inspecting Root contents
 	Detach         bool // return after admission, printing the handle on stdout
 	ApplyOnSuccess bool // apply retained changes after successful completion, attached or detached
+	Forwards       []PortForward
 	changeClientID string
 	selectionGuard *snapshot.SelectionGuard
 	Stdout         io.Writer
@@ -118,6 +119,16 @@ func runWithDetachNotifications(
 	errf := func(format string, args ...any) {
 		fmt.Fprintf(opts.Stderr, "errand: "+format+"\n", args...)
 	}
+	if opts.Detach && len(opts.Forwards) != 0 {
+		errf("--detach and --forward are mutually exclusive")
+		return ExitTransaction
+	}
+	forwarding, err := bindPortForwards(opts.Forwards, opts.Stderr)
+	if err != nil {
+		errf("%v", err)
+		return ExitTransaction
+	}
+	defer forwarding.Close()
 
 	jobID := proto.NewULID()
 	handle := peerLabel(opts.PeerName, opts.PeerURL) + "/" + jobID
@@ -282,6 +293,7 @@ func runWithDetachNotifications(
 	if status.State == proto.StateQueued {
 		fmt.Fprintln(opts.Stderr, "errand: queued on the runner; logs follow once a slot frees (Ctrl-C cancels)")
 	}
+	forwarding.Start(opts.PeerURL, jobID)
 
 	detachRequested := false
 	select {
@@ -311,6 +323,7 @@ func runWithDetachNotifications(
 		return ExitTransaction
 	}
 	if !controller.releaseAtTerminal(interruptCtx) {
+		forwarding.Close()
 		if _, workerErr := ensureAutomaticApplyWorker(opts, jobID, automaticWorkerStarted); workerErr != nil {
 			errf("automatic workspace change application could not continue: %v", workerErr)
 		}
@@ -319,6 +332,7 @@ func runWithDetachNotifications(
 		errf("interrupted as the job completed; inspect or fetch workspace changes with handle %s", handle)
 		return signalExit("interrupt", 2)
 	}
+	forwarding.Close()
 	return finishTerminalChanges(opts, jobID, handle, final)
 }
 
@@ -423,6 +437,7 @@ type AttachOptions struct {
 	JobID    string
 	Stdout   io.Writer
 	Stderr   io.Writer
+	Forwards []PortForward
 }
 
 // Attach resumes following an existing job: it streams the log from the
@@ -460,12 +475,23 @@ func attachWithDetachNotifications(
 		fmt.Fprintf(opts.Stderr, "errand: "+format+"\n", args...)
 	}
 	handle := peerLabel(opts.PeerName, opts.PeerURL) + "/" + opts.JobID
+	forwarding, err := bindPortForwards(opts.Forwards, opts.Stderr)
+	if err != nil {
+		errf("%v", err)
+		return ExitTransaction
+	}
+	defer forwarding.Close()
 
 	status, err := getStatus(opts.PeerURL, opts.JobID)
 	if err != nil {
 		errf("%v", err)
 		return ExitTransaction
 	}
+	if len(opts.Forwards) != 0 && status.Result != nil {
+		errf("cannot forward a terminal job")
+		return ExitTransaction
+	}
+	forwarding.Start(opts.PeerURL, opts.JobID)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -487,11 +513,13 @@ func attachWithDetachNotifications(
 		return ExitTransaction
 	}
 	if !controller.releaseAtTerminal(ctx) {
+		forwarding.Close()
 		cancel()
 		<-controller.done
 		errf("interrupted as the job completed; inspect with handle %s", handle)
 		return signalExit("interrupt", 2)
 	}
+	forwarding.Close()
 	return finishTerminalChanges(runOpts, opts.JobID, handle, final)
 }
 
