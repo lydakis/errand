@@ -521,11 +521,17 @@ errand attach <peer/ulid>
 errand fetch [--apply [--conflicts]] <peer/ulid> [path]
 errand kill [--force] <peer/ulid>
 errand df [--on X] [--json]    # fleet storage; read-own
-errand gc cache                 # shared cache policy; manage-caches
+errand gc cache [--dry-run]     # shared cache policy; manage-caches
 errand gc jobs --older-than 30d # caller-owned clean terminal receipts
 errand gc changes --older-than 30d # local workspace identities and downloaded staging
-errand gc all --older-than 30d  # cache, jobs, and local change state
+errand gc all --older-than 30d [--dry-run] # cache, jobs, and local change state
 ```
+
+Every GC target accepts `--dry-run`. A dry run uses the same eligibility policy
+while leaving all persistent state unchanged, including cache files, receipts,
+reconciliation markers, local lock files, permissions, and the admission
+clock. Local staging that cannot be sized without widening permissions is
+reported as a failed preview and left untouched.
 
 Without `--detach`: streams, exits per the two-layer status rule — drop-in
 for scripts. With `--detach`: prints the peer-qualified handle and returns.

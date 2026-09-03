@@ -53,11 +53,13 @@ func changeStatsWithCollector(
 }
 
 type localChangeCandidate struct {
-	key           string
-	statePath     string
-	downloadPaths []string
-	modified      time.Time
-	bytes         int64
+	key            string
+	statePath      string
+	downloadPaths  []string
+	modified       time.Time
+	bytes          int64
+	transferActive bool
+	scanFailed     bool
 }
 
 const unresolvedChangeStateProtection = proto.ChangeReconciliationWindow
@@ -77,7 +79,11 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 	candidates := map[string]*localChangeCandidate{}
 	jobs := filepath.Join(root, "jobs")
 	downloads := filepath.Join(root, "downloads")
-	if err := collectChangeGCCandidates(jobs, downloads, candidates); err != nil {
+	collector := collectChangeGCCandidates
+	if dryRun {
+		collector = collectChangeGCCandidatesReadOnly
+	}
+	if err := collector(jobs, downloads, candidates); err != nil {
 		return result, err
 	}
 	cutoff := time.Now().Add(-olderThan)
@@ -86,6 +92,40 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 			continue
 		}
 		result.Selected++
+		if dryRun {
+			if candidate.scanFailed {
+				result.Failed++
+				continue
+			}
+			if candidate.transferActive {
+				result.Protected++
+				continue
+			}
+			unlock, acquired, lockErr := tryAcquireExistingLocalChangeLock(localChangeTransferLockName(candidate.key))
+			if lockErr != nil {
+				result.Failed++
+				continue
+			}
+			if !acquired {
+				result.Protected++
+				continue
+			}
+			removed, eligible, protected, removeErr := collectLocalChangeCandidate(candidate, cutoff, true)
+			unlock()
+			if removeErr != nil {
+				result.Failed++
+				continue
+			}
+			if protected {
+				result.Protected++
+				continue
+			}
+			if removed && eligible {
+				result.Removed++
+				result.FreedBytes += candidate.bytes
+			}
+			continue
+		}
 		unlock, acquired, lockErr := tryAcquireLocalChangeLock(localChangeTransferLockName(candidate.key))
 		if lockErr != nil {
 			result.Failed++
@@ -186,7 +226,7 @@ func collectLocalChangeCandidate(candidate *localChangeCandidate, cutoff time.Ti
 		}
 		return nil
 	}
-	if candidate.statePath == "" {
+	if dryRun || candidate.statePath == "" {
 		err = remove()
 	} else if _, statErr := os.Stat(state.Root); statErr == nil {
 		err = withWorkspaceChangeLock(state.Root, remove)
@@ -358,6 +398,18 @@ func reconcileRemovedJobChange(root, key string) error {
 }
 
 func collectChangeGCCandidates(jobs, downloads string, candidates map[string]*localChangeCandidate) error {
+	return collectChangeGCCandidatesMode(jobs, downloads, candidates, false)
+}
+
+func collectChangeGCCandidatesReadOnly(jobs, downloads string, candidates map[string]*localChangeCandidate) error {
+	return collectChangeGCCandidatesMode(jobs, downloads, candidates, true)
+}
+
+func collectChangeGCCandidatesMode(
+	jobs, downloads string,
+	candidates map[string]*localChangeCandidate,
+	readOnly bool,
+) error {
 	if entries, err := os.ReadDir(jobs); err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
@@ -387,13 +439,36 @@ func collectChangeGCCandidates(jobs, downloads string, candidates map[string]*lo
 			downloadPath := filepath.Join(downloads, entry.Name())
 			candidate.downloadPaths = append(candidate.downloadPaths, downloadPath)
 			candidate.modified = laterTime(candidate.modified, info.ModTime())
-			unlock, err := acquireLocalChangeLock(localChangeTransferLockName(key))
-			if err != nil {
-				return err
+			var unlock func()
+			if readOnly {
+				var acquired bool
+				unlock, acquired, err = tryAcquireExistingLocalChangeLock(localChangeTransferLockName(key))
+				if err != nil {
+					candidate.scanFailed = true
+					continue
+				}
+				if !acquired {
+					candidate.transferActive = true
+					continue
+				}
+			} else {
+				unlock, err = acquireLocalChangeLock(localChangeTransferLockName(key))
+				if err != nil {
+					return err
+				}
 			}
-			size, err := changeops.TreeSize(downloadPath)
+			var size int64
+			if readOnly {
+				size, err = readOnlyTreeSize(downloadPath)
+			} else {
+				size, err = changeops.TreeSize(downloadPath)
+			}
 			unlock()
 			if err != nil {
+				if readOnly {
+					candidate.scanFailed = true
+					continue
+				}
 				return err
 			}
 			candidate.bytes += size
@@ -402,6 +477,22 @@ func collectChangeGCCandidates(jobs, downloads string, candidates map[string]*lo
 		return err
 	}
 	return nil
+}
+
+func readOnlyTreeSize(root string) (int64, error) {
+	var total int64
+	err := filepath.WalkDir(root, func(_ string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		total += info.Size()
+		return nil
+	})
+	return total, err
 }
 
 func localChangeCandidateKey(name string) string {

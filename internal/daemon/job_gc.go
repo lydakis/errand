@@ -162,10 +162,14 @@ func (d *Daemon) handleJobGC(w http.ResponseWriter, r *http.Request, id Identity
 		httpError(w, http.StatusBadRequest, "keep must not be negative")
 		return
 	}
-	markerNow, err := d.advanceAdmissionClock(time.Now())
-	if err != nil {
-		httpError(w, http.StatusInternalServerError, "persisting admission clock: "+err.Error())
-		return
+	markerNow := d.admissionNow(time.Now())
+	if !req.DryRun {
+		var err error
+		markerNow, err = d.advanceAdmissionClock(time.Now())
+		if err != nil {
+			httpError(w, http.StatusInternalServerError, "persisting admission clock: "+err.Error())
+			return
+		}
 	}
 	result := proto.JobGCResult{DryRun: req.DryRun}
 	if !req.DryRun {
@@ -179,12 +183,14 @@ func (d *Daemon) handleJobGC(w http.ResponseWriter, r *http.Request, id Identity
 		}
 		result.CleanupFailures = failures
 	}
-	if err := d.pruneCollected(r.Context(), markerNow); err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if !req.DryRun {
+		if err := d.pruneCollected(r.Context(), markerNow); err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return
+			}
+			httpError(w, http.StatusInternalServerError, "pruning collection markers: "+err.Error())
 			return
 		}
-		httpError(w, http.StatusInternalServerError, "pruning collection markers: "+err.Error())
-		return
 	}
 
 	d.mu.Lock()

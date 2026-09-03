@@ -81,7 +81,7 @@ func TestControlEndpointsReturnDecodedResponses(t *testing.T) {
 	if err != nil || storage.Jobs.Items != 2 || storage.Jobs.Bytes != 58 {
 		t.Fatalf("StorageStats() = %+v, %v", storage, err)
 	}
-	gc, err := CacheGC(server.URL)
+	gc, err := CacheGC(server.URL, false)
 	if err != nil || gc.RemovedBlobs != 2 || gc.FreedBytes != 17 {
 		t.Fatalf("CacheGC() = %+v, %v", gc, err)
 	}
@@ -296,7 +296,7 @@ func TestCacheGCUsesMaintenanceDeadline(t *testing.T) {
 		}, nil
 	})}
 
-	result, err := CacheGC("http://runner")
+	result, err := CacheGC("http://runner", false)
 	if err != nil {
 		t.Fatal(err)
 	}

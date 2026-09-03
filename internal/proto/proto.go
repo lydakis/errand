@@ -337,9 +337,14 @@ type StorageStats struct {
 	Jobs  StorageCategory `json:"jobs"`
 }
 
+type CacheGCRequest struct {
+	DryRun bool `json:"dry_run,omitempty"`
+}
+
 type CacheGCResult struct {
 	RemovedBlobs int   `json:"removed_blobs"`
 	FreedBytes   int64 `json:"freed_bytes"`
+	DryRun       bool  `json:"dry_run"`
 }
 
 type JobGCRequest struct {

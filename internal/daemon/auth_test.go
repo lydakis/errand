@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -279,7 +280,7 @@ func TestCacheGCEndpointRequiresManageCachesAction(t *testing.T) {
 			ts := httptest.NewServer(d.Handler())
 			t.Cleanup(ts.Close)
 
-			res, err := ts.Client().Post(ts.URL+"/v0/cache/gc", "application/json", nil)
+			res, err := ts.Client().Post(ts.URL+"/v0/cache/gc", "application/json", strings.NewReader("{}"))
 			if err != nil {
 				t.Fatal(err)
 			}

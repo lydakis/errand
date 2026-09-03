@@ -39,10 +39,10 @@ usage:
   errand status [--json] [--on PEER | --url URL] HANDLE
   errand kill [--force] [--on PEER | --url URL] HANDLE
   errand df [--json] [--on PEER | --url URL]
-  errand gc cache [--on PEER | --url URL]
+  errand gc cache [--dry-run] [--on PEER | --url URL]
   errand gc jobs [--older-than DURATION] [--keep N] [--dry-run] [--on PEER | --url URL]
   errand gc changes --older-than DURATION [--dry-run]
-  errand gc all --older-than DURATION [--keep N] [--on PEER | --url URL]
+  errand gc all --older-than DURATION [--keep N] [--dry-run] [--on PEER | --url URL]
   errand serve [--config PATH] [--listen ADDR] [--state-dir DIR] [--allow-user LOGIN]...
   errand info [--on PEER | --url URL]
   errand version
@@ -673,7 +673,7 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 	rawURL := fs.String("url", "", "peer base URL")
 	olderThan := fs.String("older-than", "", "remove jobs settled longer than this duration ago")
 	keep := fs.Int("keep", -1, "retain at least the newest N eligible jobs")
-	dryRun := fs.Bool("dry-run", false, "report eligible jobs without removing them")
+	dryRun := fs.Bool("dry-run", false, "report eligible data without removing it")
 	fs.Parse(args[1:])
 	if fs.NArg() != 0 {
 		fmt.Fprintf(stderr, "errand: unexpected gc arguments: %s\n", strings.Join(fs.Args(), " "))
@@ -683,12 +683,8 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "errand: unknown gc target %q; want cache, jobs, changes, or all\n", target)
 		return 2
 	}
-	if target == "cache" && (*olderThan != "" || *keep != -1 || *dryRun) {
+	if target == "cache" && (*olderThan != "" || *keep != -1) {
 		fmt.Fprintln(stderr, "errand: job retention flags do not apply to gc cache")
-		return 2
-	}
-	if target == "all" && *dryRun {
-		fmt.Fprintln(stderr, "errand: --dry-run applies only to gc jobs")
 		return 2
 	}
 	if target == "changes" && *keep != -1 {
@@ -755,10 +751,13 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 	}
 	failed := false
 	if target == "cache" || target == "all" {
-		result, err := client.CacheGC(peerURL)
+		result, err := client.CacheGC(peerURL, *dryRun)
 		if err != nil {
 			fmt.Fprintf(stderr, "errand: cache gc: %v\n", err)
 			failed = true
+		} else if result.DryRun {
+			fmt.Fprintf(stdout, "%s cache: would remove %d blobs and free %d bytes\n",
+				label, result.RemovedBlobs, result.FreedBytes)
 		} else {
 			fmt.Fprintf(stdout, "%s cache: removed %d blobs, freed %d bytes\n",
 				label, result.RemovedBlobs, result.FreedBytes)

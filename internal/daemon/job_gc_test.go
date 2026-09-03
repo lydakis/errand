@@ -618,7 +618,7 @@ func TestJobGCPrunesExpiredMarkersWithoutRestart(t *testing.T) {
 	d.collected[id] = record
 
 	keep := 0
-	body, _ := json.Marshal(proto.JobGCRequest{Keep: &keep, DryRun: true})
+	body, _ := json.Marshal(proto.JobGCRequest{Keep: &keep})
 	request := httptest.NewRequest(http.MethodPost, "/v0/jobs/gc", bytes.NewReader(body))
 	recorder := httptest.NewRecorder()
 	d.handleJobGC(recorder, request, Identity{})
@@ -630,6 +630,47 @@ func TestJobGCPrunesExpiredMarkersWithoutRestart(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(d.collectedDir(), id+".json")); !os.IsNotExist(err) {
 		t.Fatalf("expired collection marker remains on disk: %v", err)
+	}
+}
+
+func TestJobGCDryRunDoesNotAdvanceClockOrPruneExpiredMarkers(t *testing.T) {
+	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	id := proto.NewULID()
+	record := collectedRecord{CollectedAt: time.Now().Add(-collectedMarkerTTL - time.Minute)}
+	marker := filepath.Join(d.collectedDir(), id+".json")
+	if err := replaceJSON(marker, record); err != nil {
+		t.Fatal(err)
+	}
+	d.collected[id] = record
+	clockBefore, err := os.ReadFile(d.admissionClockPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keep := 0
+	body, _ := json.Marshal(proto.JobGCRequest{Keep: &keep, DryRun: true})
+	request := httptest.NewRequest(http.MethodPost, "/v0/jobs/gc", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	d.handleJobGC(recorder, request, Identity{})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("job GC = %s", recorder.Result().Status)
+	}
+	clockAfter, err := os.ReadFile(d.admissionClockPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(clockBefore, clockAfter) {
+		t.Fatal("dry-run advanced the durable admission clock")
+	}
+	if _, ok := d.collected[id]; !ok {
+		t.Fatal("dry-run pruned the expired marker from memory")
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("dry-run pruned the expired marker from disk: %v", err)
 	}
 }
 

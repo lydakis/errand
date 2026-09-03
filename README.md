@@ -242,10 +242,12 @@ GC always names its target. Bare `errand gc` only prints usage:
 
 ```text
 errand gc cache
+errand gc cache --dry-run
 errand gc jobs --older-than 30d --keep 500
 errand gc jobs --dry-run --older-than 30d
 errand gc changes --older-than 30d
 errand gc all --older-than 30d --keep 500
+errand gc all --dry-run --older-than 30d --keep 500
 ```
 
 Job GC only removes the caller's clean `exited` or `killed` receipts. Clean
@@ -261,6 +263,11 @@ pending apply transactions are always protected. Records whose submission never 
 the requested `--older-than` boundary. Unresolved submitted jobs remain
 protected for 30 days, after which an explicit local GC may retire abandoned
 state.
+`--dry-run` is available for every GC target. It applies the same selection
+policy and reports the space it can inspect without changing cache, receipt,
+reconciliation, local-change, lock, permission, or admission-clock state.
+Local staging that cannot be inspected without widening permissions is reported
+as a failed preview and left untouched.
 After non-dry job GC, the client replays the runner's durable, owner-scoped
 collection markers, so a lost deletion response does not strand local records.
 New job IDs must carry a ULID timestamp from the preceding 24 hours, with one

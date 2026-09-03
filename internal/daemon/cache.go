@@ -331,10 +331,10 @@ func (c *blobCache) StatsContext(ctx context.Context) (proto.CacheStats, error) 
 }
 
 func (c *blobCache) GC() (proto.CacheGCResult, error) {
-	return c.GCContext(context.Background())
+	return c.GCContext(context.Background(), false)
 }
 
-func (c *blobCache) GCContext(ctx context.Context) (proto.CacheGCResult, error) {
+func (c *blobCache) GCContext(ctx context.Context, dryRun bool) (proto.CacheGCResult, error) {
 	if err := c.acquireInsert(ctx); err != nil {
 		return proto.CacheGCResult{}, err
 	}
@@ -343,6 +343,9 @@ func (c *blobCache) GCContext(ctx context.Context) (proto.CacheGCResult, error) 
 		return proto.CacheGCResult{}, err
 	}
 	defer c.mu.Unlock()
+	if dryRun {
+		return c.planGCLocked(ctx)
+	}
 	var result proto.CacheGCResult
 	tempBytes, err := c.cleanupTempsLocked(ctx)
 	if err != nil {
@@ -371,6 +374,90 @@ func (c *blobCache) GCContext(ctx context.Context) (proto.CacheGCResult, error) 
 	return result, err
 }
 
+func (c *blobCache) planGCLocked(ctx context.Context) (proto.CacheGCResult, error) {
+	result := proto.CacheGCResult{DryRun: true}
+	tempBytes, err := c.inspectTempsLocked(ctx)
+	if err != nil {
+		return result, err
+	}
+	result.FreedBytes = tempBytes
+
+	type blob struct {
+		path string
+		size int64
+		used time.Time
+	}
+	var retained []blob
+	cutoff := time.Now().Add(-c.ttl)
+	_, total, err := c.walkLocked(ctx, func(path string, fi fs.FileInfo) error {
+		if fi.ModTime().Before(cutoff) {
+			result.RemovedBlobs++
+			result.FreedBytes += fi.Size()
+			return nil
+		}
+		retained = append(retained, blob{path: path, size: fi.Size(), used: fi.ModTime()})
+		return nil
+	})
+	if err != nil {
+		return result, err
+	}
+	remaining := total - (result.FreedBytes - tempBytes)
+	if remaining <= c.maxBytes {
+		return result, nil
+	}
+	target := c.maxBytes
+	if target >= 10 {
+		target -= target / 10
+	}
+	sort.Slice(retained, func(i, j int) bool {
+		if retained[i].used.Equal(retained[j].used) {
+			return retained[i].path < retained[j].path
+		}
+		return retained[i].used.Before(retained[j].used)
+	})
+	for _, candidate := range retained {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		if remaining <= target {
+			break
+		}
+		remaining -= candidate.size
+		result.RemovedBlobs++
+		result.FreedBytes += candidate.size
+	}
+	return result, nil
+}
+
+func (c *blobCache) inspectTempsLocked(ctx context.Context) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	entries, err := os.ReadDir(c.dir)
+	if err != nil {
+		return 0, err
+	}
+	var bytes int64
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return bytes, err
+		}
+		if !strings.HasPrefix(entry.Name(), insertTempPrefix) {
+			continue
+		}
+		path := filepath.Join(c.dir, entry.Name())
+		info, err := os.Lstat(path)
+		if err != nil {
+			return bytes, err
+		}
+		if !info.Mode().IsRegular() {
+			return bytes, fmt.Errorf("cache: insert temporary %q is not a regular file", path)
+		}
+		bytes += info.Size()
+	}
+	return bytes, nil
+}
+
 func (c *blobCache) enforceSizeLocked(ctx context.Context) error {
 	_, _, err := c.evictOverLocked(ctx)
 	return err
@@ -397,7 +484,12 @@ func (c *blobCache) evictOverLocked(ctx context.Context) (int, int64, error) {
 		return 0, 0, err
 	}
 	c.bytes = total
-	sort.Slice(blobs, func(i, j int) bool { return blobs[i].used.Before(blobs[j].used) })
+	sort.Slice(blobs, func(i, j int) bool {
+		if blobs[i].used.Equal(blobs[j].used) {
+			return blobs[i].path < blobs[j].path
+		}
+		return blobs[i].used.Before(blobs[j].used)
+	})
 	target := c.maxBytes
 	if target >= 10 {
 		target -= target / 10

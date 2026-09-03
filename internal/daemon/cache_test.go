@@ -172,6 +172,85 @@ func TestCacheGCRemovesCrashInsertTemp(t *testing.T) {
 	}
 }
 
+func TestCacheGCDryRunReportsWithoutRemovingAnything(t *testing.T) {
+	c := testCache(t, 1<<20, time.Hour)
+	sha, size := insertContent(t, c, "soon to expire")
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(c.path(sha), old, old); err != nil {
+		t.Fatal(err)
+	}
+	temp := filepath.Join(c.dir, ".insert-orphan")
+	if err := os.WriteFile(temp, []byte("partial blob"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := c.GCContext(context.Background(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.DryRun || result.RemovedBlobs != 1 || result.FreedBytes != size+int64(len("partial blob")) {
+		t.Fatalf("dry-run result = %+v", result)
+	}
+	for _, path := range []string{c.path(sha), temp} {
+		if _, err := os.Lstat(path); err != nil {
+			t.Fatalf("dry-run removed %q: %v", path, err)
+		}
+	}
+}
+
+func TestCacheGCDryRunUsesTheRealCapacityPolicy(t *testing.T) {
+	c := testCache(t, 50, time.Hour)
+	type cached struct {
+		path string
+		size int64
+	}
+	var blobs []cached
+	for index, content := range []string{
+		"aaaaaaaaaaaaaaaaaaaa",
+		"bbbbbbbbbbbbbbbbbbbb",
+		"cccccccccccccccccccc",
+	} {
+		sum := sha256.Sum256([]byte(content))
+		sha := hex.EncodeToString(sum[:])
+		path := c.path(sha)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		used := time.Now().Add(time.Duration(index-3) * time.Minute)
+		if err := os.Chtimes(path, used, used); err != nil {
+			t.Fatal(err)
+		}
+		blobs = append(blobs, cached{path: path, size: int64(len(content))})
+	}
+
+	preview, err := c.GCContext(context.Background(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.RemovedBlobs != 1 || preview.FreedBytes != blobs[0].size {
+		t.Fatalf("capacity preview = %+v", preview)
+	}
+	for _, blob := range blobs {
+		if _, err := os.Stat(blob.path); err != nil {
+			t.Fatalf("capacity preview removed %q: %v", blob.path, err)
+		}
+	}
+
+	actual, err := c.GC()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actual.RemovedBlobs != preview.RemovedBlobs || actual.FreedBytes != preview.FreedBytes {
+		t.Fatalf("actual GC %+v did not match preview %+v", actual, preview)
+	}
+	if _, err := os.Stat(blobs[0].path); !os.IsNotExist(err) {
+		t.Fatalf("actual GC kept oldest blob: %v", err)
+	}
+}
+
 func TestCacheStatsReportsInvalidBlobEntry(t *testing.T) {
 	c := testCache(t, 1<<20, time.Hour)
 	path := filepath.Join(c.dir, strings.Repeat("a", 64))

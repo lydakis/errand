@@ -1333,6 +1333,118 @@ func TestChangeGCRetainsPendingTransactionsAndRemovesOldCompletedState(t *testin
 	}
 }
 
+func TestChangeGCDryRunDoesNotCreateLocksOrTightenPermissions(t *testing.T) {
+	stateHome := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateHome)
+	workspace := t.TempDir()
+	peerURL := "http://runner.test"
+	jobID := proto.NewULID()
+	state := localChangeState{
+		JobID: jobID, PeerURL: peerURL, ManifestRoot: testManifestRoot, Root: workspace, Terminal: true,
+	}
+	if err := saveLocalChangeState(state); err != nil {
+		t.Fatal(err)
+	}
+	root, err := localChangeRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(root, "jobs", localChangeKey(peerURL, jobID)+".json")
+	old := time.Now().Add(-48 * time.Hour)
+	if err := os.Chtimes(statePath, old, old); err != nil {
+		t.Fatal(err)
+	}
+	downloads := filepath.Join(root, "downloads")
+	if err := os.Mkdir(downloads, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	download := filepath.Join(downloads, localChangeKey(peerURL, jobID))
+	if err := os.Mkdir(download, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	artifact := filepath.Join(download, "artifact")
+	if err := os.WriteFile(artifact, []byte("retained"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(download, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := ChangeGC(24*time.Hour, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.DryRun || result.Removed != 1 {
+		t.Fatalf("dry-run result = %+v", result)
+	}
+	if _, err := os.Stat(statePath); err != nil {
+		t.Fatalf("dry-run removed local change state: %v", err)
+	}
+	if got, err := os.ReadFile(artifact); err != nil || string(got) != "retained" {
+		t.Fatalf("dry-run changed downloaded staging: %q, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "locks")); !os.IsNotExist(err) {
+		t.Fatalf("dry-run created a lock directory: %v", err)
+	}
+	info, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("dry-run changed state directory mode to %04o", info.Mode().Perm())
+	}
+}
+
+func TestChangeGCDryRunDoesNotWidenRestrictiveDownloadedStaging(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root, err := localChangeRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	downloads := filepath.Join(root, "downloads")
+	if err := os.MkdirAll(downloads, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	key := localChangeKey("http://runner.test", proto.NewULID())
+	download := filepath.Join(downloads, key)
+	sealed := filepath.Join(download, "sealed")
+	if err := os.MkdirAll(sealed, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sealed, "artifact"), []byte("retained"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(sealed, 0); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(sealed, 0o700)
+	old := time.Now().Add(-48 * time.Hour)
+	if err := os.Chtimes(download, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := ChangeGC(24*time.Hour, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.DryRun || result.Failed != 1 || result.Removed != 0 {
+		t.Fatalf("dry-run result = %+v", result)
+	}
+	info, err := os.Lstat(sealed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0 {
+		t.Fatalf("dry-run widened restrictive staging to %04o", info.Mode().Perm())
+	}
+	if _, err := os.Stat(filepath.Join(root, "locks")); !os.IsNotExist(err) {
+		t.Fatalf("dry-run created a lock directory: %v", err)
+	}
+}
+
 func TestChangeStatsAndGCHandleRestrictiveStaging(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root, err := localChangeRoot()
@@ -1604,12 +1716,21 @@ func TestChangeGCSkipsActiveTransfer(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := ChangeGC(24*time.Hour, false)
+	if err != nil {
+		unlock()
+		t.Fatal(err)
+	}
+	if result.Protected != 1 || result.Removed != 0 {
+		unlock()
+		t.Fatalf("ChangeGC() = %+v", result)
+	}
+	dry, err := ChangeGC(24*time.Hour, true)
 	unlock()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Protected != 1 || result.Removed != 0 {
-		t.Fatalf("ChangeGC() = %+v", result)
+	if dry.Protected != 1 || dry.Removed != 0 {
+		t.Fatalf("ChangeGC(dry-run) = %+v", dry)
 	}
 	if _, err := os.Stat(statePath); err != nil {
 		t.Fatalf("active transfer state was collected: %v", err)

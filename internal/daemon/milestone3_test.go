@@ -291,7 +291,7 @@ func TestStorageStatsAndCacheGCEndpoints(t *testing.T) {
 	d.cache.mu.Lock()
 	d.cache.ttl = 0
 	d.cache.mu.Unlock()
-	gcResp, err := http.Post(ts.URL+"/v0/cache/gc", "application/json", nil)
+	gcResp, err := http.Post(ts.URL+"/v0/cache/gc", "application/json", strings.NewReader("{}"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +318,7 @@ func TestCacheGCCancellationStopsHandler(t *testing.T) {
 	defer release()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	req := httptest.NewRequest(http.MethodPost, "/v0/cache/gc", nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodPost, "/v0/cache/gc", strings.NewReader("{}")).WithContext(ctx)
 	done := make(chan struct{})
 	go func() {
 		d.handleCacheGC(httptest.NewRecorder(), req, Identity{})

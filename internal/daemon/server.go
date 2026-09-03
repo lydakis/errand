@@ -685,7 +685,18 @@ func (d *Daemon) handleCacheGC(w http.ResponseWriter, r *http.Request, _ Identit
 		httpError(w, http.StatusNotFound, "snapshot cache is disabled on this runner")
 		return
 	}
-	result, err := d.cache.GCContext(r.Context())
+	var req proto.CacheGCRequest
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "decoding cache GC policy: "+err.Error())
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		httpError(w, http.StatusBadRequest, "cache GC policy must contain one JSON object")
+		return
+	}
+	result, err := d.cache.GCContext(r.Context(), req.DryRun)
 	if err != nil {
 		if r.Context().Err() != nil {
 			return

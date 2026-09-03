@@ -160,6 +160,46 @@ func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
 	}
 }
 
+func TestCmdGCAllDryRunIsObservationalAcrossEveryTarget(t *testing.T) {
+	stateHome := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateHome)
+	var cacheRequest proto.CacheGCRequest
+	var jobRequest proto.JobGCRequest
+	var reconciliationCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v0/cache/gc":
+			if err := json.NewDecoder(r.Body).Decode(&cacheRequest); err != nil {
+				t.Error(err)
+			}
+			json.NewEncoder(w).Encode(proto.CacheGCResult{RemovedBlobs: 2, FreedBytes: 10, DryRun: true})
+		case "/v0/jobs/gc":
+			if err := json.NewDecoder(r.Body).Decode(&jobRequest); err != nil {
+				t.Error(err)
+			}
+			json.NewEncoder(w).Encode(proto.JobGCResult{SelectedJobs: 3, FreedBytes: 20, DryRun: true})
+		case "/v0/change-reconciliation", "/v0/change-reconciliation/ack":
+			reconciliationCalls++
+			http.Error(w, "dry-run must not reconcile", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := cmdGCTo([]string{
+		"all", "--url", server.URL, "--older-than", "1d", "--keep", "5", "--dry-run",
+	}, &stdout, &stderr)
+	if code != 0 || !cacheRequest.DryRun || !jobRequest.DryRun || reconciliationCalls != 0 ||
+		!strings.Contains(stdout.String(), "cache: would remove 2") ||
+		!strings.Contains(stdout.String(), "jobs: would remove 3") ||
+		!strings.Contains(stdout.String(), "local changes: would remove 0") {
+		t.Fatalf("gc all --dry-run = %d, cache=%+v jobs=%+v reconciliation=%d stdout=%q stderr=%q",
+			code, cacheRequest, jobRequest, reconciliationCalls, stdout.String(), stderr.String())
+	}
+}
+
 func TestCmdGCRoundsFractionalSecondsUp(t *testing.T) {
 	var gotSeconds int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

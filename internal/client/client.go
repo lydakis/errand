@@ -587,11 +587,11 @@ func StorageStats(peerURL string) (proto.StorageStats, error) {
 	return stats, err
 }
 
-func CacheGC(peerURL string) (proto.CacheGCResult, error) {
+func CacheGC(peerURL string, dryRun bool) (proto.CacheGCResult, error) {
 	var result proto.CacheGCResult
 	err := postJSONResultContextTimeout(
 		context.Background(), maintenanceHTTP, maintenanceTimeout,
-		peerURL+"/v0/cache/gc", nil, "cache gc", &result,
+		peerURL+"/v0/cache/gc", proto.CacheGCRequest{DryRun: dryRun}, "cache gc", &result,
 	)
 	return result, err
 }
