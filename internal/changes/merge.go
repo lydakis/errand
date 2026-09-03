@@ -17,10 +17,14 @@ import (
 )
 
 type MergeConflictError struct {
-	Paths []string
+	Paths        []string
+	Materialized bool
 }
 
 func (e *MergeConflictError) Error() string {
+	if e.Materialized {
+		return "workspace changes applied with unresolved conflicts at: " + strings.Join(e.Paths, ", ")
+	}
 	return "workspace changes conflict at: " + strings.Join(e.Paths, ", ")
 }
 
@@ -58,7 +62,8 @@ func mergeChangeRoots(
 	bundle proto.ChangeBundle,
 	paths []string,
 	ours proto.Manifest,
-) error {
+	materializeConflicts bool,
+) ([]string, error) {
 	base := newMergeTree(baseRoot, bundle.BaseManifest)
 	local := newMergeTree(oursRoot, ours)
 	remote := newMergeTree(remoteRoot, bundle.RemoteManifest)
@@ -73,45 +78,61 @@ func mergeChangeRoots(
 	}
 	for _, changePath := range paths {
 		if err := ctx.Err(); err != nil {
-			return err
+			return nil, err
 		}
 		if metadata[changePath] {
-			if err := mergeMetadataPath(changePath, mergedRoot, base, local, remote, conflicts); err != nil {
-				return err
+			if err := mergeMetadataPath(
+				changePath, mergedRoot, base, local, remote, conflicts, materializeConflicts,
+			); err != nil {
+				return nil, err
 			}
 			continue
 		}
 		if err := mergeTreePath(
 			ctx, changePath, mergedRoot, base, local, remote,
-			baseLocal, baseRemote, localRemote, conflicts,
+			baseLocal, baseRemote, localRemote, conflicts, materializeConflicts,
 		); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if len(conflicts) == 0 {
-		return nil
+		return nil, nil
 	}
 	conflictPaths := make([]string, 0, len(conflicts))
 	for conflictPath := range conflicts {
 		conflictPaths = append(conflictPaths, conflictPath)
 	}
 	sort.Strings(conflictPaths)
-	return &MergeConflictError{Paths: conflictPaths}
+	if !materializeConflicts {
+		return conflictPaths, &MergeConflictError{Paths: conflictPaths}
+	}
+	return conflictPaths, nil
 }
 
-func mergeMetadataPath(name, mergedRoot string, base, ours, remote mergeTree, conflicts map[string]bool) error {
+func mergeMetadataPath(
+	name, mergedRoot string,
+	base, ours, remote mergeTree,
+	conflicts map[string]bool,
+	materializeConflicts bool,
+) error {
 	baseEntry, baseOK := base.entries[name]
 	oursEntry, oursOK := ours.entries[name]
 	remoteEntry, remoteOK := remote.entries[name]
 	if !baseOK || !oursOK || !remoteOK || baseEntry.Type != proto.EntryDir ||
 		oursEntry.Type != proto.EntryDir || remoteEntry.Type != proto.EntryDir {
 		conflicts[name] = true
+		if materializeConflicts {
+			return copyMergeSubtree(ours, name, mergedRoot)
+		}
 		return nil
 	}
 	mode, ok := mergeMode(baseEntry.Mode, true, oursEntry.Mode, remoteEntry.Mode)
 	if !ok {
 		conflicts[name] = true
-		return nil
+		if !materializeConflicts {
+			return nil
+		}
+		mode = oursEntry.Mode
 	}
 	dest := filepath.Join(mergedRoot, filepath.FromSlash(name))
 	if err := os.MkdirAll(dest, os.FileMode(mode)|0o700); err != nil {
@@ -162,6 +183,7 @@ func mergeTreePath(
 	baseRemote treeDelta,
 	oursRemote treeDelta,
 	conflicts map[string]bool,
+	materializeConflicts bool,
 ) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -183,7 +205,10 @@ func mergeTreePath(
 		mode, ok := mergeMode(baseEntry.Mode, baseOK, oursEntry.Mode, remoteEntry.Mode)
 		if !ok {
 			conflicts[name] = true
-			return nil
+			if !materializeConflicts {
+				return nil
+			}
+			mode = oursEntry.Mode
 		}
 		dest := filepath.Join(mergedRoot, filepath.FromSlash(name))
 		if err := os.MkdirAll(dest, os.FileMode(mode)|0o700); err != nil {
@@ -192,7 +217,7 @@ func mergeTreePath(
 		for _, child := range mergeChildren(name, base, ours, remote) {
 			if err := mergeTreePath(
 				ctx, child, mergedRoot, base, ours, remote,
-				baseOurs, baseRemote, oursRemote, conflicts,
+				baseOurs, baseRemote, oursRemote, conflicts, materializeConflicts,
 			); err != nil {
 				return err
 			}
@@ -204,21 +229,28 @@ func mergeTreePath(
 		mode, ok := mergeMode(baseEntry.Mode, true, oursEntry.Mode, remoteEntry.Mode)
 		if !ok {
 			conflicts[name] = true
-			return nil
+			if !materializeConflicts {
+				return nil
+			}
+			mode = oursEntry.Mode
 		}
-		clean, err := mergeRegularFile(
+		result, err := mergeRegularFile(
 			ctx,
 			filepath.Join(ours.root, filepath.FromSlash(name)),
 			filepath.Join(base.root, filepath.FromSlash(name)),
 			filepath.Join(remote.root, filepath.FromSlash(name)),
 			filepath.Join(mergedRoot, filepath.FromSlash(name)),
 			os.FileMode(mode),
+			materializeConflicts,
 		)
 		if err != nil {
 			return err
 		}
-		if !clean {
+		if result != regularMergeClean {
 			conflicts[name] = true
+			if materializeConflicts && result == regularMergeBinaryConflict {
+				return copyMergeSubtree(ours, name, mergedRoot)
+			}
 		}
 		return nil
 	}
@@ -228,6 +260,9 @@ func mergeTreePath(
 		_, modeOK := mergeMode(baseEntry.Mode, true, oursEntry.Mode, remoteEntry.Mode)
 		if !targetOK || !modeOK {
 			conflicts[name] = true
+			if materializeConflicts {
+				return copyMergeSubtree(ours, name, mergedRoot)
+			}
 			return nil
 		}
 		dest := filepath.Join(mergedRoot, filepath.FromSlash(name))
@@ -237,6 +272,9 @@ func mergeTreePath(
 		return os.Symlink(target, dest)
 	}
 	conflicts[name] = true
+	if materializeConflicts {
+		return copyMergeSubtree(ours, name, mergedRoot)
+	}
 	return nil
 }
 
@@ -329,52 +367,81 @@ func restoreMergeSubtreeModes(source mergeTree, name, mergedRoot string) error {
 	return nil
 }
 
-func mergeRegularFile(ctx context.Context, ours, base, remote, dest string, mode os.FileMode) (bool, error) {
+type regularMergeResult uint8
+
+const (
+	regularMergeClean regularMergeResult = iota
+	regularMergeTextConflict
+	regularMergeBinaryConflict
+)
+
+func mergeRegularFile(
+	ctx context.Context,
+	ours, base, remote, dest string,
+	mode os.FileMode,
+	materializeConflicts bool,
+) (regularMergeResult, error) {
 	for _, name := range []string{ours, base, remote} {
 		binary, err := isBinaryFile(name)
 		if err != nil {
-			return false, err
+			return regularMergeClean, err
 		}
 		if binary {
-			return false, nil
+			return regularMergeBinaryConflict, nil
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
-		return false, err
+		return regularMergeClean, err
 	}
 	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return false, err
+		return regularMergeClean, err
 	}
-	cmd := exec.CommandContext(ctx, "git", "merge-file", "--stdout", ours, base, remote)
+	cmd := exec.CommandContext(
+		ctx, "git", "merge-file", "--stdout",
+		"-L", "local", "-L", "base", "-L", "remote",
+		ours, base, remote,
+	)
 	cmd.Stdout = out
 	stderr := truncatingBuffer{remaining: 32 << 10}
 	cmd.Stderr = &stderr
 	runErr := cmd.Run()
 	closeErr := out.Close()
 	if runErr != nil {
-		_ = os.Remove(dest)
 		var exitErr *exec.ExitError
 		if errors.As(runErr, &exitErr) {
 			if code := exitErr.ExitCode(); code > 0 && code < 128 {
-				return false, closeErr
+				if closeErr != nil {
+					_ = os.Remove(dest)
+					return regularMergeClean, closeErr
+				}
+				if !materializeConflicts {
+					_ = os.Remove(dest)
+					return regularMergeTextConflict, nil
+				}
+				if err := os.Chmod(dest, mode.Perm()); err != nil {
+					_ = os.Remove(dest)
+					return regularMergeClean, err
+				}
+				return regularMergeTextConflict, nil
 			}
 			detail := strings.TrimSpace(stderr.String())
 			if detail != "" {
 				runErr = fmt.Errorf("git merge-file failed: %s: %w", detail, runErr)
 			}
 		}
-		return false, errors.Join(runErr, closeErr)
+		_ = os.Remove(dest)
+		return regularMergeClean, errors.Join(runErr, closeErr)
 	}
 	if closeErr != nil {
 		_ = os.Remove(dest)
-		return false, closeErr
+		return regularMergeClean, closeErr
 	}
 	if err := os.Chmod(dest, mode.Perm()); err != nil {
 		_ = os.Remove(dest)
-		return false, err
+		return regularMergeClean, err
 	}
-	return true, nil
+	return regularMergeClean, nil
 }
 
 func isBinaryFile(name string) (bool, error) {

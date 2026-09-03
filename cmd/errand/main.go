@@ -29,11 +29,12 @@ var version = "0.1.0-dev"
 const usage = `errand — a personal job runner for machines you own
 
 usage:
-  errand [--on PEER | --url URL] [--detach] [--env K=V]... [--passenv K]...
+  errand [--on PEER | --url URL] [--detach] [--apply | --no-apply]
+         [--env K=V]... [--passenv K]...
          [--workspace-root PATH] [--workdir REL]
          [--include-all | --no-snapshot] -- CMD [ARG...]
   errand attach [--on PEER | --url URL] HANDLE
-  errand fetch [--apply] [--on PEER | --url URL] HANDLE [PATH]
+  errand fetch [--apply [--conflicts]] [--on PEER | --url URL] HANDLE [PATH]
   errand ps [-a | --all] [-n N | --last N] [--json] [--on PEER | --url URL]
   errand status [--json] [--on PEER | --url URL] HANDLE
   errand kill [--force] [--on PEER | --url URL] HANDLE
@@ -74,6 +75,13 @@ func main() {
 		os.Exit(2)
 	}
 	switch args[0] {
+	case "serve", "_automatic-apply", "version", "help", "-h", "--help":
+	default:
+		if err := client.ResumeAutomaticApplies(); err != nil {
+			fmt.Fprintf(os.Stderr, "errand: resuming automatic workspace applications: %v\n", err)
+		}
+	}
+	switch args[0] {
 	case "serve":
 		os.Exit(cmdServe(args[1:]))
 	case "attach":
@@ -95,6 +103,8 @@ func main() {
 	case "version":
 		fmt.Println("errand", version)
 		os.Exit(0)
+	case "_automatic-apply":
+		os.Exit(cmdAutomaticApply(args[1:]))
 	case "help", "-h", "--help":
 		fmt.Println(usage)
 		os.Exit(0)
@@ -117,6 +127,8 @@ func cmdRun(args []string) int {
 	includeAll := fs.Bool("include-all", false, "allow an otherwise refused broad snapshot (never permits a filesystem root)")
 	noSnapshot := fs.Bool("no-snapshot", false, "run in an empty remote workspace without inspecting local file contents")
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
+	apply := fs.Bool("apply", false, "apply retained workspace changes after successful completion")
+	noApply := fs.Bool("no-apply", false, "do not apply retained workspace changes after the run")
 	var envs, passenvs stringList
 	fs.Var(&envs, "env", "set K=V in the job environment (repeatable)")
 	fs.Var(&passenvs, "passenv", "forward the named local env var (repeatable)")
@@ -144,6 +156,10 @@ func cmdRun(args []string) int {
 	}
 	if *includeAll && *noSnapshot {
 		fmt.Fprintln(os.Stderr, "errand: --include-all and --no-snapshot are mutually exclusive")
+		return 2
+	}
+	if *apply && *noApply {
+		fmt.Fprintln(os.Stderr, "errand: --apply and --no-apply are mutually exclusive")
 		return 2
 	}
 	if *noSnapshot && *workspaceRoot != "" {
@@ -176,6 +192,7 @@ func cmdRun(args []string) int {
 	}
 	root := cwd
 	project := ""
+	var workspaceApplyOnSuccess *bool
 	if !*noSnapshot {
 		selected, discoverErr := workspace.Discover(cwd, *workspaceRoot)
 		if discoverErr != nil {
@@ -184,6 +201,7 @@ func cmdRun(args []string) int {
 		}
 		root = selected.Root
 		project = selected.Project
+		workspaceApplyOnSuccess = selected.ApplyOnSuccess
 		if *workdir == "" {
 			*workdir = selected.Workdir
 		}
@@ -193,20 +211,64 @@ func cmdRun(args []string) int {
 		}
 		fmt.Fprintf(os.Stderr, "errand: workspace root %s (from %s)\n", selected.Root, selected.Source)
 		fmt.Fprintf(os.Stderr, "errand: command workdir %s\n", shownWorkdir)
+	} else {
+		selected, discoverErr := workspace.Discover(cwd, cwd)
+		if discoverErr != nil {
+			fmt.Fprintf(os.Stderr, "errand: %v\n", discoverErr)
+			return client.ExitTransaction
+		}
+		workspaceApplyOnSuccess = selected.ApplyOnSuccess
+	}
+	globalApplyOnSuccess := false
+	if !*apply && !*noApply && workspaceApplyOnSuccess == nil {
+		clientConfig, err := config.LoadClient()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+			return client.ExitTransaction
+		}
+		globalApplyOnSuccess = clientConfig.ApplyOnSuccess
+	}
+	applyOnSuccess, err := resolveApplyOnSuccess(
+		*apply, *noApply, workspaceApplyOnSuccess, globalApplyOnSuccess,
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		return 2
 	}
 	return client.Run(client.RunOptions{
-		PeerURL:    peerURL,
-		PeerName:   peerLabel,
-		Root:       root,
-		Argv:       argv,
-		Env:        env,
-		PassEnv:    passenvs,
-		Workdir:    *workdir,
-		Project:    project,
-		IncludeAll: *includeAll,
-		NoSnapshot: *noSnapshot,
-		Detach:     *detach,
+		PeerURL:        peerURL,
+		PeerName:       peerLabel,
+		Root:           root,
+		Argv:           argv,
+		Env:            env,
+		PassEnv:        passenvs,
+		Workdir:        *workdir,
+		Project:        project,
+		IncludeAll:     *includeAll,
+		NoSnapshot:     *noSnapshot,
+		Detach:         *detach,
+		ApplyOnSuccess: applyOnSuccess,
 	})
+}
+
+func resolveApplyOnSuccess(
+	explicitApply, explicitNoApply bool,
+	workspaceApply *bool,
+	globalApply bool,
+) (bool, error) {
+	if explicitApply && explicitNoApply {
+		return false, fmt.Errorf("--apply and --no-apply are mutually exclusive")
+	}
+	if explicitApply {
+		return true, nil
+	}
+	if explicitNoApply {
+		return false, nil
+	}
+	if workspaceApply != nil {
+		return *workspaceApply, nil
+	}
+	return globalApply, nil
 }
 
 // resolvePeerTarget returns the effective transport URL and the label that
@@ -313,11 +375,16 @@ func cmdAttach(args []string) int {
 func cmdFetch(args []string) int {
 	fs := flag.NewFlagSet("fetch", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "apply retained workspace changes with a clean-or-refuse three-way merge")
+	conflicts := fs.Bool("conflicts", false, "materialize text conflicts and apply clean changes")
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	fs.Parse(args)
 	if fs.NArg() < 1 || fs.NArg() > 2 {
 		fmt.Fprintln(os.Stderr, "errand fetch: HANDLE (peer/ULID) and at most one changed PATH are required")
+		return 2
+	}
+	if *conflicts && !*apply {
+		fmt.Fprintln(os.Stderr, "errand fetch: --conflicts requires --apply")
 		return 2
 	}
 	peerURL, _, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
@@ -338,7 +405,8 @@ func cmdFetch(args []string) int {
 		}
 	}
 	staged, err := client.FetchChanges(client.ChangeFetchOptions{
-		PeerURL: peerURL, JobID: jobID, Apply: *apply, Path: changePath, CallerDir: callerDir,
+		PeerURL: peerURL, JobID: jobID, Apply: *apply, MaterializeConflicts: *conflicts,
+		Path: changePath, CallerDir: callerDir,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)

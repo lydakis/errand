@@ -41,6 +41,27 @@ func TestLoadDaemonFailsClosedWithoutAbsoluteStateRoot(t *testing.T) {
 	}
 }
 
+func TestLoadClientApplyOnSuccess(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	configDir, err := dir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "config.toml"), []byte("apply_on_success = true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.ApplyOnSuccess {
+		t.Fatal("apply_on_success was not loaded")
+	}
+}
+
 func TestLoadDaemonRejectsMissingExplicitConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing.toml")
 	if _, err := LoadDaemon(path); err == nil || !errors.Is(err, os.ErrNotExist) {

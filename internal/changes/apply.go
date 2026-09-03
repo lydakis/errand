@@ -110,13 +110,14 @@ func Apply(
 	selected map[string]bool,
 	owner string,
 	transaction string,
+	options ApplyOptions,
 ) (ApplyResult, error) {
 	identity, err := applyWorkspaceIdentity(destinationRoot)
 	if err != nil {
 		return ApplyResult{}, err
 	}
 	return ApplyToWorkspace(
-		stagedRoot, destinationRoot, bundle, selected, owner, transaction, identity,
+		stagedRoot, destinationRoot, bundle, selected, owner, transaction, identity, options,
 	)
 }
 
@@ -130,6 +131,7 @@ func ApplyToWorkspace(
 	owner string,
 	transaction string,
 	expectedRoot fsidentity.Identity,
+	options ApplyOptions,
 ) (ApplyResult, error) {
 	if err := validateBundle(bundle); err != nil {
 		return ApplyResult{}, err
@@ -149,7 +151,6 @@ func ApplyToWorkspace(
 	if len(paths) == 0 {
 		return ApplyResult{}, nil
 	}
-	reportedPaths := append([]string(nil), paths...)
 	metadataPaths := make(map[string]bool, len(bundle.MetadataPaths))
 	for _, metadataPath := range bundle.MetadataPaths {
 		metadataPaths[metadataPath] = true
@@ -169,9 +170,22 @@ func ApplyToWorkspace(
 	}
 	defer destination.Close()
 	parentPolicies, err := applyParentPolicies(destination.root, bundle, paths)
+	var preMergeConflicts []string
+	if options.MaterializeConflicts {
+		var conflict *MergeConflictError
+		if errors.As(err, &conflict) {
+			preMergeConflicts = mergeConflictPaths(preMergeConflicts, conflict.Paths)
+			paths = rootsOutsideConflicts(paths, conflict.Paths)
+			if len(paths) == 0 {
+				return ApplyResult{Conflicts: preMergeConflicts}, nil
+			}
+			parentPolicies, err = applyParentPolicies(destination.root, bundle, paths)
+		}
+	}
 	if err != nil {
 		return ApplyResult{}, fmt.Errorf("checking apply parents: %w", err)
 	}
+	reportedPaths := append([]string(nil), paths...)
 	mergeRoot, err := os.MkdirTemp(filepath.Dir(stagedRoot), ".merge-")
 	if err != nil {
 		return ApplyResult{}, err
@@ -194,7 +208,28 @@ func ApplyToWorkspace(
 		return ApplyResult{}, fmt.Errorf("verifying staged changes: %w", err)
 	}
 	defer closeTreeAccesses(trustedAccess)
-	oursManifest, inputs, err := captureApplyInputs(destination, bundle, paths)
+	var oursManifest proto.Manifest
+	var inputs map[string]applyPathInput
+	for {
+		oursManifest, inputs, err = captureApplyInputs(destination, bundle, paths)
+		if err == nil || !options.MaterializeConflicts {
+			break
+		}
+		var conflict *MergeConflictError
+		if !errors.As(err, &conflict) {
+			break
+		}
+		filtered := rootsOutsideConflicts(paths, conflict.Paths)
+		if len(filtered) == len(paths) {
+			break
+		}
+		preMergeConflicts = mergeConflictPaths(preMergeConflicts, conflict.Paths)
+		paths = filtered
+		if len(paths) == 0 {
+			return ApplyResult{Conflicts: preMergeConflicts}, nil
+		}
+		reportedPaths = append(reportedPaths[:0], paths...)
+	}
 	if err != nil {
 		return ApplyResult{}, fmt.Errorf("capturing local merge input: %w", err)
 	}
@@ -203,7 +238,7 @@ func ApplyToWorkspace(
 		return ApplyResult{}, fmt.Errorf("materializing local merge input: %w", err)
 	}
 	defer oursAccess.closeWithoutRestore()
-	if err := mergeChangeRoots(
+	conflicts, err := mergeChangeRoots(
 		context.Background(),
 		filepath.Join(trustedRoot, "base"),
 		oursRoot,
@@ -212,9 +247,13 @@ func ApplyToWorkspace(
 		bundle,
 		paths,
 		oursManifest,
-	); err != nil {
+		options.MaterializeConflicts,
+	)
+	if err != nil {
 		return ApplyResult{}, fmt.Errorf("merging workspace changes: %w", err)
 	}
+	conflicts = mergeConflictPaths(preMergeConflicts, conflicts)
+	reportedPaths = rootsOutsideConflicts(paths, conflicts)
 	mergedAccess, err := makeTreeAccessible(mergedRoot)
 	if err != nil {
 		return ApplyResult{}, fmt.Errorf("preparing merged workspace: %w", err)
@@ -406,8 +445,42 @@ func ApplyToWorkspace(
 		return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
 	}
 	return ApplyResult{
-		Applied: reportedPaths, States: applyJournalStates(journal), Transaction: transaction, BundleRoot: journal.BundleRoot,
+		Applied: reportedPaths, Conflicts: conflicts, States: applyJournalStates(journal),
+		Transaction: transaction, BundleRoot: journal.BundleRoot,
 	}, nil
+}
+
+func rootsOutsideConflicts(roots, conflicts []string) []string {
+	filtered := make([]string, 0, len(roots))
+	for _, root := range roots {
+		blocked := false
+		for _, conflict := range conflicts {
+			if root == conflict || strings.HasPrefix(root, conflict+"/") ||
+				strings.HasPrefix(conflict, root+"/") {
+				blocked = true
+				break
+			}
+		}
+		if !blocked {
+			filtered = append(filtered, root)
+		}
+	}
+	return filtered
+}
+
+func mergeConflictPaths(groups ...[]string) []string {
+	set := make(map[string]struct{})
+	for _, group := range groups {
+		for _, conflict := range group {
+			set[conflict] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(set))
+	for conflict := range set {
+		result = append(result, conflict)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func captureApplyInputs(

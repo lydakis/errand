@@ -13,16 +13,20 @@ import (
 const markerName = ".errand.toml"
 
 type Selection struct {
-	Root    string
-	Workdir string
-	Project string
-	Source  string
+	Root           string
+	Workdir        string
+	Project        string
+	Source         string
+	ApplyOnSuccess *bool
 }
 
 type projectConfig struct {
 	Workspace struct {
 		Root bool `toml:"root"`
 	} `toml:"workspace"`
+	Changes struct {
+		ApplyOnSuccess *bool `toml:"apply_on_success"`
+	} `toml:"changes"`
 }
 
 // Discover selects an explicit root, the nearest marked ancestor, or cwd.
@@ -41,12 +45,14 @@ func Discover(cwd, explicit string) (Selection, error) {
 		if err != nil {
 			return Selection{}, fmt.Errorf("workspace: resolving --workspace-root: %w", err)
 		}
-		if _, err := readExplicitConfig(root); err != nil {
+		cfg, err := readExplicitConfig(root)
+		if err != nil {
 			return Selection{}, err
 		}
-		return selection(root, cwd, "--workspace-root")
+		return selection(root, cwd, "--workspace-root", cfg.Changes.ApplyOnSuccess)
 	}
 
+	var currentApplyOnSuccess *bool
 	for dir := cwd; ; dir = filepath.Dir(dir) {
 		marker := filepath.Join(dir, markerName)
 		if markerInfo, err := os.Stat(marker); err == nil {
@@ -59,8 +65,11 @@ func Discover(cwd, explicit string) (Selection, error) {
 				if _, err := toml.DecodeFile(marker, &cfg); err != nil {
 					return Selection{}, fmt.Errorf("workspace: reading %s: %w", marker, err)
 				}
+				if dir == cwd {
+					currentApplyOnSuccess = cfg.Changes.ApplyOnSuccess
+				}
 				if cfg.Workspace.Root {
-					return selection(dir, cwd, marker)
+					return selection(dir, cwd, marker, cfg.Changes.ApplyOnSuccess)
 				}
 			}
 		}
@@ -69,7 +78,7 @@ func Discover(cwd, explicit string) (Selection, error) {
 			break
 		}
 	}
-	return selection(cwd, cwd, "current directory")
+	return selection(cwd, cwd, "current directory", currentApplyOnSuccess)
 }
 
 func readExplicitConfig(root string) (projectConfig, error) {
@@ -124,7 +133,7 @@ func canonicalDir(dir string) (string, error) {
 	return filepath.Clean(resolved), nil
 }
 
-func selection(root, cwd, source string) (Selection, error) {
+func selection(root, cwd, source string, applyOnSuccess *bool) (Selection, error) {
 	rel, err := filepath.Rel(root, cwd)
 	if err != nil {
 		return Selection{}, fmt.Errorf("workspace: deriving command workdir: %w", err)
@@ -141,7 +150,10 @@ func selection(root, cwd, source string) (Selection, error) {
 	if rel != "" && !hasGitMetadata(root) {
 		project = strings.SplitN(rel, "/", 2)[0]
 	}
-	return Selection{Root: root, Workdir: rel, Project: project, Source: source}, nil
+	return Selection{
+		Root: root, Workdir: rel, Project: project, Source: source,
+		ApplyOnSuccess: applyOnSuccess,
+	}, nil
 }
 
 func hasGitMetadata(root string) bool {

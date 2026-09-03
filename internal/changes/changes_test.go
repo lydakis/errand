@@ -383,7 +383,7 @@ func TestCollectWorkspaceChangesKeepsLexicalSiblingsAsSeparateRoots(t *testing.T
 	}
 	staged := extractTestBundle(t, jobDir, bundle)
 	local := t.TempDir()
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -472,7 +472,7 @@ func TestApplyRecreatesUntrackedParentForCreatedRoot(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(matching, "build"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	result, err := Apply(staged, matching, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, matching, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatalf("apply with matching parent: %v", err)
 	}
@@ -489,7 +489,7 @@ func TestApplyRecreatesUntrackedParentForCreatedRoot(t *testing.T) {
 	if err := os.Remove(filepath.Join(local, "build")); err != nil {
 		t.Fatal(err)
 	}
-	_, err = Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	_, err = Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	var conflict *MergeConflictError
 	if !errors.As(err, &conflict) || fmt.Sprint(conflict.Paths) != "[build]" {
 		t.Fatalf("apply with deleted submitted parent = %v, want build conflict", err)
@@ -540,8 +540,8 @@ func TestApplyAllowsCreatedSiblingRootsInSeparateTransactions(t *testing.T) {
 	}
 	for _, name := range []string{"build/a", "build/b"} {
 		result, err := Apply(
-			staged, local, bundle, map[string]bool{name: true}, "test-owner", NewApplyTransaction(),
-		)
+			staged, local, bundle, map[string]bool{name: true}, "test-owner", NewApplyTransaction(), ApplyOptions{})
+
 		if err != nil {
 			t.Fatalf("apply %s: %v", name, err)
 		}
@@ -567,8 +567,8 @@ func TestApplyAllowsCreatedSiblingRootsInSeparateTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := Apply(
-		staged, conflicting, bundle, map[string]bool{"build/a": true}, "test-owner", NewApplyTransaction(),
-	)
+		staged, conflicting, bundle, map[string]bool{"build/a": true}, "test-owner", NewApplyTransaction(), ApplyOptions{})
+
 	if err != nil {
 		t.Fatalf("apply with unrelated parent edit: %v", err)
 	}
@@ -605,14 +605,14 @@ func TestDeletedWorkspaceChangeAppliesOnlyAgainstOriginalValue(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(local, "artifact"), []byte("local edit"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction()); err == nil ||
+	if _, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{}); err == nil ||
 		!strings.Contains(err.Error(), "artifact") {
 		t.Fatalf("conflicting deletion error = %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(local, "artifact"), []byte("original"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -894,7 +894,7 @@ func TestApplyRetainedRestrictiveTree(t *testing.T) {
 	staged := extractTestBundle(t, jobDir, bundle)
 	defer os.Chmod(filepath.Join(staged, "remote", "sealed"), 0o700)
 	local := t.TempDir()
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -976,7 +976,7 @@ func TestDirectoryModeOnlyChangeDoesNotRetainContents(t *testing.T) {
 		t.Fatal(err)
 	}
 	staged := extractTestBundle(t, jobDir, bundle)
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1066,7 +1066,7 @@ func TestDirectoryModeAndChildChangeStayCompactAndApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	staged := extractTestBundle(t, jobDir, bundle)
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1143,7 +1143,7 @@ func TestApplyRefusesUnreadableWorkspaceWithoutChangingMode(t *testing.T) {
 	}
 	defer os.Chmod(localSealed, 0o700)
 	staged := extractTestBundle(t, jobDir, bundle)
-	if _, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction()); err == nil {
+	if _, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{}); err == nil {
 		t.Fatal("Apply unexpectedly read an inaccessible workspace")
 	}
 	if info, err := os.Lstat(localSealed); err != nil || info.Mode().Perm() != 0 {
@@ -1379,7 +1379,7 @@ func TestRecoverApplicationRollsBackRestrictiveInstall(t *testing.T) {
 	staged := extractTestBundle(t, jobDir, bundle)
 	defer os.Chmod(filepath.Join(staged, "remote", "sealed"), 0o700)
 	local := t.TempDir()
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1518,7 +1518,7 @@ func TestRenameNoReplacePreservesConcurrentDestination(t *testing.T) {
 func TestRecoverApplicationRollsBackInterruptedInstall(t *testing.T) {
 	local, bundle, staged := applyFixture(t, "old", "new")
 	transaction := NewApplyTransaction()
-	result, err := Apply(staged, local, bundle, nil, "test-owner", transaction)
+	result, err := Apply(staged, local, bundle, nil, "test-owner", transaction, ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1570,7 +1570,7 @@ func TestApplyRetainsRecoveryJournalUntilCommit(t *testing.T) {
 	staged := extractTestBundle(t, jobDir, bundle)
 	local := t.TempDir()
 	transaction := NewApplyTransaction()
-	result, err := Apply(staged, local, bundle, nil, "test-owner", transaction)
+	result, err := Apply(staged, local, bundle, nil, "test-owner", transaction, ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1725,7 +1725,7 @@ func TestRollbackResumesFromQuarantinedInstalledValue(t *testing.T) {
 func TestRecoverApplicationCompletesCommittedInstall(t *testing.T) {
 	local, bundle, staged := applyFixture(t, "old", "new")
 	transaction := NewApplyTransaction()
-	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction); err != nil {
+	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction, ApplyOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	pending, err := RecoverApplication(local, transaction)
@@ -1743,7 +1743,7 @@ func TestRecoverApplicationCompletesCommittedInstall(t *testing.T) {
 func TestRecoverApplicationContextRefusesCanceledRecovery(t *testing.T) {
 	local, bundle, staged := applyFixture(t, "old", "new")
 	transaction := NewApplyTransaction()
-	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction); err != nil {
+	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction, ApplyOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1759,7 +1759,7 @@ func TestRecoverApplicationContextRefusesCanceledRecovery(t *testing.T) {
 func TestRecoverApplicationPreservesBackupWhenInstalledChangeChanged(t *testing.T) {
 	local, bundle, staged := applyFixture(t, "old", "new")
 	transaction := NewApplyTransaction()
-	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction); err != nil {
+	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction, ApplyOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(local, "artifact"), []byte("user edit"), 0o600); err != nil {
@@ -1778,7 +1778,7 @@ func TestRecoverApplicationPreservesBackupWhenInstalledChangeChanged(t *testing.
 func TestApplyBackupValidationRestoresConcurrentEdit(t *testing.T) {
 	local, bundle, staged := applyFixture(t, "old", "new")
 	transaction := NewApplyTransaction()
-	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction); err != nil {
+	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction, ApplyOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	journal, err := loadApplyJournal(local, transaction)
@@ -1810,7 +1810,7 @@ func TestApplyBackupValidationRestoresConcurrentEdit(t *testing.T) {
 func TestInstalledChangeValidationRejectsConcurrentEdit(t *testing.T) {
 	local, bundle, staged := applyFixture(t, "old", "new")
 	transaction := NewApplyTransaction()
-	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction); err != nil {
+	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction, ApplyOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	journal, err := loadApplyJournal(local, transaction)
@@ -2111,8 +2111,8 @@ func TestApplyToWorkspaceRefusesIdenticalReplacementRoot(t *testing.T) {
 	}
 	transaction := NewApplyTransaction()
 	_, err = ApplyToWorkspace(
-		staged, workspace, bundle, nil, "test-owner", transaction, workspaceID,
-	)
+		staged, workspace, bundle, nil, "test-owner", transaction, workspaceID, ApplyOptions{})
+
 	if err == nil || !strings.Contains(err.Error(), "not the workspace") {
 		t.Fatalf("ApplyToWorkspace() error = %v", err)
 	}
@@ -2139,8 +2139,7 @@ func TestIdentityBoundRecoveryAndMatchingRefuseReplacementRoot(t *testing.T) {
 	}
 	transaction := NewApplyTransaction()
 	if _, err := ApplyToWorkspace(
-		staged, workspace, bundle, nil, "test-owner", transaction, workspaceID,
-	); err != nil {
+		staged, workspace, bundle, nil, "test-owner", transaction, workspaceID, ApplyOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	moved := filepath.Join(parent, "original")
@@ -2215,7 +2214,7 @@ func TestRecoverApplicationRemovesParentsCreatedForMissingChange(t *testing.T) {
 	local := t.TempDir()
 	staged := extractTestBundle(t, jobDir, bundle)
 	transaction := NewApplyTransaction()
-	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction); err != nil {
+	if _, err := Apply(staged, local, bundle, nil, "test-owner", transaction, ApplyOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	journal, err := loadApplyJournal(local, transaction)
@@ -2497,7 +2496,7 @@ func TestExtractAndApplyRefusesChangedDestination(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(local, "artifact"), []byte("user edit"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Apply(staged, local, bundle, map[string]bool{"artifact": true}, "test-owner", NewApplyTransaction())
+	_, err := Apply(staged, local, bundle, map[string]bool{"artifact": true}, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	var conflict *MergeConflictError
 	if !errors.As(err, &conflict) || fmt.Sprint(conflict.Paths) != "[artifact]" {
 		t.Fatalf("Apply conflict = %v", err)
@@ -2523,7 +2522,7 @@ func TestApplyThreeWayMergesIndependentTextEdits(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(local, "artifact"), []byte("first\nsecond\nTHIRD\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2567,7 +2566,7 @@ func TestExtractAndApplyReplacesMatchingDestination(t *testing.T) {
 		t.Fatal(err)
 	}
 	staged := extractTestBundle(t, jobDir, bundle)
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2602,7 +2601,7 @@ func TestApplyRefusesLocallyModifiedStaging(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(staged, "remote", "artifact"), []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction()); err == nil || !strings.Contains(err.Error(), "changed during pack") {
+	if _, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{}); err == nil || !strings.Contains(err.Error(), "changed during pack") {
 		t.Fatalf("Apply tampered staging error = %v", err)
 	}
 	if _, err := os.Lstat(filepath.Join(local, "artifact")); !os.IsNotExist(err) {
@@ -2643,7 +2642,7 @@ func TestApplyTreatsDivergentBinaryFileAsConflict(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(local, "artifact"), localValue, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	_, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	var conflict *MergeConflictError
 	if !errors.As(err, &conflict) || fmt.Sprint(conflict.Paths) != "[artifact]" {
 		t.Fatalf("binary apply error = %v, want artifact conflict", err)
@@ -2651,6 +2650,159 @@ func TestApplyTreatsDivergentBinaryFileAsConflict(t *testing.T) {
 	got, readErr := os.ReadFile(filepath.Join(local, "artifact"))
 	if readErr != nil || !bytes.Equal(got, localValue) {
 		t.Fatalf("binary local value changed = %q, %v", got, readErr)
+	}
+}
+
+func TestApplyWithConflictsMaterializesTextAndPreservesBinary(t *testing.T) {
+	remote := t.TempDir()
+	base := map[string][]byte{
+		"clean.txt":  []byte("base clean\n"),
+		"text.txt":   []byte("base text\n"),
+		"binary.bin": []byte("base\x00value"),
+		"type.txt":   []byte("base type\n"),
+	}
+	for name, value := range base {
+		if err := os.WriteFile(filepath.Join(remote, name), value, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest, err := snapshot.Build(remote, []string{"binary.bin", "clean.txt", "text.txt", "type.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobDir := t.TempDir()
+	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	for name, value := range map[string][]byte{
+		"clean.txt":  []byte("remote clean\n"),
+		"text.txt":   []byte("remote text\n"),
+		"binary.bin": []byte("remote\x00value"),
+	} {
+		if err := os.WriteFile(filepath.Join(remote, name), value, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Remove(filepath.Join(remote, "type.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("remote-target", filepath.Join(remote, "type.txt")); err != nil {
+		t.Fatal(err)
+	}
+	bundle, collected, err := CollectWorkspaceChangesContext(
+		context.Background(), remote, jobDir, manifest, proto.SelectionPolicy{}, 1<<20,
+	)
+	if err != nil || !collected {
+		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
+	}
+	staged := extractTestBundle(t, jobDir, bundle)
+	local := t.TempDir()
+	for name, value := range base {
+		if err := os.WriteFile(filepath.Join(local, name), value, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	localBinary := []byte("local\x00value")
+	if err := os.WriteFile(filepath.Join(local, "binary.bin"), localBinary, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(local, "text.txt"), []byte("local text\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	localType := []byte("local type\n")
+	if err := os.WriteFile(filepath.Join(local, "type.txt"), localType, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Apply(
+		staged, local, bundle, nil, "test-owner", NewApplyTransaction(),
+		ApplyOptions{MaterializeConflicts: true},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(result.Conflicts); got != "[binary.bin text.txt type.txt]" {
+		t.Fatalf("conflicts = %s", got)
+	}
+	if got := fmt.Sprint(result.Applied); got != "[clean.txt]" {
+		t.Fatalf("applied = %s, want only the clean root", got)
+	}
+	if err := CommitApply(local, result.Transaction); err != nil {
+		t.Fatal(err)
+	}
+	clean, _ := os.ReadFile(filepath.Join(local, "clean.txt"))
+	text, _ := os.ReadFile(filepath.Join(local, "text.txt"))
+	binary, _ := os.ReadFile(filepath.Join(local, "binary.bin"))
+	typeValue, _ := os.ReadFile(filepath.Join(local, "type.txt"))
+	if string(clean) != "remote clean\n" {
+		t.Fatalf("clean value = %q", clean)
+	}
+	if !bytes.Contains(text, []byte("<<<<<<< local")) ||
+		!bytes.Contains(text, []byte("local text")) || !bytes.Contains(text, []byte("remote text")) {
+		t.Fatalf("text conflict = %q", text)
+	}
+	if !bytes.Equal(binary, localBinary) {
+		t.Fatalf("binary conflict changed = %q", binary)
+	}
+	if !bytes.Equal(typeValue, localType) {
+		t.Fatalf("type conflict changed = %q", typeValue)
+	}
+}
+
+func TestApplyWithConflictsSkipsStructuralConflictAndAppliesCleanRoot(t *testing.T) {
+	remote := t.TempDir()
+	if err := os.Mkdir(filepath.Join(remote, "locked"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(remote, "clean.txt"), []byte("base\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := snapshot.Build(remote, []string{"clean.txt", "locked"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobDir := t.TempDir()
+	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(remote, "locked"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(remote, "clean.txt"), []byte("remote\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bundle, collected, err := CollectWorkspaceChangesContext(
+		context.Background(), remote, jobDir, manifest, proto.SelectionPolicy{}, 1<<20,
+	)
+	if err != nil || !collected {
+		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
+	}
+	staged := extractTestBundle(t, jobDir, bundle)
+	local := t.TempDir()
+	if err := os.WriteFile(filepath.Join(local, "clean.txt"), []byte("base\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Apply(
+		staged, local, bundle, nil, "test-owner", NewApplyTransaction(),
+		ApplyOptions{MaterializeConflicts: true},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(result.Conflicts); got != "[locked]" {
+		t.Fatalf("conflicts = %s", got)
+	}
+	if got := fmt.Sprint(result.Applied); got != "[clean.txt]" {
+		t.Fatalf("applied = %s", got)
+	}
+	if err := CommitApply(local, result.Transaction); err != nil {
+		t.Fatal(err)
+	}
+	clean, _ := os.ReadFile(filepath.Join(local, "clean.txt"))
+	if string(clean) != "remote\n" {
+		t.Fatalf("clean value = %q", clean)
+	}
+	if _, err := os.Lstat(filepath.Join(local, "locked")); !os.IsNotExist(err) {
+		t.Fatalf("structural conflict changed local path: %v", err)
 	}
 }
 
@@ -2667,12 +2819,12 @@ func TestMergeRegularFileReportsGitOperationalFailure(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	clean, err := mergeRegularFile(
+	result, err := mergeRegularFile(
 		context.Background(), filepath.Join(root, "ours"), filepath.Join(root, "base"),
-		filepath.Join(root, "remote"), filepath.Join(root, "merged"), 0o600,
+		filepath.Join(root, "remote"), filepath.Join(root, "merged"), 0o600, false,
 	)
-	if clean || err == nil || !strings.Contains(err.Error(), "helper-exploded") {
-		t.Fatalf("mergeRegularFile() = clean %t, error %v", clean, err)
+	if err == nil || !strings.Contains(err.Error(), "helper-exploded") {
+		t.Fatalf("mergeRegularFile() = result %d, error %v", result, err)
 	}
 }
 
@@ -2690,7 +2842,7 @@ func TestCommitApplyRefusesReplacementTransactionDirectory(t *testing.T) {
 	}
 	local := t.TempDir()
 	staged := extractTestBundle(t, jobDir, bundle)
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2734,7 +2886,7 @@ func TestCommitApplyPreservesBackupAfterConcurrentEdit(t *testing.T) {
 	}
 	local := t.TempDir()
 	staged := extractTestBundle(t, jobDir, bundle)
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2771,7 +2923,7 @@ func TestApplyCreatesMissingParentsInsideDestination(t *testing.T) {
 	}
 	local := t.TempDir()
 	staged := extractTestBundle(t, jobDir, bundle)
-	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction())
+	result, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

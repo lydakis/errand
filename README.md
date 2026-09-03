@@ -19,9 +19,11 @@ errand serve                  # config: ~/.config/errand/errandd.toml
 # on a caller
 errand info                   # measured facts from every configured peer
 errand -- python3 -m unittest # runs your working tree over there
+errand --apply -- gofmt -w .  # applies retained changes only after clean success
 errand --no-snapshot -- uname -a # runs in a fresh empty remote workspace
 # Ctrl-D detaches without stopping the remote job; Ctrl-C interrupts it
 job=$(errand --detach -- make build)
+edit=$(errand --detach --apply -- sh -c 'printf fixed > report.txt')
 errand ps                     # active jobs across configured peers
 errand ps --last 20           # latest jobs across all states (maximum 200)
 errand ps --all --json        # terminal receipt data for clients
@@ -53,6 +55,9 @@ explicit `.errandignore` at the shared root:
 # .errand.toml
 [workspace]
 root = true
+
+[changes]
+apply_on_success = true
 ```
 
 Errand discovers the nearest marked ancestor, snapshots from there, and runs
@@ -62,6 +67,18 @@ and directory owned by the caller in a directory that is not group- or
 world-writable; use the explicit flag for intentionally shared workspaces. A
 marker chooses only the boundary; it does not bypass `.errandignore`, Git
 selection, home-directory protection, or the filesystem-root refusal.
+`[changes].apply_on_success` is read only from the selected workspace root.
+For `--no-snapshot`, the current directory is the configuration root; Errand
+does not climb to an ancestor marker when no local workspace is transferred.
+Set `apply_on_success = true` in `~/.config/errand/config.toml` for a personal
+default. Explicit `--apply` or `--no-apply` wins over workspace and personal
+configuration. Applying is a property of the submitted job, independent of
+whether its logs are currently being observed. `--detach --apply` and Ctrl-D
+during an applying run hand completion to a detached local worker, which waits
+for success and applies into the originating workspace. `attach` remains
+observation-only and never chooses or changes that policy. If the worker or
+client machine stops, the persisted policy is resumed by the next client
+command on that machine.
 
 ## Why not just ssh?
 
@@ -123,8 +140,12 @@ which makes reports, traces, and partial build products available for
 inspection. A `--no-snapshot` job starts from an empty baseline, so every file
 it creates is retained.
 
-A foreground run reports retained changes and the job handle but does not
-download them. `errand status HANDLE` lists the changed paths. `errand attach
+A run reports retained changes and the job handle but does not download them
+unless `--apply` or `apply_on_success` requests automatic application after a
+completely successful transaction. The policy survives explicit `--detach`
+and interactive Ctrl-D; failed commands never apply automatically. The
+originating client records background application progress and errors, which
+`errand status HANDLE` reports alongside the changed paths. `errand attach
 HANDLE` follows logs and status only; it never downloads or applies workspace
 changes. `errand fetch HANDLE [PATH]`
 stages all changes or any retained path. Applying a selected path requires a
@@ -132,8 +153,12 @@ retained change root or an ancestor of one; `errand fetch --apply HANDLE [PATH]`
 performs a three-way merge from the submitted snapshot, the current local
 workspace, and the completed remote workspace. Errand applies the result only
 when the entire selected merge is clean. On conflict, the working tree remains
-untouched and the staged base and remote trees remain available. Deletions use
-the same merge rules;
+untouched and the staged base and remote trees remain available.
+`errand fetch --apply --conflicts HANDLE [PATH]` explicitly chooses a
+non-clean state: clean changes are applied, text conflicts receive standard
+conflict markers, and binary or type conflicts keep their local values. It
+exits nonzero, reports unresolved paths, and keeps the base and remote values
+in staging for manual resolution. Deletions use the same merge rules;
 fetching only deleted paths returns the retained `bundle.json` tombstone
 metadata because no file exists to return. A different machine can fetch
 and inspect changes, but cannot apply them without the originating machine's

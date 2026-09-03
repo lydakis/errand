@@ -105,15 +105,20 @@ func localChangeClientID() (string, error) {
 }
 
 type localChangeState struct {
-	JobID             string              `json:"job_id"`
-	PeerURL           string              `json:"peer_url"`
-	Root              string              `json:"root"`
-	RootID            fsidentity.Identity `json:"root_identity"`
-	ManifestRoot      string              `json:"manifest_root"`
-	SubmissionStarted bool                `json:"submission_started,omitempty"`
-	Terminal          bool                `json:"terminal,omitempty"`
-	Applied           map[string]string   `json:"applied,omitempty"`
-	Pending           string              `json:"pending_transaction,omitempty"`
+	JobID              string              `json:"job_id"`
+	PeerURL            string              `json:"peer_url"`
+	Root               string              `json:"root"`
+	RootID             fsidentity.Identity `json:"root_identity"`
+	ManifestRoot       string              `json:"manifest_root"`
+	SubmissionStarted  bool                `json:"submission_started,omitempty"`
+	AdmissionConfirmed bool                `json:"admission_confirmed,omitempty"`
+	Terminal           bool                `json:"terminal,omitempty"`
+	ApplyOnSuccess     bool                `json:"apply_on_success,omitempty"`
+	AutomaticApply     string              `json:"automatic_apply,omitempty"`
+	AutomaticApplyErr  string              `json:"automatic_apply_error,omitempty"`
+	AutomaticApplyDir  string              `json:"automatic_apply_staged_at,omitempty"`
+	Applied            map[string]string   `json:"applied,omitempty"`
+	Pending            string              `json:"pending_transaction,omitempty"`
 }
 
 func loadLocalChangeState(peerURL, jobID string) (localChangeState, error) {
@@ -325,6 +330,23 @@ func markLocalChangeSubmissionStarted(peerURL, jobID string) error {
 	} else {
 		return err
 	}
+}
+
+func markLocalChangeAdmissionConfirmed(peerURL, jobID string) error {
+	unlock, err := acquireLocalChangeLock(localChangeTransferLockName(localChangeKey(peerURL, jobID)))
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	state, err := loadLocalChangeState(peerURL, jobID)
+	if err != nil {
+		return err
+	}
+	if state.AdmissionConfirmed {
+		return nil
+	}
+	state.AdmissionConfirmed = true
+	return saveLocalChangeState(state)
 }
 
 func recoverWorkspaceApplications(root string) error {
@@ -549,10 +571,40 @@ func tryAcquireLocalChangeLock(name string) (func(), bool, error) {
 	}, true, nil
 }
 
+func tryAcquireLocalChangeLease(name string) (func(), bool, error) {
+	f, err := openLocalChangeLock(name)
+	if err != nil {
+		return nil, false, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return func() {
+		// Contenders never wait on a lease, so unlinking before unlock cannot
+		// strand a waiter on the old inode. The owner has finished polling before
+		// this release runs, making a concurrently recreated lease harmless.
+		_ = os.Remove(f.Name())
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}, true, nil
+}
+
 const localChangeLockStripes = 256
 
 func localChangeTransferLockName(key string) string {
 	return localChangeStripedLockName("download", key)
+}
+
+func localAutomaticApplyLockName(key string) string {
+	return localChangeStripedLockName("automatic-apply", key)
+}
+
+func localAutomaticApplyWorkerLockName(key string) string {
+	return "automatic-apply-worker-" + key
 }
 
 func localChangeWorkspaceLockName(root string) string {

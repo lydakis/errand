@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -80,6 +81,24 @@ func TestCmdStatusJSONIncludesPeerAndJobDetails(t *testing.T) {
 	}
 }
 
+func TestFormatAutomaticApplyReportsDurableFailure(t *testing.T) {
+	got := formatAutomaticApply(client.AutomaticApplyStatus{
+		State: "failed", Error: "merge conflict",
+	})
+	if got != "failed: merge conflict" {
+		t.Fatalf("automatic apply status = %q", got)
+	}
+}
+
+func TestFormatAutomaticApplyReportsPendingRetryReason(t *testing.T) {
+	got := formatAutomaticApply(client.AutomaticApplyStatus{
+		State: "pending", Error: "runner temporarily unavailable",
+	})
+	if got != "pending retry: runner temporarily unavailable" {
+		t.Fatalf("automatic apply status = %q", got)
+	}
+}
+
 func TestCmdStatusExplainsEmptyWorkspaceAndIncompleteRetention(t *testing.T) {
 	id := proto.NewULID()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -119,7 +138,7 @@ func TestWriteStatusShowsTruncatedWorkspaceChangeCount(t *testing.T) {
 			},
 		}},
 		Spec: proto.ReceiptSpec{Argv: []string{"true"}},
-	})
+	}, nil)
 	if !strings.Contains(output.String(), "… 2 more paths") {
 		t.Fatalf("truncated status output = %q", output.String())
 	}
@@ -134,7 +153,7 @@ func TestWriteStatusTreatsAmbiguousExecutionLogsAsUnknown(t *testing.T) {
 			TransactionError: "execution state unknown",
 		}},
 		Spec: proto.ReceiptSpec{Argv: []string{"build"}},
-	})
+	}, nil)
 
 	for _, want := range []string{
 		"Logs: availability unknown; attach to inspect retained logs",

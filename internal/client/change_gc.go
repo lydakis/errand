@@ -144,9 +144,7 @@ func collectLocalChangeCandidate(candidate *localChangeCandidate, cutoff time.Ti
 		if pendingErr != nil {
 			return false, false, false, pendingErr
 		}
-		if pending || (unavailable && !candidate.modified.Before(time.Now().Add(-unresolvedChangeStateProtection))) ||
-			(!state.Terminal && state.SubmissionStarted &&
-				!candidate.modified.Before(time.Now().Add(-unresolvedChangeStateProtection))) {
+		if pending || localChangeStateNeedsProtection(state, unavailable, candidate.modified, time.Now()) {
 			return false, true, true, nil
 		}
 	}
@@ -160,9 +158,7 @@ func collectLocalChangeCandidate(candidate *localChangeCandidate, cutoff time.Ti
 			if pendingErr != nil {
 				return pendingErr
 			}
-			if pending || (unavailable && !candidate.modified.Before(time.Now().Add(-unresolvedChangeStateProtection))) ||
-				(!current.Terminal && current.SubmissionStarted &&
-					!candidate.modified.Before(time.Now().Add(-unresolvedChangeStateProtection))) {
+			if pending || localChangeStateNeedsProtection(current, unavailable, candidate.modified, time.Now()) {
 				protected = true
 				return nil
 			}
@@ -200,6 +196,20 @@ func collectLocalChangeCandidate(candidate *localChangeCandidate, cutoff time.Ti
 		err = statErr
 	}
 	return err == nil && eligible && !protected, eligible, protected, err
+}
+
+func localChangeStateNeedsProtection(
+	state localChangeState,
+	transactionUnavailable bool,
+	modified, now time.Time,
+) bool {
+	if modified.Before(now.Add(-unresolvedChangeStateProtection)) {
+		return false
+	}
+	if transactionUnavailable || (!state.Terminal && state.SubmissionStarted) {
+		return true
+	}
+	return state.ApplyOnSuccess && !automaticApplyFinished(state.AutomaticApply)
 }
 
 func localChangeTransactionExists(state localChangeState) (exists, unavailable bool, err error) {

@@ -15,8 +15,9 @@ import (
 )
 
 type statusJSON struct {
-	Peer   string `json:"peer"`
-	Handle string `json:"handle"`
+	Peer           string                       `json:"peer"`
+	Handle         string                       `json:"handle"`
+	AutomaticApply *client.AutomaticApplyStatus `json:"automatic_apply,omitempty"`
 	proto.JobDetails
 }
 
@@ -49,20 +50,37 @@ func cmdStatusTo(args []string, stdout, stderr io.Writer) int {
 	}
 	label = cmpOr(label, peerURL)
 	handle := label + "/" + jobID
+	automaticApply, applyErr := client.GetAutomaticApplyStatus(peerURL, jobID)
+	if applyErr != nil {
+		fmt.Fprintf(stderr, "errand: reading automatic apply state: %v\n", applyErr)
+	}
 	if *jsonOutput {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(statusJSON{Peer: label, Handle: handle, JobDetails: details}); err != nil {
+		if err := encoder.Encode(statusJSON{
+			Peer: label, Handle: handle, AutomaticApply: automaticApply, JobDetails: details,
+		}); err != nil {
 			fmt.Fprintf(stderr, "errand: encoding job status: %v\n", err)
+			return 1
+		}
+		if applyErr != nil {
 			return 1
 		}
 		return 0
 	}
-	writeStatus(stdout, label, handle, details)
+	writeStatus(stdout, label, handle, details, automaticApply)
+	if applyErr != nil {
+		return 1
+	}
 	return 0
 }
 
-func writeStatus(w io.Writer, peer, handle string, details proto.JobDetails) {
+func writeStatus(
+	w io.Writer,
+	peer, handle string,
+	details proto.JobDetails,
+	automaticApply *client.AutomaticApplyStatus,
+) {
 	writeStatusField(w, "Job", handle)
 	writeStatusField(w, "State", details.State)
 	writeStatusField(w, "Runner", peer)
@@ -90,6 +108,9 @@ func writeStatus(w io.Writer, peer, handle string, details proto.JobDetails) {
 		writeStatusField(w, "Transaction", statusTransaction(details.Result))
 	}
 	writeStatusField(w, "Logs", statusLogs(details))
+	if automaticApply != nil {
+		writeStatusField(w, "Automatic apply", formatAutomaticApply(*automaticApply))
+	}
 
 	if details.Result != nil && details.Result.Changes != nil {
 		fmt.Fprintln(w, "Workspace changes:")
@@ -121,6 +142,31 @@ func writeStatus(w io.Writer, peer, handle string, details proto.JobDetails) {
 		for _, command := range next {
 			fmt.Fprintf(w, "  %s\n", command)
 		}
+	}
+}
+
+func formatAutomaticApply(status client.AutomaticApplyStatus) string {
+	switch status.State {
+	case "pending":
+		if status.Error != "" {
+			return "pending retry: " + status.Error
+		}
+		return "pending in background"
+	case "applying":
+		return "applying in background"
+	case "applied":
+		return "applied"
+	case "no_changes":
+		return "complete; no workspace changes"
+	case "skipped":
+		return "not applied; job did not complete successfully"
+	case "failed":
+		if status.Error != "" {
+			return "failed: " + status.Error
+		}
+		return "failed"
+	default:
+		return status.State
 	}
 }
 

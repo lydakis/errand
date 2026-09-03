@@ -77,6 +77,7 @@ type RunOptions struct {
 	IncludeAll     bool
 	NoSnapshot     bool // use a fresh empty workspace without inspecting Root contents
 	Detach         bool // return after admission, printing the handle on stdout
+	ApplyOnSuccess bool // apply retained changes after successful completion, attached or detached
 	changeClientID string
 	selectionGuard *snapshot.SelectionGuard
 	Stdout         io.Writer
@@ -262,9 +263,21 @@ func runWithDetachNotifications(
 			submissionStarted = false
 			return ExitTransaction
 		}
+		if opts.ApplyOnSuccess {
+			if workerErr := handoffAutomaticApply(opts.PeerURL, jobID); workerErr != nil {
+				errf("automatic workspace change application could not continue: %v", workerErr)
+			}
+		}
 		errf("the job may have been admitted; handle %s", handle)
 		return ExitTransaction
 	}
+	if opts.ApplyOnSuccess {
+		if err := confirmAutomaticApplyAdmission(opts.PeerURL, jobID); err != nil {
+			errf("recording automatic apply admission: %v", err)
+			errf("automatic apply is still pending; recover with: errand fetch --apply %s", handle)
+		}
+	}
+	automaticWorkerStarted, _ := ensureAutomaticApplyWorker(opts, jobID, false)
 	fmt.Fprintf(opts.Stderr, "errand: job %s (%d files, commit %s)\n",
 		handle, len(paths), shortCommit(gitInfo))
 	if status.State == proto.StateQueued {
@@ -283,25 +296,61 @@ func runWithDetachNotifications(
 		if opts.Detach {
 			fmt.Fprintln(opts.Stdout, handle)
 		}
-		return controller.completeDetach(interruptCtx)
+		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted)
 	}
 
 	final, err, detached := streamUntilDetach(opts, jobID, status, detach)
 	if detached {
-		return controller.completeDetach(interruptCtx)
+		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted)
 	}
 	if err != nil {
+		if _, workerErr := ensureAutomaticApplyWorker(opts, jobID, automaticWorkerStarted); workerErr != nil {
+			errf("automatic workspace change application could not continue: %v", workerErr)
+		}
 		errf("%v", err)
 		errf("the job may still be running; resume with handle %s", handle)
 		return ExitTransaction
 	}
 	if !controller.releaseAtTerminal(interruptCtx) {
+		if _, workerErr := ensureAutomaticApplyWorker(opts, jobID, automaticWorkerStarted); workerErr != nil {
+			errf("automatic workspace change application could not continue: %v", workerErr)
+		}
 		stopInterrupts()
 		<-controller.done
 		errf("interrupted as the job completed; inspect or fetch workspace changes with handle %s", handle)
 		return signalExit("interrupt", 2)
 	}
 	return finishTerminalChanges(opts, jobID, handle, final)
+}
+
+func completeRunDetach(
+	opts RunOptions,
+	jobID, handle string,
+	controller *admittedJobController,
+	ctx context.Context,
+	automaticWorkerStarted bool,
+) int {
+	_, workerErr := ensureAutomaticApplyWorker(opts, jobID, automaticWorkerStarted)
+	code := controller.completeDetach(ctx)
+	if code != 0 {
+		return code
+	}
+	if workerErr != nil {
+		fmt.Fprintf(opts.Stderr, "errand: automatic workspace change application could not continue: %v\n", workerErr)
+		fmt.Fprintf(opts.Stderr, "errand: fetch and apply manually with: errand fetch --apply %s\n", handle)
+		return ExitTransaction
+	}
+	return 0
+}
+
+func ensureAutomaticApplyWorker(opts RunOptions, jobID string, alreadyStarted bool) (bool, error) {
+	if !opts.ApplyOnSuccess || alreadyStarted {
+		return alreadyStarted, nil
+	}
+	if err := handoffAutomaticApply(opts.PeerURL, jobID); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 type snapshotPreparation struct {
@@ -449,12 +498,6 @@ func attachWithDetachNotifications(
 
 func finishTerminalChanges(opts RunOptions, jobID, handle string, final proto.JobStatus) int {
 	changeErr := markLocalChangeTerminal(opts.PeerURL, jobID)
-	if final.Result != nil && final.Result.Changes != nil {
-		changes := final.Result.Changes
-		fmt.Fprintf(opts.Stderr,
-			"errand: %d workspace changes retained (%d bytes); fetch with errand fetch %s\n",
-			changes.PathCount, changes.Bytes, handle)
-	}
 	code := exitCode(final, opts.Stderr, handle)
 	if changeErr != nil {
 		fmt.Fprintf(opts.Stderr, "errand: recording terminal workspace state failed: %v\n", changeErr)
@@ -462,7 +505,55 @@ func finishTerminalChanges(opts RunOptions, jobID, handle string, final proto.Jo
 			return ExitTransaction
 		}
 	}
+	automatic, automaticRequested, automaticErr := automaticApplyForJob(opts.PeerURL, jobID)
+	if opts.ApplyOnSuccess && changeErr == nil {
+		automaticRequested = true
+		automatic, automaticErr = applyTerminalAutomatically(opts.PeerURL, jobID, final)
+	}
+	if automaticErr != nil {
+		label := "reading automatic apply state"
+		if opts.ApplyOnSuccess {
+			label = "automatic workspace change application failed"
+		}
+		fmt.Fprintf(opts.Stderr, "errand: %s: %v\n", label, automaticErr)
+		if automatic.staged != "" {
+			fmt.Fprintf(opts.Stderr, "errand: workspace changes remain staged at %s\n", automatic.staged)
+		}
+		if code == 0 {
+			return ExitTransaction
+		}
+	}
+	if final.Result == nil || final.Result.Changes == nil {
+		return code
+	}
+	changes := final.Result.Changes
+	if automaticRequested {
+		switch automatic.state {
+		case automaticApplyApplied:
+			fmt.Fprintf(opts.Stderr, "errand: workspace changes applied from %s\n", automatic.staged)
+		case automaticApplyFailed:
+			fmt.Fprintf(opts.Stderr, "errand: automatic workspace change application failed: %s\n", automatic.err)
+			if automatic.staged != "" {
+				fmt.Fprintf(opts.Stderr, "errand: workspace changes remain staged at %s\n", automatic.staged)
+			}
+			if code == 0 {
+				return ExitTransaction
+			}
+		case automaticApplyPending, automaticApplyRunning:
+			fmt.Fprintln(opts.Stderr, "errand: automatic workspace change application is pending")
+		default:
+			writeRetainedChanges(opts.Stderr, changes, handle)
+		}
+	} else {
+		writeRetainedChanges(opts.Stderr, changes, handle)
+	}
 	return code
+}
+
+func writeRetainedChanges(stderr io.Writer, changes *proto.ChangeSummary, handle string) {
+	fmt.Fprintf(stderr,
+		"errand: %d workspace changes retained (%d bytes); fetch with errand fetch %s\n",
+		changes.PathCount, changes.Bytes, handle)
 }
 
 func getStatus(peerURL, jobID string) (proto.JobStatus, error) {
@@ -557,7 +648,10 @@ func getJSONWithClientContext(ctx context.Context, httpClient *http.Client, url 
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: %s: %s", label, resp.Status, apiError(body))
+		return &controlHTTPError{
+			statusCode: resp.StatusCode,
+			err:        fmt.Errorf("%s: %s: %s", label, resp.Status, apiError(body)),
+		}
 	}
 	if err := json.Unmarshal(body, dst); err != nil {
 		return fmt.Errorf("%s: decoding response: %w", label, err)
@@ -1052,6 +1146,14 @@ type idleReadCloser struct {
 	timeout time.Duration
 }
 
+type streamIdleError struct {
+	timeout time.Duration
+}
+
+func (e *streamIdleError) Error() string {
+	return fmt.Sprintf("stream idle timeout after %s", e.timeout)
+}
+
 type terminalEOFOps struct {
 	foreground   func() bool
 	waitReadable func(time.Duration) (bool, error)
@@ -1143,7 +1245,7 @@ func (r *idleReadCloser) Read(p []byte) (int, error) {
 		return got.n, got.err
 	case <-timer.C:
 		_ = r.ReadCloser.Close()
-		return 0, fmt.Errorf("stream idle timeout after %s", r.timeout)
+		return 0, &streamIdleError{timeout: r.timeout}
 	}
 }
 

@@ -30,9 +30,14 @@ type Baseline struct {
 
 type ApplyResult struct {
 	Applied     []string
+	Conflicts   []string
 	States      map[string]string
 	Transaction string
 	BundleRoot  string
+}
+
+type ApplyOptions struct {
+	MaterializeConflicts bool
 }
 
 const (

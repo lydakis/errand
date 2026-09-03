@@ -22,8 +22,9 @@ type Peer struct {
 }
 
 type Client struct {
-	DefaultPeer string          `toml:"default_peer"`
-	Peers       map[string]Peer `toml:"peers"`
+	DefaultPeer    string          `toml:"default_peer"`
+	ApplyOnSuccess bool            `toml:"apply_on_success"`
+	Peers          map[string]Peer `toml:"peers"`
 }
 
 func dir() (string, error) {

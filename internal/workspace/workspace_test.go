@@ -29,6 +29,46 @@ func TestDiscoverUsesNearestMarkedAncestor(t *testing.T) {
 	}
 }
 
+func TestDiscoverReturnsApplyPreferenceFromSelectedRoot(t *testing.T) {
+	root := t.TempDir()
+	cwd := filepath.Join(root, "src", "package-b")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := "[workspace]\nroot = true\n\n[changes]\napply_on_success = true\n"
+	if err := os.WriteFile(filepath.Join(root, markerName), []byte(marker), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Discover(cwd, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ApplyOnSuccess == nil || !*got.ApplyOnSuccess {
+		t.Fatalf("Discover() apply preference = %v", got.ApplyOnSuccess)
+	}
+}
+
+func TestDiscoverDoesNotUseNestedApplyPreference(t *testing.T) {
+	root := t.TempDir()
+	cwd := filepath.Join(root, "src", "package-b")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, markerName), []byte("[workspace]\nroot = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cwd, markerName), []byte("[changes]\napply_on_success = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Discover(cwd, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ApplyOnSuccess != nil {
+		t.Fatalf("Discover() used nested apply preference: %v", *got.ApplyOnSuccess)
+	}
+}
+
 func TestDiscoverUsesGitWorkspaceNameBelowRepositoryRoot(t *testing.T) {
 	root := t.TempDir()
 	cwd := filepath.Join(root, "src", "package-b")

@@ -328,6 +328,74 @@ func TestRunReportsRetainedChangesUntilExplicitFetch(t *testing.T) {
 	}
 }
 
+func TestRunAppliesRetainedChangesOnSuccessWhenRequested(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	_, ts := testDaemon(t)
+	root := workspaceWith(t, map[string]string{"report.txt": "old"})
+	var stderr bytes.Buffer
+	code := client.Run(client.RunOptions{
+		PeerURL: ts.URL, Root: root, Argv: []string{"/bin/sh", "-c", "printf applied > report.txt"},
+		ApplyOnSuccess: true, Stdout: io.Discard, Stderr: &stderr,
+	})
+	if code != 0 {
+		t.Fatalf("run exit = %d; stderr: %s", code, stderr.String())
+	}
+	got, err := os.ReadFile(filepath.Join(root, "report.txt"))
+	if err != nil || string(got) != "applied" {
+		t.Fatalf("automatically applied value = %q, %v", got, err)
+	}
+	if !strings.Contains(stderr.String(), "workspace changes applied") {
+		t.Fatalf("automatic apply diagnostic = %q", stderr.String())
+	}
+}
+
+func TestRunDoesNotApplyChangesFromFailedCommand(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	_, ts := testDaemon(t)
+	root := workspaceWith(t, map[string]string{"report.txt": "old"})
+	code := client.Run(client.RunOptions{
+		PeerURL: ts.URL, Root: root,
+		Argv:           []string{"/bin/sh", "-c", "printf remote > report.txt; exit 7"},
+		ApplyOnSuccess: true, Stdout: io.Discard, Stderr: io.Discard,
+	})
+	if code != 7 {
+		t.Fatalf("run exit = %d, want 7", code)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "report.txt"))
+	if err != nil || string(got) != "old" {
+		t.Fatalf("failed command changed local workspace = %q, %v", got, err)
+	}
+}
+
+func TestFetchApplyConflictsMaterializesTextConflict(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	d, ts := testDaemon(t)
+	root := workspaceWith(t, map[string]string{"report.txt": "base\n"})
+	if code := client.Run(client.RunOptions{
+		PeerURL: ts.URL, Root: root,
+		Argv:   []string{"/bin/sh", "-c", "printf 'remote\\n' > report.txt"},
+		Stdout: io.Discard, Stderr: io.Discard,
+	}); code != 0 {
+		t.Fatalf("run exit = %d", code)
+	}
+	if err := os.WriteFile(filepath.Join(root, "report.txt"), []byte("local\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	id := lastJobID(t, d)
+	staged, err := client.FetchChanges(client.ChangeFetchOptions{
+		PeerURL: ts.URL, JobID: id, Apply: true, MaterializeConflicts: true, CallerDir: root,
+	})
+	var conflict *changeops.MergeConflictError
+	if !errors.As(err, &conflict) || staged == "" || fmt.Sprint(conflict.Paths) != "[report.txt]" {
+		t.Fatalf("materialized fetch = staged %q, error %v", staged, err)
+	}
+	got, readErr := os.ReadFile(filepath.Join(root, "report.txt"))
+	if readErr != nil || !bytes.Contains(got, []byte("<<<<<<< local")) ||
+		!bytes.Contains(got, []byte("local")) || !bytes.Contains(got, []byte("remote")) {
+		t.Fatalf("materialized conflict = %q, %v", got, readErr)
+	}
+}
+
 func TestFetchApplyCanSelectOneChangedPath(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	d, ts := testDaemon(t)

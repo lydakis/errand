@@ -236,6 +236,208 @@ func TestInitializeNoSnapshotChangeStateBindsEmptyManifestToWorkspace(t *testing
 	}
 }
 
+func TestAutomaticApplyWorkerAppliesCompletedDetachedJob(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	remote := t.TempDir()
+	jobDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(remote, "artifact"), []byte("base"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	baseline, err := snapshot.Build(remote, []string{"artifact"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := changeops.CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(remote, "artifact"), []byte("remote"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bundle, collected, err := changeops.CollectWorkspaceChangesContext(
+		context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !collected {
+		t.Fatal("changed workspace did not produce a bundle")
+	}
+	summary := &proto.ChangeSummary{
+		Paths: bundle.Paths, PathCount: len(bundle.Paths), BundleRoot: bundle.RootHash(), Bytes: bundle.Bytes,
+	}
+	local := t.TempDir()
+	if err := os.WriteFile(filepath.Join(local, "artifact"), []byte("base"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	jobID := proto.NewULID()
+	zero := 0
+	changeRequests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v0/jobs/" + jobID:
+			_ = json.NewEncoder(w).Encode(proto.JobStatus{ID: jobID, State: proto.StateExited, Result: &proto.Result{
+				ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true, Changes: summary,
+			}})
+		case "/v0/jobs/" + jobID + "/changes":
+			changeRequests++
+			if changeRequests == 1 {
+				http.Error(w, "try again", http.StatusServiceUnavailable)
+				return
+			}
+			mw := multipart.NewWriter(w)
+			w.Header().Set("Content-Type", mw.FormDataContentType())
+			if err := writeTestChangeMultipart(mw, bundle, jobDir); err != nil {
+				t.Error(err)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	if err := saveLocalChangeState(localChangeState{
+		JobID: jobID, PeerURL: server.URL, Root: local, ManifestRoot: baseline.RootHash(),
+		SubmissionStarted: true, AdmissionConfirmed: true, ApplyOnSuccess: true,
+		AutomaticApply: automaticApplyPending,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runAutomaticApplyWorkerContext(context.Background(), server.URL, jobID, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(local, "artifact"))
+	if err != nil || string(got) != "remote" {
+		t.Fatalf("detached automatic apply value = %q, %v", got, err)
+	}
+	state, err := loadLocalChangeState(server.URL, jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.AutomaticApply != automaticApplyApplied || state.AutomaticApplyDir == "" {
+		t.Fatalf("automatic apply state = %+v", state)
+	}
+	if changeRequests != 2 {
+		t.Fatalf("change download requests = %d, want retry after transient failure", changeRequests)
+	}
+}
+
+func TestManualApplyRecoversFailedAutomaticApply(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	local, bundle, staged := testChangeApplyFixture(t, "base", "remote")
+	peerURL := "http://runner.test"
+	jobID := proto.NewULID()
+	opts := RunOptions{PeerURL: peerURL, Root: local, ApplyOnSuccess: true}
+	if err := initializeChangeState(context.Background(), &opts, jobID, bundle.BaselineRoot); err != nil {
+		t.Fatal(err)
+	}
+	state, err := loadLocalChangeState(peerURL, jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.SubmissionStarted = true
+	state.AdmissionConfirmed = true
+	state.Terminal = true
+	state.AutomaticApply = automaticApplyFailed
+	state.AutomaticApplyErr = "temporary fetch failure"
+	if err := saveLocalChangeState(state); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := applyChangeBundle(peerURL, jobID, local, staged, bundle, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(local, "artifact"))
+	if err != nil || string(got) != "remote" {
+		t.Fatalf("manual recovery value = %q, %v", got, err)
+	}
+	state, err = loadLocalChangeState(peerURL, jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.AutomaticApply != automaticApplyApplied || state.AutomaticApplyErr != "" || state.AutomaticApplyDir != staged {
+		t.Fatalf("recovered automatic apply state = %+v", state)
+	}
+}
+
+func TestPartialManualApplyDoesNotCompleteAutomaticApplyPolicy(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	remote := t.TempDir()
+	jobDir := t.TempDir()
+	for _, name := range []string{"first", "second"} {
+		if err := os.WriteFile(filepath.Join(remote, name), []byte("base"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	baseline, err := snapshot.Build(remote, []string{"first", "second"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := changeops.CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"first", "second"} {
+		if err := os.WriteFile(filepath.Join(remote, name), []byte("remote"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bundle, collected, err := changeops.CollectWorkspaceChangesContext(
+		context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20,
+	)
+	if err != nil || !collected {
+		t.Fatalf("collecting changes = %t, %v", collected, err)
+	}
+	staged := extractTestChangeBundle(t, jobDir, bundle)
+	local := t.TempDir()
+	for _, name := range []string{"first", "second"} {
+		if err := os.WriteFile(filepath.Join(local, name), []byte("base"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	peerURL := "http://runner.test"
+	jobID := proto.NewULID()
+	if err := saveLocalChangeState(localChangeState{
+		JobID: jobID, PeerURL: peerURL, Root: local,
+		ManifestRoot: baseline.RootHash(), SubmissionStarted: true, AdmissionConfirmed: true,
+		Terminal: true, ApplyOnSuccess: true, AutomaticApply: automaticApplyFailed,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := applyChangeBundle(
+		peerURL, jobID, local, staged, bundle, map[string]bool{"first": true}, false,
+	); err != nil {
+		t.Fatal(err)
+	}
+	state, err := loadLocalChangeState(peerURL, jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.AutomaticApply != automaticApplyFailed {
+		t.Fatalf("partial manual apply completed automatic policy: %+v", state)
+	}
+	first, _ := os.ReadFile(filepath.Join(local, "first"))
+	second, _ := os.ReadFile(filepath.Join(local, "second"))
+	if string(first) != "remote" || string(second) != "base" {
+		t.Fatalf("partial apply values = %q, %q", first, second)
+	}
+}
+
+func TestChangeGCProtectsUnfinishedAutomaticApply(t *testing.T) {
+	now := time.Now()
+	state := localChangeState{
+		SubmissionStarted: true, Terminal: true, ApplyOnSuccess: true,
+		AutomaticApply: automaticApplyPending,
+	}
+	if !localChangeStateNeedsProtection(state, false, now.Add(-time.Hour), now) {
+		t.Fatal("unfinished automatic apply was not protected from local change GC")
+	}
+	state.AutomaticApply = automaticApplyApplied
+	if localChangeStateNeedsProtection(state, false, now.Add(-time.Hour), now) {
+		t.Fatal("completed automatic apply remained protected from age-based GC")
+	}
+}
+
 func TestApplyChangeBundleRejectsDifferentSubmittedManifest(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root := t.TempDir()
@@ -249,7 +451,7 @@ func TestApplyChangeBundleRejectsDifferentSubmittedManifest(t *testing.T) {
 	bundle := proto.ChangeBundle{
 		V: changeops.BundleVersion, BaselineRoot: strings.Repeat("a", 64),
 	}
-	if _, err := applyChangeBundle(peerURL, jobID, root, t.TempDir(), bundle, nil); err == nil ||
+	if _, err := applyChangeBundle(peerURL, jobID, root, t.TempDir(), bundle, nil, false); err == nil ||
 		!strings.Contains(err.Error(), "submitted workspace") {
 		t.Fatalf("mismatched manifest apply error = %v", err)
 	}
@@ -944,7 +1146,9 @@ func TestInitializeChangeStateRefusesPendingApplicationWithoutRecovery(t *testin
 	if err := saveLocalChangeState(state); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := changeops.Apply(staged, local, bundle, nil, owner, transaction); err != nil {
+	if _, err := changeops.Apply(
+		staged, local, bundle, nil, owner, transaction, changeops.ApplyOptions{},
+	); err != nil {
 		t.Fatal(err)
 	}
 	err := initializeChangeState(
@@ -1592,7 +1796,7 @@ func TestRepeatApplyRefusesDestinationChangedAfterFirstApply(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := applyChangeBundle(peerURL, jobID, t.TempDir(), staged, bundle, nil); err == nil || !strings.Contains(err.Error(), "within the workspace") {
+	if _, err := applyChangeBundle(peerURL, jobID, t.TempDir(), staged, bundle, nil, false); err == nil || !strings.Contains(err.Error(), "within the workspace") {
 		t.Fatalf("apply from unrelated workspace error = %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(local, "artifact"))
@@ -1603,13 +1807,13 @@ func TestRepeatApplyRefusesDestinationChangedAfterFirstApply(t *testing.T) {
 	if err := os.MkdirAll(callerDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := applyChangeBundle(peerURL, jobID, callerDir, staged, bundle, nil); err != nil {
+	if _, err := applyChangeBundle(peerURL, jobID, callerDir, staged, bundle, nil, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(local, "artifact"), []byte("user edit"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := applyChangeBundle(peerURL, jobID, local, staged, bundle, nil); err == nil || !strings.Contains(err.Error(), "changed after it was applied") {
+	if _, err := applyChangeBundle(peerURL, jobID, local, staged, bundle, nil, false); err == nil || !strings.Contains(err.Error(), "changed after it was applied") {
 		t.Fatalf("repeat apply error = %v", err)
 	}
 	got, err = os.ReadFile(filepath.Join(local, "artifact"))
@@ -1649,7 +1853,7 @@ func TestApplyRefusesWorkspaceReplacedAtSamePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := applyChangeBundle(peerURL, jobID, local, staged, bundle, nil); err == nil || !strings.Contains(err.Error(), "is not the workspace") {
+	if _, err := applyChangeBundle(peerURL, jobID, local, staged, bundle, nil, false); err == nil || !strings.Contains(err.Error(), "is not the workspace") {
 		t.Fatalf("apply to replacement workspace error = %v", err)
 	}
 	if _, err := os.Lstat(filepath.Join(local, "artifact")); !os.IsNotExist(err) {

@@ -212,6 +212,9 @@ Per-project defaults (portable, in the repo):
 [workspace]
 root = true                    # this directory is the snapshot boundary
 
+[changes]
+apply_on_success = true        # apply after clean successful completion
+
 [run]
 backend = "container"
 image   = "rust:1.86"          # receipt records the resolved digest
@@ -226,8 +229,11 @@ path  = "/usr/local/cargo/registry"
 scope = "project"              # project | user | peer (opt-in beyond project)
 ```
 
-Personal aliases and defaults (`cabal`, default peer, addresses) live in
+Personal aliases and defaults (`cabal`, default peer, addresses, and
+`apply_on_success`) live in
 `~/.config/errand/config.toml`, never in the repository.
+For `--no-snapshot`, the current directory is the configuration root, so an
+ancestor marker cannot silently choose an apply policy for an empty workspace.
 
 Environment defaults to **nothing forwarded**: target's PATH, plus `pass`
 by name and `set` literals. The initiator's ambient environment is never
@@ -432,12 +438,16 @@ Retention uses the same representable filesystem boundary as snapshots. Git
 metadata, Errand apply transactions, and transient nodes such as sockets are
 excluded without invalidating other retained changes.
 
-Attached, detached, and foreground jobs use the same retention path. Completion
-reports the retained-change summary and handle without downloading the bundle.
-`attach` follows logs and status only. An explicit `fetch` downloads immutable
-staging. The client mutates the working tree only for an explicit
-`fetch --apply`; a different or non-matching workspace can stage changes but
-cannot apply them.
+Attached and detached jobs use the same retention path. Completion reports the
+retained-change summary and handle without downloading the bundle unless the
+job's submission policy requests automatic application. `--apply` applies only
+after the remote process and transaction both succeed; `--no-apply` disables
+workspace or personal defaults. That policy is independent of observation:
+explicit `--detach` and interactive Ctrl-D hand it to a detached local
+completion worker. `attach` follows logs and status without choosing or changing
+the policy. Interrupted workers retain their pending policy and are resumed on
+the next client invocation. A different or non-matching workspace can stage
+changes but cannot apply them.
 
 Application is conflict-safe, never silent:
 
@@ -449,8 +459,14 @@ Application is conflict-safe, never silent:
 4. If every selected change merges cleanly, install the complete result through
    same-filesystem renames. A durable local journal rolls back an interrupted
    installation or completes its state record before discarding original files.
-5. On conflict, leave the working tree untouched, retain staging, and report
-   the conflicting paths.
+5. By default, any conflict leaves the working tree untouched, retains staging,
+   and reports the conflicting paths.
+
+`fetch --apply --conflicts` is the explicit exception to step 5. It installs
+clean changes and standard text conflict markers while leaving binary and type
+conflicts at their local values. It retains the staged base and remote values,
+reports every unresolved path, and exits nonzero. Errand provides no conflict
+index, resolution commands, or continuation lifecycle.
 
 This is a path-based merge with Git-compatible text merge behavior. It does not
 attempt rename detection or maintain an Errand-specific conflict index.
@@ -495,14 +511,14 @@ vaguer is promised.
 ## CLI surface (v0)
 
 ```
-errand [--on X | --where facts] [--detach] -- <cmd...>
+errand [--on X | --where facts] [--detach] [--apply | --no-apply] -- <cmd...>
 errand peers                    # configured peers, probed facts, reachability
 errand peers pair | revoke      # LAN identity ceremony
 errand ps [-a | --all] [-n N | --last N] [--on X] [--json] # N <= 200
 errand info [--on X]           # all configured peers unless narrowed
 errand logs <peer/ulid> [-f]    # resumes from last seen seq
 errand attach <peer/ulid>
-errand fetch [--apply] <peer/ulid> [path]
+errand fetch [--apply [--conflicts]] <peer/ulid> [path]
 errand kill [--force] <peer/ulid>
 errand df [--on X] [--json]    # fleet storage; read-own
 errand gc cache                 # shared cache policy; manage-caches
@@ -516,7 +532,8 @@ for scripts. With `--detach`: prints the peer-qualified handle and returns.
 A terminal user can press Ctrl-D while running or reattached to detach the
 local follower and later attach again; Ctrl-C continues to interrupt the
 remote process. A detach exit of 0 confirms only the local detach action, not
-the eventual job outcome.
+the eventual job outcome. Detaching never changes a job's `--apply` or
+`--no-apply` policy; automatic application continues in a detached local worker.
 A bare ULID is resolved through `--on`, `--url`, or the configured default
 peer. Alias-qualified handles require the matching peer configuration;
 URL-qualified handles retain the concrete scheme, host, and port. An explicit
@@ -582,8 +599,9 @@ versions are not a compatibility contract.
    unchanged; what persists is cache with an explicit lifecycle. This is
    what makes a tight edit-run loop cheap instead of a full re-ship per
    run.
-4. Automatic workspace-change retention, staging, and conflict-safe
-   `fetch --apply`; failure-artifact retention.
+4. Automatic workspace-change retention, staging, success-only apply defaults,
+   clean-or-refuse merging, explicit conflict materialization, and
+   failure-artifact retention.
 5. Rootless container backend + named-cache model.
 6. LAN pairing with PAKE and pinned device identities.
 7. Nix backend.

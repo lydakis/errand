@@ -86,7 +86,10 @@ func downloadChangeBundleLocked(peerURL, jobID, key string, expected proto.Chang
 	defer body.Close()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(io.LimitReader(body, 1<<20))
-		return "", bundle, fmt.Errorf("fetching changes: %s: %s", resp.Status, apiError(raw))
+		return "", bundle, &controlHTTPError{
+			statusCode: resp.StatusCode,
+			err:        fmt.Errorf("fetching changes: %s: %s", resp.Status, apiError(raw)),
+		}
 	}
 	mediaType, params, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if err != nil || mediaType != "multipart/form-data" || params["boundary"] == "" {

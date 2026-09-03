@@ -22,6 +22,12 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	if len(os.Args) == 4 && os.Args[1] == "_automatic-apply" {
+		if err := RunAutomaticApplyWorker(os.Args[2], os.Args[3]); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	stateHome, err := os.MkdirTemp("", "errand-client-test-state-")
 	if err != nil {
 		panic(err)
@@ -156,6 +162,108 @@ func TestOutputlessRunSendsCanonicalLimits(t *testing.T) {
 	}
 	if !interruptsReleased.Load() {
 		t.Fatal("terminal run retained remote SIGINT ownership")
+	}
+}
+
+func TestAdmissionBookkeepingFailureDoesNotAbandonAdmittedJob(t *testing.T) {
+	previousConfirm := confirmAutomaticApplyAdmission
+	previousLauncher := launchAutomaticApplyWorker
+	t.Cleanup(func() {
+		confirmAutomaticApplyAdmission = previousConfirm
+		launchAutomaticApplyWorker = previousLauncher
+	})
+	confirmAutomaticApplyAdmission = func(string, string) error {
+		return errors.New("state write unavailable")
+	}
+	launchAutomaticApplyWorker = func(string, string) error { return nil }
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var logRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff":
+			http.NotFound(w, r)
+		case r.Method == http.MethodPut:
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/logs"):
+			logRequests.Add(1)
+			w.Header().Set("Content-Type", "text/event-stream")
+			zero := 0
+			status, _ := json.Marshal(proto.JobStatus{State: proto.StateExited, Result: &proto.Result{
+				ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true,
+			}})
+			fmt.Fprintf(w, "event: status\ndata: %s\n\n", status)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	var stderr bytes.Buffer
+	code := runWithDetachNotifications(RunOptions{
+		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+		ApplyOnSuccess: true, Stdout: io.Discard, Stderr: &stderr,
+	}, make(chan os.Signal, 2), testInterruptNotifications(), nil)
+	if code != 0 {
+		t.Fatalf("run exit = %d, want remote success; stderr: %s", code, stderr.String())
+	}
+	if logRequests.Load() != 1 {
+		t.Fatalf("log requests = %d, want admitted job to remain attached", logRequests.Load())
+	}
+	if !strings.Contains(stderr.String(), "recording automatic apply admission") {
+		t.Fatalf("admission bookkeeping warning = %q", stderr.String())
+	}
+}
+
+func TestAttachedApplyStartsCompletionWorkerAtAdmission(t *testing.T) {
+	previousLauncher := launchAutomaticApplyWorker
+	t.Cleanup(func() { launchAutomaticApplyWorker = previousLauncher })
+	workerStarted := make(chan string, 1)
+	launchAutomaticApplyWorker = func(peerURL, jobID string) error {
+		workerStarted <- peerURL + "/" + jobID
+		return nil
+	}
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff":
+			http.NotFound(w, r)
+		case r.Method == http.MethodPut:
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/logs"):
+			select {
+			case <-workerStarted:
+			default:
+				t.Error("log following began before automatic apply had a completion worker")
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			zero := 0
+			status, _ := json.Marshal(proto.JobStatus{State: proto.StateExited, Result: &proto.Result{
+				ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true,
+			}})
+			fmt.Fprintf(w, "event: status\ndata: %s\n\n", status)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	var stderr bytes.Buffer
+	code := runWithDetachNotifications(RunOptions{
+		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+		ApplyOnSuccess: true, Stdout: io.Discard, Stderr: &stderr,
+	}, make(chan os.Signal, 2), testInterruptNotifications(), nil)
+	if code != 0 {
+		t.Fatalf("run exit = %d; stderr: %s", code, stderr.String())
 	}
 }
 
@@ -456,6 +564,14 @@ func TestDetachDrainsInterruptDeliveredWhileResetting(t *testing.T) {
 }
 
 func TestInteractiveDetachRequestedBeforeAdmissionSkipsLogFollowing(t *testing.T) {
+	previousLauncher := launchAutomaticApplyWorker
+	t.Cleanup(func() { launchAutomaticApplyWorker = previousLauncher })
+	workerStarted := make(chan string, 1)
+	launchAutomaticApplyWorker = func(peerURL, jobID string) error {
+		workerStarted <- peerURL + "/" + jobID
+		return nil
+	}
+
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -480,7 +596,7 @@ func TestInteractiveDetachRequestedBeforeAdmissionSkipsLogFollowing(t *testing.T
 	var stderr bytes.Buffer
 	code := runWithDetachNotifications(RunOptions{
 		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
-		Stdout: io.Discard, Stderr: &stderr,
+		ApplyOnSuccess: true, Stdout: io.Discard, Stderr: &stderr,
 	}, make(chan os.Signal, 2), testInterruptNotifications(), detach)
 	if code != 0 {
 		t.Fatalf("pre-admission interactive detach exit = %d; stderr: %s", code, stderr.String())
@@ -488,9 +604,419 @@ func TestInteractiveDetachRequestedBeforeAdmissionSkipsLogFollowing(t *testing.T
 	if logRequests.Load() != 0 {
 		t.Fatalf("pre-admission detach followed logs %d times", logRequests.Load())
 	}
+	select {
+	case target := <-workerStarted:
+		if !strings.HasPrefix(target, server.URL+"/") {
+			t.Fatalf("automatic apply worker target = %q", target)
+		}
+	default:
+		t.Fatal("detachment did not hand automatic apply to a completion worker")
+	}
 	for _, want := range []string{"detached", "reattach with", server.URL + "/"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Fatalf("pre-admission detach report %q does not contain %q", stderr.String(), want)
+		}
+	}
+}
+
+func TestDetachedApplyReportsWorkerLaunchFailure(t *testing.T) {
+	previousLauncher := launchAutomaticApplyWorker
+	t.Cleanup(func() { launchAutomaticApplyWorker = previousLauncher })
+	launchAutomaticApplyWorker = func(string, string) error { return errors.New("worker unavailable") }
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/snapshot/diff"):
+			http.NotFound(w, r)
+		case r.Method == http.MethodPut:
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := runWithDetachNotifications(RunOptions{
+		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+		Detach: true, ApplyOnSuccess: true, Stdout: &stdout, Stderr: &stderr,
+	}, make(chan os.Signal, 2), testInterruptNotifications(), nil)
+	if code != ExitTransaction {
+		t.Fatalf("detached apply launch failure exit = %d, want %d; stderr: %s", code, ExitTransaction, stderr.String())
+	}
+	if !proto.ValidULID(strings.TrimSpace(strings.TrimPrefix(stdout.String(), server.URL+"/"))) {
+		t.Fatalf("detached apply did not preserve handle on stdout: %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "automatic workspace change application could not continue") {
+		t.Fatalf("worker launch failure diagnostic = %q", stderr.String())
+	}
+	jobID := strings.TrimSpace(strings.TrimPrefix(stdout.String(), server.URL+"/"))
+	state, err := loadLocalChangeState(server.URL, jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.AutomaticApply != automaticApplyPending || !strings.Contains(state.AutomaticApplyErr, "worker unavailable") {
+		t.Fatalf("worker launch failure state = %+v, want resumable pending state", state)
+	}
+}
+
+func TestAutomaticApplyCompletionUsesSingleOwner(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	peerURL := "http://runner.test"
+	jobID := proto.NewULID()
+	if err := saveLocalChangeState(localChangeState{
+		JobID: jobID, PeerURL: peerURL, Root: root, ManifestRoot: (proto.Manifest{}).RootHash(),
+		SubmissionStarted: true, AdmissionConfirmed: true, ApplyOnSuccess: true,
+		AutomaticApply: automaticApplyPending,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	key := localChangeKey(peerURL, jobID)
+	unlock, err := acquireLocalChangeLock(localAutomaticApplyLockName(key))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	zero := 0
+	done := make(chan error, 1)
+	go func() {
+		_, err := applyTerminalAutomatically(peerURL, jobID, proto.JobStatus{
+			State:  proto.StateExited,
+			Result: &proto.Result{ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true},
+		})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		unlock()
+		t.Fatalf("automatic apply bypassed its ownership lock: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	unlock()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("automatic apply did not continue after ownership was released")
+	}
+}
+
+func TestAutomaticApplyWorkerProcessUsesPersistedPolicy(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	jobID := proto.NewULID()
+	zero := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v0/jobs/"+jobID {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(proto.JobStatus{ID: jobID, State: proto.StateExited, Result: &proto.Result{
+			ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true,
+		}})
+	}))
+	defer server.Close()
+	if err := saveLocalChangeState(localChangeState{
+		JobID: jobID, PeerURL: server.URL, Root: root, ManifestRoot: (proto.Manifest{}).RootHash(),
+		SubmissionStarted: true, AdmissionConfirmed: true, ApplyOnSuccess: true,
+		AutomaticApply: automaticApplyPending,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := startAutomaticApplyWorkerProcess(server.URL, jobID); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		state, err := loadLocalChangeState(server.URL, jobID)
+		if err == nil && state.AutomaticApply == automaticApplyNoChanges {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	state, err := loadLocalChangeState(server.URL, jobID)
+	t.Fatalf("detached worker did not settle persisted policy: state=%+v error=%v", state, err)
+}
+
+func TestAutomaticApplyWorkerSettlesSuccessfulJobWithoutChanges(t *testing.T) {
+	root := t.TempDir()
+	jobID := proto.NewULID()
+	zero := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v0/jobs/"+jobID {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(proto.JobStatus{ID: jobID, State: proto.StateExited, Result: &proto.Result{
+			ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true,
+		}})
+	}))
+	defer server.Close()
+	if err := saveLocalChangeState(localChangeState{
+		JobID: jobID, PeerURL: server.URL, Root: root, ManifestRoot: (proto.Manifest{}).RootHash(),
+		SubmissionStarted: true, AdmissionConfirmed: true, ApplyOnSuccess: true,
+		AutomaticApply: automaticApplyPending,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runAutomaticApplyWorkerContext(context.Background(), server.URL, jobID, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	state, err := loadLocalChangeState(server.URL, jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Terminal || state.AutomaticApply != automaticApplyNoChanges {
+		t.Fatalf("automatic apply state = terminal %t, status %q", state.Terminal, state.AutomaticApply)
+	}
+}
+
+func TestAutomaticApplyWorkerLeaseDeduplicatesPollers(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	jobID := proto.NewULID()
+	zero := 0
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releasePoll := func() { releaseOnce.Do(func() { close(release) }) }
+	defer releasePoll()
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v0/jobs/"+jobID {
+			http.NotFound(w, r)
+			return
+		}
+		if requests.Add(1) == 1 {
+			close(entered)
+		}
+		<-release
+		_ = json.NewEncoder(w).Encode(proto.JobStatus{ID: jobID, State: proto.StateExited, Result: &proto.Result{
+			ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true,
+		}})
+	}))
+	defer server.Close()
+	if err := saveLocalChangeState(localChangeState{
+		JobID: jobID, PeerURL: server.URL, Root: root, ManifestRoot: (proto.Manifest{}).RootHash(),
+		SubmissionStarted: true, AdmissionConfirmed: true, ApplyOnSuccess: true,
+		AutomaticApply: automaticApplyPending,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- RunAutomaticApplyWorker(server.URL, jobID) }()
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first automatic apply worker did not begin polling")
+	}
+	secondDone := make(chan error, 1)
+	go func() { secondDone <- RunAutomaticApplyWorker(server.URL, jobID) }()
+	select {
+	case err := <-secondDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("duplicate automatic apply worker began polling")
+	}
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("status requests before releasing worker = %d, want 1", got)
+	}
+	releasePoll()
+	select {
+	case err := <-firstDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("owning automatic apply worker did not finish")
+	}
+	stateRoot, err := localChangeRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	leasePath := filepath.Join(
+		stateRoot, "locks",
+		localAutomaticApplyWorkerLockName(localChangeKey(server.URL, jobID))+".lock",
+	)
+	if _, err := os.Lstat(leasePath); !os.IsNotExist(err) {
+		t.Fatalf("completed automatic apply worker retained lease file: %v", err)
+	}
+}
+
+func TestAutomaticApplyCompletionLocksAreBounded(t *testing.T) {
+	names := make(map[string]bool)
+	for range localChangeLockStripes * 4 {
+		jobID := proto.NewULID()
+		key := localChangeKey("http://runner.test", jobID)
+		names[localAutomaticApplyLockName(key)] = true
+	}
+	if len(names) > localChangeLockStripes {
+		t.Fatalf("automatic apply created %d completion lock names, want at most %d", len(names), localChangeLockStripes)
+	}
+}
+
+func TestAutomaticApplyKeepsTransientFetchFailurePending(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	jobID := proto.NewULID()
+	zero := 0
+	summary := &proto.ChangeSummary{
+		Paths: []string{"artifact"}, PathCount: 1, BundleRoot: strings.Repeat("a", 64), Bytes: 1,
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v0/jobs/" + jobID:
+			_ = json.NewEncoder(w).Encode(proto.JobDetails{JobStatus: proto.JobStatus{
+				ID: jobID, State: proto.StateExited, Result: &proto.Result{
+					ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true, Changes: summary,
+				},
+			}})
+		case "/v0/jobs/" + jobID + "/changes":
+			http.Error(w, "try again", http.StatusServiceUnavailable)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	if err := saveLocalChangeState(localChangeState{
+		JobID: jobID, PeerURL: server.URL, Root: root, ManifestRoot: testManifestRoot,
+		SubmissionStarted: true, AdmissionConfirmed: true, ApplyOnSuccess: true,
+		AutomaticApply: automaticApplyPending,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := applyTerminalAutomatically(server.URL, jobID, proto.JobStatus{
+		ID: jobID, State: proto.StateExited, Result: &proto.Result{
+			ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true, Changes: summary,
+		},
+	})
+	if err == nil {
+		t.Fatal("transient fetch failure unexpectedly succeeded")
+	}
+	state, loadErr := loadLocalChangeState(server.URL, jobID)
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if state.AutomaticApply != automaticApplyPending || !strings.Contains(state.AutomaticApplyErr, "503") {
+		t.Fatalf("transient automatic apply state = %+v, want resumable pending", state)
+	}
+}
+
+func TestLateAutomaticApplyFailureCannotOverwriteSuccess(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	peerURL := "http://runner.test"
+	jobID := proto.NewULID()
+	if err := saveLocalChangeState(localChangeState{
+		JobID: jobID, PeerURL: peerURL, Root: t.TempDir(), ManifestRoot: testManifestRoot,
+		SubmissionStarted: true, AdmissionConfirmed: true, ApplyOnSuccess: true,
+		AutomaticApply: automaticApplyApplied, AutomaticApplyDir: "/staged/success",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordAutomaticApply(peerURL, jobID, automaticApplyOutcome{
+		state: automaticApplyFailed, err: "late worker failure",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := loadLocalChangeState(peerURL, jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.AutomaticApply != automaticApplyApplied || state.AutomaticApplyDir != "/staged/success" || state.AutomaticApplyErr != "" {
+		t.Fatalf("late failure overwrote terminal success: %+v", state)
+	}
+}
+
+func TestAutomaticApplyTreatsMissingConfirmedJobAsPermanent(t *testing.T) {
+	err := &controlHTTPError{statusCode: http.StatusNotFound, err: errors.New("missing")}
+	if automaticApplyStatusErrorIsPermanent(err, false) {
+		t.Fatal("unconfirmed missing job was treated as permanent")
+	}
+	if !automaticApplyStatusErrorIsPermanent(err, true) {
+		t.Fatal("confirmed missing job was retried forever")
+	}
+}
+
+func TestResumeAutomaticAppliesRestartsOnlyUnfinishedPolicies(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	previousLauncher := launchAutomaticApplyWorker
+	t.Cleanup(func() { launchAutomaticApplyWorker = previousLauncher })
+	started := make(chan string, 3)
+	launchAutomaticApplyWorker = func(peerURL, jobID string) error {
+		started <- peerURL + "/" + jobID
+		return nil
+	}
+
+	workspace := t.TempDir()
+	peerURL := "http://runner.test"
+	pendingID := proto.NewULID()
+	activeID := proto.NewULID()
+	for _, state := range []localChangeState{
+		{
+			JobID: pendingID, PeerURL: peerURL, Root: workspace, ManifestRoot: (proto.Manifest{}).RootHash(),
+			SubmissionStarted: true, ApplyOnSuccess: true, AutomaticApply: automaticApplyPending,
+		},
+		{
+			JobID: activeID, PeerURL: peerURL, Root: workspace, ManifestRoot: (proto.Manifest{}).RootHash(),
+			SubmissionStarted: true, ApplyOnSuccess: true, AutomaticApply: automaticApplyPending,
+		},
+		{
+			JobID: proto.NewULID(), PeerURL: peerURL, Root: workspace, ManifestRoot: (proto.Manifest{}).RootHash(),
+			SubmissionStarted: true, ApplyOnSuccess: true, AutomaticApply: automaticApplyApplied,
+		},
+		{
+			JobID: proto.NewULID(), PeerURL: peerURL, Root: workspace, ManifestRoot: (proto.Manifest{}).RootHash(),
+			SubmissionStarted: true,
+		},
+	} {
+		if err := saveLocalChangeState(state); err != nil {
+			t.Fatal(err)
+		}
+	}
+	unlock, acquired, err := tryAcquireLocalChangeLease(
+		localAutomaticApplyWorkerLockName(localChangeKey(peerURL, activeID)),
+	)
+	if err != nil || !acquired {
+		t.Fatalf("acquiring active worker lease = %t, %v", acquired, err)
+	}
+	defer unlock()
+
+	if err := ResumeAutomaticApplies(); err != nil {
+		t.Fatal(err)
+	}
+	resumed := map[string]bool{}
+	for len(started) != 0 {
+		resumed[<-started] = true
+	}
+	if !resumed[peerURL+"/"+pendingID] {
+		t.Fatal("unfinished automatic apply was not resumed")
+	}
+	if resumed[peerURL+"/"+activeID] {
+		t.Fatal("active automatic apply worker was redundantly resumed")
+	}
+	if len(resumed) != 1 {
+		t.Fatalf("unexpected automatic applies resumed: %v", resumed)
+	}
+}
+
+func TestAutomaticApplyWorkerEnvironmentOmitsUnrelatedSecrets(t *testing.T) {
+	t.Setenv("ERRAND_TEST_SECRET", "do-not-inherit")
+	for _, entry := range automaticApplyWorkerEnvironment() {
+		if strings.HasPrefix(entry, "ERRAND_TEST_SECRET=") {
+			t.Fatalf("automatic apply worker inherited unrelated secret: %q", entry)
 		}
 	}
 }

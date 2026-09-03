@@ -15,11 +15,12 @@ import (
 )
 
 type ChangeFetchOptions struct {
-	PeerURL   string
-	JobID     string
-	Apply     bool
-	Path      string
-	CallerDir string
+	PeerURL              string
+	JobID                string
+	Apply                bool
+	MaterializeConflicts bool
+	Path                 string
+	CallerDir            string
 }
 
 func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifestRoot string) error {
@@ -30,7 +31,10 @@ func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifes
 	opts.changeClientID = clientID
 	state := localChangeState{
 		JobID: jobID, PeerURL: strings.TrimSuffix(opts.PeerURL, "/"), Root: opts.Root,
-		ManifestRoot: manifestRoot,
+		ManifestRoot: manifestRoot, ApplyOnSuccess: opts.ApplyOnSuccess,
+	}
+	if opts.ApplyOnSuccess {
+		state.AutomaticApply = automaticApplyPending
 	}
 	if opts.Root == "" {
 		return fmt.Errorf("workspace root is required")
@@ -62,6 +66,9 @@ func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifes
 // only stages the bundle. With Apply true it requires the submission machine's
 // workspace identity record and applies every still-unapplied changed path.
 func FetchChanges(opts ChangeFetchOptions) (string, error) {
+	if opts.MaterializeConflicts && !opts.Apply {
+		return "", fmt.Errorf("--conflicts requires --apply")
+	}
 	details, err := GetJobDetails(opts.PeerURL, opts.JobID)
 	if err != nil {
 		return "", err
@@ -108,7 +115,9 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 		if err := validateApplySelection(selected, opts.Path); err != nil {
 			return staged, err
 		}
-		if _, err := applyChangeBundle(opts.PeerURL, opts.JobID, opts.CallerDir, staged, bundle, selected); err != nil {
+		if _, err := applyChangeBundle(
+			opts.PeerURL, opts.JobID, opts.CallerDir, staged, bundle, selected, opts.MaterializeConflicts,
+		); err != nil {
 			return staged, err
 		}
 	}
@@ -179,7 +188,13 @@ func validateApplySelection(selected map[string]bool, requested string) error {
 	return nil
 }
 
-func applyChangeBundle(peerURL, jobID, callerDir, staged string, bundle proto.ChangeBundle, selected map[string]bool) ([]string, error) {
+func applyChangeBundle(
+	peerURL, jobID, callerDir, staged string,
+	bundle proto.ChangeBundle,
+	selected map[string]bool,
+	materializeConflicts bool,
+) ([]string, error) {
+	completeSelection := changeSelectionComplete(bundle.Paths, selected)
 	state, err := loadLocalChangeState(peerURL, jobID)
 	if err != nil {
 		return nil, fmt.Errorf("applying changes: %w", err)
@@ -251,6 +266,7 @@ func applyChangeBundle(peerURL, jobID, callerDir, staged string, bundle proto.Ch
 			effective[changePath] = true
 		}
 		if len(effective) == 0 {
+			markRecoveredAutomaticApply(&state, staged, completeSelection)
 			return saveLocalChangeState(state)
 		}
 		transaction := changeops.NewApplyTransaction()
@@ -261,7 +277,7 @@ func applyChangeBundle(peerURL, jobID, callerDir, staged string, bundle proto.Ch
 		owner := localChangeKey(peerURL, jobID)
 		result, applyErr := changeops.ApplyToWorkspace(
 			staged, state.Root, bundle, effective, owner, transaction,
-			state.RootID,
+			state.RootID, changeops.ApplyOptions{MaterializeConflicts: materializeConflicts},
 		)
 		if applyErr != nil {
 			if _, recoverErr := recoverOneApplication(&state, owner); recoverErr != nil {
@@ -276,17 +292,63 @@ func applyChangeBundle(peerURL, jobID, callerDir, staged string, bundle proto.Ch
 		if err := saveLocalChangeState(state); err != nil {
 			return err
 		}
+		if result.Transaction == "" {
+			state.Pending = ""
+			if len(result.Conflicts) == 0 {
+				markRecoveredAutomaticApply(&state, staged, completeSelection)
+			}
+			if err := saveLocalChangeState(state); err != nil {
+				return err
+			}
+			if len(result.Conflicts) != 0 {
+				return &changeops.MergeConflictError{Paths: result.Conflicts, Materialized: true}
+			}
+			return nil
+		}
 		if err := changeops.CommitApplyToWorkspace(state.Root, result.Transaction, state.RootID); err != nil {
 			return err
 		}
 		state.Pending = ""
-		return saveLocalChangeState(state)
+		if len(result.Conflicts) == 0 {
+			markRecoveredAutomaticApply(&state, staged, completeSelection)
+		}
+		if err := saveLocalChangeState(state); err != nil {
+			return err
+		}
+		if len(result.Conflicts) != 0 {
+			return &changeops.MergeConflictError{Paths: result.Conflicts, Materialized: true}
+		}
+		return nil
 	})
 	sort.Strings(applied)
 	if err != nil {
 		return nil, fmt.Errorf("applying changes: %w", err)
 	}
 	return applied, nil
+}
+
+func changeSelectionComplete(paths []string, selected map[string]bool) bool {
+	if selected == nil {
+		return true
+	}
+	for _, changePath := range paths {
+		if !selected[changePath] {
+			return false
+		}
+	}
+	return true
+}
+
+func markRecoveredAutomaticApply(state *localChangeState, staged string, complete bool) {
+	if !state.ApplyOnSuccess || !complete {
+		return
+	}
+	switch state.AutomaticApply {
+	case automaticApplyPending, automaticApplyRunning, automaticApplyFailed:
+		state.AutomaticApply = automaticApplyApplied
+		state.AutomaticApplyDir = staged
+		state.AutomaticApplyErr = ""
+	}
 }
 
 func validateApplyCallerWorkspace(recordedRoot, callerDir string) error {
