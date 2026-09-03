@@ -618,7 +618,7 @@ url = %q
 		t.Fatalf("df exit = %d; stderr=%q", code, stderr.String())
 	}
 	out := stdout.String()
-	for _, want := range []string{"LOCATION", "CACHE", "JOBS", "STAGED", "TOTAL", "cabal", "mac-mini", "local", "6.0 MiB", "1.0 GiB", "56 MiB", "84 MiB"} {
+	for _, want := range []string{"LOCATION", "CACHE", "JOBS", "CHANGES", "TOTAL", "cabal", "mac-mini", "local", "6.0 MiB", "1.0 GiB", "56 MiB", "84 MiB"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("df output missing %q:\n%s", want, out)
 		}
@@ -650,12 +650,12 @@ url = %q
 	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
 		t.Fatalf("decoding df JSON: %v; output=%q", err, stdout.String())
 	}
-	if !strings.Contains(stdout.String(), `"staged"`) {
-		t.Fatalf("df JSON does not expose local staged changes: %s", stdout.String())
+	if !strings.Contains(stdout.String(), `"changes"`) {
+		t.Fatalf("df JSON does not expose local changes: %s", stdout.String())
 	}
 	if len(rows) != 2 || rows[0].Location != "cabal" || rows[0].Cache == nil ||
 		rows[0].Cache.Bytes != 42 || rows[0].Jobs.Bytes != 58 || rows[0].TotalBytes != 100 ||
-		rows[1].Location != "local" || rows[1].Staged == nil {
+		rows[1].Location != "local" || rows[1].Changes == nil {
 		t.Fatalf("df JSON = %+v", rows)
 	}
 }

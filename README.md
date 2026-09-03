@@ -231,12 +231,11 @@ cancelled durably before they start. A submission is rejected as busy only
 when both the configured running slots and bounded queue are full.
 
 `errand df` reports logical storage used by each runner's shared snapshot cache
-and the authenticated caller's job receipts, plus locally staged downloads and
-apply bookkeeping under `STAGED`. Human output uses readable binary units;
-`--json` preserves raw byte and item counts, cache limits, and cache TTL.
-Capability-based runners must grant `read-own` to use `errand df`;
-`manage-caches` remains required only for `errand gc cache`. Job receipt
-collection uses the separate `gc-own` action.
+and the authenticated caller's job receipts, plus local change records and
+download staging. Human output uses readable binary units; `--json` preserves
+raw byte and item counts, cache limits, and cache TTL. Capability-based runners
+must grant `read-own` to use `errand df`; `manage-caches` remains required only
+for `errand gc cache`. Job receipt collection uses the separate `gc-own` action.
 The frozen design's ACL example includes the complete action set.
 
 GC always names its target. Bare `errand gc` only prints usage:
