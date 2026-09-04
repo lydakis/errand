@@ -803,7 +803,7 @@ func submitAttempts(opts RunOptions, jobID string, spec proto.Spec, manifest pro
 func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, bool, error) {
 	var status proto.JobStatus
 	if err := opts.selectionGuard.Verify(); err != nil {
-		return status, false, err
+		return status, false, &submitNotStartedError{err: err}
 	}
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
@@ -906,6 +906,13 @@ type submitHTTPError struct {
 	capacity   bool
 }
 
+type submitNotStartedError struct {
+	err error
+}
+
+func (e *submitNotStartedError) Error() string { return e.err.Error() }
+func (e *submitNotStartedError) Unwrap() error { return e.err }
+
 func (e *submitHTTPError) Error() string {
 	if e.capacity {
 		if e.message == "" {
@@ -917,6 +924,10 @@ func (e *submitHTTPError) Error() string {
 }
 
 func submitDefinitelyRejected(err error) bool {
+	var notStarted *submitNotStartedError
+	if errors.As(err, &notStarted) {
+		return true
+	}
 	var rejected *submitHTTPError
 	if !errors.As(err, &rejected) {
 		return false

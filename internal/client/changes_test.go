@@ -717,6 +717,58 @@ func TestDefiniteSubmitRejectionRemovesChangeState(t *testing.T) {
 	}
 }
 
+func TestSelectionChangeBeforeSubmitDoesNotClaimPossibleAdmission(t *testing.T) {
+	stateHome := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateHome)
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "artifact"), []byte("baseline"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var puts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff" {
+			if err := os.WriteFile(filepath.Join(root, "late"), []byte("changed"), 0o600); err != nil {
+				t.Error(err)
+			}
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method == http.MethodPut {
+			puts++
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	var stderr bytes.Buffer
+	code := runWithDetachNotifications(RunOptions{
+		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+		Stdout: io.Discard, Stderr: &stderr,
+	}, make(chan os.Signal), testInterruptNotifications(), nil)
+	if code != ExitTransaction {
+		t.Fatalf("selection change exit = %d, want %d", code, ExitTransaction)
+	}
+	if puts != 0 {
+		t.Fatalf("selection change sent %d submit requests, want 0", puts)
+	}
+	if !strings.Contains(stderr.String(), "selection policy changed") {
+		t.Fatalf("selection change diagnostic = %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "may have been admitted") {
+		t.Fatalf("pre-request failure claimed possible admission: %q", stderr.String())
+	}
+	entries, err := os.ReadDir(filepath.Join(stateHome, "errand", "jobs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("selection change retained unsubmitted change state: %v", entries)
+	}
+}
+
 func TestSubmitRetryConflictRetainsChangeStateAndHandle(t *testing.T) {
 	stateHome := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateHome)

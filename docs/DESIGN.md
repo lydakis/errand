@@ -393,10 +393,11 @@ them. It binds every requested local port before submission or attachment so a
 collision fails without admitting a new job or partially opening a session.
 Each accepted TCP connection creates one separately authenticated,
 owner-checked, full-duplex request to the runner.
-The runner accepts it only with `forward-own`, only for the named job, and only
-while that job is running. Staging, queued, and terminal jobs refuse tunnel
-connections immediately. The local listener remains open, so clients may retry
-after the job starts.
+The runner accepts it only with `forward-own` and only while the named job is
+running. For the host backend, that job is an ownership and liveness gate, not
+a network boundary: the tunnel can reach any runner-loopback service. Staging,
+queued, and terminal jobs refuse tunnel connections immediately. The local
+listener remains open, so clients may retry after the job starts.
 
 Detaching with Ctrl-D closes the local listeners and their connections without
 signaling the job. Ctrl-C retains the normal attached-job meaning: it sends
