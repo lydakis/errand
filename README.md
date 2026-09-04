@@ -6,7 +6,7 @@ your terminal, real exit code. The heat, watts, and minutes are spent
 elsewhere.
 
 <p align="center">
-  <img src="docs/assets/errand-astral-projection.png" width="720" alt="Errand: running it elsewhere is a lot like astral projection.">
+  <img src="docs/assets/errand-astral-projection.png" width="600" alt="Errand: running it elsewhere is a lot like astral projection.">
 </p>
 
 <p align="center"><sub>Adapted from Figure 7.1 in Daniel P. Dern's <i>The Internet Guide for New Users</i> (1994).</sub></p>
