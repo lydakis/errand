@@ -1500,29 +1500,19 @@ func TestQueuedInterruptAtAdmissionStaysLocal(t *testing.T) {
 	}
 }
 
-func TestQueueNoticeRequiresAContinuingWait(t *testing.T) {
+func TestQueueNoticeReportsAdmissionState(t *testing.T) {
 	for _, test := range []struct {
 		name  string
 		state string
 		want  bool
 	}{
-		{name: "still queued", state: proto.StateQueued, want: true},
+		{name: "queued", state: proto.StateQueued, want: true},
 		{name: "already running", state: proto.StateRunning, want: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			jobID := proto.NewULID()
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/v0/jobs/"+jobID {
-					http.NotFound(w, r)
-					return
-				}
-				json.NewEncoder(w).Encode(proto.JobStatus{ID: jobID, State: test.state})
-			}))
-			defer server.Close()
-
 			var stderr bytes.Buffer
-			reportQueueWaitAfter(context.Background(), server.URL, jobID, &stderr, 0)
-			got := strings.Contains(stderr.String(), "queued on the runner")
+			reportAdmissionState(proto.JobStatus{State: test.state}, &stderr)
+			got := strings.Contains(stderr.String(), "queued on the runner; logs follow when it starts")
 			if got != test.want {
 				t.Fatalf("queue notice present = %v, want %v; output %q", got, test.want, stderr.String())
 			}
