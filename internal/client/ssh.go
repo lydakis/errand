@@ -148,7 +148,7 @@ func effectiveSSHCommand(command string) string {
 }
 
 func sshRemoteInvocation(endpoint sshEndpoint) string {
-	command := endpoint.command + " _stdio"
+	command := shellQuote(endpoint.command) + " _stdio"
 	if endpoint.socket != "" {
 		command += " --socket " + shellQuote(endpoint.socket)
 	}

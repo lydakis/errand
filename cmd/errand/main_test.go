@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/setup"
 	"github.com/lydakis/errand/internal/tailnet"
 )
 
@@ -888,4 +889,116 @@ func TestCmdRunRejectsWorkdirWithoutSnapshot(t *testing.T) {
 	if code := cmdRun([]string{"--no-snapshot", "--workdir", "build", "--", "/bin/true"}); code != 2 {
 		t.Fatalf("no-snapshot workdir exit = %d, want 2", code)
 	}
+}
+
+func TestSetupHelpAndFlagAliases(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := cmdSetupTo([]string{"--help"}, &stdout, &stderr, nil); code != 0 {
+		t.Fatalf("setup --help exit = %d", code)
+	}
+	if !strings.Contains(stderr.String(), "usage: errand setup [options]") || stdout.Len() != 0 {
+		t.Fatalf("setup --help stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+	for _, want := range []string{"-allow-user", "-dry-run", "-f", "-force", "-n"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("setup --help missing %q:\n%s", want, stderr.String())
+		}
+	}
+	if strings.Contains(stderr.String(), "-allow value") || strings.Contains(stderr.String(), "-service-name") {
+		t.Fatalf("setup exposes an inconsistent or unnecessary flag:\n%s", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "full runner access") {
+		t.Fatalf("setup understates --allow-user authority:\n%s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := cmdSetupTo([]string{"-f", "-n", "--print-acl"}, &stdout, &stderr, nil); code != 0 {
+		t.Fatalf("setup short flags exit = %d; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"tag:errand-runner"`) {
+		t.Fatalf("setup short flags output = %q", stdout.String())
+	}
+}
+
+func TestSetupDryRunDoesNotClaimTheRunnerIsReady(t *testing.T) {
+	report := &setup.Report{
+		Self:       tailnet.Self{DNSName: "mini.example.ts.net"},
+		SocketPath: "/Users/george/.errand/errand.sock",
+		Config:     setup.ConfigChoice{Listen: "tailnet:7443", MaxJobs: 1},
+	}
+	var output bytes.Buffer
+	printSetupReport(&output, report, true)
+	if strings.Contains(output.String(), "is ready") || !strings.Contains(output.String(), "would be configured") {
+		t.Fatalf("dry-run readiness summary = %q", output.String())
+	}
+}
+
+func TestSetupRejectsNegativeMaxJobs(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := cmdSetupTo([]string{"--max-jobs", "-1", "--print-acl"}, &stdout, &stderr, nil); code != 2 {
+		t.Fatalf("negative max-jobs exit = %d", code)
+	}
+	if !strings.Contains(stderr.String(), "--max-jobs must be positive") {
+		t.Fatalf("negative max-jobs diagnostic = %q", stderr.String())
+	}
+}
+
+func TestSetupRejectsConflictingTailnetProviders(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := cmdSetupTo([]string{
+		"--tailscaled-socket", "/run/tailscaled.sock",
+		"--tailscale-cli", "/usr/local/bin/tailscale", "--print-acl",
+	}, &stdout, &stderr, nil)
+	if code != 2 || !strings.Contains(stderr.String(), "mutually exclusive") {
+		t.Fatalf("conflicting providers exit=%d stderr=%q", code, stderr.String())
+	}
+}
+
+func TestSetupRejectsRemovedRunnerSubcommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := cmdSetupTo([]string{"runner"}, &stdout, &stderr, nil); code != 2 {
+		t.Fatalf("setup runner exit = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "unexpected arguments: runner") {
+		t.Fatalf("setup runner diagnostic = %q", stderr.String())
+	}
+}
+
+func TestSetupReportUsesTheEffectiveListener(t *testing.T) {
+	report := &setup.Report{
+		Executable:    "/Users/george/bin/errand",
+		RemoteCommand: "/Users/george/bin/errand",
+		SocketPath:    "/Users/george/.errand/errand.sock",
+		Self:          tailnet.Self{DNSName: "mini.example.ts.net"},
+		Config: setup.ConfigChoice{
+			Listen: "none", MaxJobs: 1, AllowUsers: []string{"george@example.com"},
+		},
+		Info: &proto.Info{MaxJobs: 1},
+	}
+	var output bytes.Buffer
+	printSetupReport(&output, report, false)
+	if strings.Contains(output.String(), "url =") || !strings.Contains(output.String(), `ssh = "mini"`) ||
+		!strings.Contains(output.String(), `remote_command = "/Users/george/bin/errand"`) ||
+		!strings.Contains(output.String(), `remote_socket = "/Users/george/.errand/errand.sock"`) {
+		t.Fatalf("SSH-only setup instructions = %q", output.String())
+	}
+
+	report.Config.Listen = "tailnet:9443"
+	report.RemoteCommand = ""
+	output.Reset()
+	printSetupReport(&output, report, false)
+	if !strings.Contains(output.String(), `url = "http://mini.example.ts.net:9443"`) {
+		t.Fatalf("custom listener setup instructions = %q", output.String())
+	}
+	if strings.Contains(output.String(), "remote_command") {
+		t.Fatalf("setup emitted remote_command after proving the PATH entry: %q", output.String())
+	}
+	if !strings.Contains(output.String(), `remote_socket = "/Users/george/.errand/errand.sock"`) {
+		t.Fatalf("setup omitted the effective daemon socket: %q", output.String())
+	}
+}
+
+func (serveTestProvider) Self(context.Context) (tailnet.Self, error) {
+	return tailnet.Self{Login: "test@example.com", UserID: 1, DNSName: "test.example.ts.net", Version: "1.102.3"}, nil
 }

@@ -40,6 +40,17 @@ type APIError struct {
 	Code  string `json:"code,omitempty"`
 }
 
+// SetupQuiesce is the local setup handshake used to keep an idle runner idle
+// while its service definition is replaced and restarted.
+type SetupQuiesce struct {
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type SetupQuiesceRelease struct {
+	Token string `json:"token"`
+}
+
 const (
 	EntryFile    = "file"
 	EntryDir     = "dir"
@@ -403,8 +414,8 @@ type Facts struct {
 type Info struct {
 	Proto   int    `json:"proto"`
 	Version string `json:"version"`
-	// Busy means a submission right now would be refused: every running
-	// slot and queue position is taken.
+	// Busy means a submission right now would be refused because capacity is
+	// full or the runner is temporarily quiesced for setup.
 	Busy         bool  `json:"busy"`
 	StagingJobs  int   `json:"staging_jobs"`
 	StartingJobs int   `json:"starting_jobs"`

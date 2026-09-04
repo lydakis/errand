@@ -115,6 +115,9 @@ func (c Client) PeerURL(name string) (string, error) {
 		if p.RemoteSocket != "" && !strings.HasPrefix(p.RemoteSocket, "/") {
 			return "", fmt.Errorf("peer %q: remote_socket must be an absolute Unix path", name)
 		}
+		if p.RemoteCommand != "" && !strings.HasPrefix(p.RemoteCommand, "/") {
+			return "", fmt.Errorf("peer %q: remote_command must be an absolute executable path", name)
+		}
 		return SSHScheme + "://" + p.SSH, nil
 	}
 	return strings.TrimSuffix(p.URL, "/"), nil

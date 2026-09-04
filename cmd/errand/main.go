@@ -53,6 +53,8 @@ usage:
   errand gc changes --older-than DURATION [-n | --dry-run]
   errand gc all --older-than DURATION [--keep N] [-n | --dry-run] [--on PEER | --url URL]
   errand serve [--config PATH] [--listen ADDR] [--state-dir DIR] [--allow-user LOGIN]...
+  errand setup [--max-jobs N] [--allow-user LOGIN]...
+               [-f | --force] [-n | --dry-run] [--print-acl]
   errand info [--json] [--on PEER | --url URL]
   errand version
 
@@ -85,7 +87,7 @@ func main() {
 	}
 	skipResume := cliHelpRequested(args)
 	switch args[0] {
-	case "serve", "_automatic-apply", "_stdio", "version":
+	case "serve", "setup", "_automatic-apply", "_stdio", "version":
 		skipResume = true
 	}
 	if !skipResume {
@@ -96,6 +98,8 @@ func main() {
 	switch args[0] {
 	case "serve":
 		os.Exit(cmdServe(args[1:]))
+	case "setup":
+		os.Exit(cmdSetup(args[1:]))
 	case "attach":
 		os.Exit(cmdAttach(args[1:]))
 	case "fetch":

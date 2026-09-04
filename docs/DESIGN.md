@@ -598,6 +598,8 @@ vaguer is promised.
 
 ```
 errand [--on X | --where facts] [-d | --detach] [--apply | --no-apply] -- <cmd...>
+errand setup [--max-jobs N] [--allow-user LOGIN]...
+             [-f | --force] [-n | --dry-run] [--print-acl]
 errand peers                    # configured peers, probed facts, reachability
 errand ps [-a | --all] [-n N | --last N] [--on X] [--json] # N <= 200
 errand info [--on X] [--json]  # human-readable fleet facts unless JSON is requested
@@ -622,6 +624,14 @@ Frequent run options use established short forms: `-d` for `--detach`, `-e`
 for `--env`, `-w` for `--workdir`, and SSH-style `-L` for `--forward`. GC uses
 `-n` for `--dry-run`, and `errand kill` uses `-f` for `--force`. Routing,
 workspace mutation, and snapshot-boundary options remain long-form.
+
+`errand setup` acquires an expiring lease from the local daemon before changing
+config or service files. The daemon grants it only while idle and atomically
+refuses new admissions until restart, so setup cannot race a newly submitted
+job. If an existing local socket cannot be reserved, setup refuses the
+restart. Its generated SSH peer block includes the effective `remote_socket`
+and an absolute `remote_command` unless setup proved that
+`/usr/local/bin/errand` resolves to the installed executable.
 
 Without `--detach`: streams, exits per the two-layer status rule — drop-in
 for scripts. With `--detach`: prints the peer-qualified handle and returns.

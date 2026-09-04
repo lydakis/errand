@@ -14,7 +14,9 @@ elsewhere.
 
 ```
 # on a runner
-errand serve                  # config: ~/.config/errand/errandd.toml
+errand setup                  # discovers tailscaled, writes errandd.toml granting
+                              # this node's own login access, installs and probes
+errand serve                  # what the service runs; config: ~/.config/errand/errandd.toml
 
 # on a caller
 errand info                   # human-readable facts from every configured peer
@@ -37,12 +39,28 @@ errand gc jobs --dry-run --older-than 30d --keep 500
 Frequent execution flags follow familiar CLI conventions: `-d` is
 `--detach`, `-e` is `--env`, `-w` is `--workdir`, and SSH-style `-L` is
 `--forward`. `errand kill -f` requests `--force`, and GC accepts `-n` for
-`--dry-run`. Safety boundaries and mutating workspace options remain
-long-form so their meaning stays explicit. Use `--help` at the relevant
-level, for example `errand info --help` or `errand gc jobs --help`.
+`--dry-run`; setup uses the same `-f` and `-n` forms. Safety boundaries and
+mutating workspace options remain long-form so their meaning stays explicit.
+Use `--help` at the relevant level, for example `errand info --help` or
+`errand gc jobs --help`.
+
+`errand setup` is idempotent: it keeps an existing config or service
+definition unless `--force` is given, enables user-service linger on Linux
+(so the runner survives logout), installs a launch agent on macOS, and
+restarts the service so preserved configuration edits are active. Before
+writing anything, it reserves an idle runner and blocks new admissions until
+restart; it refuses while jobs are staging, starting, running, or queued.
+Generated services retain the absolute entries from the setup shell's `PATH`
+and add the standard system directories, so runner-installed developer tools
+remain available to jobs. Setup also links `/usr/local/bin/errand` when it can
+(so SSH callers find it on the non-interactive PATH); otherwise its client
+snippet includes the required absolute `remote_command`. It then probes the
+daemon over its own socket. `-n` or `--dry-run` shows every decision;
+`--print-acl` emits the tailnet grant for capability-based fleets.
 
 Runner access can use a tailnet URL or SSH. Tailnet callers are authorized by
-WhoIs identity through an ACL app capability or `allow_users`. The daemon uses
+WhoIs identity through an ACL app capability or `allow_users`; an allow-listed
+login receives full runner access. The daemon uses
 a tailscaled LocalAPI socket when available and falls back to the `tailscale`
 CLI, including for the standalone macOS app. CLI-based WhoIs cannot provide
 destination-scoped capabilities, so that path requires `allow_users`.
@@ -59,7 +77,8 @@ remote_command = "/usr/local/bin/errand"
 remote_socket = "/srv/errand/errand.sock"
 ```
 
-`remote_socket` is needed only when the runner uses a non-default socket.
+`errand setup` always prints the effective `remote_socket`, so the SSH peer
+remains correct when setup uses a custom config, state directory, or socket.
 Set `listen = "none"` in `errandd.toml` for an SSH-only runner. SSH handles
 host authentication, keys, jump hosts, and caller access. Jobs submitted over
 SSH and the tailnet have separate owners.

@@ -30,11 +30,58 @@ type WhoIs struct {
 	CapMap map[string][]json.RawMessage
 }
 
+// Self describes this node as tailscaled sees it.
+type Self struct {
+	Login    string
+	UserID   int64
+	DNSName  string
+	HostName string
+	IPs      []string
+	OS       string
+	Version  string
+}
+
 // Provider is one way of reaching tailscaled.
 type Provider interface {
 	Name() string
 	WhoIs(ctx context.Context, remoteAddr, dstIP string) (WhoIs, error)
 	SelfIPs(ctx context.Context) ([]string, error)
+	Self(ctx context.Context) (Self, error)
+}
+
+// statusWire is the subset of tailscaled's status document both providers
+// decode (LocalAPI /status and `tailscale status --json` share it).
+type statusWire struct {
+	Version      string `json:"Version"`
+	BackendState string `json:"BackendState"`
+	Self         struct {
+		DNSName      string   `json:"DNSName"`
+		HostName     string   `json:"HostName"`
+		UserID       int64    `json:"UserID"`
+		TailscaleIPs []string `json:"TailscaleIPs"`
+		OS           string   `json:"OS"`
+	} `json:"Self"`
+	User map[string]struct {
+		LoginName string `json:"LoginName"`
+	} `json:"User"`
+}
+
+func (w statusWire) toSelf() (Self, error) {
+	self := Self{
+		UserID:   w.Self.UserID,
+		DNSName:  strings.TrimSuffix(w.Self.DNSName, "."),
+		HostName: w.Self.HostName,
+		IPs:      w.Self.TailscaleIPs,
+		OS:       w.Self.OS,
+		Version:  strings.TrimSpace(w.Version),
+	}
+	if u, ok := w.User[strconv.FormatInt(w.Self.UserID, 10)]; ok {
+		self.Login = u.LoginName
+	}
+	if self.Login == "" {
+		return self, fmt.Errorf("tailscaled status (state %q) names no login for this node; is Tailscale logged in?", w.BackendState)
+	}
+	return self, nil
 }
 
 // SupportsDestinationScopedWhoIs reports whether a tailscaled version honors
@@ -190,6 +237,22 @@ func (p *localAPI) WhoIs(ctx context.Context, remoteAddr, dstIP string) (WhoIs, 
 	return wire.toWhoIs(), nil
 }
 
+func (p *localAPI) Self(ctx context.Context) (Self, error) {
+	res, err := p.get(ctx, "/localapi/v0/status?peers=false")
+	if err != nil {
+		return Self{}, err
+	}
+	defer res.Body.Close()
+	var wire statusWire
+	if err := json.NewDecoder(res.Body).Decode(&wire); err != nil {
+		return Self{}, fmt.Errorf("decoding tailscaled status: %w", err)
+	}
+	if wire.Version == "" {
+		wire.Version = res.Header.Get("Tailscale-Version")
+	}
+	return wire.toSelf()
+}
+
 func (p *localAPI) SelfIPs(ctx context.Context) ([]string, error) {
 	res, err := p.get(ctx, "/localapi/v0/status?peers=false")
 	if err != nil {
@@ -242,6 +305,18 @@ func (p *cli) WhoIs(ctx context.Context, remoteAddr, _ string) (WhoIs, error) {
 	w := wire.toWhoIs()
 	w.CapMap = nil // not destination-scoped through the CLI; never grant from it
 	return w, nil
+}
+
+func (p *cli) Self(ctx context.Context) (Self, error) {
+	out, err := p.run(ctx, "status", "--json")
+	if err != nil {
+		return Self{}, err
+	}
+	var wire statusWire
+	if err := json.Unmarshal(out, &wire); err != nil {
+		return Self{}, fmt.Errorf("decoding tailscale status: %w", err)
+	}
+	return wire.toSelf()
 }
 
 func (p *cli) SelfIPs(ctx context.Context) ([]string, error) {

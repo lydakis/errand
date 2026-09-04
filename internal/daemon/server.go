@@ -40,6 +40,7 @@ const (
 	maxManifestBytes      = 64 << 20
 	defaultUploadOverhead = 1 << 30
 	changeStreamIdleLimit = 2 * time.Minute
+	setupQuiesceDuration  = 5 * time.Minute
 )
 
 const (
@@ -85,11 +86,13 @@ type Daemon struct {
 	admissionHighWater time.Time
 	// queue is the admission-ordered waiting list. Entries remain here while
 	// staging and, once staged, while queued for a running slot.
-	queue     []*Job
-	draining  bool
-	lockFile  *os.File
-	closeOnce sync.Once
-	closeErr  error
+	queue             []*Job
+	draining          bool
+	setupQuiesceToken string
+	setupQuiesceUntil time.Time
+	lockFile          *os.File
+	closeOnce         sync.Once
+	closeErr          error
 }
 
 func New(cfg Config) (*Daemon, error) {
@@ -601,6 +604,8 @@ func (d *Daemon) runQueue() {
 func (d *Daemon) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v0/info", d.auth("", d.handleInfo))
+	mux.HandleFunc("POST /v0/setup/quiesce", d.auth("", d.handleSetupQuiesce))
+	mux.HandleFunc("DELETE /v0/setup/quiesce", d.auth("", d.handleSetupQuiesceRelease))
 	mux.HandleFunc("GET /v0/jobs", d.auth(proto.ActionReadOwn, d.handleList))
 	mux.HandleFunc("POST /v0/snapshot/diff", d.auth(proto.ActionSubmit, d.handleSnapshotDiff))
 	mux.HandleFunc("GET /v0/storage", d.auth(proto.ActionReadOwn, d.handleStorageStats))
@@ -616,6 +621,56 @@ func (d *Daemon) Handler() http.Handler {
 	mux.HandleFunc("POST /v0/jobs/{id}/signal", d.auth(proto.ActionKillOwn, d.handleSignal))
 	mux.HandleFunc("POST /v0/jobs/{id}/kill", d.auth(proto.ActionKillOwn, d.handleKill))
 	return mux
+}
+
+func (d *Daemon) handleSetupQuiesce(w http.ResponseWriter, _ *http.Request, id Identity) {
+	if !id.Local {
+		httpError(w, http.StatusForbidden, "runner setup is available only through the local Unix socket")
+		return
+	}
+	now := time.Now()
+	d.mu.Lock()
+	if d.setupQuiesceToken != "" && now.Before(d.setupQuiesceUntil) {
+		d.mu.Unlock()
+		httpError(w, http.StatusConflict, "runner setup is already in progress")
+		return
+	}
+	o := d.occupancyLocked()
+	if active := activeJobSummary(o); active != "" {
+		d.mu.Unlock()
+		httpError(w, http.StatusConflict, "runner has active jobs ("+active+"); wait until it is idle before restarting")
+		return
+	}
+	token := proto.NewULID()
+	expiresAt := now.Add(setupQuiesceDuration)
+	d.setupQuiesceToken = token
+	d.setupQuiesceUntil = expiresAt
+	d.mu.Unlock()
+	writeJSON(w, http.StatusCreated, proto.SetupQuiesce{Token: token, ExpiresAt: expiresAt})
+}
+
+func (d *Daemon) handleSetupQuiesceRelease(w http.ResponseWriter, r *http.Request, id Identity) {
+	if !id.Local {
+		httpError(w, http.StatusForbidden, "runner setup is available only through the local Unix socket")
+		return
+	}
+	var req proto.SetupQuiesceRelease
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil || req.Token == "" {
+		httpError(w, http.StatusBadRequest, "a setup quiesce token is required")
+		return
+	}
+	d.mu.Lock()
+	if req.Token != d.setupQuiesceToken {
+		d.mu.Unlock()
+		httpError(w, http.StatusConflict, "setup quiesce token does not match")
+		return
+	}
+	d.setupQuiesceToken = ""
+	d.setupQuiesceUntil = time.Time{}
+	d.mu.Unlock()
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request, Identity)
@@ -650,7 +705,7 @@ func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) {
 	d.mu.Lock()
 	o := d.occupancyLocked()
-	busy := d.capacityFullLocked()
+	busy := d.capacityFullLocked() || d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil)
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, proto.Info{
 		Proto:        proto.ProtoVersion,
@@ -811,6 +866,11 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 	if freshnessErr != nil {
 		d.mu.Unlock()
 		httpError(w, http.StatusBadRequest, freshnessErr.Error())
+		return
+	}
+	if d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil) {
+		d.mu.Unlock()
+		httpError(w, http.StatusServiceUnavailable, "runner is being reconfigured; retry on another peer")
 		return
 	}
 	if d.capacityFullLocked() {
@@ -1010,6 +1070,25 @@ type occupancy struct {
 	queued   int
 	starting int
 	running  int
+}
+
+func activeJobSummary(o occupancy) string {
+	counts := []struct {
+		n int
+		s string
+	}{
+		{o.staging, "staging"},
+		{o.starting, "starting"},
+		{o.running, "running"},
+		{o.queued, "queued"},
+	}
+	var active []string
+	for _, count := range counts {
+		if count.n != 0 {
+			active = append(active, fmt.Sprintf("%d %s", count.n, count.s))
+		}
+	}
+	return strings.Join(active, ", ")
 }
 
 // occupancyLocked derives the public phase counts from scheduler ownership.

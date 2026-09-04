@@ -1051,6 +1051,16 @@ func TestConfiguredSSHPeersKeepEndpointSettingsSeparate(t *testing.T) {
 	}
 }
 
+func TestSSHRemoteInvocationQuotesTheExecutablePath(t *testing.T) {
+	got := sshRemoteInvocation(sshEndpoint{
+		command: "/Applications/Errand Tools/errand's", socket: "/tmp/runner socket.sock",
+	})
+	want := `'/Applications/Errand Tools/errand'"'"'s' _stdio --socket '/tmp/runner socket.sock'`
+	if got != want {
+		t.Fatalf("SSH remote invocation = %q, want %q", got, want)
+	}
+}
+
 func TestDialSSHDrainsStdoutAfterProcessExit(t *testing.T) {
 	dir := t.TempDir()
 	fakeSSH := filepath.Join(dir, "ssh")

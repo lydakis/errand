@@ -99,7 +99,7 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 		"while [ $# -gt 0 ]; do case \"$1\" in --) shift; break;; -o) shift 2;; -*) shift;; *) break;; esac; done\n" +
 		"[ \"$1\" = \"george@fake-runner\" ] || exit 91\n" +
 		"shift\n" +
-		"[ \"$1\" = \"/opt/errand _stdio --socket '" + socket + "'\" ] || exit 92\n" +
+		"[ \"$1\" = \"'/opt/errand' _stdio --socket '" + socket + "'\" ] || exit 92\n" +
 		"exec " + bin + " _stdio --socket '" + socket + "'\n"
 	if err := os.WriteFile(fakeSSH, []byte(script), 0o755); err != nil {
 		t.Fatal(err)

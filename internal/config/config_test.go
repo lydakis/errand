@@ -213,17 +213,18 @@ func TestResolveListenFailsClosedWithoutAssignedTailscaleIP(t *testing.T) {
 
 func TestSSHPeersResolveToSSHURLsWithoutLeakingTheCommand(t *testing.T) {
 	c := Client{DefaultPeer: "mini", Peers: map[string]Peer{
-		"mini":   {SSH: "george@mini", RemoteCommand: "~/.local/bin/errand", RemoteSocket: "/srv/errand/runner.sock"},
-		"both":   {SSH: "mini", URL: "http://mini:7443"},
-		"weird":  {SSH: "mini/../x"},
-		"secret": {SSH: "george:password@mini"},
-		"socket": {SSH: "mini", RemoteSocket: "relative.sock"},
+		"mini":    {SSH: "george@mini", RemoteCommand: "/home/george/.local/bin/errand", RemoteSocket: "/srv/errand/runner.sock"},
+		"both":    {SSH: "mini", URL: "http://mini:7443"},
+		"weird":   {SSH: "mini/../x"},
+		"secret":  {SSH: "george:password@mini"},
+		"socket":  {SSH: "mini", RemoteSocket: "relative.sock"},
+		"command": {SSH: "mini", RemoteCommand: "~/bin/errand"},
 	}}
 	u, err := c.PeerURL("")
 	if err != nil || u != "ssh://george@mini" {
 		t.Fatalf("ssh peer url = %q, %v", u, err)
 	}
-	if got := c.SSHRemoteCommand(""); got != "~/.local/bin/errand" {
+	if got := c.SSHRemoteCommand(""); got != "/home/george/.local/bin/errand" {
 		t.Fatalf("remote command = %q", got)
 	}
 	if got := c.SSHRemoteSocket(""); got != "/srv/errand/runner.sock" {
@@ -240,5 +241,8 @@ func TestSSHPeersResolveToSSHURLsWithoutLeakingTheCommand(t *testing.T) {
 	}
 	if _, err := c.PeerURL("socket"); err == nil {
 		t.Fatal("a relative remote socket must be rejected")
+	}
+	if _, err := c.PeerURL("command"); err == nil {
+		t.Fatal("a non-absolute remote command must be rejected")
 	}
 }
