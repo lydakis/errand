@@ -75,6 +75,8 @@ type Daemon struct {
 	identity tailnet.Provider
 	selfUID  uint32
 	cache    *blobCache // nil when the cache is disabled
+	// Kept per daemon so admission storage failures can be tested independently.
+	writeAdmissionReceipt func(*Job, string, any) error
 
 	mu        sync.Mutex
 	jobs      map[string]*Job
@@ -140,6 +142,7 @@ func New(cfg Config) (*Daemon, error) {
 	d := &Daemon{
 		cfg: cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{},
 		identity: identity, selfUID: currentUID(),
+		writeAdmissionReceipt: (*Job).writeJSON,
 	}
 	if err := d.lockStateDir(); err != nil {
 		return nil, err
@@ -900,8 +903,8 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		Project: project, ProjectTruncated: projectTruncated, Facts: measureFacts(),
 	}
 	j.state = proto.StateStaging
-	if err := j.writeJSON("spec.json", proto.NewReceiptSpec(spec)); err == nil {
-		err = j.writeJSON("admission.json", j.Admission)
+	if err = d.writeAdmissionReceipt(j, "spec.json", proto.NewReceiptSpec(spec)); err == nil {
+		err = d.writeAdmissionReceipt(j, "admission.json", j.Admission)
 	}
 	if err == nil {
 		err = os.Rename(tmpDir, dir)
