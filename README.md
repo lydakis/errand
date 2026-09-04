@@ -25,6 +25,8 @@ errand setup                  # discovers tailscaled, writes errandd.toml granti
 errand serve                  # what the service runs; config: ~/.config/errand/errandd.toml
 
 # on a caller
+errand peers discover         # runners on your tailnet that admit you, with exact add commands
+errand peers add cabal cabal  # verify it answers you, then record it (first peer becomes default)
 errand info                   # human-readable facts from every configured peer
 errand info --json            # the same facts for scripts and agents
 errand -- python3 -m unittest # runs your working tree over there
@@ -45,10 +47,26 @@ errand gc jobs --dry-run --older-than 30d --keep 500
 Frequent execution flags follow familiar CLI conventions: `-d` is
 `--detach`, `-e` is `--env`, `-w` is `--workdir`, and SSH-style `-L` is
 `--forward`. `errand kill -f` requests `--force`, and GC accepts `-n` for
-`--dry-run`; setup uses the same `-f` and `-n` forms. Safety boundaries and
-mutating workspace options remain long-form so their meaning stays explicit.
+`--dry-run`; setup and peer mutation use the same `-f` and `-n` forms, while
+peer discovery uses `-a` for `--all`. Safety boundaries, transport details,
+and mutating workspace options remain long-form so their meaning stays explicit.
 Use `--help` at the relevant level, for example `errand info --help` or
 `errand gc jobs --help`.
+
+`errand peers` shows configured peers and whether they answer. `errand peers
+add NAME HOST` probes the runner with an authenticated `/v0/info` *before*
+writing anything: a 403 prints your tailnet login and tells you to add it to
+the runner's `allow_users`, then restart through `errand setup`; an unreachable
+host suggests running setup there (or `--no-verify` to record an offline runner). HOST may be a
+MagicDNS name, `host:port`, an `http://` URL, or an ssh_config host with
+`--ssh` (plus `--remote-command` when errand is not on that host's login
+PATH, and `--remote-socket` for a non-default daemon socket). `errand peers
+discover` is read-only and scoped to your own tailnet:
+it asks tailscaled for the node list, probes each online node's errand
+port, and prints exact `peers add` commands for runners that admit you,
+flagging ones already configured (by name or IP) and ones that refused you.
+It never scans arbitrary hosts and never writes config.
+Use `errand info` for detailed runner capacity, platform, KVM, and tool facts.
 
 `errand setup` is idempotent: it keeps an existing config or service
 definition unless `--force` is given, enables user-service linger on Linux

@@ -67,10 +67,23 @@ func TestSelfFromCLI(t *testing.T) {
 
 func TestSelfRefusesLoggedOutNode(t *testing.T) {
 	var wire statusWire
-	if err := json.Unmarshal([]byte(`{"BackendState":"NeedsLogin","Self":{"UserID":0},"User":{}}`), &wire); err != nil {
+	if err := json.Unmarshal([]byte(`{"BackendState":"NeedsLogin","Self":{"UserID":0},"User":{},"Peer":{"stale":{"DNSName":"old.example.ts.net.","Online":true}}}`), &wire); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := wire.toSelf(); err == nil {
 		t.Fatal("a node with no login must not produce a Self")
+	}
+	if _, err := wire.toPeers(); err == nil {
+		t.Fatal("a logged-out node must not expose stale peers for discovery")
+	}
+}
+
+func TestPeersRefuseNonRunningBackendWithCachedIdentity(t *testing.T) {
+	var wire statusWire
+	if err := json.Unmarshal([]byte(`{"BackendState":"NeedsLogin","Self":{"UserID":42},"User":{"42":{"LoginName":"george@example.com"}},"Peer":{"stale":{"DNSName":"old.example.ts.net.","Online":true}}}`), &wire); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wire.toPeers(); err == nil {
+		t.Fatal("a non-running backend with cached identity exposed stale peers")
 	}
 }

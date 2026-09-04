@@ -53,8 +53,13 @@ usage:
   errand gc changes --older-than DURATION [-n | --dry-run]
   errand gc all --older-than DURATION [--keep N] [-n | --dry-run] [--on PEER | --url URL]
   errand serve [--config PATH] [--listen ADDR] [--state-dir DIR] [--allow-user LOGIN]...
-  errand setup [--max-jobs N] [--allow-user LOGIN]...
+  errand setup [--config PATH] [--max-jobs N] [--allow-user LOGIN]...
                [-f | --force] [-n | --dry-run] [--print-acl]
+  errand peers [--json]
+  errand peers add [--ssh] [--remote-command PATH] [--remote-socket PATH]
+                   [-f | --force] [-n | --dry-run] [--no-verify] NAME HOST
+  errand peers remove NAME
+  errand peers discover [-a | --all] [--json]
   errand info [--json] [--on PEER | --url URL]
   errand version
 
@@ -100,6 +105,8 @@ func main() {
 		os.Exit(cmdServe(args[1:]))
 	case "setup":
 		os.Exit(cmdSetup(args[1:]))
+	case "peers":
+		os.Exit(cmdPeers(args[1:]))
 	case "attach":
 		os.Exit(cmdAttach(args[1:]))
 	case "fetch":

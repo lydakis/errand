@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,9 +19,9 @@ import (
 
 type Peer struct {
 	URL           string `toml:"url"`
-	SSH           string `toml:"ssh"`
-	RemoteCommand string `toml:"remote_command"`
-	RemoteSocket  string `toml:"remote_socket"`
+	SSH           string `toml:"ssh,omitempty"`
+	RemoteCommand string `toml:"remote_command,omitempty"`
+	RemoteSocket  string `toml:"remote_socket,omitempty"`
 }
 
 const SSHScheme = "ssh"
@@ -44,9 +45,9 @@ func (c Client) SSHRemoteSocket(name string) string {
 }
 
 type Client struct {
-	DefaultPeer    string          `toml:"default_peer"`
-	ApplyOnSuccess bool            `toml:"apply_on_success"`
-	Peers          map[string]Peer `toml:"peers"`
+	DefaultPeer    string          `toml:"default_peer,omitempty"`
+	ApplyOnSuccess bool            `toml:"apply_on_success,omitempty"`
+	Peers          map[string]Peer `toml:"peers,omitempty"`
 }
 
 func dir() (string, error) {
@@ -120,7 +121,21 @@ func (c Client) PeerURL(name string) (string, error) {
 		}
 		return SSHScheme + "://" + p.SSH, nil
 	}
+	u, err := url.Parse(p.URL)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" ||
+		(u.Scheme != "http" && u.Scheme != "https") {
+		return "", fmt.Errorf("peer %q: url must be an http:// or https:// runner base URL", name)
+	}
 	return strings.TrimSuffix(p.URL, "/"), nil
+}
+
+// ValidatePeer checks that a peer can be resolved by ordinary client commands.
+func ValidatePeer(name string, peer Peer) error {
+	if err := validatePeerName(name); err != nil {
+		return err
+	}
+	_, err := (Client{Peers: map[string]Peer{name: peer}}).PeerURL(name)
+	return err
 }
 
 type Daemon struct {
@@ -227,4 +242,167 @@ func (d Daemon) SocketPath() string {
 		return d.Socket
 	}
 	return filepath.Join(d.StateDir, "errand.sock")
+}
+
+// ClientPath is the personal client config file.
+func ClientPath() (string, error) {
+	configDir, err := dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, "config.toml"), nil
+}
+
+// AddPeer records a peer, making the first peer the default. New peers are
+// appended so existing comments and ordering survive; replacements re-encode.
+func AddPeer(path, name string, peer Peer, replace bool) (madeDefault bool, err error) {
+	state, err := prepareAddPeer(path, name, peer, replace)
+	if err != nil {
+		return false, err
+	}
+	c := state.client
+	madeDefault = state.plan.MadeDefault
+	if c.Peers == nil {
+		c.Peers = map[string]Peer{}
+	}
+	c.Peers[name] = peer
+	if madeDefault {
+		c.DefaultPeer = name
+	}
+	if state.plan.Replacing || !state.existing {
+		return madeDefault, writeClient(path, c)
+	}
+	if madeDefault && state.defaultDefined {
+		return madeDefault, writeClient(path, c)
+	}
+	var block strings.Builder
+	block.WriteString(fmt.Sprintf("\n[peers.%s]\n", name))
+	if peer.URL != "" {
+		block.WriteString(fmt.Sprintf("url = %q\n", peer.URL))
+	} else {
+		block.WriteString(fmt.Sprintf("ssh = %q\n", peer.SSH))
+		if peer.RemoteCommand != "" {
+			block.WriteString(fmt.Sprintf("remote_command = %q\n", peer.RemoteCommand))
+		}
+		if peer.RemoteSocket != "" {
+			block.WriteString(fmt.Sprintf("remote_socket = %q\n", peer.RemoteSocket))
+		}
+	}
+	text := state.raw
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	if madeDefault {
+		text = fmt.Sprintf("default_peer = %q\n", name) + text
+	}
+	return madeDefault, writeFile(path, text+block.String())
+}
+
+// AddPeerPlan describes the observable effect of AddPeer without writing.
+type AddPeerPlan struct {
+	MadeDefault bool
+	Replacing   bool
+}
+
+// PlanAddPeer validates an add against the current client configuration.
+func PlanAddPeer(path, name string, peer Peer, replace bool) (AddPeerPlan, error) {
+	state, err := prepareAddPeer(path, name, peer, replace)
+	return state.plan, err
+}
+
+type addPeerState struct {
+	client         Client
+	raw            string
+	existing       bool
+	defaultDefined bool
+	plan           AddPeerPlan
+}
+
+func prepareAddPeer(path, name string, peer Peer, replace bool) (addPeerState, error) {
+	var state addPeerState
+	if err := ValidatePeer(name, peer); err != nil {
+		return state, err
+	}
+	if raw, readErr := os.ReadFile(path); readErr == nil {
+		state.existing = true
+		state.raw = string(raw)
+		metadata, err := toml.Decode(state.raw, &state.client)
+		if err != nil {
+			return state, fmt.Errorf("%s: %w", path, err)
+		}
+		state.defaultDefined = metadata.IsDefined("default_peer")
+	} else if !os.IsNotExist(readErr) {
+		return state, readErr
+	}
+	_, state.plan.Replacing = state.client.Peers[name]
+	if state.plan.Replacing && !replace {
+		return state, fmt.Errorf("peer %q already exists in %s (use --force to replace it)", name, path)
+	}
+	state.plan.MadeDefault = state.client.DefaultPeer == "" && len(state.client.Peers) == 0
+	return state, nil
+}
+
+// RemovePeer deletes a peer, clearing default_peer if it pointed there.
+func RemovePeer(path, name string) (clearedDefault bool, err error) {
+	var c Client
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	if _, err := toml.Decode(string(raw), &c); err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
+	}
+	if _, ok := c.Peers[name]; !ok {
+		return false, fmt.Errorf("peer %q is not configured in %s", name, path)
+	}
+	delete(c.Peers, name)
+	if c.DefaultPeer == name {
+		c.DefaultPeer = ""
+		clearedDefault = true
+	}
+	return clearedDefault, writeClient(path, c)
+}
+
+func validatePeerName(name string) error {
+	if name == "" {
+		return fmt.Errorf("peer name must not be empty")
+	}
+	for _, r := range name {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			return fmt.Errorf("peer name %q may contain only letters, digits, '-' and '_'", name)
+		}
+	}
+	return nil
+}
+
+func writeClient(path string, c Client) error {
+	var b strings.Builder
+	b.WriteString("# errand client configuration — peers are personal aliases, never repository state.\n")
+	if err := toml.NewEncoder(&b).Encode(c); err != nil {
+		return err
+	}
+	return writeFile(path, b.String())
+}
+
+func writeFile(path, text string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.WriteString(text); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }

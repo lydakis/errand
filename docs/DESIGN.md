@@ -74,9 +74,13 @@ two roles, not self-execution: a client may target other peers, but a runner
 rejects connections originating from its own machine. Run local work directly.
 
 Peers are **explicit** in personal config; `errand peers` probes configured
-peers' `/v0/info`; `--where` searches only those. No tailnet scanning.
-Probing facts is implied by holding any errand capability (plus
-network-level access); no separate probe grant exists in v0.
+peers' `/v0/info`; `--where` searches only those. Discovery is scoped, not
+scanning: `errand peers discover` asks the caller's own tailscaled for the
+node list and probes each online node's errand port with an authenticated
+`/v0/info` — never arbitrary hosts, never other networks — and prints exact
+`peers add` commands for runners that admit the caller. Probing facts is
+implied by holding any errand capability (plus network-level access); no
+separate probe grant exists in v0.
 
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
 is a design constraint, not a v0 deliverable — the protocol and job model
@@ -600,7 +604,10 @@ vaguer is promised.
 errand [--on X | --where facts] [-d | --detach] [--apply | --no-apply] -- <cmd...>
 errand setup [--max-jobs N] [--allow-user LOGIN]...
              [-f | --force] [-n | --dry-run] [--print-acl]
-errand peers                    # configured peers, probed facts, reachability
+errand peers [--json]           # configured peers and reachability
+errand peers add NAME HOST      # verify first (403 → accurate allow-list remedy), then record
+errand peers remove NAME
+errand peers discover [-a | --all] # runners on the caller's own tailnet; read-only
 errand ps [-a | --all] [-n N | --last N] [--on X] [--json] # N <= 200
 errand info [--on X] [--json]  # human-readable fleet facts unless JSON is requested
 errand logs <peer/ulid> [-f]    # resumes from last seen seq
@@ -622,8 +629,10 @@ reported as a failed preview and left untouched.
 
 Frequent run options use established short forms: `-d` for `--detach`, `-e`
 for `--env`, `-w` for `--workdir`, and SSH-style `-L` for `--forward`. GC uses
-`-n` for `--dry-run`, and `errand kill` uses `-f` for `--force`. Routing,
-workspace mutation, and snapshot-boundary options remain long-form.
+`-n` for `--dry-run`, `errand kill` uses `-f` for `--force`, and peer
+management follows those same aliases plus `-a` for `discover --all`. Routing,
+transport details, workspace mutation, and snapshot-boundary options remain
+long-form.
 
 `errand setup` acquires an expiring lease from the local daemon before changing
 config or service files. The daemon grants it only while idle and atomically
@@ -685,7 +694,8 @@ versions are not a compatibility contract.
 - No arbitrary-host discovery or scheduler-style fan-out. `errand ps` may
   query the caller's finite, explicit configured-peer set; partial failure is
   reported with a nonzero exit status.
-- No tailnet scanning for discovery; peers are explicit config.
+- No arbitrary-host scanning; discovery is limited to the caller's own
+  tailnet node list and the errand port, and never writes config by itself.
 - No execution tracing / attestation; the receipt claims only what errand
   observed.
 

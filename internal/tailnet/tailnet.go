@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +48,20 @@ type Provider interface {
 	WhoIs(ctx context.Context, remoteAddr, dstIP string) (WhoIs, error)
 	SelfIPs(ctx context.Context) ([]string, error)
 	Self(ctx context.Context) (Self, error)
+	// Peers lists the other nodes on this tailnet as tailscaled sees them —
+	// the scope of errand's discovery: never arbitrary hosts, only the
+	// caller's own tailnet.
+	Peers(ctx context.Context) ([]Peer, error)
+}
+
+// Peer is another node on the caller's tailnet.
+type Peer struct {
+	DNSName  string // MagicDNS name without the trailing dot
+	HostName string
+	OS       string
+	Online   bool
+	IPs      []string
+	UserID   int64
 }
 
 // statusWire is the subset of tailscaled's status document both providers
@@ -64,6 +79,32 @@ type statusWire struct {
 	User map[string]struct {
 		LoginName string `json:"LoginName"`
 	} `json:"User"`
+	Peer map[string]struct {
+		DNSName      string   `json:"DNSName"`
+		HostName     string   `json:"HostName"`
+		OS           string   `json:"OS"`
+		Online       bool     `json:"Online"`
+		TailscaleIPs []string `json:"TailscaleIPs"`
+		UserID       int64    `json:"UserID"`
+	} `json:"Peer"`
+}
+
+func (w statusWire) toPeers() ([]Peer, error) {
+	if w.BackendState != "Running" {
+		return nil, fmt.Errorf("tailscaled is not running (state %q); is Tailscale up?", w.BackendState)
+	}
+	if _, err := w.toSelf(); err != nil {
+		return nil, err
+	}
+	peers := make([]Peer, 0, len(w.Peer))
+	for _, p := range w.Peer {
+		peers = append(peers, Peer{
+			DNSName: strings.TrimSuffix(p.DNSName, "."), HostName: p.HostName, OS: p.OS,
+			Online: p.Online, IPs: p.TailscaleIPs, UserID: p.UserID,
+		})
+	}
+	sort.Slice(peers, func(i, j int) bool { return peers[i].DNSName < peers[j].DNSName })
+	return peers, nil
 }
 
 func (w statusWire) toSelf() (Self, error) {
@@ -253,6 +294,19 @@ func (p *localAPI) Self(ctx context.Context) (Self, error) {
 	return wire.toSelf()
 }
 
+func (p *localAPI) Peers(ctx context.Context) ([]Peer, error) {
+	res, err := p.get(ctx, "/localapi/v0/status")
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	var wire statusWire
+	if err := json.NewDecoder(res.Body).Decode(&wire); err != nil {
+		return nil, fmt.Errorf("decoding tailscaled status: %w", err)
+	}
+	return wire.toPeers()
+}
+
 func (p *localAPI) SelfIPs(ctx context.Context) ([]string, error) {
 	res, err := p.get(ctx, "/localapi/v0/status?peers=false")
 	if err != nil {
@@ -317,6 +371,18 @@ func (p *cli) Self(ctx context.Context) (Self, error) {
 		return Self{}, fmt.Errorf("decoding tailscale status: %w", err)
 	}
 	return wire.toSelf()
+}
+
+func (p *cli) Peers(ctx context.Context) ([]Peer, error) {
+	out, err := p.run(ctx, "status", "--json")
+	if err != nil {
+		return nil, err
+	}
+	var wire statusWire
+	if err := json.Unmarshal(out, &wire); err != nil {
+		return nil, fmt.Errorf("decoding tailscale status: %w", err)
+	}
+	return wire.toPeers()
 }
 
 func (p *cli) SelfIPs(ctx context.Context) ([]string, error) {

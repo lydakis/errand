@@ -1002,3 +1002,5 @@ func TestSetupReportUsesTheEffectiveListener(t *testing.T) {
 func (serveTestProvider) Self(context.Context) (tailnet.Self, error) {
 	return tailnet.Self{Login: "test@example.com", UserID: 1, DNSName: "test.example.ts.net", Version: "1.102.3"}, nil
 }
+
+func (serveTestProvider) Peers(context.Context) ([]tailnet.Peer, error) { return nil, nil }

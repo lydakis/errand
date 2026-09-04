@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BurntSushi/toml"
+
 	"github.com/lydakis/errand/internal/tailnet"
 )
 
@@ -244,5 +246,74 @@ func TestSSHPeersResolveToSSHURLsWithoutLeakingTheCommand(t *testing.T) {
 	}
 	if _, err := c.PeerURL("command"); err == nil {
 		t.Fatal("a non-absolute remote command must be rejected")
+	}
+}
+
+func TestAddPeerRejectsDefinitionsThatCannotBeResolved(t *testing.T) {
+	for name, peer := range map[string]Peer{
+		"bad-url":     {URL: "ftp://runner"},
+		"url-command": {URL: "http://runner:7443", RemoteCommand: "/bin/errand"},
+		"bad-ssh":     {SSH: "runner with spaces"},
+		"bad-command": {SSH: "runner", RemoteCommand: "bin/errand"},
+		"bad-socket":  {SSH: "runner", RemoteSocket: "run/errand.sock"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			if _, err := AddPeer(path, name, peer, false); err == nil {
+				t.Fatal("AddPeer accepted an unusable peer")
+			}
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Fatal("AddPeer wrote an unusable peer")
+			}
+		})
+	}
+}
+
+func TestAddPeerPreservesExistingConfigWhenSettingFirstDefault(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	original := "# keep this comment\napply_on_success = true\n"
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	madeDefault, err := AddPeer(path, "cabal", Peer{URL: "http://cabal:7443"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !madeDefault {
+		t.Fatal("first peer was not made default")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	for _, want := range []string{`default_peer = "cabal"`, "# keep this comment", "apply_on_success = true", "[peers.cabal]"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("config missing %q:\n%s", want, text)
+		}
+	}
+	var cfg Client
+	if _, err := toml.Decode(text, &cfg); err != nil {
+		t.Fatalf("written config is invalid: %v\n%s", err, text)
+	}
+}
+
+func TestAddPeerExtendsInlinePeerConfigWithoutCorruptingIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	original := `default_peer = "existing"
+peers = { existing = { url = "http://existing:7443" } }
+`
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddPeer(path, "cabal", Peer{URL: "http://cabal:7443"}, false); err != nil {
+		t.Fatal(err)
+	}
+	var cfg Client
+	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+		t.Fatalf("AddPeer wrote invalid TOML: %v", err)
+	}
+	if cfg.DefaultPeer != "existing" || cfg.Peers["existing"].URL != "http://existing:7443" || cfg.Peers["cabal"].URL != "http://cabal:7443" {
+		t.Fatalf("config after AddPeer = %+v", cfg)
 	}
 }

@@ -666,3 +666,5 @@ func TestServicePathKeepsAbsoluteEntriesAndAddsSystemDefaults(t *testing.T) {
 		t.Fatalf("service PATH = %q, want %q", got, want)
 	}
 }
+
+func (fakeProvider) Peers(context.Context) ([]tailnet.Peer, error) { return nil, nil }
