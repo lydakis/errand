@@ -26,12 +26,16 @@ func cmdStatus(args []string) int {
 }
 
 func cmdStatusTo(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("status", flag.ContinueOnError)
+	fs := flag.NewFlagSet("errand status", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
+	setFlagUsage(fs, "errand status [options] HANDLE")
 	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
 		return 2
 	}
 	if fs.NArg() != 1 {

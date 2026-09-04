@@ -45,6 +45,18 @@ func TestCmdRunRejectsWorkspaceRootWithoutSnapshot(t *testing.T) {
 	}
 }
 
+func TestCmdRunShortWorkdirFlag(t *testing.T) {
+	if code := cmdRun([]string{"--no-snapshot", "-w", "build", "--", "/bin/true"}); code != 2 {
+		t.Fatalf("no-snapshot short workdir exit = %d, want 2", code)
+	}
+}
+
+func TestCmdRunShortEnvFlag(t *testing.T) {
+	if code := cmdRun([]string{"--url", "http://runner.invalid", "-e", "INVALID", "--", "/bin/true"}); code != 2 {
+		t.Fatalf("invalid short env exit = %d, want 2", code)
+	}
+}
+
 func TestResolveApplyOnSuccessPrecedence(t *testing.T) {
 	workspaceTrue := true
 	workspaceFalse := false
@@ -97,12 +109,78 @@ func TestCmdGCRejectsUnexpectedArguments(t *testing.T) {
 	}
 }
 
+func TestCmdGCHelpOnlyShowsFlagsForTarget(t *testing.T) {
+	for _, test := range []struct {
+		target string
+		want   []string
+		reject []string
+	}{
+		{target: "cache", want: []string{"usage: errand gc cache [options]", "-dry-run", "-on", "-url"}, reject: []string{"-keep", "-older-than"}},
+		{target: "jobs", want: []string{"usage: errand gc jobs [options]", "-dry-run", "-keep", "-older-than", "-on", "-url"}},
+		{target: "changes", want: []string{"usage: errand gc changes --older-than DURATION [options]", "-dry-run", "-older-than"}, reject: []string{"-keep", "-on", "-url"}},
+		{target: "all", want: []string{"usage: errand gc all --older-than DURATION [options]", "-dry-run", "-keep", "-older-than", "-on", "-url"}},
+	} {
+		t.Run(test.target, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := cmdGCTo([]string{test.target, "--help"}, &stdout, &stderr); code != 0 {
+				t.Fatalf("gc %s --help exit = %d, stderr=%q", test.target, code, stderr.String())
+			}
+			for _, want := range test.want {
+				if !strings.Contains(stderr.String(), want) {
+					t.Errorf("gc %s --help missing %q:\n%s", test.target, want, stderr.String())
+				}
+			}
+			for _, reject := range test.reject {
+				if strings.Contains(stderr.String(), reject) {
+					t.Errorf("gc %s --help unexpectedly contains %q:\n%s", test.target, reject, stderr.String())
+				}
+			}
+		})
+	}
+}
+
+func TestCLIHelpDetectionStopsAtCommandSeparator(t *testing.T) {
+	for _, args := range [][]string{
+		{"--help"},
+		{"info", "--help"},
+		{"gc", "jobs", "-h"},
+	} {
+		if !cliHelpRequested(args) {
+			t.Errorf("cliHelpRequested(%q) = false, want true", args)
+		}
+	}
+	for _, args := range [][]string{
+		{"--", "tool", "--help"},
+		{"--on", "cabal", "--", "tool", "-h"},
+	} {
+		if cliHelpRequested(args) {
+			t.Errorf("cliHelpRequested(%q) = true, want false", args)
+		}
+	}
+}
+
 func TestCmdGCChangesUsesExplicitLocalTarget(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	var stdout, stderr bytes.Buffer
-	if code := cmdGCTo([]string{"changes", "--older-than", "1d", "--dry-run"}, &stdout, &stderr); code != 0 ||
+	if code := cmdGCTo([]string{"changes", "--older-than", "1d", "-n"}, &stdout, &stderr); code != 0 ||
 		!strings.Contains(stdout.String(), "local changes: would remove 0 records") {
 		t.Fatalf("gc changes = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestCmdKillShortForceFlag(t *testing.T) {
+	id := proto.NewULID()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v0/jobs/"+id+"/kill" || r.URL.Query().Get("force") != "1" {
+			t.Errorf("force-kill request = %s %s", r.Method, r.URL.String())
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	if code := cmdKill([]string{"-f", "--url", server.URL, id}); code != 0 {
+		t.Fatalf("short force exit = %d, want 0", code)
 	}
 }
 
@@ -518,17 +596,28 @@ func TestCmdPsPresentsTimingSourceAndWorkdir(t *testing.T) {
 func TestCmdInfoAggregatesConfiguredPeers(t *testing.T) {
 	started := make(chan struct{}, 2)
 	release := make(chan struct{})
-	serveInfo := func(version string) *httptest.Server {
+	serveInfo := func(version, goos, arch string) *httptest.Server {
 		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			started <- struct{}{}
+			select {
+			case started <- struct{}{}:
+			default:
+			}
 			<-release
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(proto.Info{Version: version})
+			json.NewEncoder(w).Encode(proto.Info{
+				Version:   version,
+				MaxJobs:   2,
+				MaxQueued: 8,
+				Facts: proto.Facts{
+					OS: goos, Arch: arch, NumCPU: 8,
+					Tools: map[string]string{"git": "/usr/bin/git"},
+				},
+			})
 		}))
 	}
-	cabal := serveInfo("linux-runner")
+	cabal := serveInfo("linux-runner", "linux", "amd64")
 	defer cabal.Close()
-	macMini := serveInfo("darwin-runner")
+	macMini := serveInfo("darwin-runner", "darwin", "arm64")
 	defer macMini.Close()
 	writeClientConfig(t, fmt.Sprintf(`[peers.cabal]
 url = %q
@@ -551,6 +640,21 @@ url = %q
 	if code := <-done; code != 0 {
 		t.Fatalf("info exit = %d; stderr=%q", code, stderr.String())
 	}
+	for _, want := range []string{
+		"PEER", "STATUS", "SLOTS", "QUEUE", "SYSTEM",
+		"cabal", "linux/amd64", "linux-runner",
+		"mac-mini", "darwin/arm64", "darwin-runner", "git",
+	} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("human info missing %q:\n%s", want, stdout.String())
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := cmdInfoTo([]string{"--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("JSON info exit = %d; stderr=%q", code, stderr.String())
+	}
 	var got map[string]proto.Info
 	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
 		t.Fatalf("decoding aggregate info: %v; output=%q", err, stdout.String())
@@ -561,7 +665,7 @@ url = %q
 
 	stdout.Reset()
 	stderr.Reset()
-	if code := cmdInfoTo([]string{"--on", "cabal"}, &stdout, &stderr); code != 0 {
+	if code := cmdInfoTo([]string{"--json", "--on", "cabal"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("targeted info exit = %d; stderr=%q", code, stderr.String())
 	}
 	var targeted proto.Info

@@ -31,3 +31,9 @@ func TestCmdRunRejectsDetachedForward(t *testing.T) {
 		t.Fatalf("detached forward exit = %d, want 2", code)
 	}
 }
+
+func TestCmdRunRejectsDetachedForwardShortFlags(t *testing.T) {
+	if code := cmdRun([]string{"-d", "-L", "3000", "--", "/bin/true"}); code != 2 {
+		t.Fatalf("detached forward short flags exit = %d, want 2", code)
+	}
+}

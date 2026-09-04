@@ -17,7 +17,8 @@ elsewhere.
 errand serve                  # config: ~/.config/errand/errandd.toml
 
 # on a caller
-errand info                   # measured facts from every configured peer
+errand info                   # human-readable facts from every configured peer
+errand info --json            # the same facts for scripts and agents
 errand -- python3 -m unittest # runs your working tree over there
 errand --apply -- gofmt -w .  # applies retained changes only after clean success
 errand --no-snapshot -- uname -a # runs in a fresh empty remote workspace
@@ -32,6 +33,13 @@ errand attach "$job"          # replay logs and follow to completion
 errand attach --forward 8080:3000 "$job" # add a forward while attached
 errand gc jobs --dry-run --older-than 30d --keep 500
 ```
+
+Frequent execution flags follow familiar CLI conventions: `-d` is
+`--detach`, `-e` is `--env`, `-w` is `--workdir`, and SSH-style `-L` is
+`--forward`. `errand kill -f` requests `--force`, and GC accepts `-n` for
+`--dry-run`. Safety boundaries and mutating workspace options remain
+long-form so their meaning stays explicit. Use `--help` at the relevant
+level, for example `errand info --help` or `errand gc jobs --help`.
 
 Runner config authorizes callers by tailnet identity (whois): an ACL app
 capability or a local `allow_users` list. Destination-scoped capability

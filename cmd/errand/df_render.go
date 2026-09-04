@@ -26,10 +26,12 @@ func cmdDf(args []string) int {
 }
 
 func cmdDfTo(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("df", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand df", flag.ExitOnError)
+	fs.SetOutput(stderr)
 	on := fs.String("on", "", "restrict to one peer name")
 	rawURL := fs.String("url", "", "restrict to one peer base URL")
 	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
+	setFlagUsage(fs, "errand df [options]")
 	fs.Parse(args)
 	if fs.NArg() != 0 {
 		fmt.Fprintf(stderr, "errand: unexpected df arguments: %s\n", strings.Join(fs.Args(), " "))

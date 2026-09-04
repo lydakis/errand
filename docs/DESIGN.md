@@ -589,15 +589,15 @@ vaguer is promised.
 ## CLI surface (v0)
 
 ```
-errand [--on X | --where facts] [--detach] [--apply | --no-apply] -- <cmd...>
+errand [--on X | --where facts] [-d | --detach] [--apply | --no-apply] -- <cmd...>
 errand peers                    # configured peers, probed facts, reachability
 errand peers pair | revoke      # LAN identity ceremony
 errand ps [-a | --all] [-n N | --last N] [--on X] [--json] # N <= 200
-errand info [--on X]           # all configured peers unless narrowed
+errand info [--on X] [--json]  # human-readable fleet facts unless JSON is requested
 errand logs <peer/ulid> [-f]    # resumes from last seen seq
 errand attach <peer/ulid>
 errand fetch [--apply [--conflicts]] <peer/ulid> [path]
-errand kill [--force] <peer/ulid>
+errand kill [-f | --force] <peer/ulid>
 errand df [--on X] [--json]    # fleet storage; read-own
 errand gc cache [--dry-run]     # shared cache policy; manage-caches
 errand gc jobs --older-than 30d # caller-owned clean terminal receipts
@@ -610,6 +610,11 @@ while leaving all persistent state unchanged, including cache files, receipts,
 reconciliation markers, local lock files, permissions, and the admission
 clock. Local staging that cannot be sized without widening permissions is
 reported as a failed preview and left untouched.
+
+Frequent run options use established short forms: `-d` for `--detach`, `-e`
+for `--env`, `-w` for `--workdir`, and SSH-style `-L` for `--forward`. GC uses
+`-n` for `--dry-run`, and `errand kill` uses `-f` for `--force`. Routing,
+workspace mutation, and snapshot-boundary options remain long-form.
 
 Without `--detach`: streams, exits per the two-layer status rule — drop-in
 for scripts. With `--detach`: prints the peer-qualified handle and returns.

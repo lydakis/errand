@@ -29,23 +29,25 @@ var version = "0.1.0-dev"
 const usage = `errand — a personal job runner for machines you own
 
 usage:
-  errand [--on PEER | --url URL] [--detach] [--forward [LOCAL:]REMOTE]...
+  errand [--on PEER | --url URL] [-d | --detach]
+         [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]...
          [--apply | --no-apply]
-         [--env K=V]... [--passenv K]...
-         [--workspace-root PATH] [--workdir REL]
+         [-e K=V | --env K=V]... [--passenv K]...
+         [--workspace-root PATH] [-w REL | --workdir REL]
          [--include-all | --no-snapshot] -- CMD [ARG...]
-  errand attach [--forward [LOCAL:]REMOTE]... [--on PEER | --url URL] HANDLE
+  errand attach [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]...
+                [--on PEER | --url URL] HANDLE
   errand fetch [--apply [--conflicts]] [--on PEER | --url URL] HANDLE [PATH]
   errand ps [-a | --all] [-n N | --last N] [--json] [--on PEER | --url URL]
   errand status [--json] [--on PEER | --url URL] HANDLE
-  errand kill [--force] [--on PEER | --url URL] HANDLE
+  errand kill [-f | --force] [--on PEER | --url URL] HANDLE
   errand df [--json] [--on PEER | --url URL]
-  errand gc cache [--dry-run] [--on PEER | --url URL]
-  errand gc jobs [--older-than DURATION] [--keep N] [--dry-run] [--on PEER | --url URL]
-  errand gc changes --older-than DURATION [--dry-run]
-  errand gc all --older-than DURATION [--keep N] [--dry-run] [--on PEER | --url URL]
+  errand gc cache [-n | --dry-run] [--on PEER | --url URL]
+  errand gc jobs [--older-than DURATION] [--keep N] [-n | --dry-run] [--on PEER | --url URL]
+  errand gc changes --older-than DURATION [-n | --dry-run]
+  errand gc all --older-than DURATION [--keep N] [-n | --dry-run] [--on PEER | --url URL]
   errand serve [--config PATH] [--listen ADDR] [--state-dir DIR] [--allow-user LOGIN]...
-  errand info [--on PEER | --url URL]
+  errand info [--json] [--on PEER | --url URL]
   errand version
 
 A HANDLE is peer/ULID as printed at submission (a bare ULID works with
@@ -75,9 +77,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
+	skipResume := cliHelpRequested(args)
 	switch args[0] {
-	case "serve", "_automatic-apply", "version", "help", "-h", "--help":
-	default:
+	case "serve", "_automatic-apply", "version":
+		skipResume = true
+	}
+	if !skipResume {
 		if err := client.ResumeAutomaticApplies(); err != nil {
 			fmt.Fprintf(os.Stderr, "errand: resuming automatic workspace applications: %v\n", err)
 		}
@@ -102,11 +107,10 @@ func main() {
 	case "info":
 		os.Exit(cmdInfo(args[1:]))
 	case "version":
-		fmt.Println("errand", version)
-		os.Exit(0)
+		os.Exit(cmdVersion(args[1:]))
 	case "_automatic-apply":
 		os.Exit(cmdAutomaticApply(args[1:]))
-	case "help", "-h", "--help":
+	case "-h", "--help":
 		fmt.Println(usage)
 		os.Exit(0)
 	default:
@@ -166,7 +170,7 @@ func (p *portForwardList) Set(value string) error {
 }
 
 func cmdRun(args []string) int {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand", flag.ExitOnError)
 	on := fs.String("on", "", "peer name from ~/.config/errand/config.toml")
 	rawURL := fs.String("url", "", "peer base URL (mutually exclusive with --on)")
 	workdir := fs.String("workdir", "", "working directory, relative to the workspace root")
@@ -174,12 +178,16 @@ func cmdRun(args []string) int {
 	includeAll := fs.Bool("include-all", false, "allow an otherwise refused broad snapshot (never permits a filesystem root)")
 	noSnapshot := fs.Bool("no-snapshot", false, "run in an empty remote workspace without inspecting local file contents")
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
+	fs.BoolVar(detach, "d", false, "return after admission, printing the job handle on stdout")
 	apply := fs.Bool("apply", false, "apply retained workspace changes after successful completion")
 	noApply := fs.Bool("no-apply", false, "do not apply retained workspace changes after the run")
+	fs.StringVar(workdir, "w", "", "working directory, relative to the workspace root")
 	var forwards portForwardList
 	var envs, passenvs stringList
 	fs.Var(&forwards, "forward", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
+	fs.Var(&forwards, "L", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
 	fs.Var(&envs, "env", "set K=V in the job environment (repeatable)")
+	fs.Var(&envs, "e", "set K=V in the job environment (repeatable)")
 	fs.Var(&passenvs, "passenv", "forward the named local env var (repeatable)")
 	fs.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
 
@@ -408,11 +416,13 @@ func resolveHandle(handleArg, rawURL, on string) (peerURL, label, jobID string, 
 }
 
 func cmdAttach(args []string) int {
-	fs := flag.NewFlagSet("attach", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand attach", flag.ExitOnError)
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	var forwards portForwardList
 	fs.Var(&forwards, "forward", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
+	fs.Var(&forwards, "L", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
+	setFlagUsage(fs, "errand attach [options] HANDLE")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "errand attach: exactly one HANDLE (peer/ULID) is required")
@@ -429,11 +439,12 @@ func cmdAttach(args []string) int {
 }
 
 func cmdFetch(args []string) int {
-	fs := flag.NewFlagSet("fetch", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand fetch", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "apply retained workspace changes with a clean-or-refuse three-way merge")
 	conflicts := fs.Bool("conflicts", false, "materialize text conflicts and apply clean changes")
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
+	setFlagUsage(fs, "errand fetch [options] HANDLE [PATH]")
 	fs.Parse(args)
 	if fs.NArg() < 1 || fs.NArg() > 2 {
 		fmt.Fprintln(os.Stderr, "errand fetch: HANDLE (peer/ULID) and at most one changed PATH are required")
@@ -480,10 +491,12 @@ func cmdFetch(args []string) int {
 }
 
 func cmdKill(args []string) int {
-	fs := flag.NewFlagSet("kill", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand kill", flag.ExitOnError)
 	force := fs.Bool("force", false, "SIGKILL instead of SIGTERM")
+	fs.BoolVar(force, "f", false, "SIGKILL instead of SIGTERM")
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
+	setFlagUsage(fs, "errand kill [options] HANDLE")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "errand kill: exactly one HANDLE (peer/ULID) is required")
@@ -627,7 +640,8 @@ func cmdPs(args []string) int {
 }
 
 func cmdPsTo(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("ps", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand ps", flag.ExitOnError)
+	fs.SetOutput(stderr)
 	on := fs.String("on", "", "restrict to one peer name")
 	rawURL := fs.String("url", "", "restrict to one peer base URL")
 	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
@@ -637,6 +651,7 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&all, "a", false, "include terminal jobs")
 	fs.IntVar(&last, "last", 0, "show only the latest N jobs across all states")
 	fs.IntVar(&last, "n", 0, "show only the latest N jobs across all states")
+	setFlagUsage(fs, "errand ps [options]")
 	fs.Parse(args)
 	if fs.NArg() != 0 {
 		fmt.Fprintf(stderr, "errand: unexpected ps arguments: %s\n", strings.Join(fs.Args(), " "))
@@ -723,39 +738,57 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "usage: errand gc cache|jobs|changes|all [options]")
 		return 2
 	}
-	target := args[0]
-	fs := flag.NewFlagSet("gc", flag.ExitOnError)
-	on := fs.String("on", "", "peer name")
-	rawURL := fs.String("url", "", "peer base URL")
-	olderThan := fs.String("older-than", "", "remove jobs settled longer than this duration ago")
-	keep := fs.Int("keep", -1, "retain at least the newest N eligible jobs")
-	dryRun := fs.Bool("dry-run", false, "report eligible data without removing it")
-	fs.Parse(args[1:])
-	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "errand: unexpected gc arguments: %s\n", strings.Join(fs.Args(), " "))
-		return 2
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Fprintln(stderr, "usage: errand gc cache|jobs|changes|all [options]")
+		return 0
 	}
+	target := args[0]
 	if target != "cache" && target != "jobs" && target != "changes" && target != "all" {
 		fmt.Fprintf(stderr, "errand: unknown gc target %q; want cache, jobs, changes, or all\n", target)
 		return 2
 	}
-	if target == "cache" && (*olderThan != "" || *keep != -1) {
-		fmt.Fprintln(stderr, "errand: job retention flags do not apply to gc cache")
+
+	fs := flag.NewFlagSet("errand gc "+target, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var on, rawURL, olderThan string
+	keep := -1
+	dryRun := false
+	if target != "changes" {
+		fs.StringVar(&on, "on", "", "peer name")
+		fs.StringVar(&rawURL, "url", "", "peer base URL")
+	}
+	if target == "jobs" || target == "changes" || target == "all" {
+		fs.StringVar(&olderThan, "older-than", "", "remove eligible data older than this duration")
+	}
+	if target == "jobs" || target == "all" {
+		fs.IntVar(&keep, "keep", -1, "retain at least the newest N eligible jobs")
+	}
+	fs.BoolVar(&dryRun, "dry-run", false, "report eligible data without removing it")
+	fs.BoolVar(&dryRun, "n", false, "report eligible data without removing it")
+	synopsis := "errand gc " + target + " [options]"
+	if target == "changes" || target == "all" {
+		synopsis = "errand gc " + target + " --older-than DURATION [options]"
+	}
+	setFlagUsage(fs, synopsis)
+	if err := fs.Parse(args[1:]); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
 		return 2
 	}
-	if target == "changes" && *keep != -1 {
-		fmt.Fprintln(stderr, "errand: --keep does not apply to local change state")
+	if fs.NArg() != 0 {
+		fmt.Fprintf(stderr, "errand: unexpected gc arguments: %s\n", strings.Join(fs.Args(), " "))
 		return 2
 	}
 	var jobRequest proto.JobGCRequest
 	var retentionDuration time.Duration
 	if target == "jobs" || target == "all" {
-		if *olderThan == "" && *keep == -1 {
+		if olderThan == "" && keep == -1 {
 			fmt.Fprintln(stderr, "errand: gc jobs requires --older-than or --keep")
 			return 2
 		}
-		if *olderThan != "" {
-			duration, err := parseRetentionDuration(*olderThan)
+		if olderThan != "" {
+			duration, err := parseRetentionDuration(olderThan)
 			if err != nil || duration <= 0 || duration < time.Second {
 				fmt.Fprintln(stderr, "errand: --older-than must be a positive duration of at least 1s")
 				return 2
@@ -767,25 +800,21 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 			}
 			jobRequest.OlderThanSeconds = &seconds
 		}
-		if *keep != -1 {
-			if *keep < 0 {
+		if keep != -1 {
+			if keep < 0 {
 				fmt.Fprintln(stderr, "errand: --keep must not be negative")
 				return 2
 			}
-			jobRequest.Keep = keep
+			jobRequest.Keep = &keep
 		}
-		jobRequest.DryRun = *dryRun
+		jobRequest.DryRun = dryRun
 	}
 	if target == "changes" {
-		if *rawURL != "" || *on != "" {
-			fmt.Fprintln(stderr, "errand: --on and --url do not apply to local change state")
-			return 2
-		}
-		if *olderThan == "" {
+		if olderThan == "" {
 			fmt.Fprintln(stderr, "errand: gc changes requires --older-than")
 			return 2
 		}
-		duration, err := parseRetentionDuration(*olderThan)
+		duration, err := parseRetentionDuration(olderThan)
 		if err != nil || duration < time.Second {
 			fmt.Fprintln(stderr, "errand: --older-than must be a positive duration of at least 1s")
 			return 2
@@ -799,7 +828,7 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 	peerURL, label := "", "local"
 	if target != "changes" {
 		var err error
-		peerURL, label, err = resolvePeerTarget(*rawURL, *on)
+		peerURL, label, err = resolvePeerTarget(rawURL, on)
 		if err != nil {
 			fmt.Fprintf(stderr, "errand: %v\n", err)
 			return 1
@@ -807,7 +836,7 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 	}
 	failed := false
 	if target == "cache" || target == "all" {
-		result, err := client.CacheGC(peerURL, *dryRun)
+		result, err := client.CacheGC(peerURL, dryRun)
 		if err != nil {
 			fmt.Fprintf(stderr, "errand: cache gc: %v\n", err)
 			failed = true
@@ -835,7 +864,7 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		if err == nil && (result.FailedJobs != 0 || result.CleanupFailures != 0) {
 			failed = true
 		}
-		if !*dryRun {
+		if !dryRun {
 			if err := client.ReconcileCollectedJobChanges(peerURL); err != nil {
 				fmt.Fprintf(stderr, "errand: reconciling removed job changes: %v\n", err)
 				failed = true
@@ -843,7 +872,7 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if target == "changes" || target == "all" {
-		result, err := client.ChangeGC(retentionDuration, *dryRun)
+		result, err := client.ChangeGC(retentionDuration, dryRun)
 		if err != nil {
 			fmt.Fprintf(stderr, "errand: local change gc: %v\n", err)
 			failed = true
@@ -880,9 +909,12 @@ func cmdInfo(args []string) int {
 }
 
 func cmdInfoTo(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("info", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand info", flag.ExitOnError)
+	fs.SetOutput(stderr)
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
+	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
+	setFlagUsage(fs, "errand info [options]")
 	fs.Parse(args)
 	if fs.NArg() != 0 {
 		fmt.Fprintf(stderr, "errand: unexpected info arguments: %s\n", strings.Join(fs.Args(), " "))
@@ -893,34 +925,39 @@ func cmdInfoTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "errand: %v\n", err)
 		return 1
 	}
-	infos := make(map[string]proto.Info, len(read.results))
-	for _, result := range read.results {
-		infos[result.target.name] = result.value
-	}
-
-	var output any = infos
-	if (*rawURL != "" || *on != "") && len(infos) == 1 {
-		for _, info := range infos {
-			output = info
+	if *jsonOutput {
+		infos := make(map[string]proto.Info, len(read.results))
+		for _, result := range read.results {
+			infos[result.target.name] = result.value
 		}
+
+		var output any = infos
+		if (*rawURL != "" || *on != "") && len(infos) == 1 {
+			for _, info := range infos {
+				output = info
+			}
+		}
+		encoded, err := json.MarshalIndent(output, "", "  ")
+		if err != nil {
+			fmt.Fprintf(stderr, "errand: encoding runner info: %v\n", err)
+			return 1
+		}
+		fmt.Fprintln(stdout, string(encoded))
+	} else if len(read.results) != 0 {
+		writeInfo(stdout, read.results)
 	}
-	encoded, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		fmt.Fprintf(stderr, "errand: encoding runner info: %v\n", err)
-		return 1
-	}
-	fmt.Fprintln(stdout, string(encoded))
 	return read.exitCode()
 }
 
 func cmdServe(args []string) int {
-	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand serve", flag.ExitOnError)
 	cfgPath := fs.String("config", "", "path to errandd.toml")
 	listen := fs.String("listen", "", `listen address ("tailnet:7443" resolves the tailnet IP)`)
 	stateDir := fs.String("state-dir", "", "receipt and job state directory")
 	insecure := fs.Bool("insecure-no-auth", false, "DANGEROUS: skip all authorization (tests only)")
 	var allowUsers stringList
 	fs.Var(&allowUsers, "allow-user", "tailnet login allowed to use this runner (repeatable)")
+	setFlagUsage(fs, "errand serve [options]")
 	fs.Parse(args)
 
 	fileCfg, err := config.LoadDaemon(*cfgPath)
