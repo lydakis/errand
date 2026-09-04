@@ -261,11 +261,39 @@ func TestPeersListIsCompactAndRejectsHiddenSubcommands(t *testing.T) {
 			t.Fatalf("peers output overlaps with info via %q:\n%s", unwanted, text)
 		}
 	}
+	if strings.Contains(text, "DETAIL") {
+		t.Fatalf("healthy peers output includes an empty detail column:\n%s", text)
+	}
 	for _, hidden := range []string{"help", "list", "rm"} {
 		out.Reset()
 		errb.Reset()
 		if code := cmdPeersTo([]string{hidden}, &out, &errb, deps); code != 2 {
 			t.Fatalf("hidden subcommand %q exit %d, want 2", hidden, code)
+		}
+	}
+}
+
+func TestPeersListShowsDetailWhenAProbeFails(t *testing.T) {
+	deps := peersDeps{
+		load: func() (config.Client, error) {
+			return config.Client{
+				DefaultPeer: "cabal",
+				Peers: map[string]config.Peer{
+					"cabal": {URL: "http://cabal:7443"},
+				},
+			}, nil
+		},
+		probe: func(context.Context, string) (proto.Info, error) {
+			return proto.Info{}, &client.ProbeError{Kind: client.ProbeUnreachable, Detail: "connection refused"}
+		},
+	}
+	var out, errb bytes.Buffer
+	if code := cmdPeersTo(nil, &out, &errb, deps); code != 0 {
+		t.Fatalf("list exit %d: %s", code, errb.String())
+	}
+	for _, want := range []string{"DETAIL", "unreachable", "connection refused"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("peers output missing %q:\n%s", want, out.String())
 		}
 	}
 }

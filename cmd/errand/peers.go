@@ -359,16 +359,32 @@ func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 	if *jsonOutput {
 		return writeJSONRows(stdout, stderr, rows)
 	}
+	hasDetails := false
+	for _, r := range rows {
+		if r.Detail != "" {
+			hasDetails = true
+			break
+		}
+	}
 	w := tabwriter.NewWriter(stdout, 2, 8, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tDEFAULT\tTARGET\tSTATUS\tDETAIL")
+	if hasDetails {
+		fmt.Fprintln(w, "NAME\tDEFAULT\tTARGET\tSTATUS\tDETAIL")
+	} else {
+		fmt.Fprintln(w, "NAME\tDEFAULT\tTARGET\tSTATUS")
+	}
 	for _, r := range rows {
 		isDefault := ""
 		if r.Default {
 			isDefault = "yes"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			terminalSafeField(r.Name), isDefault, terminalSafeField(r.Target),
-			terminalSafeField(r.Status), terminalSafeField(r.Detail))
+		if hasDetails {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+				terminalSafeField(r.Name), isDefault, terminalSafeField(r.Target),
+				terminalSafeField(r.Status), terminalSafeField(r.Detail))
+		} else {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+				terminalSafeField(r.Name), isDefault, terminalSafeField(r.Target), terminalSafeField(r.Status))
+		}
 	}
 	w.Flush()
 	return 0
