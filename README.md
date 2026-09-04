@@ -5,6 +5,12 @@ get the result back: same command, same working tree, logs streaming to
 your terminal, real exit code. The heat, watts, and minutes are spent
 elsewhere.
 
+<p align="center">
+  <img src="docs/assets/errand-astral-projection.png" width="720" alt="Errand: running it elsewhere is a lot like astral projection.">
+</p>
+
+<p align="center"><sub>Adapted from Figure 7.1 in Daniel P. Dern's <i>The Internet Guide for New Users</i> (1994).</sub></p>
+
 > **Status: milestone 4.5.** The transactional core works end to end over a
 > tailnet, including durable detached jobs, restart reconciliation,
 > content-addressed snapshot reuse, conflict-safe workspace change capture, and
