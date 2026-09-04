@@ -223,24 +223,6 @@ func TestInsecureTestHandlerAllowsSameHost(t *testing.T) {
 	}
 }
 
-func TestDestinationScopedWhoIsVersionGate(t *testing.T) {
-	for _, tt := range []struct {
-		version string
-		want    bool
-	}{
-		{version: ""},
-		{version: "1.98.2"},
-		{version: "v1.99.0-dev"},
-		{version: "1.100.0", want: true},
-		{version: "1.101.0-dev20260829", want: true},
-		{version: "2.0.0", want: true},
-	} {
-		if got := supportsDestinationScopedWhois(tt.version); got != tt.want {
-			t.Fatalf("supportsDestinationScopedWhois(%q) = %v, want %v", tt.version, got, tt.want)
-		}
-	}
-}
-
 func TestWhoIsReusesHTTPTransport(t *testing.T) {
 	response := map[string]any{
 		"Node":        map[string]any{"Name": "laptop.tailnet.ts.net.", "StableID": "node-1"},

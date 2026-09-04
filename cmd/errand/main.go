@@ -4,23 +4,29 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/tailnet"
 	"github.com/lydakis/errand/internal/workspace"
 )
 
@@ -79,7 +85,7 @@ func main() {
 	}
 	skipResume := cliHelpRequested(args)
 	switch args[0] {
-	case "serve", "_automatic-apply", "version":
+	case "serve", "_automatic-apply", "_stdio", "version":
 		skipResume = true
 	}
 	if !skipResume {
@@ -110,6 +116,8 @@ func main() {
 		os.Exit(cmdVersion(args[1:]))
 	case "_automatic-apply":
 		os.Exit(cmdAutomaticApply(args[1:]))
+	case "_stdio":
+		os.Exit(cmdStdio(args[1:]))
 	case "-h", "--help":
 		fmt.Println(usage)
 		os.Exit(0)
@@ -355,8 +363,23 @@ func resolvePeerTarget(rawURL, on string) (peerURL, label string, err error) {
 	if label == "" {
 		label = cfg.DefaultPeer
 	}
-	peerURL, err = cfg.PeerURL(on)
+	peerURL, err = configuredPeerURL(cfg, on)
 	return peerURL, label, err
+}
+
+func configuredPeerURL(cfg config.Client, name string) (string, error) {
+	peerURL, err := cfg.PeerURL(name)
+	if err != nil {
+		return "", err
+	}
+	identity := name
+	if identity == "" {
+		identity = cfg.DefaultPeer
+	}
+	peerURL = client.ConfigureSSHPeer(
+		peerURL, identity, cfg.SSHRemoteCommand(name), cfg.SSHRemoteSocket(name),
+	)
+	return peerURL, nil
 }
 
 // resolveHandle turns "peer/ULID" or a bare ULID into (peerURL, label, jobID).
@@ -378,7 +401,7 @@ func resolveHandle(handleArg, rawURL, on string) (peerURL, label, jobID string, 
 	switch {
 	case rawURL != "":
 		effectiveURL := strings.TrimSuffix(rawURL, "/")
-		if strings.HasPrefix(prefix, "http://") || strings.HasPrefix(prefix, "https://") {
+		if strings.HasPrefix(prefix, "http://") || strings.HasPrefix(prefix, "https://") || strings.HasPrefix(prefix, "ssh://") {
 			handleURL := strings.TrimSuffix(prefix, "/")
 			if handleURL != effectiveURL {
 				return "", "", "", fmt.Errorf("handle peer %q conflicts with --url %q", handleURL, effectiveURL)
@@ -395,7 +418,7 @@ func resolveHandle(handleArg, rawURL, on string) (peerURL, label, jobID string, 
 		}
 	case prefix == "":
 		peerURL, label, err = resolvePeerTarget("", "")
-	case strings.HasPrefix(prefix, "http://") || strings.HasPrefix(prefix, "https://"):
+	case strings.HasPrefix(prefix, "http://") || strings.HasPrefix(prefix, "https://") || strings.HasPrefix(prefix, "ssh://"):
 		peerURL = strings.TrimSuffix(prefix, "/")
 		label = peerURL
 	default:
@@ -403,7 +426,7 @@ func resolveHandle(handleArg, rawURL, on string) (peerURL, label, jobID string, 
 		if cfgErr != nil {
 			return "", "", "", cfgErr
 		}
-		peerURL, err = cfg.PeerURL(prefix)
+		peerURL, err = configuredPeerURL(cfg, prefix)
 		if err != nil {
 			return "", "", "", err
 		}
@@ -610,7 +633,7 @@ func peerTargets(rawURL, on string) ([]peerTarget, []error, error) {
 		return nil, nil, err
 	}
 	if on != "" {
-		url, err := cfg.PeerURL(on)
+		url, err := configuredPeerURL(cfg, on)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -625,7 +648,7 @@ func peerTargets(rawURL, on string) ([]peerTarget, []error, error) {
 	targets := make([]peerTarget, 0, len(names))
 	var warnings []error
 	for _, name := range names {
-		url, err := cfg.PeerURL(name)
+		url, err := configuredPeerURL(cfg, name)
 		if err != nil {
 			warnings = append(warnings, fmt.Errorf("peer %s: %w", name, err))
 			continue
@@ -952,7 +975,7 @@ func cmdInfoTo(args []string, stdout, stderr io.Writer) int {
 func cmdServe(args []string) int {
 	fs := flag.NewFlagSet("errand serve", flag.ExitOnError)
 	cfgPath := fs.String("config", "", "path to errandd.toml")
-	listen := fs.String("listen", "", `listen address ("tailnet:7443" resolves the tailnet IP)`)
+	listen := fs.String("listen", "", `listen address ("tailnet:7443" resolves the tailnet IP; "none" is SSH-only)`)
 	stateDir := fs.String("state-dir", "", "receipt and job state directory")
 	insecure := fs.Bool("insecure-no-auth", false, "DANGEROUS: skip all authorization (tests only)")
 	var allowUsers stringList
@@ -972,9 +995,16 @@ func cmdServe(args []string) int {
 	}
 	fileCfg.AllowUsers = append(fileCfg.AllowUsers, allowUsers...)
 
-	addr, err := config.ResolveListen(fileCfg.Listen, fileCfg.TailscaledSocket)
-	if err != nil {
-		log.Fatalf("errand serve: %v", err)
+	tcpEnabled := !strings.EqualFold(strings.TrimSpace(fileCfg.Listen), config.DisabledListener)
+	var identity tailnet.Provider
+	var addr string
+	if tcpEnabled {
+		addr, identity, err = resolveServeTransport(
+			fileCfg.Listen, *insecure, fileCfg.TailscaledSocket, fileCfg.TailscaleCLI, tailnet.Discover,
+		)
+		if err != nil {
+			log.Fatalf("errand serve: %v", err)
+		}
 	}
 	d, err := daemon.New(daemon.Config{
 		Listen:           addr,
@@ -982,6 +1012,7 @@ func cmdServe(args []string) int {
 		AllowUsers:       fileCfg.AllowUsers,
 		Capability:       fileCfg.Capability,
 		TailscaledSocket: fileCfg.TailscaledSocket,
+		Identity:         identity,
 		InsecureNoAuth:   *insecure,
 		Version:          version,
 		CacheDisabled:    fileCfg.Cache.Disabled,
@@ -994,19 +1025,148 @@ func cmdServe(args []string) int {
 		log.Fatalf("errand serve: %v", err)
 	}
 	defer d.Close()
-	mode := "tailnet whois"
-	if *insecure {
-		mode = "INSECURE no-auth"
+	handler := d.Handler()
+	socketPath := fileCfg.SocketPath()
+	unixListener, err := listenUnixSocket(socketPath)
+	if err != nil {
+		log.Fatalf("errand serve: %v", err)
 	}
-	log.Printf("errand %s serving on %s (%s; state %s)", version, addr, mode, fileCfg.StateDir)
-	server := &http.Server{
-		Addr: addr, Handler: d.Handler(),
+	defer os.Remove(socketPath)
+	if tcpEnabled {
+		mode := "INSECURE no-auth"
+		if identity != nil {
+			mode = "tailnet whois via " + identity.Name()
+		}
+		log.Printf("errand %s serving on %s (%s) and %s (SSH); state %s",
+			version, addr, mode, socketPath, fileCfg.StateDir)
+	} else {
+		log.Printf("errand %s serving on %s (SSH only); state %s", version, socketPath, fileCfg.StateDir)
+	}
+
+	unixServer := &http.Server{
+		Handler:           handler,
+		ConnContext:       daemon.ConnContext,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Minute,
 		IdleTimeout:       2 * time.Minute,
 	}
-	if err := server.ListenAndServe(); err != nil {
+	errs := make(chan error, 2)
+	go func() { errs <- unixServer.Serve(unixListener) }()
+	if tcpEnabled {
+		tcpServer := &http.Server{
+			Addr: addr, Handler: handler,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Minute,
+			IdleTimeout:       2 * time.Minute,
+		}
+		go func() { errs <- tcpServer.ListenAndServe() }()
+	}
+	if err := <-errs; err != nil {
 		log.Fatalf("errand serve: %v", err)
 	}
+	return 0
+}
+
+type tailnetDiscoverFunc func(string, string) (tailnet.Provider, error)
+
+func resolveServeTransport(
+	listen string,
+	insecure bool,
+	socket string,
+	cli string,
+	discover tailnetDiscoverFunc,
+) (string, tailnet.Provider, error) {
+	var provider tailnet.Provider
+	var selfIPs func(context.Context) ([]string, error)
+	host, _, splitErr := net.SplitHostPort(listen)
+	needsTailnetAddress := splitErr == nil && host == "tailnet"
+	if !insecure || needsTailnetAddress {
+		var err error
+		provider, err = discover(socket, cli)
+		if err != nil {
+			return "", nil, err
+		}
+		selfIPs = provider.SelfIPs
+	}
+	addr, err := config.ResolveListen(listen, selfIPs)
+	if err != nil {
+		return "", nil, err
+	}
+	if insecure {
+		provider = nil
+	}
+	return addr, provider, nil
+}
+
+// listenUnixSocket binds the daemon's local socket, replacing a stale one
+// left by a previous instance (the state-dir flock already guarantees a
+// single live daemon per state directory).
+func listenUnixSocket(path string) (net.Listener, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	if fi, err := os.Lstat(path); err == nil {
+		if fi.Mode()&os.ModeSocket == 0 {
+			return nil, fmt.Errorf("local socket path %q exists and is not a socket", path)
+		}
+		conn, dialErr := net.DialTimeout("unix", path, 250*time.Millisecond)
+		if dialErr == nil {
+			conn.Close()
+			return nil, fmt.Errorf("local socket %q already has a live listener", path)
+		}
+		if !errors.Is(dialErr, syscall.ECONNREFUSED) {
+			return nil, fmt.Errorf("checking existing local socket %q: %w", path, dialErr)
+		}
+		if err := os.Remove(path); err != nil {
+			return nil, fmt.Errorf("removing stale local socket: %w", err)
+		}
+	}
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		return nil, fmt.Errorf("binding local socket %s: %w", path, err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		listener.Close()
+		return nil, err
+	}
+	return listener, nil
+}
+
+// cmdStdio bridges an SSH session to the daemon's Unix socket.
+func cmdStdio(args []string) int {
+	fs := flag.NewFlagSet("errand _stdio", flag.ContinueOnError)
+	socketFlag := fs.String("socket", "", "daemon Unix socket (default from errandd.toml / state dir)")
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	socket := *socketFlag
+	if socket == "" {
+		cfg, err := config.LoadDaemon("")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "errand _stdio: %v\n", err)
+			return 1
+		}
+		socket = cfg.SocketPath()
+	}
+	conn, err := net.DialTimeout("unix", socket, 5*time.Second)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand _stdio: no runner at %s (is errand serve running here?): %v\n", socket, err)
+		return 1
+	}
+	defer conn.Close()
+	done := make(chan struct{}, 2)
+	go func() {
+		_, _ = io.Copy(conn, os.Stdin)
+		if uc, ok := conn.(*net.UnixConn); ok {
+			_ = uc.CloseWrite()
+		}
+		done <- struct{}{}
+	}()
+	go func() {
+		_, _ = io.Copy(os.Stdout, conn)
+		done <- struct{}{}
+	}()
+	<-done // either direction ending ends the bridge; the other unblocks on close
 	return 0
 }

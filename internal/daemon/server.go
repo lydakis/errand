@@ -30,6 +30,7 @@ import (
 	"github.com/lydakis/errand/internal/logio"
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/tailnet"
 )
 
 const StateAmbiguous = proto.StateAmbiguous
@@ -53,6 +54,7 @@ type Config struct {
 	Capability       string
 	TailscaledSocket string
 	InsecureNoAuth   bool
+	Identity         tailnet.Provider
 	MaxUploadBytes   int64
 	MaxLimits        proto.Limits // ceiling a spec may request
 	Version          string
@@ -68,9 +70,10 @@ type Config struct {
 }
 
 type Daemon struct {
-	cfg         Config
-	whoisClient *http.Client
-	cache       *blobCache // nil when the cache is disabled
+	cfg      Config
+	identity tailnet.Provider
+	selfUID  uint32
+	cache    *blobCache // nil when the cache is disabled
 
 	mu        sync.Mutex
 	jobs      map[string]*Job
@@ -93,8 +96,9 @@ func New(cfg Config) (*Daemon, error) {
 	if cfg.Capability == "" {
 		cfg.Capability = proto.DefaultCapability
 	}
-	if cfg.TailscaledSocket == "" {
-		cfg.TailscaledSocket = "/var/run/tailscale/tailscaled.sock"
+	identity := cfg.Identity
+	if identity == nil && cfg.TailscaledSocket != "" {
+		identity = tailnet.NewLocalAPI(cfg.TailscaledSocket)
 	}
 	if cfg.MaxLimits == (proto.Limits{}) {
 		cfg.MaxLimits = proto.DefaultLimits()
@@ -132,7 +136,7 @@ func New(cfg Config) (*Daemon, error) {
 	}
 	d := &Daemon{
 		cfg: cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{},
-		whoisClient: newWhoisClient(cfg.TailscaledSocket),
+		identity: identity, selfUID: currentUID(),
 	}
 	if err := d.lockStateDir(); err != nil {
 		return nil, err
@@ -180,9 +184,6 @@ func (d *Daemon) lockStateDir() error {
 // Close releases the process-wide ownership of the daemon state directory.
 func (d *Daemon) Close() error {
 	d.closeOnce.Do(func() {
-		if d.whoisClient != nil {
-			d.whoisClient.CloseIdleConnections()
-		}
 		if d.lockFile == nil {
 			return
 		}
@@ -623,12 +624,16 @@ type handlerFunc func(http.ResponseWriter, *http.Request, Identity)
 // authorization suffices, e.g. for /v0/info). Fail closed.
 func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		localAddr, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
-		if !d.cfg.InsecureNoAuth && unsupportedSelfTarget(r.RemoteAddr, localAddr) {
-			httpError(w, http.StatusForbidden, "self-targeting is not supported; choose another peer")
-			return
+		// Unix-socket callers are identified by kernel credentials; the
+		// same-host rule exists only because WhoIs cannot see loopback.
+		if _, local := localPeerFromContext(r.Context()); !local && !d.cfg.InsecureNoAuth {
+			localAddr, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+			if unsupportedSelfTarget(r.RemoteAddr, localAddr) {
+				httpError(w, http.StatusForbidden, "self-targeting is not supported; choose another peer")
+				return
+			}
 		}
-		id, err := d.identify(r.RemoteAddr, localAddr)
+		id, err := d.identifyRequest(r)
 		if err != nil {
 			httpError(w, http.StatusForbidden, err.Error())
 			return
@@ -831,6 +836,7 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		Time: time.Now(), UserID: id.UserID, UserLogin: id.Login,
 		NodeID: id.NodeID, NodeName: id.Node,
 		RemoteAddr: r.RemoteAddr, Method: id.Method,
+		LocalUID: int64(id.LocalUID), LocalUser: id.LocalUser,
 		Project: project, ProjectTruncated: projectTruncated, Facts: measureFacts(),
 	}
 	j.state = proto.StateStaging

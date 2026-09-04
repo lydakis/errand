@@ -731,6 +731,7 @@ func TestClientRunsThroughQueueTransparently(t *testing.T) {
 	if queuedID == "" {
 		t.Fatalf("client job never queued; stderr: %s", errb.String())
 	}
+	time.Sleep(350 * time.Millisecond)
 
 	forceKill(t, ts.URL, blocker)
 	select {

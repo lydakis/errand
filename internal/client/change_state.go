@@ -107,6 +107,9 @@ func localChangeClientID() (string, error) {
 type localChangeState struct {
 	JobID              string              `json:"job_id"`
 	PeerURL            string              `json:"peer_url"`
+	SSHTarget          string              `json:"ssh_target,omitempty"`
+	SSHRemoteCommand   string              `json:"ssh_remote_command,omitempty"`
+	SSHRemoteSocket    string              `json:"ssh_remote_socket,omitempty"`
 	Root               string              `json:"root"`
 	RootID             fsidentity.Identity `json:"root_identity"`
 	ManifestRoot       string              `json:"manifest_root"`

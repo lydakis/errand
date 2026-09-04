@@ -4,16 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/netip"
-	"net/url"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/tailnet"
 )
 
 // Identity is who a request came from and what they may do. Fail closed:
@@ -23,8 +20,14 @@ type Identity struct {
 	UserID  int64
 	Node    string
 	NodeID  string
-	Method  string // capability | allowlist | insecure-test
+	Method  string // capability | allowlist | local | insecure-test
 	Actions map[string]bool
+
+	// Local is set for Unix-socket callers (the SSH transport terminates
+	// there); identity comes from kernel peer credentials, not WhoIs.
+	Local     bool
+	LocalUID  uint32
+	LocalUser string
 }
 
 func (id Identity) Allowed(action string) bool {
@@ -34,6 +37,9 @@ func (id Identity) Allowed(action string) bool {
 // Owner is the ownership principal per the design: the authenticated
 // tailnet user when one exists, otherwise the node identity.
 func (id Identity) Owner() string {
+	if id.Local {
+		return fmt.Sprintf("local-user:%d", id.LocalUID)
+	}
 	if id.Login != "" {
 		if id.UserID == 0 {
 			return ""
@@ -46,65 +52,23 @@ func (id Identity) Owner() string {
 	return "tailnet-node:" + id.NodeID
 }
 
-type whoisResponse struct {
-	Node struct {
-		Name     string `json:"Name"`
-		StableID string `json:"StableID"`
-	} `json:"Node"`
-	UserProfile struct {
-		ID        int64  `json:"ID"`
-		LoginName string `json:"LoginName"`
-	} `json:"UserProfile"`
-	CapMap map[string][]json.RawMessage `json:"CapMap"`
-}
-
 type capRule struct {
 	Actions []string `json:"actions"`
 }
 
-// whois asks the local tailscaled who owns remoteAddr, over its Unix
-// socket LocalAPI.
-func newWhoisClient(socket string) *http.Client {
-	return &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				var dialer net.Dialer
-				return dialer.DialContext(ctx, "unix", socket)
-			},
-		},
-	}
-}
-
-func (d *Daemon) whois(remoteAddr string, localAddr net.Addr) (whoisResponse, error) {
-	var resp whoisResponse
-	if d.whoisClient == nil {
-		return resp, fmt.Errorf("whois: client is not initialized")
+// whois asks tailscaled (through whichever provider was discovered) who owns
+// remoteAddr as seen arriving at this listener's address.
+func (d *Daemon) whois(remoteAddr string, localAddr net.Addr) (tailnet.WhoIs, error) {
+	if d.identity == nil {
+		return tailnet.WhoIs{}, fmt.Errorf("whois: no tailnet identity provider is configured")
 	}
 	destination, err := acceptedDestinationIP(localAddr)
 	if err != nil {
-		return resp, fmt.Errorf("whois: %w", err)
+		return tailnet.WhoIs{}, fmt.Errorf("whois: %w", err)
 	}
-	query := url.Values{"addr": {remoteAddr}, "dst_ip": {destination}}
-	u := "http://local-tailscaled.sock/localapi/v0/whois?" + query.Encode()
-	res, err := d.whoisClient.Get(u)
-	if err != nil {
-		return resp, fmt.Errorf("whois: %w", err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return resp, fmt.Errorf("whois: tailscaled returned %s", res.Status)
-	}
-	if !supportsDestinationScopedWhois(res.Header.Get("Tailscale-Version")) {
-		return resp, fmt.Errorf("whois: tailscaled %q does not support destination-scoped WhoIs (requires 1.100 or newer)", res.Header.Get("Tailscale-Version"))
-	}
-	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return resp, fmt.Errorf("whois: %w", err)
-	}
-	if _, err := io.Copy(io.Discard, res.Body); err != nil {
-		return resp, fmt.Errorf("whois: draining response: %w", err)
-	}
-	return resp, nil
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return d.identity.WhoIs(ctx, remoteAddr, destination)
 }
 
 func acceptedDestinationIP(localAddr net.Addr) (string, error) {
@@ -154,22 +118,6 @@ func unsupportedSelfTarget(remoteAddr string, localAddr net.Addr) bool {
 	return err == nil && !ip.IsLoopback()
 }
 
-func supportsDestinationScopedWhois(raw string) bool {
-	parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(raw), "v"), ".")
-	if len(parts) < 2 {
-		return false
-	}
-	major, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return false
-	}
-	minor, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return false
-	}
-	return major > 1 || major == 1 && minor >= 100
-}
-
 // identify resolves and authorizes a caller. Authorization comes from the
 // tailnet ACL capability (action schema, additive merge) or the runner's
 // local allowlist; anything else is refused.
@@ -182,8 +130,8 @@ func (d *Daemon) identify(remoteAddr string, localAddr net.Addr) (Identity, erro
 		return Identity{}, err
 	}
 	id := Identity{
-		Login: w.UserProfile.LoginName, UserID: w.UserProfile.ID,
-		Node: w.Node.Name, NodeID: w.Node.StableID, Actions: map[string]bool{},
+		Login: w.LoginName, UserID: w.UserID,
+		Node: w.NodeName, NodeID: w.NodeStableID, Actions: map[string]bool{},
 	}
 	if id.Owner() == "" {
 		return id, fmt.Errorf("whois returned no stable owner identity for %s (%s)", id.Login, id.Node)
@@ -214,7 +162,36 @@ func (d *Daemon) identify(remoteAddr string, localAddr net.Addr) (Identity, erro
 	return id, nil
 }
 
+// identifyRequest resolves a request's caller: Unix-socket peers by kernel
+// credentials, everyone else by tailnet WhoIs.
+func (d *Daemon) identifyRequest(r *http.Request) (Identity, error) {
+	if peer, ok := localPeerFromContext(r.Context()); ok {
+		return d.identifyLocal(peer)
+	}
+	localAddr, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	return d.identify(r.RemoteAddr, localAddr)
+}
+
+func (d *Daemon) identifyLocal(peer LocalPeer) (Identity, error) {
+	id := Identity{
+		Method: "local", Local: true, LocalUID: peer.UID, LocalUser: peer.User,
+		Login: peer.User, Actions: map[string]bool{},
+	}
+	if d.cfg.InsecureNoAuth {
+		id.Actions["*"] = true
+		return id, nil
+	}
+	if peer.UID != d.selfUID {
+		return id, fmt.Errorf("local user %s (uid %d) holds no errand authorization", peer.User, peer.UID)
+	}
+	id.Actions["*"] = true
+	return id, nil
+}
+
 func admissionOwner(a proto.Admission) string {
+	if a.LocalUser != "" || a.Method == "local" {
+		return fmt.Sprintf("local-user:%d", a.LocalUID)
+	}
 	return (Identity{
 		Login: a.UserLogin, UserID: a.UserID,
 		Node: a.NodeName, NodeID: a.NodeID,

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lydakis/errand/internal/tailnet"
 )
 
 func TestConfigDirFailsClosedWithoutAbsoluteUserRoot(t *testing.T) {
@@ -149,7 +151,7 @@ func TestResolveListenUsesTailscaleLocalAPIAddress(t *testing.T) {
 		listener.Close()
 	})
 
-	got, err := ResolveListen("tailnet:7443", socket)
+	got, err := ResolveListen("tailnet:7443", tailnet.NewLocalAPI(socket).SelfIPs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +162,7 @@ func TestResolveListenUsesTailscaleLocalAPIAddress(t *testing.T) {
 
 func TestResolveListenRejectsLoopback(t *testing.T) {
 	for _, address := range []string{"127.0.0.1:7443", "[::1]:7443", "localhost:7443"} {
-		if got, err := ResolveListen(address, filepath.Join(t.TempDir(), "missing.sock")); err == nil {
+		if got, err := ResolveListen(address, nil); err == nil {
 			t.Fatalf("loopback listener %q resolved to %q, want an error", address, got)
 		}
 	}
@@ -168,9 +170,16 @@ func TestResolveListenRejectsLoopback(t *testing.T) {
 
 func TestResolveListenLeavesExplicitRemoteAddressAlone(t *testing.T) {
 	const address = "100.101.102.103:7443"
-	got, err := ResolveListen(address, filepath.Join(t.TempDir(), "missing.sock"))
+	got, err := ResolveListen(address, nil)
 	if err != nil || got != address {
 		t.Fatalf("explicit listener = %q, %v", got, err)
+	}
+}
+
+func TestResolveListenCanDisableTCP(t *testing.T) {
+	got, err := ResolveListen("none", nil)
+	if err != nil || got != "" {
+		t.Fatalf("disabled TCP listener = %q, %v", got, err)
 	}
 }
 
@@ -197,7 +206,39 @@ func TestResolveListenFailsClosedWithoutAssignedTailscaleIP(t *testing.T) {
 		listener.Close()
 	})
 
-	if got, err := ResolveListen("tailnet:7443", socket); err == nil {
+	if got, err := ResolveListen("tailnet:7443", tailnet.NewLocalAPI(socket).SelfIPs); err == nil {
 		t.Fatalf("tailnet listener without an assigned Tailscale IP = %q, want an error", got)
+	}
+}
+
+func TestSSHPeersResolveToSSHURLsWithoutLeakingTheCommand(t *testing.T) {
+	c := Client{DefaultPeer: "mini", Peers: map[string]Peer{
+		"mini":   {SSH: "george@mini", RemoteCommand: "~/.local/bin/errand", RemoteSocket: "/srv/errand/runner.sock"},
+		"both":   {SSH: "mini", URL: "http://mini:7443"},
+		"weird":  {SSH: "mini/../x"},
+		"secret": {SSH: "george:password@mini"},
+		"socket": {SSH: "mini", RemoteSocket: "relative.sock"},
+	}}
+	u, err := c.PeerURL("")
+	if err != nil || u != "ssh://george@mini" {
+		t.Fatalf("ssh peer url = %q, %v", u, err)
+	}
+	if got := c.SSHRemoteCommand(""); got != "~/.local/bin/errand" {
+		t.Fatalf("remote command = %q", got)
+	}
+	if got := c.SSHRemoteSocket(""); got != "/srv/errand/runner.sock" {
+		t.Fatalf("remote socket = %q", got)
+	}
+	if _, err := c.PeerURL("both"); err == nil {
+		t.Fatal("a peer with both url and ssh must be rejected")
+	}
+	if _, err := c.PeerURL("weird"); err == nil {
+		t.Fatal("ssh host with path characters must be rejected")
+	}
+	if _, err := c.PeerURL("secret"); err == nil {
+		t.Fatal("ssh target with password syntax must be rejected")
+	}
+	if _, err := c.PeerURL("socket"); err == nil {
+		t.Fatal("a relative remote socket must be rejected")
 	}
 }

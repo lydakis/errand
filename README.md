@@ -13,7 +13,7 @@ elsewhere.
 ## Quickstart
 
 ```
-# on a runner (Linux box on your tailnet)
+# on a runner
 errand serve                  # config: ~/.config/errand/errandd.toml
 
 # on a caller
@@ -41,9 +41,28 @@ Frequent execution flags follow familiar CLI conventions: `-d` is
 long-form so their meaning stays explicit. Use `--help` at the relevant
 level, for example `errand info --help` or `errand gc jobs --help`.
 
-Runner config authorizes callers by tailnet identity (whois): an ACL app
-capability or a local `allow_users` list. Destination-scoped capability
-checks require Tailscale 1.100 or newer. No keys, no credentials stored.
+Runner access can use a tailnet URL or SSH. Tailnet callers are authorized by
+WhoIs identity through an ACL app capability or `allow_users`. The daemon uses
+a tailscaled LocalAPI socket when available and falls back to the `tailscale`
+CLI, including for the standalone macOS app. CLI-based WhoIs cannot provide
+destination-scoped capabilities, so that path requires `allow_users`.
+
+An SSH peer uses the same HTTP protocol over `ssh HOST errand _stdio`. The
+daemon accepts the bridge through a private Unix socket and verifies that it
+runs as the daemon's OS user. Configure an ssh_config alias and an absolute
+binary path when non-interactive SSH does not include Errand on `PATH`:
+
+```toml
+[peers.cabal]
+ssh = "cabal"
+remote_command = "/usr/local/bin/errand"
+remote_socket = "/srv/errand/errand.sock"
+```
+
+`remote_socket` is needed only when the runner uses a non-default socket.
+Set `listen = "none"` in `errandd.toml` for an SSH-only runner. SSH handles
+host authentication, keys, jump hosts, and caller access. Jobs submitted over
+SSH and the tailnet have separate owners.
 Runners execute one job at a time by default and queue up to eight more. Set
 `max_jobs` and `max_queued` in `errandd.toml` to change those limits;
 `max_queued = 0` disables queueing.
@@ -110,18 +129,17 @@ transaction ssh doesn't attempt. The implemented milestones provide:
 - **A receipt:** an append-only record of what was asked, who asked, what
   ran, and what happened.
 
-The remaining v0 work includes explicitly declared named caches, fact-based
-peer selection, and direct LAN pairing.
+The remaining v0 work includes explicitly declared named caches and
+fact-based peer selection.
 
 ## Shape
 
-One binary, symmetric peers, no controller. Transport and identity come
-from your [tailnet](https://tailscale.com) (WhoIs + ACL capability grants;
-errand stores zero credentials) or, later, from direct LAN pairing with
-pinned device keys. The current execution backend runs directly on the
-host. Rootless containers and Nix devshells are planned. Symmetry means that
-each machine can send work to other peers and receive work from them; Errand
-rejects a client connection to a runner on the same machine.
+One binary, symmetric peers, no controller. Transport and identity come from
+your [tailnet](https://tailscale.com) or SSH. The current execution backend
+runs directly on the host. Rootless containers and Nix devshells are planned.
+Symmetry means that each machine can send work to other peers and receive work
+from them. Errand rejects a tailnet client connection to a runner on the same
+machine; SSH reaches the daemon through its private local socket.
 
 ```
 errand -- cargo test                   # configured default peer
@@ -150,8 +168,8 @@ connection.
 Detached jobs, `ps`, `attach`, `kill`, workspace-root discovery, automatic
 workspace change capture and conflict-safe application, TCP forwarding,
 snapshot caching, fleet storage reporting, and cache and receipt GC are
-implemented. Planned v0 commands still include fact-based peer selection,
-named-cache management, and pairing.
+implemented. Planned v0 commands still include fact-based peer selection and
+named-cache management.
 
 After every command, Errand compares the final remote workspace with the
 submitted snapshot and retains every snapshot-representable created, modified,

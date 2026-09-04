@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net"
 	"net/http"
@@ -172,6 +173,60 @@ func TestForwardSessionCarriesOpaqueTrafficAndClosesOnDetach(t *testing.T) {
 	_ = local.SetReadDeadline(time.Now().Add(time.Second))
 	if _, err := local.Read(make([]byte, 1)); err == nil {
 		t.Fatal("local connection remained open after the forwarding session closed")
+	}
+}
+
+func TestForwardSessionUsesSSHTransport(t *testing.T) {
+	jobID := "01K4Q8ZJ2M0000000000000000"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v0/jobs/"+jobID+"/ports/4321/connect" {
+			http.NotFound(w, r)
+			return
+		}
+		if err := http.NewResponseController(w).EnableFullDuplex(); err != nil {
+			t.Error(err)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		payload := make([]byte, 4)
+		if _, err := io.ReadFull(r.Body, payload); err != nil {
+			return
+		}
+		_, _ = w.Write(payload)
+		w.(http.Flusher).Flush()
+	}))
+	defer server.Close()
+
+	oldDial := dialSSHConnection
+	dialSSHConnection = func(ctx context.Context, _, _ string) (net.Conn, error) {
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, "tcp", server.Listener.Addr().String())
+	}
+	t.Cleanup(func() { dialSSHConnection = oldDial })
+
+	localPort := unusedTCPPort(t)
+	session, err := bindPortForwards([]PortForward{{Local: localPort, Remote: 4321}}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	session.Start("ssh://forward-test", jobID)
+	local, err := net.Dial("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(int(localPort))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer local.Close()
+	payload := []byte("ping")
+	if _, err := local.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	got := make([]byte, len(payload))
+	if _, err := io.ReadFull(local, got); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("ssh forward round trip = %q, want %q", got, payload)
 	}
 }
 

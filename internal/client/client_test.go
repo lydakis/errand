@@ -1024,6 +1024,82 @@ func TestAutomaticApplyWorkerEnvironmentOmitsUnrelatedSecrets(t *testing.T) {
 	}
 }
 
+func TestConfiguredSSHPeersKeepEndpointSettingsSeparate(t *testing.T) {
+	first := ConfigureSSHPeer("ssh://shared-host", "stable", "/opt/stable/errand", "/run/stable.sock")
+	second := ConfigureSSHPeer("ssh://shared-host", "dev", "/opt/dev/errand", "/run/dev.sock")
+	if first == second {
+		t.Fatalf("configured SSH peer URLs collide: %q", first)
+	}
+	for _, tc := range []struct {
+		url, target, command, socket string
+	}{
+		{first, "shared-host", "/opt/stable/errand", "/run/stable.sock"},
+		{second, "shared-host", "/opt/dev/errand", "/run/dev.sock"},
+	} {
+		endpoint := sshEndpointForPeer(tc.url)
+		if endpoint.target != tc.target || endpoint.command != tc.command || endpoint.socket != tc.socket {
+			t.Fatalf("SSH endpoint for %q = %+v", tc.url, endpoint)
+		}
+	}
+	updated := ConfigureSSHPeer("ssh://shared-host", "stable", "/new/errand", "/run/new.sock")
+	if updated != first {
+		t.Fatalf("changing transport details changed durable peer identity: %q != %q", updated, first)
+	}
+	endpoint := sshEndpointForPeer(updated)
+	if endpoint.command != "/new/errand" || endpoint.socket != "/run/new.sock" {
+		t.Fatalf("updated SSH endpoint = %+v", endpoint)
+	}
+}
+
+func TestDialSSHDrainsStdoutAfterProcessExit(t *testing.T) {
+	dir := t.TempDir()
+	fakeSSH := filepath.Join(dir, "ssh")
+	if err := os.WriteFile(fakeSSH, []byte("#!/bin/sh\nprintf 'complete-response'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	conn, err := dialSSH(context.Background(), "fake", "ignored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	time.Sleep(100 * time.Millisecond) // let the child exit before the first read
+	got, err := io.ReadAll(conn)
+	if err != nil {
+		t.Fatalf("reading buffered SSH output after process exit: %v", err)
+	}
+	if string(got) != "complete-response" {
+		t.Fatalf("SSH output = %q", got)
+	}
+}
+
+func TestAutomaticApplyRestoresPersistedSSHEndpoint(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("ERRAND_SSH_COMMAND", "")
+	root := t.TempDir()
+	peerURL := ConfigureSSHPeer(
+		"ssh://automatic-apply-test", "test", "/opt/errand", "/run/errand-test.sock",
+	)
+	jobID := proto.NewULID()
+
+	opts := RunOptions{PeerURL: peerURL, Root: root, ApplyOnSuccess: true}
+	if err := initializeChangeState(context.Background(), &opts, jobID, (proto.Manifest{}).RootHash()); err != nil {
+		t.Fatal(err)
+	}
+	state, err := loadLocalChangeState(peerURL, jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sshEndpoints.Delete(peerURL)
+	restoreSSHEndpoint(state)
+	endpoint := sshEndpointForPeer(peerURL)
+	if endpoint.target != "automatic-apply-test" || endpoint.command != "/opt/errand" || endpoint.socket != "/run/errand-test.sock" {
+		t.Fatalf("restored SSH endpoint = %+v", endpoint)
+	}
+}
+
 func TestInteractiveDetachCancelsOnlyTheLocalLogFollow(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
@@ -1411,6 +1487,36 @@ func TestQueuedInterruptAtAdmissionStaysLocal(t *testing.T) {
 	)
 	if controller != nil {
 		t.Fatal("queued pre-admission interrupt started remote control")
+	}
+}
+
+func TestQueueNoticeRequiresAContinuingWait(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		state string
+		want  bool
+	}{
+		{name: "still queued", state: proto.StateQueued, want: true},
+		{name: "already running", state: proto.StateRunning, want: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			jobID := proto.NewULID()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v0/jobs/"+jobID {
+					http.NotFound(w, r)
+					return
+				}
+				json.NewEncoder(w).Encode(proto.JobStatus{ID: jobID, State: test.state})
+			}))
+			defer server.Close()
+
+			var stderr bytes.Buffer
+			reportQueueWaitAfter(context.Background(), server.URL, jobID, &stderr, 0)
+			got := strings.Contains(stderr.String(), "queued on the runner")
+			if got != test.want {
+				t.Fatalf("queue notice present = %v, want %v; output %q", got, test.want, stderr.String())
+			}
+		})
 	}
 }
 

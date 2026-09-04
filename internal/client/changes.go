@@ -29,8 +29,10 @@ func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifes
 		return fmt.Errorf("loading local change client identity: %w", err)
 	}
 	opts.changeClientID = clientID
+	ssh := sshEndpointForPeer(opts.PeerURL)
 	state := localChangeState{
 		JobID: jobID, PeerURL: strings.TrimSuffix(opts.PeerURL, "/"), Root: opts.Root,
+		SSHTarget: ssh.target, SSHRemoteCommand: ssh.command, SSHRemoteSocket: ssh.socket,
 		ManifestRoot: manifestRoot, ApplyOnSuccess: opts.ApplyOnSuccess,
 	}
 	if opts.ApplyOnSuccess {

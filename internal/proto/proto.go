@@ -205,7 +205,9 @@ type Admission struct {
 	NodeID           string    `json:"node_id,omitempty"`
 	NodeName         string    `json:"node_name,omitempty"`
 	RemoteAddr       string    `json:"remote_addr"`
-	Method           string    `json:"method"` // capability | allowlist | insecure-test
+	Method           string    `json:"method"` // capability | allowlist | local | insecure-test
+	LocalUID         int64     `json:"local_uid,omitempty"`
+	LocalUser        string    `json:"local_user,omitempty"`
 	Project          string    `json:"project,omitempty"`
 	ProjectTruncated bool      `json:"project_truncated,omitempty"`
 	Facts            Facts     `json:"facts"`

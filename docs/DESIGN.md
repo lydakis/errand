@@ -61,8 +61,8 @@ properties are what make the round-trip trustworthy.
   It is honest about its own trust level (see Receipt trust). Never
   overwritten into fiction *by errand*.
 - Boring on purpose. One binary, one daemon, one application protocol.
-  Files on disk. (One protocol, not necessarily one literal socket — tailnet
-  HTTP and LAN mTLS may want separate listeners sharing a handler stack.)
+  Files on disk. (One protocol, not one literal socket — the tailnet TCP
+  listener and the local Unix socket share one handler stack.)
 
 ## Shape: symmetric peers
 
@@ -99,32 +99,37 @@ container runtime must actually respond, not merely sit on PATH.
 
 ## Transport and identity
 
-Two transports behind one peer abstraction:
+Two transports behind one peer abstraction, each yielding an identity the
+daemon authorizes against an explicit, revocable, directed grant:
 
 1. **Tailnet (preferred).** Daemon binds the host's tailnet address.
-   Callers are identified via destination-scoped LocalAPI WhoIs
-   (`WhoIsForIP`, constraining the capability map to the address actually
-   accessed); milestone 1 requires Tailscale 1.100 or newer and fails
-   closed on older or unversioned daemons. errand stores zero credentials
+   Callers are identified via destination-scoped WhoIs; the runner reaches
+   tailscaled through whichever provider it discovers: the LocalAPI Unix
+   socket (Linux `tailscaled`, or the open-source macOS daemon) or the
+   `tailscale` CLI (the only path into the standalone macOS app, which
+   cannot scope capabilities and therefore authorizes by allow list only).
+   Destination-scoped capabilities require Tailscale 1.100 or newer; older
+   or unversioned LocalAPI daemons fail closed. errand stores zero credentials
    in this mode.
-2. **Local network.** errand owns identity: a pairing ceremony performs an
-   authenticated key exchange (PAKE / short-authentication-string — the
-   short code is never sent as a bearer secret over the unauthenticated
-   channel), is single-use, short-lived, and rate-limited, and pins stable
-   device public keys. Connections are mTLS between paired devices.
-   `errand peers revoke` removes the key **and closes active sessions**.
+2. **SSH.** The client speaks the same versioned HTTP protocol over an SSH
+   session (`ssh HOST errand _stdio`), which the runner bridges to the
+   daemon's **Unix socket**. Identity there is the kernel's: peer
+   credentials (`SO_PEERCRED` / `LOCAL_PEERCRED`) must match the daemon's uid.
+   The socket and its state-directory parent are private to that account.
+   SSH's `known_hosts` pins the runner and `authorized_keys` controls who may
+   log in as the runner account, so errand owns no keys or pairing state.
+   Peer configuration may set `remote_command` to an absolute Errand binary
+   path when the non-interactive SSH `PATH` does not contain it, and
+   `remote_socket` when the runner was started with a non-default config,
+   state directory, or socket path.
+   Set `listen = "none"` for an SSH-only runner with no Tailscale. The Unix
+   socket is the sanctioned loopback route; the TCP listener still refuses
+   loopback and self-target connections, which WhoIs cannot identify.
 
-   **A pair is a directed edge.** Initiating a pairing grants the
-   *initiator* the right to submit to the *responder* — never the reverse.
-   This mirrors tailnet authorization, where direction comes from the
-   grant's `src` → `dst`; on LAN it comes from who initiated. A
-   bidirectional relationship is two one-way pairs, each independently
-   revocable. In errand vocabulary the sides of the authority edge are the
-   **caller** (may submit) and the **runner** (accepts): each machine keeps
-   an authorized-callers list (device keys that may submit to it) and a
-   known-runners list (machines it can submit to). Ceremony UX: the runner
-   displays the short code (works headless — you are SSH'd in anyway), the
-   caller enters it.
+   **The edge is directed** on both transports: on the tailnet from the
+   grant's `src` to `dst`, and over SSH through access to the runner account.
+   In errand vocabulary the sides are the **caller** (may submit) and the
+   **runner** (accepts). A bidirectional relationship is two one-way grants.
 
 No third transport. No tailcat mode: control-plane-less tunnels discard the
 identity story errand depends on.
@@ -168,12 +173,15 @@ end when their transport connection closes.
 - **Tailnet:** the authenticated Tailscale *user* when WhoIs provides one
   (so a job submitted from the phone can be attached from the laptop),
   otherwise the exact node identity.
-- **LAN:** the paired device public key. Device-scoped — no cross-device
-  attach on LAN in v0.
-- Cross-transport or manually grouped identities are not supported in v0.
+- **SSH / local:** the kernel-attested daemon uid on the Unix socket, as
+  `local-user:<uid>`. Any SSH session or shell for that uid is the same owner.
+- Cross-transport or manually grouped identities are not supported in v0:
+  a job submitted over the tailnet is not owned by the same person's local
+  uid, and vice versa.
 
-`admission.json` records both the user identity and the exact device
-identity, even when ownership keys off only one.
+`admission.json` records the user identity and the exact device identity
+(tailnet), or the uid and username (SSH/local), even when ownership keys
+off only one.
 
 ### Job handles are peer-qualified
 
@@ -591,7 +599,6 @@ vaguer is promised.
 ```
 errand [--on X | --where facts] [-d | --detach] [--apply | --no-apply] -- <cmd...>
 errand peers                    # configured peers, probed facts, reachability
-errand peers pair | revoke      # LAN identity ceremony
 errand ps [-a | --all] [-n N | --last N] [--on X] [--json] # N <= 200
 errand info [--on X] [--json]  # human-readable fleet facts unless JSON is requested
 errand logs <peer/ulid> [-f]    # resumes from last seen seq
@@ -699,7 +706,9 @@ versions are not a compatibility contract.
    authenticated transport, with host-loopback support and a backend-owned
    job-endpoint seam for later isolated runtimes.
 5. Rootless container backend + named-cache model.
-6. LAN pairing with PAKE and pinned device identities.
+6. SSH transport: Unix-socket listener with peer-credential identity,
+   `ssh://` peers with ControlMaster sharing, and a tailnet identity provider
+   abstraction that also supports macOS runners.
 7. Nix backend.
 8. Facts-based `--where` selection with admission-time revalidation.
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,7 +14,35 @@ import (
 	"time"
 
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/tailnet"
 )
+
+type serveTestProvider struct{}
+
+func (serveTestProvider) Name() string { return "test" }
+func (serveTestProvider) WhoIs(context.Context, string, string) (tailnet.WhoIs, error) {
+	return tailnet.WhoIs{}, nil
+}
+func (serveTestProvider) SelfIPs(context.Context) ([]string, error) {
+	return []string{"100.64.0.9"}, nil
+}
+
+func TestResolveServeTransportDiscoversDefaultTailnetAddressWhenInsecure(t *testing.T) {
+	discovered := 0
+	addr, identity, err := resolveServeTransport(
+		"tailnet:7443", true, "", "",
+		func(string, string) (tailnet.Provider, error) {
+			discovered++
+			return serveTestProvider{}, nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if discovered != 1 || addr != "100.64.0.9:7443" || identity != nil {
+		t.Fatalf("serve transport = addr %q, identity %v, discoveries %d", addr, identity, discovered)
+	}
+}
 
 func writeClientConfig(t *testing.T, body string) {
 	t.Helper()

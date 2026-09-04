@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -35,6 +36,8 @@ const (
 	streamIdleTimeout     = 2 * time.Minute
 	streamDeadlineMargin  = 5 * time.Minute
 	maxProjectLabelBytes  = 128
+	queueNoticeDelay      = 250 * time.Millisecond
+	queueProbeTimeout     = 250 * time.Millisecond
 )
 
 var directTransport = func() *http.Transport {
@@ -290,9 +293,6 @@ func runWithDetachNotifications(
 	automaticWorkerStarted, _ := ensureAutomaticApplyWorker(opts, jobID, false)
 	fmt.Fprintf(opts.Stderr, "errand: job %s (%d files, commit %s)\n",
 		handle, len(paths), shortCommit(gitInfo))
-	if status.State == proto.StateQueued {
-		fmt.Fprintln(opts.Stderr, "errand: queued on the runner; logs follow once a slot frees (Ctrl-C cancels)")
-	}
 	forwarding.Start(opts.PeerURL, jobID)
 
 	detachRequested := false
@@ -310,7 +310,21 @@ func runWithDetachNotifications(
 		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted)
 	}
 
+	queueNoticeDone := make(chan struct{})
+	queueNoticeCtx, stopQueueNotice := context.WithCancel(context.Background())
+	if status.State == proto.StateQueued {
+		opts.Stderr = &lockedWriter{writer: opts.Stderr}
+		go func() {
+			defer close(queueNoticeDone)
+			reportQueueWait(queueNoticeCtx, opts.PeerURL, jobID, opts.Stderr)
+		}()
+	} else {
+		close(queueNoticeDone)
+	}
+
 	final, err, detached := streamUntilDetach(opts, jobID, status, detach)
+	stopQueueNotice()
+	<-queueNoticeDone
 	if detached {
 		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted)
 	}
@@ -334,6 +348,37 @@ func runWithDetachNotifications(
 	}
 	forwarding.Close()
 	return finishTerminalChanges(opts, jobID, handle, final)
+}
+
+type lockedWriter struct {
+	mu     sync.Mutex
+	writer io.Writer
+}
+
+func (w *lockedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.writer.Write(p)
+}
+
+func reportQueueWait(ctx context.Context, peerURL, jobID string, stderr io.Writer) {
+	reportQueueWaitAfter(ctx, peerURL, jobID, stderr, queueNoticeDelay)
+}
+
+func reportQueueWaitAfter(ctx context.Context, peerURL, jobID string, stderr io.Writer, delay time.Duration) {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-timer.C:
+	}
+	statusCtx, cancel := context.WithTimeout(ctx, queueProbeTimeout)
+	defer cancel()
+	status, err := getStatusContext(statusCtx, peerURL, jobID)
+	if err == nil && status.State == proto.StateQueued {
+		fmt.Fprintln(stderr, "errand: queued on the runner; logs follow once a slot frees (Ctrl-C cancels)")
+	}
 }
 
 func completeRunDetach(

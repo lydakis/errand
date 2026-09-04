@@ -4,21 +4,43 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/lydakis/errand/internal/tailnet"
 )
 
 type Peer struct {
-	URL string `toml:"url"`
+	URL           string `toml:"url"`
+	SSH           string `toml:"ssh"`
+	RemoteCommand string `toml:"remote_command"`
+	RemoteSocket  string `toml:"remote_socket"`
+}
+
+const SSHScheme = "ssh"
+const DisabledListener = "none"
+
+// SSHRemoteCommand returns the errand command to run on an SSH peer.
+func (c Client) SSHRemoteCommand(name string) string {
+	if name == "" {
+		name = c.DefaultPeer
+	}
+	return c.Peers[name].RemoteCommand
+}
+
+// SSHRemoteSocket returns the daemon Unix socket for an SSH peer. An empty
+// value tells the remote bridge to use its default runner configuration.
+func (c Client) SSHRemoteSocket(name string) string {
+	if name == "" {
+		name = c.DefaultPeer
+	}
+	return c.Peers[name].RemoteSocket
 }
 
 type Client struct {
@@ -76,8 +98,24 @@ func (c Client) PeerURL(name string) (string, error) {
 		return "", fmt.Errorf("no peer named and no default_peer configured")
 	}
 	p, ok := c.Peers[name]
-	if !ok || p.URL == "" {
+	if !ok || (p.URL == "" && p.SSH == "") {
 		return "", fmt.Errorf("peer %q is not configured", name)
+	}
+	if p.URL != "" && p.SSH != "" {
+		return "", fmt.Errorf("peer %q sets both url and ssh; choose one transport", name)
+	}
+	if p.URL != "" && (p.RemoteCommand != "" || p.RemoteSocket != "") {
+		return "", fmt.Errorf("peer %q: remote_command and remote_socket require ssh", name)
+	}
+	if p.SSH != "" {
+		if strings.ContainsAny(p.SSH, " \t\r\n:/?#") || strings.HasPrefix(p.SSH, "@") ||
+			strings.HasSuffix(p.SSH, "@") || strings.Count(p.SSH, "@") > 1 {
+			return "", fmt.Errorf("peer %q: ssh must be an ssh_config host or user@host", name)
+		}
+		if p.RemoteSocket != "" && !strings.HasPrefix(p.RemoteSocket, "/") {
+			return "", fmt.Errorf("peer %q: remote_socket must be an absolute Unix path", name)
+		}
+		return SSHScheme + "://" + p.SSH, nil
 	}
 	return strings.TrimSuffix(p.URL, "/"), nil
 }
@@ -88,6 +126,8 @@ type Daemon struct {
 	AllowUsers       []string    `toml:"allow_users"`
 	Capability       string      `toml:"capability"`
 	TailscaledSocket string      `toml:"tailscaled_socket"`
+	TailscaleCLI     string      `toml:"tailscale_cli"`
+	Socket           string      `toml:"socket"`
 	Cache            DaemonCache `toml:"cache"`
 
 	// MaxJobs defaults to 1. MaxQueued defaults to 8; zero disables queueing.
@@ -142,8 +182,13 @@ func LoadDaemon(path string) (Daemon, error) {
 }
 
 // ResolveListen turns "tailnet:PORT" into an address assigned to this node by
-// tailscaled. Explicit listener addresses pass through unchanged.
-func ResolveListen(listen, tailscaledSocket string) (string, error) {
+// tailscaled, via the discovered identity provider. Explicit listener
+// addresses pass through unchanged; loopback runners are refused because
+// WhoIs cannot identify them (the Unix socket is the local path).
+func ResolveListen(listen string, selfIPs func(context.Context) ([]string, error)) (string, error) {
+	if strings.EqualFold(strings.TrimSpace(listen), DisabledListener) {
+		return "", nil
+	}
 	host, port, err := net.SplitHostPort(listen)
 	if err != nil {
 		return "", fmt.Errorf("listen %q: %w", listen, err)
@@ -157,56 +202,26 @@ func ResolveListen(listen, tailscaledSocket string) (string, error) {
 	if host != "tailnet" {
 		return listen, nil
 	}
-	ip, err := tailscaleIP(tailscaledSocket)
+	if selfIPs == nil {
+		return "", fmt.Errorf("listen %q: no tailnet identity provider to resolve the address", listen)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ips, err := selfIPs(ctx)
+	if err != nil {
+		return "", fmt.Errorf("resolving tailnet listener: %w", err)
+	}
+	ip, err := tailnet.PreferredIP(ips)
 	if err != nil {
 		return "", fmt.Errorf("resolving tailnet listener: %w", err)
 	}
 	return net.JoinHostPort(ip, port), nil
 }
 
-func tailscaleIP(socket string) (string, error) {
-	if socket == "" {
-		socket = "/var/run/tailscale/tailscaled.sock"
+// SocketPath returns the Unix-socket listener path for a runner config.
+func (d Daemon) SocketPath() string {
+	if d.Socket != "" {
+		return d.Socket
 	}
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			var dialer net.Dialer
-			return dialer.DialContext(ctx, "unix", socket)
-		},
-	}
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
-	res, err := client.Get("http://local-tailscaled.sock/localapi/v0/status?peers=false")
-	if err != nil {
-		return "", fmt.Errorf("reading tailscaled status: %w", err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-		return "", fmt.Errorf("tailscaled status returned %s: %s", res.Status, strings.TrimSpace(string(body)))
-	}
-	var status struct {
-		BackendState string   `json:"BackendState"`
-		TailscaleIPs []string `json:"TailscaleIPs"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&status); err != nil {
-		return "", fmt.Errorf("decoding tailscaled status: %w", err)
-	}
-	var ipv6 string
-	for _, raw := range status.TailscaleIPs {
-		ip := net.ParseIP(raw)
-		if ip == nil {
-			continue
-		}
-		if v4 := ip.To4(); v4 != nil {
-			return v4.String(), nil
-		}
-		if ipv6 == "" {
-			ipv6 = ip.String()
-		}
-	}
-	if ipv6 != "" {
-		return ipv6, nil
-	}
-	return "", fmt.Errorf("tailscaled has no assigned IP (state %s); is Tailscale up?", status.BackendState)
+	return filepath.Join(d.StateDir, "errand.sock")
 }
