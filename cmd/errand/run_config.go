@@ -16,6 +16,7 @@ import (
 
 // Both submission and inspection use these flags and the same resolver.
 type runConfigFlags struct {
+	session                    sessionFlags
 	envs, passenvs             stringList
 	profile                    string
 	on, url, workdir, root     string
@@ -23,6 +24,7 @@ type runConfigFlags struct {
 }
 
 func (f *runConfigFlags) bind(fs *flag.FlagSet) {
+	f.session.bind(fs)
 	fs.Var(&f.envs, "env", "set NAME=VALUE in the job environment (repeatable; values hidden in diagnostics)")
 	fs.Var(&f.envs, "e", "set NAME=VALUE in the job environment (repeatable)")
 	fs.Var(&f.passenvs, "passenv", "require and forward a local environment variable (repeatable; replaces configured pass list)")
@@ -41,6 +43,11 @@ func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error)
 	set := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	result := config.RunOverrides{Peer: f.on, URL: f.url, WorkspaceRoot: f.root, NoSnapshot: f.noSnapshot}
+	var err error
+	result.Forwards, err = f.session.overrides(fs)
+	if err != nil {
+		return result, err
+	}
 	result.Environment.Pass = f.passenvs
 	for _, name := range f.passenvs {
 		if err := workspace.ValidateEnvironmentName(name); err != nil {
@@ -144,6 +151,7 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 			{"workspace_root", effective.Root}, {"workdir", effective.Workdir},
 			{"project", effective.Project}, {"apply_on_success", effective.ApplyOnSuccess},
 			{"no_snapshot", effective.NoSnapshot},
+			{"forward", effective.Forwards},
 		} {
 			if _, exists := effective.Sources[row.key]; !exists {
 				continue

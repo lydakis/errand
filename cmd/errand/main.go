@@ -27,6 +27,7 @@ import (
 	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/workspace"
 )
 
 var version = "0.1.0-dev"
@@ -35,12 +36,12 @@ const usage = `errand — a personal job runner for machines you own
 
 usage:
   errand [--profile NAME] [--on PEER | --url URL] [-d | --detach]
-         [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]...
+         [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]... [--no-forward]
          [--apply | --no-apply]
          [-e K=V | --env K=V]... [--passenv K]...
          [--workspace-root PATH] [-w REL | --workdir REL]
          [--include-all | --no-snapshot] -- CMD [ARG...]
-  errand attach [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]...
+  errand attach [--profile NAME] [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]... [--no-forward]
                 [--on PEER | --url URL] HANDLE
   errand fetch [--apply [--conflicts]] [--on PEER | --url URL] HANDLE [PATH]
   errand ps [-a | --all] [-n N | --last N] [--json] [--on PEER | --url URL]
@@ -61,6 +62,7 @@ usage:
   errand config [--json] [--profile NAME] [--on PEER | --url URL]
                 [--workspace-root PATH] [-w REL | --workdir REL]
                 [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
+                [--forward [LOCAL:]REMOTE]... [--no-forward]
                 [--apply | --no-apply] [--no-snapshot]
   errand access [list] [--config PATH] [--json]
   errand access add [-n | --dry-run] [--config PATH] [--json] LOGIN
@@ -70,6 +72,7 @@ usage:
   errand doctor [--json] [--profile NAME] [--on PEER | --url URL]
                 [--workspace-root PATH] [-w REL | --workdir REL]
                 [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
+                [--forward [LOCAL:]REMOTE]... [--no-forward]
                 [--apply | --no-apply] [--no-snapshot]
   errand version
 
@@ -171,25 +174,7 @@ func (p *portForwardList) String() string {
 }
 
 func (p *portForwardList) Set(value string) error {
-	localText, remoteText, hasLocal := strings.Cut(value, ":")
-	if !hasLocal {
-		remoteText = localText
-	}
-	if localText == "" || remoteText == "" || strings.Contains(remoteText, ":") {
-		return fmt.Errorf("--forward wants [LOCAL:]REMOTE, got %q", value)
-	}
-	parse := func(label, text string) (uint16, error) {
-		port, err := strconv.ParseUint(text, 10, 16)
-		if err != nil || port == 0 {
-			return 0, fmt.Errorf("%s port %q must be between 1 and 65535", label, text)
-		}
-		return uint16(port), nil
-	}
-	local, err := parse("local", localText)
-	if err != nil {
-		return err
-	}
-	remote, err := parse("remote", remoteText)
+	local, remote, err := workspace.ParsePortForward(value)
 	if err != nil {
 		return err
 	}
@@ -300,16 +285,51 @@ func resolveHandle(handleArg, rawURL, on string) (peerURL, label, jobID string, 
 }
 
 func cmdAttach(args []string) int {
-	fs := flag.NewFlagSet("errand attach", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand attach", flag.ContinueOnError)
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
-	var forwards portForwardList
-	fs.Var(&forwards, "forward", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
-	fs.Var(&forwards, "L", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
+	profile := fs.String("profile", "", "session preferences from workspace or personal configuration")
+	var session sessionFlags
+	session.bind(fs)
 	setFlagUsage(fs, "errand attach [options] HANDLE")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		return 2
+	}
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "errand attach: exactly one HANDLE (peer/ULID) is required")
+		return 2
+	}
+	cli, err := session.overrides(fs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		return 2
+	}
+	emptyProfile := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "profile" && *profile == "" {
+			emptyProfile = true
+		}
+	})
+	if emptyProfile {
+		fmt.Fprintln(os.Stderr, "errand: --profile requires a non-empty name")
+		return 2
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		return client.ExitTransaction
+	}
+	effective, err := config.ResolveSession(cwd, *profile, cli)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		return client.ExitTransaction
+	}
+	forwards, err := sessionForwards(effective.Forwards)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
 	peerURL, label, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
@@ -317,9 +337,7 @@ func cmdAttach(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
-	return client.Attach(client.AttachOptions{
-		PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards,
-	})
+	return client.Attach(client.AttachOptions{PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards})
 }
 
 func cmdFetch(args []string) int {

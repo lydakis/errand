@@ -429,8 +429,13 @@ errand attach --forward 8080:3000 HANDLE
 locally. The run form is shorthand for submitting and opening the initial
 attached session with those forwards. A job may be submitted without any
 forwards and gain or change them on any later attachment. Forward mappings are
-local session state: they are not written to `spec.json`, remembered for later
-attachments, or displayed by `status`.
+local session state: they are not written to `spec.json` or displayed by
+`status`. `[session] forward` defaults and `[profiles.NAME.session]` can select
+mappings for each new session; `attach --profile NAME` applies only session
+preferences and keeps the handle as its target. Each attachment resolves
+current configuration rather than remembering submission settings. CLI
+`--forward` replaces the configured list; `--no-forward` clears it. See
+[session configuration](CONFIGURATION.md#session-forwarding).
 
 The client binds both IPv4 and IPv6 local loopback when the platform supports
 them. It binds every requested local port before submission or attachment so a
@@ -448,7 +453,8 @@ signaling the job. Ctrl-C retains the normal attached-job meaning: it sends
 SIGINT, a second Ctrl-C force-kills, and the forwarding session closes as the
 job settles. A client that wants forwarding after detaching invokes `attach`
 again with the desired mappings. `--detach --forward` is rejected because no
-attached client would remain to own the local listeners.
+attached client would remain to own the local listeners. This includes
+configured forwards; use `--no-forward` to submit that profile detached.
 
 There is no readiness probe. If the application is not listening, the accepted
 local connection closes without a noisy session diagnostic; the listener stays

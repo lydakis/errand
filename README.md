@@ -131,6 +131,12 @@ and remove comments.
 See [runner access configuration](docs/CONFIGURATION.md#runner-access) for the
 full contract.
 
+Save recurring mappings with `[profiles.dev.session]` and
+`forward = ["8080:3000"]`, then use `errand --profile dev -- pnpm dev` or
+`errand attach --profile dev HANDLE`. `--forward` replaces configured mappings;
+`--no-forward` disables them, including for detached submission. See
+[session configuration](docs/CONFIGURATION.md#session-forwarding).
+
 Diagnose the runner selected for your next invocation with `errand doctor`,
 or choose one with `errand doctor --on cabal`. It resolves the same run
 settings as `errand config`, then checks runner connectivity, access to info,

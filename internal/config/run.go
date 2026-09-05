@@ -11,6 +11,7 @@ import (
 // RunOverrides contains only explicit caller choices. Pointers distinguish
 // an absent override from false or an empty (workspace-root) workdir.
 type RunOverrides struct {
+	Forwards                 []string
 	Environment              workspace.Environment
 	Profile                  string
 	Peer, URL, WorkspaceRoot string
@@ -22,6 +23,7 @@ type RunOverrides struct {
 // EffectiveRun is shared by submission and config inspection. URL is the
 // configured endpoint, before the client installs its private SSH identity.
 type EffectiveRun struct {
+	Forwards       []string              `json:"forward"`
 	Environment    []EnvironmentVariable `json:"environment,omitempty"`
 	Profile        string                `json:"profile,omitempty"`
 	Peer           string                `json:"peer"`
@@ -72,20 +74,9 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	}
 	personalSource := "personal: " + personalPath
 	workspaceSource := "workspace: " + filepath.Join(selected.Root, ".errand.toml")
-	var profile workspace.Profile
-	profileSource := ""
-	if cli.Profile != "" {
-		var found bool
-		profile, found = personal.Profiles[cli.Profile]
-		profileSource = personalSource
-		if local, exists := selected.Profiles[cli.Profile]; exists {
-			profile, found = local, true
-			profileSource = workspaceSource
-		}
-		if !found {
-			return result, fmt.Errorf("profile %q is not defined in %s or the selected workspace %s", cli.Profile, personalPath, selected.Root)
-		}
-		profileSource += " (profiles." + cli.Profile + ")"
+	profile, profileSource, err := selectProfile(personal, selected, cli.Profile, personalSource, workspaceSource)
+	if err != nil {
+		return result, err
 	}
 	result = EffectiveRun{
 		Profile: cli.Profile,
@@ -102,6 +93,11 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	if cli.Profile != "" {
 		result.Sources["profile"] = profileSource
 	}
+	session, err := resolveSession(personal.Session, selected.Session, profile.Session, cli.Forwards, personalSource, workspaceSource, profileSource)
+	if err != nil {
+		return result, err
+	}
+	result.Forwards, result.Sources["forward"] = session.Forwards, session.Source
 	result.Environment = resolveEnvironment(
 		environmentLayer{personal.Environment, personalSource + " env"},
 		environmentLayer{selected.Environment, workspaceSource + " env"},

@@ -17,9 +17,6 @@ func cmdRun(args []string) int {
 	includeAll := fs.Bool("include-all", false, "allow an otherwise refused broad snapshot (never permits a filesystem root)")
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
 	fs.BoolVar(detach, "d", false, "return after admission, printing the job handle on stdout")
-	var forwards portForwardList
-	fs.Var(&forwards, "forward", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
-	fs.Var(&forwards, "L", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
 	fs.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
 
 	// Everything after "--" is the command; flags come before it.
@@ -53,7 +50,7 @@ func cmdRun(args []string) int {
 		fmt.Fprintln(os.Stderr, "errand: --include-all and --no-snapshot are mutually exclusive")
 		return 2
 	}
-	if *detach && len(forwards) != 0 {
+	if *detach && len(settings.session.forwards) != 0 {
 		fmt.Fprintln(os.Stderr, "errand: --detach and --forward are mutually exclusive")
 		return 2
 	}
@@ -71,6 +68,15 @@ func cmdRun(args []string) int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return client.ExitTransaction
+	}
+	if *detach && len(effective.Forwards) != 0 {
+		fmt.Fprintln(os.Stderr, "errand: --detach cannot use configured forwards; add --no-forward")
+		return 2
+	}
+	forwards, err := sessionForwards(effective.Forwards)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
+		return 2
 	}
 	env, passenvs := effective.JobEnvironment()
 	if !effective.NoSnapshot {

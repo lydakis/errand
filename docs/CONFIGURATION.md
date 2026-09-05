@@ -11,8 +11,8 @@ automatic apply, precedence is:
 
 Profiles can also set a workdir, overriding the caller's relative directory;
 an explicit CLI workdir wins. Environment settings use the same layers, with
-merge rules described below. Forwarding, detachment, and broad snapshot opt-in
-remain CLI options.
+merge rules described below. Session forwarding uses list replacement at each
+layer. Detachment and broad snapshot opt-in remain CLI options.
 
 ## Personal configuration
 
@@ -116,7 +116,7 @@ therefore opts out of all settings in that personal profile. Other personal
 profiles remain available by name.
 
 Profiles support `run.peer`, `run.workdir`, `changes.apply_on_success`,
-`env.set`, and `env.pass`. Explicit `false` and empty workdir values override
+`env.set`, `env.pass`, and `session.forward`. Explicit `false` and empty workdir values override
 lower layers. Unsupported keys and incorrect value types are errors when
 loading configuration, including in inactive profiles. There is no profile
 inheritance, automatic profile selection, command definition, or transport
@@ -206,6 +206,60 @@ It does not hash files or validate a complete job: use `errand peers` to check
 runner availability; snapshot policy and remote command validation still happen
 when submitting. Peer lifecycle and job-handle commands retain their explicit
 targets and personal defaults; a workspace preference only selects new runs.
+
+## Session forwarding
+
+Configure local loopback TCP forwards in personal configuration, the selected
+workspace, or an explicitly selected profile:
+
+```toml
+[session]
+forward = ["3000"]
+
+[profiles.dev.session]
+forward = ["8080:3000", "3001"]
+
+[profiles.build.session]
+forward = []
+```
+
+```sh
+errand --profile dev -- pnpm dev
+errand config --profile dev --json
+errand --profile dev --forward 9000:3000 -- pnpm dev
+errand --profile dev --detach --no-forward -- pnpm dev
+errand attach --profile dev PEER/JOB
+errand attach --no-forward PEER/JOB
+```
+
+`session.forward` is an array of strings using the CLI's `[LOCAL:]REMOTE`
+syntax. Both ports must be between 1 and 65535. Hostnames, bind addresses, and
+duplicate local ports are rejected. Omitting the list inherits lower layers;
+`forward = []` explicitly clears it. Each supplied list replaces the whole
+previous list: personal defaults, workspace defaults, selected profile, then
+CLI. Repeat `--forward`/`-L` to supply multiple CLI mappings. `--no-forward`
+clears the list and cannot be combined with either forwarding flag.
+`--no-forward=false` leaves configured defaults in effect.
+
+Runs resolve these settings from their selected configuration root, including
+`--workspace-root` and `--no-snapshot` behavior. `attach` resolves session
+preferences from the current directory's discovered workspace and optionally
+`--profile`. Its handle and `--on`/`--url` still determine the target; profile
+run targets, environment values, workdirs, and apply settings are not applied
+to an existing job. Unknown profiles and malformed configuration still fail.
+A later attachment resolves the configuration available at that time. It does
+not remember which profile or mappings were used for submission.
+
+A detached run with any effective forwards is rejected before submission;
+use `--no-forward` or a profile with `forward = []`. Ctrl-D closes the current
+session's listeners and connections. Mappings are never persisted in job specs
+or receipts. See [attached TCP forwarding](DESIGN.md#attached-tcp-forwarding-milestone-45-amendment-2026-09-03)
+for the transport and lifecycle contract.
+
+`config` and `doctor --json` expose the effective `forward` list with its
+source. Inspection validates syntax but does not bind ports or test forwarding
+permission, remote port availability, or application readiness. Actual run and
+attach commands bind all requested local ports before contacting the runner.
 
 ## Runner access
 
