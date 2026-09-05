@@ -87,6 +87,35 @@ func TestAccessRemoveClearsDuplicatesAndLastEntry(t *testing.T) {
 	}
 }
 
+func TestDeniedAccessPreservesGrantsAndOtherSettings(t *testing.T) {
+	body := "allow_users = ['owner@example.com']\ndeny_users = ['owner@example.com', 'owner@example.com']\ncapability = 'custom/cap'\n[future]\nenabled = true\n"
+	path := accessFixture(t, body)
+	change, err := ChangeDeniedAccess(path, "owner@example.com", false, false)
+	if err != nil || !change.Written || change.Field != "deny_users" || len(change.After) != 0 {
+		t.Fatalf("remove duplicate denials: %+v, %v", change, err)
+	}
+	var before, after map[string]any
+	if _, err := toml.Decode(body, &before); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := toml.DecodeFile(path, &after); err != nil {
+		t.Fatal(err)
+	}
+	delete(before, "deny_users")
+	delete(after, "deny_users")
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("denial changed other settings: %v vs %v", before, after)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("policy permissions: %v, %v", info, err)
+	}
+	for _, login := range []string{"", "*", "friend@example.com\n"} {
+		if _, err := ChangeDeniedAccess(path, login, true, false); err == nil {
+			t.Fatalf("accepted denial %q", login)
+		}
+	}
+}
+
 func TestAccessAddsToEmptyConfig(t *testing.T) {
 	path := accessFixture(t, "")
 	change, err := ChangeAccess(path, "owner@example.com", true, false)

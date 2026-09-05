@@ -144,6 +144,7 @@ type Daemon struct {
 	Listen           string      `toml:"listen"`
 	StateDir         string      `toml:"state_dir"`
 	AllowUsers       []string    `toml:"allow_users"`
+	DenyUsers        []string    `toml:"deny_users"`
 	Capability       string      `toml:"capability"`
 	TailscaledSocket string      `toml:"tailscaled_socket"`
 	TailscaleCLI     string      `toml:"tailscale_cli"`

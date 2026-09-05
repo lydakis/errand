@@ -127,6 +127,9 @@ func printSetupReport(w io.Writer, r *setup.Report, dryRun bool) {
 	} else {
 		fmt.Fprintf(w, "allows: %s\n", strings.Join(r.Config.AllowUsers, ", "))
 	}
+	if len(r.Config.DenyUsers) != 0 {
+		fmt.Fprintf(w, "denies (overrides tailnet grants): %s\n", strings.Join(r.Config.DenyUsers, ", "))
+	}
 	fmt.Fprintf(w, "\nOn a client, add to ~/.config/errand/config.toml:\n\n")
 	if peerURL, ok := setupPeerURL(r.Config.Listen, r.Self.DNSName); ok {
 		fmt.Fprintf(w, "    [peers.%s]\n    url = %q\n", short, peerURL)

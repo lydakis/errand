@@ -17,11 +17,13 @@ import (
 type AccessPolicy struct {
 	Path       string   `json:"path" toml:"-"`
 	AllowUsers []string `json:"allow_users" toml:"allow_users"`
+	DenyUsers  []string `json:"deny_users" toml:"deny_users"`
 	Capability string   `json:"capability" toml:"capability"`
 	Listen     string   `json:"listen" toml:"listen"`
 }
 
 type AccessChange struct {
+	Field   string   `json:"field"`
 	Path    string   `json:"path"`
 	Before  []string `json:"before"`
 	After   []string `json:"after"`
@@ -74,6 +76,9 @@ func readAccessDocument(path string) (AccessPolicy, map[string]any, []byte, erro
 	if policy.AllowUsers == nil {
 		policy.AllowUsers = []string{}
 	}
+	if policy.DenyUsers == nil {
+		policy.DenyUsers = []string{}
+	}
 	if policy.Capability == "" {
 		policy.Capability = proto.DefaultCapability
 	}
@@ -87,6 +92,16 @@ func readAccessDocument(path string) (AccessPolicy, map[string]any, []byte, erro
 // unknown settings, survive re-encoding; comments and formatting do not. A
 // preview or no-op leaves the file byte-for-byte unchanged. No service is touched.
 func ChangeAccess(path, login string, add, dryRun bool) (AccessChange, error) {
+	return changeAccessList(path, login, "allow_users", add, dryRun)
+}
+
+// ChangeDeniedAccess edits deny_users with the same persistence contract as
+// ChangeAccess. It preserves grants; removing a denial restores their effect.
+func ChangeDeniedAccess(path, login string, deny, dryRun bool) (AccessChange, error) {
+	return changeAccessList(path, login, "deny_users", deny, dryRun)
+}
+
+func changeAccessList(path, login, field string, add, dryRun bool) (AccessChange, error) {
 	var result AccessChange
 	if login == "" || strings.ContainsAny(login, "*?") || strings.IndexFunc(login, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
 		return result, fmt.Errorf("login must be an exact non-empty tailnet login without whitespace or wildcards")
@@ -96,8 +111,13 @@ func ChangeAccess(path, login string, add, dryRun bool) (AccessChange, error) {
 		return result, err
 	}
 	result.Path = policy.Path
-	result.Before = slices.Clone(policy.AllowUsers)
-	result.After = slices.Clone(policy.AllowUsers)
+	result.Field = field
+	users := policy.AllowUsers
+	if field == "deny_users" {
+		users = policy.DenyUsers
+	}
+	result.Before = slices.Clone(users)
+	result.After = slices.Clone(users)
 	if add {
 		if !slices.Contains(result.After, login) {
 			result.After = append(result.After, login)
@@ -109,7 +129,7 @@ func ChangeAccess(path, login string, add, dryRun bool) (AccessChange, error) {
 	if dryRun || !result.Changed {
 		return result, nil
 	}
-	document["allow_users"] = result.After
+	document[field] = result.After
 	var encoded bytes.Buffer
 	if err := toml.NewEncoder(&encoded).Encode(document); err != nil {
 		return result, err

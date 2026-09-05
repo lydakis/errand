@@ -52,6 +52,7 @@ type Config struct {
 	Listen           string
 	StateDir         string
 	AllowUsers       []string
+	DenyUsers        []string
 	Capability       string
 	TailscaledSocket string
 	InsecureNoAuth   bool

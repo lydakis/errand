@@ -121,7 +121,7 @@ func doctorProbeFailure(target string, err error) doctorCheck {
 	kind, _ := client.ProbeKindOf(err)
 	switch kind {
 	case client.ProbeForbidden:
-		check.Hint = "On the runner, inspect errand access list using its service's --config path. Verify the intended allowlist or capability grant, and restart after saved allowlist edits. SSH access is managed separately."
+		check.Hint = "On the runner, inspect errand access list using its service's --config path. Check deny_users first, then the intended allowlist or capability grant, and restart after saved policy edits. SSH access is managed separately."
 	case client.ProbeNotErrand:
 		check.Hint = "Verify the selected endpoint serves Errand and that the client and runner use a compatible protocol version."
 	default:

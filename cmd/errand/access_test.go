@@ -60,7 +60,7 @@ func TestAccessCLI(t *testing.T) {
 		t.Fatalf("list after preview: %+v", policy)
 	}
 	run("add", "--config", path, "friend@example.com")
-	for _, want := range []string{"Updated", "restart", "Capability grants and SSH", "removes comments", "errand setup --config"} {
+	for _, want := range []string{"Updated", "restart", "deny_users overrides", "removes comments", "errand setup --config"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("missing %q in %s", want, &out)
 		}
@@ -86,11 +86,73 @@ func TestAccessCLIUsage(t *testing.T) {
 			t.Fatalf("%v: code=%d, output=%s", args, code, &out)
 		}
 	}
-	for _, action := range []string{"list", "add", "remove"} {
+	for _, action := range []string{"list", "add", "remove", "deny", "undeny"} {
 		var out, errOut bytes.Buffer
 		if code := cmdAccessTo([]string{action, "--help"}, &out, &errOut); code != 0 {
 			t.Fatalf("help %s: %d", action, code)
 		}
+	}
+}
+
+func TestAccessDenyCLI(t *testing.T) {
+	path := accessConfig(t)
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(action string, dry bool) config.AccessChange {
+		t.Helper()
+		args := []string{action, "--config", path, "--json"}
+		if dry {
+			args = append(args, "-n")
+		}
+		args = append(args, "owner@example.com")
+		var out, errOut bytes.Buffer
+		if code := cmdAccessTo(args, &out, &errOut); code != 0 {
+			t.Fatalf("%s: %d, %s", action, code, &errOut)
+		}
+		var change config.AccessChange
+		if err := json.Unmarshal(out.Bytes(), &change); err != nil {
+			t.Fatal(err)
+		}
+		return change
+	}
+	preview := run("deny", true)
+	if !preview.Changed || preview.Written || !reflect.DeepEqual(preview.After, []string{"owner@example.com"}) {
+		t.Fatalf("deny preview: %+v", preview)
+	}
+	if raw, _ := os.ReadFile(path); !bytes.Equal(raw, original) {
+		t.Fatal("preview changed config")
+	}
+	if change := run("deny", false); !change.Written {
+		t.Fatalf("deny: %+v", change)
+	}
+	denied, _ := os.ReadFile(path)
+	if change := run("deny", false); change.Changed || change.Written {
+		t.Fatalf("repeated deny: %+v", change)
+	}
+	if raw, _ := os.ReadFile(path); !bytes.Equal(raw, denied) {
+		t.Fatal("no-op changed config")
+	}
+	var out, errOut bytes.Buffer
+	if code := cmdAccessTo([]string{"list", "--config", path, "--json"}, &out, &errOut); code != 0 {
+		t.Fatalf("list: %d, %s", code, &errOut)
+	}
+	var policy struct {
+		AllowUsers []string `json:"allow_users"`
+		DenyUsers  []string `json:"deny_users"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &policy); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(policy.AllowUsers, []string{"owner@example.com"}) || !reflect.DeepEqual(policy.DenyUsers, policy.AllowUsers) {
+		t.Fatalf("denial must preserve grants: %+v", policy)
+	}
+	if change := run("undeny", false); !change.Written || len(change.After) != 0 {
+		t.Fatalf("undeny: %+v", change)
+	}
+	if change := run("undeny", false); change.Changed {
+		t.Fatalf("repeated undeny: %+v", change)
 	}
 }
 
@@ -141,11 +203,11 @@ func TestAccessEditsTakeEffectOnlyAfterRunnerReload(t *testing.T) {
 	path := accessConfig(t)
 	start := func(capability bool) *httptest.Server {
 		t.Helper()
-		policy, err := config.ReadAccess(path)
+		policy, err := config.LoadDaemon(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), AllowUsers: policy.AllowUsers, Capability: policy.Capability, Identity: accessIdentityProvider{capability: capability}})
+		d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), AllowUsers: policy.AllowUsers, DenyUsers: policy.DenyUsers, Capability: policy.Capability, Identity: accessIdentityProvider{capability: capability}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -186,5 +248,16 @@ func TestAccessEditsTakeEffectOnlyAfterRunnerReload(t *testing.T) {
 	check(added, http.StatusOK)
 	check(start(false), http.StatusForbidden)
 	// Removing the allowlist entry does not revoke an independent grant.
+	granted := start(true)
+	check(granted, http.StatusOK)
+	edit("deny")
+	check(granted, http.StatusOK)
+	denied := start(true)
+	check(denied, http.StatusForbidden)
+	// Adding an allowlist entry cannot override a denial.
+	edit("add")
+	check(start(true), http.StatusForbidden)
+	edit("undeny")
+	check(denied, http.StatusForbidden)
 	check(start(true), http.StatusOK)
 }

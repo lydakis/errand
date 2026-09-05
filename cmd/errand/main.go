@@ -65,6 +65,8 @@ usage:
   errand access [list] [--config PATH] [--json]
   errand access add [-n | --dry-run] [--config PATH] [--json] LOGIN
   errand access remove [-n | --dry-run] [--config PATH] [--json] LOGIN
+  errand access deny [-n | --dry-run] [--config PATH] [--json] LOGIN
+  errand access undeny [-n | --dry-run] [--config PATH] [--json] LOGIN
   errand doctor [--json] [--profile NAME] [--on PEER | --url URL]
                 [--workspace-root PATH] [-w REL | --workdir REL]
                 [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
@@ -824,6 +826,7 @@ func cmdServe(args []string) int {
 		Listen:           addr,
 		StateDir:         fileCfg.StateDir,
 		AllowUsers:       fileCfg.AllowUsers,
+		DenyUsers:        fileCfg.DenyUsers,
 		Capability:       fileCfg.Capability,
 		TailscaledSocket: fileCfg.TailscaledSocket,
 		Identity:         identity,

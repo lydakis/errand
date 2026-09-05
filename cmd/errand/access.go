@@ -11,7 +11,7 @@ import (
 	"github.com/lydakis/errand/internal/config"
 )
 
-const accessActivation = "Saved configuration only; restart the runner to activate it. Capability grants and SSH access are separate."
+const accessActivation = "Saved configuration only; restart the runner to activate it. deny_users overrides allow_users and capability grants for tailnet requests. Removing a denial restores any remaining grants. SSH access is separate."
 
 func cmdAccess(args []string) int { return cmdAccessTo(args, os.Stdout, os.Stderr) }
 
@@ -20,8 +20,8 @@ func cmdAccessTo(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 0 && !strings.HasPrefix(args[0], "-") {
 		action, args = args[0], args[1:]
 	}
-	if action != "list" && action != "add" && action != "remove" {
-		fmt.Fprintln(stderr, "usage: errand access [list|add|remove] [options] [LOGIN]")
+	if action != "list" && action != "add" && action != "remove" && action != "deny" && action != "undeny" {
+		fmt.Fprintln(stderr, "usage: errand access [list|add|remove|deny|undeny] [options] [LOGIN]")
 		return 2
 	}
 	fs := flag.NewFlagSet("errand access "+action, flag.ContinueOnError)
@@ -32,8 +32,8 @@ func cmdAccessTo(args []string, stdout, stderr io.Writer) int {
 	synopsis := "errand access " + action + " [options]"
 	if action != "list" {
 		synopsis += " LOGIN"
-		fs.BoolVar(&dryRun, "dry-run", false, "preview allow_users without writing or restarting")
-		fs.BoolVar(&dryRun, "n", false, "preview allow_users without writing or restarting")
+		fs.BoolVar(&dryRun, "dry-run", false, "preview the selected access list without writing or restarting")
+		fs.BoolVar(&dryRun, "n", false, "preview the selected access list without writing or restarting")
 	}
 	setFlagUsage(fs, synopsis)
 	if err := fs.Parse(args); err != nil {
@@ -63,18 +63,29 @@ func cmdAccessTo(args []string, stdout, stderr io.Writer) int {
 			}{policy, accessActivation})
 		}
 		fmt.Fprintf(stdout, "Runner config: %s\nListen: %s\nCapability: %s\n", terminalSafeField(policy.Path), terminalSafeField(policy.Listen), terminalSafeField(policy.Capability))
-		fmt.Fprintln(stdout, "Configured allow_users (full runner access):")
+		fmt.Fprintln(stdout, "Configured allow_users (full runner access unless denied):")
 		if len(policy.AllowUsers) == 0 {
 			fmt.Fprintln(stdout, "  (none)")
 		}
 		for _, login := range policy.AllowUsers {
 			fmt.Fprintf(stdout, "  %s\n", terminalSafeField(login))
 		}
+		fmt.Fprintln(stdout, "Configured deny_users (overrides tailnet grants):")
+		if len(policy.DenyUsers) == 0 {
+			fmt.Fprintln(stdout, "  (none)")
+		}
+		for _, login := range policy.DenyUsers {
+			fmt.Fprintf(stdout, "  %s\n", terminalSafeField(login))
+		}
 		fmt.Fprintln(stdout, accessActivation)
 		return 0
 	}
 	login := fs.Arg(0)
-	change, err := config.ChangeAccess(*path, login, action == "add", dryRun)
+	edit := config.ChangeAccess
+	if action == "deny" || action == "undeny" {
+		edit = config.ChangeDeniedAccess
+	}
+	change, err := edit(*path, login, action == "add" || action == "deny", dryRun)
 	if err != nil {
 		fmt.Fprintf(stderr, "errand access: %v\n", err)
 		return 1
@@ -95,7 +106,7 @@ func cmdAccessTo(args []string, stdout, stderr io.Writer) int {
 			verb = "Would update"
 		}
 	}
-	fmt.Fprintf(stdout, "%s allow_users in %s\n", verb, terminalSafeField(change.Path))
+	fmt.Fprintf(stdout, "%s %s in %s\n", verb, change.Field, terminalSafeField(change.Path))
 	fmt.Fprintf(stdout, "Before: %q\nAfter:  %q\n", change.Before, change.After)
 	if change.Changed {
 		fmt.Fprintln(stdout, "Writing re-formats TOML and removes comments; other setting values are preserved.")
