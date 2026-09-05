@@ -16,6 +16,20 @@ elsewhere.
 > content-addressed snapshot reuse, conflict-safe workspace change capture, and
 > attached TCP forwarding. The v0 design is in [docs/DESIGN.md](docs/DESIGN.md).
 
+## Installation
+
+Release archives and Homebrew packaging are prepared; the first release and
+tap publication are pending. For now, build with Go 1.27 or newer:
+
+```sh
+go build -trimpath -o errand ./cmd/errand
+./errand version
+```
+
+The release pipeline produces macOS/Linux downloads for amd64 and arm64,
+checksums, and a Homebrew source formula. See [releasing](docs/RELEASING.md)
+for validation, publication, and runner upgrade instructions.
+
 ## Quickstart
 
 ```

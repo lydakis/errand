@@ -5,12 +5,14 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Keep reusable CI distinct from the calling release workflow's group.
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -42,9 +44,27 @@ jobs:
           fi
       - name: Vet
         run: go vet ./...
+      - name: Test release packaging helpers
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Test with race detector
         run: go test -race -count=1 -timeout=5m ./...
       - name: Build and check binary
         run: |
           go build -trimpath -o "$RUNNER_TEMP/errand" ./cmd/errand
           "$RUNNER_TEMP/errand" version
+      - name: Rehearse release packaging
+        if: runner.os == 'Linux' && !startsWith(github.ref, 'refs/tags/')
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.18.0
+          args: release --snapshot --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check generated Homebrew formula
+        if: runner.os == 'Linux' && !startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(python3 -c 'import json; print(json.load(open("dist/metadata.json"))["version"])')
+          python3 scripts/homebrew_formula.py "$version" "dist/errand_${version}_source.tar.gz" dist/errand.rb
+          ruby -c dist/errand.rb
+          cd dist
+          sha256sum --check checksums.txt

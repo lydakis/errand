@@ -91,10 +91,25 @@ func (RealSystem) Executable() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return serviceExecutable(exe, os.Args[0]), nil
+}
+
+func serviceExecutable(exe, invocation string) string {
+	// Homebrew and user-managed symlinks stay stable across upgrades. Only use
+	// the invocation path if it still identifies this running executable.
+	if invoked, err := exec.LookPath(invocation); err == nil {
+		if absolute, err := filepath.Abs(invoked); err == nil {
+			running, runningErr := os.Stat(exe)
+			candidate, candidateErr := os.Stat(absolute)
+			if runningErr == nil && candidateErr == nil && os.SameFile(running, candidate) {
+				return absolute
+			}
+		}
+	}
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
-	return exe, nil
+	return exe
 }
 
 func (RealSystem) ReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
