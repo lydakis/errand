@@ -164,6 +164,14 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 				}
 				return stdout.String(), stderr.String()
 			}
+			out, _ := runCLI("doctor", "--json", target.flag, target.value)
+			var diagnosis doctorReport
+			if err := json.Unmarshal([]byte(out), &diagnosis); err != nil || !diagnosis.OK || diagnosis.Info == nil || diagnosis.Info.Version != "test" {
+				t.Fatalf("doctor over SSH: %s, %v", out, err)
+			}
+			if diagnosis.Effective.URL != "ssh://george@fake-runner" {
+				t.Fatalf("doctor exposed internal transport identity: %s", out)
+			}
 			for _, apply := range []bool{false, true} {
 				policy := "--no-apply"
 				if apply {

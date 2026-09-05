@@ -87,6 +87,11 @@ separate probe grant exists in v0.
 requires a restart; independent tailnet capability grants and SSH access
 remain separate. See [runner access](CONFIGURATION.md#runner-access).
 
+`errand doctor` combines effective run configuration with a bounded info
+probe of that selected peer and reports actionable failures. It is read-only;
+a successful info probe does not establish submission permission or validate
+the proposed snapshot or command. See [doctor checks](CONFIGURATION.md#diagnose-the-selected-runner).
+
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
 is a design constraint, not a v0 deliverable — the protocol and job model
 assume nothing POSIX-only. The milestone 1 host backend uses a process group

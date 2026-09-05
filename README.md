@@ -126,6 +126,14 @@ preserve other TOML setting values but reformat the file and remove comments.
 See [runner access configuration](docs/CONFIGURATION.md#runner-access) for the
 full contract.
 
+Diagnose the runner selected for your next invocation with `errand doctor`,
+or choose one with `errand doctor --on cabal`. It resolves the same run
+settings as `errand config`, then checks runner connectivity, access to info,
+and protocol compatibility. Failures include next steps; busy runners produce
+a warning. `--profile NAME` and `--json` are supported. Doctor submits no job
+and makes no configuration changes. See [doctor checks](docs/CONFIGURATION.md#diagnose-the-selected-runner)
+for scope and exit codes.
+
 An SSH peer uses the same HTTP protocol over `ssh HOST errand _stdio`. The
 daemon accepts the bridge through a private Unix socket and verifies that it
 runs as the daemon's OS user. Configure an ssh_config alias and an absolute

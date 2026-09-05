@@ -64,6 +64,9 @@ usage:
   errand access [list] [--config PATH] [--json]
   errand access add [-n | --dry-run] [--config PATH] [--json] LOGIN
   errand access remove [-n | --dry-run] [--config PATH] [--json] LOGIN
+  errand doctor [--json] [--profile NAME] [--on PEER | --url URL]
+                [--workspace-root PATH] [-w REL | --workdir REL]
+                [--apply | --no-apply] [--no-snapshot]
   errand version
 
 A HANDLE is peer/ULID as printed at submission (a bare ULID works with
@@ -95,7 +98,7 @@ func main() {
 	}
 	skipResume := cliHelpRequested(args)
 	switch args[0] {
-	case "serve", "setup", "_automatic-apply", "_stdio", "version", "config", "access":
+	case "serve", "setup", "_automatic-apply", "_stdio", "version", "config", "access", "doctor":
 		skipResume = true
 	}
 	if !skipResume {
@@ -114,6 +117,8 @@ func main() {
 		os.Exit(cmdConfig(args[1:]))
 	case "access":
 		os.Exit(cmdAccess(args[1:]))
+	case "doctor":
+		os.Exit(cmdDoctor(args[1:]))
 	case "attach":
 		os.Exit(cmdAttach(args[1:]))
 	case "fetch":

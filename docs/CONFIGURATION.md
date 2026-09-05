@@ -195,3 +195,40 @@ All operations accept `--json`. Listing emits `path`, `allow_users`,
 `written`, and `activation`. `changed` describes whether the desired array
 differs, while `written` is true only after a successful write. Pass options
 before the login.
+
+## Diagnose the selected runner
+
+```sh
+errand doctor
+errand doctor --on cabal
+errand doctor --profile build --json
+errand doctor --url ssh://my-runner --no-snapshot
+```
+
+Doctor resolves the same run settings and accepts the same override flags as
+`errand config`. It then makes one logical `GET /v0/info` probe to the selected
+runner, with a four-second deadline. Configured SSH aliases retain their
+`remote_command` and `remote_socket` settings. The displayed endpoint remains
+the configured URL. No other peers are discovered or probed.
+
+The configuration check reports resolver errors such as malformed TOML,
+unknown profiles, missing peers, and invalid workspace boundaries. When
+resolution fails, the runner check is skipped. The runner check distinguishes
+connection failures, refused info access, and responses that do not match the
+current Errand protocol, with next steps for each. A reachable busy runner
+produces a warning; it is still a successful diagnostic check.
+
+Doctor reads local configuration and workspace metadata and probes the runner.
+It does not select or hash snapshot files, validate command availability,
+submit jobs, change grants or configuration, restart services, or resume
+pending automatic applications. Successful info access establishes only the
+ability to read runner info; a caller can have that access without permission
+to submit. Admission and capacity can also change after the check.
+
+Exit codes are `0` for successful checks (including busy warnings), `1` for
+configuration, probe, or report-output failures, and `2` for invalid command
+usage. Help exits `0`. With `--json`, diagnostic reports go to stdout and
+include `ok`, `checks`, `scope`, the resolved `effective` configuration when
+available, and `info` after a successful probe. Each check has `name`,
+`status` (`ok`, `warning`, `error`, or `skipped`), `detail`, and an optional
+`hint`. Usage errors go to stderr without a JSON report.
