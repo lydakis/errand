@@ -1,0 +1,98 @@
+name: Publish Homebrew
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Already published stable release tag (for example v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-homebrew
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (!github.event.release.draft && !github.event.release.prerelease)
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Validate with the same generator that built the release assets.
+          ref: refs/tags/${{ inputs.tag || github.event.release.tag_name }}
+          persist-credentials: false
+      - name: Download published release assets
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo 'Expected a stable tag such as v0.1.0' >&2
+            exit 1
+          fi
+          gh api "repos/lydakis/errand/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          gh release download "$RELEASE_TAG" --repo lydakis/errand \
+            --pattern errand.rb --pattern checksums.txt \
+            --pattern "errand_${RELEASE_TAG#v}_source.tar.gz" --dir "$RUNNER_TEMP/release"
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+      - name: Check out tap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: lydakis/homebrew-errand
+          ref: main
+          path: tap
+          persist-credentials: false
+      - name: Verify release and prepare update
+        id: prepare
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          python3 scripts/prepare_homebrew_update.py "$RELEASE_TAG" \
+            "$RUNNER_TEMP/release.json" "$RUNNER_TEMP/release" \
+            tap/Formula/errand.rb "$RUNNER_TEMP/tap-update.json"
+          if [ -f "$RUNNER_TEMP/tap-update.json" ]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check publication credential is configured
+        if: steps.prepare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GORELEASER_TOKEN || secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo 'Set GORELEASER_TOKEN with Contents write access to lydakis/homebrew-errand.' >&2
+            exit 1
+          fi
+      - name: Validate formula and source installation
+        if: steps.prepare.outputs.changed == 'true'
+        run: |
+          ruby -c tap/Formula/errand.rb
+          tap_parent="$(brew --repository)/Library/Taps/lydakis"
+          mkdir -p "$tap_parent"
+          ln -s "$GITHUB_WORKSPACE/tap" "$tap_parent/homebrew-errand"
+          brew style lydakis/errand/errand
+          brew install --build-from-source lydakis/errand/errand
+          brew audit --strict lydakis/errand/errand
+          brew test lydakis/errand/errand
+      - name: Publish validated formula
+        if: steps.prepare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GORELEASER_TOKEN || secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          gh api --method PUT repos/lydakis/homebrew-errand/contents/Formula/errand.rb \
+            --input "$RUNNER_TEMP/tap-update.json" --jq .commit.html_url

@@ -3,7 +3,8 @@
 The release pipeline builds macOS and Linux binaries for amd64 and arm64,
 a source archive, SHA-256 checksums, and a Homebrew formula. It creates a
 **draft** GitHub release after the same macOS/Linux checks used for pull
-requests pass. Publishing the release and updating the tap are separate steps.
+requests pass. Publishing a stable release then triggers a validated Homebrew
+tap update automatically.
 
 ## Local rehearsal
 
@@ -29,7 +30,8 @@ The generated `dist/` directory is disposable and ignored by Git.
 
 ## First release
 
-1. Merge the release machinery and verify CI on the intended commit.
+1. Merge the release machinery and Homebrew publication workflow, verify CI on
+   the intended commit, and configure the tap token described below.
 2. Choose a version and push its tag, for example `v0.1.0`. Stable tags use
    `vMAJOR.MINOR.PATCH`; prereleases can use `v0.1.0-rc.1`. Do not move an
    existing release tag. The workflow runs only for pushed `v*` tags.
@@ -88,22 +90,43 @@ quarantine.
 
 ## Homebrew tap
 
-The planned tap is `lydakis/homebrew-errand`; it must be created before the
-first Homebrew publication. The release workflow generates a ready-to-review
-`errand.rb` instead of writing to a second repository with additional credentials.
+The public tap is [lydakis/homebrew-errand](https://github.com/lydakis/homebrew-errand).
+It can exist without a formula until the first stable release is published.
 
-After publishing a **stable** GitHub release:
+Set the Errand repository's Actions secret `GORELEASER_TOKEN` to a token with
+Contents read/write access to `lydakis/homebrew-errand`. For a fine-grained PAT,
+select that repository and the Contents permission. The workflow also accepts
+`HOMEBREW_TAP_GITHUB_TOKEN` as a fallback, following the existing IceVault setup.
+The ordinary `GITHUB_TOKEN` reads Errand release assets; the tap token is only
+exposed to the credential check and final publication step.
 
-1. Download that release's `errand.rb` and `checksums.txt` and verify the
-   formula's checksum. Copy the formula to `Formula/errand.rb` in the tap.
-2. Run `brew style`, `brew audit --strict`, a source install, and `brew test`
-   against the tapped formula. Commit and push the tap update after validation.
-3. Users can then install or upgrade with:
+The **Publish Homebrew** workflow runs on `release.published`, without scheduled
+polling. It verifies that the release is stable and published, checks the source
+archive and formula against `checksums.txt`, and compares the formula with the
+generator's expected output. It then runs `brew style`, a source install,
+`brew audit --strict`, and `brew test` on macOS before updating `Formula/errand.rb`
+in the tap through the GitHub Contents API. The previous blob ID guards against
+overwriting a concurrent tap edit.
 
-   ```sh
-   brew install lydakis/errand/errand
-   brew upgrade lydakis/errand/errand
-   ```
+Pushing a tag creates a draft release only. Drafts and prereleases do not update
+Homebrew. Publishing the stable draft starts the tap update immediately; installs
+become available when that workflow passes. No separate tap release is needed.
+
+If publication fails, fix the reported problem and rerun **Publish Homebrew**
+manually with the already published stable tag. Both automatic publication and
+manual reruns use that tag's validation scripts and formula generator, so later
+changes on the default branch do not invalidate the release's formula.
+Repeating an identical update does nothing, an older
+release cannot downgrade the tap, and a changed formula for the same version
+requires manual review rather than an overwrite. For token failures, check its
+expiration and repository access, then rerun; do not recreate the Errand release.
+
+After the first successful tap update, users can install or upgrade with:
+
+```sh
+brew install lydakis/errand/errand
+brew upgrade lydakis/errand/errand
+```
 
 The formula downloads the release's exact source archive, checks its SHA-256,
 and uses Go as a build dependency. It supports the host macOS/Linux architecture.
