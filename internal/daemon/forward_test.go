@@ -231,6 +231,9 @@ func TestForwardDoesNotDialAfterExecutionEnds(t *testing.T) {
 		dialed <- struct{}{}
 		return nil, fmt.Errorf("unexpected dial")
 	})
+	// Execution has ended even though result retention has not made the job
+	// terminal yet. Establish that ordering before sending the request.
+	close(j.executionDone)
 	ts := forwardTestServer(t, j)
 	response := make(chan *http.Response, 1)
 	requestErr := make(chan error, 1)
@@ -243,7 +246,6 @@ func TestForwardDoesNotDialAfterExecutionEnds(t *testing.T) {
 		response <- resp
 	}()
 
-	close(j.executionDone)
 	select {
 	case resp := <-response:
 		defer resp.Body.Close()
