@@ -1,5 +1,4 @@
-// Package config loads the two config files: the personal client config
-// (peer aliases — never in a repository) and the runner config.
+// Package config loads personal and runner configuration and resolves run settings.
 package config
 
 import (
@@ -46,7 +45,7 @@ func (c Client) SSHRemoteSocket(name string) string {
 
 type Client struct {
 	DefaultPeer    string          `toml:"default_peer,omitempty"`
-	ApplyOnSuccess bool            `toml:"apply_on_success,omitempty"`
+	ApplyOnSuccess *bool           `toml:"apply_on_success,omitempty"`
 	Peers          map[string]Peer `toml:"peers,omitempty"`
 }
 

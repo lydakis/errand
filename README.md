@@ -147,6 +147,9 @@ explicit `.errandignore` at the shared root:
 [workspace]
 root = true
 
+[run]
+peer = "mac-mini"             # optional; alias lives in personal config
+
 [changes]
 apply_on_success = true
 ```
@@ -170,6 +173,14 @@ for success and applies into the originating workspace. `attach` remains
 observation-only and never chooses or changes that policy. If the worker or
 client machine stops, the persisted policy is resumed by the next client
 command on that machine.
+
+`[run].peer` chooses a preferred configured peer for new runs. `--on` or
+`--url` wins over this preference; an unknown workspace alias fails instead
+of silently using the personal default. `errand config` shows the effective
+run settings and their sources; `errand config --json` provides the same
+information for scripts. Inspection stays local and does not resume automatic
+applications. See [configuration](docs/CONFIGURATION.md) for precedence and
+the supported workspace settings.
 
 ## Why not just ssh?
 

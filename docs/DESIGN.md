@@ -237,10 +237,11 @@ permits the job to access runner-local services. Container and future Atlas
 adapters instead dial loopback inside the job's network environment. The CLI
 and tunnel transport do not depend on those runtime details.
 
-Per-project defaults (portable, in the repo):
+Per-project defaults (in the repo; backend, environment, and cache sections
+below describe planned configuration):
 
 ```toml
-# .errand.toml — describes the project, never names your machines
+# .errand.toml
 [workspace]
 root = true                    # this directory is the snapshot boundary
 
@@ -248,6 +249,7 @@ root = true                    # this directory is the snapshot boundary
 apply_on_success = true        # apply after clean successful completion
 
 [run]
+peer    = "mac-mini"           # optional convenience; alias is personal
 backend = "container"
 image   = "rust:1.86"          # receipt records the resolved digest
 
@@ -261,11 +263,16 @@ path  = "/usr/local/cargo/registry"
 scope = "project"              # project | user | peer (opt-in beyond project)
 ```
 
-Personal aliases and defaults (`cabal`, default peer, addresses, and
-`apply_on_success`) live in
-`~/.config/errand/config.toml`, never in the repository.
+Personal aliases, addresses, and defaults live in
+`~/.config/errand/config.toml`. A workspace may prefer an alias with `run.peer`;
+it cannot define that alias's transport. Run resolution uses explicit CLI,
+then selected workspace preferences, then personal defaults, then safe defaults.
+Unknown workspace peers fail instead of falling back. `errand config [--json]`
+uses the same resolver to explain the effective values without networking or
+resuming automatic applications. See [configuration](CONFIGURATION.md) for the
+currently supported fields. Profiles will layer onto this resolver separately.
 For `--no-snapshot`, the current directory is the configuration root, so an
-ancestor marker cannot silently choose an apply policy for an empty workspace.
+ancestor marker cannot silently choose a peer or apply policy for an empty workspace.
 
 Environment defaults to **nothing forwarded**: target's PATH, plus `pass`
 by name and `set` literals. The initiator's ambient environment is never

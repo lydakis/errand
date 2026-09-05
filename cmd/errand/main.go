@@ -27,7 +27,6 @@ import (
 	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/tailnet"
-	"github.com/lydakis/errand/internal/workspace"
 )
 
 var version = "0.1.0-dev"
@@ -59,6 +58,9 @@ usage:
                    [-f | --force] [-n | --dry-run] [--no-verify] NAME HOST
   errand peers remove NAME
   errand peers discover [-a | --all] [--json]
+  errand config [--json] [--on PEER | --url URL]
+                [--workspace-root PATH] [-w REL | --workdir REL]
+                [--apply | --no-apply] [--no-snapshot]
   errand version
 
 A HANDLE is peer/ULID as printed at submission (a bare ULID works with
@@ -90,7 +92,7 @@ func main() {
 	}
 	skipResume := cliHelpRequested(args)
 	switch args[0] {
-	case "serve", "setup", "_automatic-apply", "_stdio", "version":
+	case "serve", "setup", "_automatic-apply", "_stdio", "version", "config":
 		skipResume = true
 	}
 	if !skipResume {
@@ -105,6 +107,8 @@ func main() {
 		os.Exit(cmdSetup(args[1:]))
 	case "peers":
 		os.Exit(cmdPeers(args[1:]))
+	case "config":
+		os.Exit(cmdConfig(args[1:]))
 	case "attach":
 		os.Exit(cmdAttach(args[1:]))
 	case "fetch":
@@ -182,170 +186,6 @@ func (p *portForwardList) Set(value string) error {
 	}
 	*p = append(*p, client.PortForward{Local: local, Remote: remote})
 	return nil
-}
-
-func cmdRun(args []string) int {
-	fs := flag.NewFlagSet("errand", flag.ExitOnError)
-	on := fs.String("on", "", "peer name from ~/.config/errand/config.toml")
-	rawURL := fs.String("url", "", "peer base URL (mutually exclusive with --on)")
-	workdir := fs.String("workdir", "", "working directory, relative to the workspace root")
-	workspaceRoot := fs.String("workspace-root", "", "snapshot root containing the current directory")
-	includeAll := fs.Bool("include-all", false, "allow an otherwise refused broad snapshot (never permits a filesystem root)")
-	noSnapshot := fs.Bool("no-snapshot", false, "run in an empty remote workspace without inspecting local file contents")
-	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
-	fs.BoolVar(detach, "d", false, "return after admission, printing the job handle on stdout")
-	apply := fs.Bool("apply", false, "apply retained workspace changes after successful completion")
-	noApply := fs.Bool("no-apply", false, "do not apply retained workspace changes after the run")
-	fs.StringVar(workdir, "w", "", "working directory, relative to the workspace root")
-	var forwards portForwardList
-	var envs, passenvs stringList
-	fs.Var(&forwards, "forward", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
-	fs.Var(&forwards, "L", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
-	fs.Var(&envs, "env", "set K=V in the job environment (repeatable)")
-	fs.Var(&envs, "e", "set K=V in the job environment (repeatable)")
-	fs.Var(&passenvs, "passenv", "forward the named local env var (repeatable)")
-	fs.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
-
-	// Everything after "--" is the command; flags come before it.
-	split := -1
-	for i, a := range args {
-		if a == "--" {
-			split = i
-			break
-		}
-	}
-	if split < 0 {
-		fmt.Fprintln(os.Stderr, "errand: missing \"--\" before the command\n\n"+usage)
-		return 2
-	}
-	if err := fs.Parse(args[:split]); err != nil {
-		return 2
-	}
-	argv := args[split+1:]
-	if len(argv) == 0 {
-		fmt.Fprintln(os.Stderr, "errand: empty command after \"--\"")
-		return 2
-	}
-	if *includeAll && *noSnapshot {
-		fmt.Fprintln(os.Stderr, "errand: --include-all and --no-snapshot are mutually exclusive")
-		return 2
-	}
-	if *apply && *noApply {
-		fmt.Fprintln(os.Stderr, "errand: --apply and --no-apply are mutually exclusive")
-		return 2
-	}
-	if *detach && len(forwards) != 0 {
-		fmt.Fprintln(os.Stderr, "errand: --detach and --forward are mutually exclusive")
-		return 2
-	}
-	if *noSnapshot && *workspaceRoot != "" {
-		fmt.Fprintln(os.Stderr, "errand: --workspace-root and --no-snapshot are mutually exclusive")
-		return 2
-	}
-	if *noSnapshot && *workdir != "" && *workdir != "." {
-		fmt.Fprintln(os.Stderr, "errand: --workdir must be the workspace root when using --no-snapshot")
-		return 2
-	}
-
-	peerURL, peerLabel, err := resolvePeerTarget(*rawURL, *on)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return client.ExitTransaction
-	}
-	env := map[string]string{}
-	for _, kv := range envs {
-		k, v, ok := strings.Cut(kv, "=")
-		if !ok || k == "" {
-			fmt.Fprintf(os.Stderr, "errand: --env wants K=V, got %q\n", kv)
-			return 2
-		}
-		env[k] = v
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return client.ExitTransaction
-	}
-	root := cwd
-	project := ""
-	var workspaceApplyOnSuccess *bool
-	if !*noSnapshot {
-		selected, discoverErr := workspace.Discover(cwd, *workspaceRoot)
-		if discoverErr != nil {
-			fmt.Fprintf(os.Stderr, "errand: %v\n", discoverErr)
-			return client.ExitTransaction
-		}
-		root = selected.Root
-		project = selected.Project
-		workspaceApplyOnSuccess = selected.ApplyOnSuccess
-		if *workdir == "" {
-			*workdir = selected.Workdir
-		}
-		shownWorkdir := *workdir
-		if shownWorkdir == "" {
-			shownWorkdir = "."
-		}
-		fmt.Fprintf(os.Stderr, "errand: workspace root %s (from %s)\n", selected.Root, selected.Source)
-		fmt.Fprintf(os.Stderr, "errand: command workdir %s\n", shownWorkdir)
-	} else {
-		selected, discoverErr := workspace.Discover(cwd, cwd)
-		if discoverErr != nil {
-			fmt.Fprintf(os.Stderr, "errand: %v\n", discoverErr)
-			return client.ExitTransaction
-		}
-		workspaceApplyOnSuccess = selected.ApplyOnSuccess
-	}
-	globalApplyOnSuccess := false
-	if !*apply && !*noApply && workspaceApplyOnSuccess == nil {
-		clientConfig, err := config.LoadClient()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-			return client.ExitTransaction
-		}
-		globalApplyOnSuccess = clientConfig.ApplyOnSuccess
-	}
-	applyOnSuccess, err := resolveApplyOnSuccess(
-		*apply, *noApply, workspaceApplyOnSuccess, globalApplyOnSuccess,
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return 2
-	}
-	return client.Run(client.RunOptions{
-		PeerURL:        peerURL,
-		PeerName:       peerLabel,
-		Root:           root,
-		Argv:           argv,
-		Env:            env,
-		PassEnv:        passenvs,
-		Workdir:        *workdir,
-		Project:        project,
-		IncludeAll:     *includeAll,
-		NoSnapshot:     *noSnapshot,
-		Detach:         *detach,
-		ApplyOnSuccess: applyOnSuccess,
-		Forwards:       forwards,
-	})
-}
-
-func resolveApplyOnSuccess(
-	explicitApply, explicitNoApply bool,
-	workspaceApply *bool,
-	globalApply bool,
-) (bool, error) {
-	if explicitApply && explicitNoApply {
-		return false, fmt.Errorf("--apply and --no-apply are mutually exclusive")
-	}
-	if explicitApply {
-		return true, nil
-	}
-	if explicitNoApply {
-		return false, nil
-	}
-	if workspaceApply != nil {
-		return *workspaceApply, nil
-	}
-	return globalApply, nil
 }
 
 // resolvePeerTarget returns the effective transport URL and the label that

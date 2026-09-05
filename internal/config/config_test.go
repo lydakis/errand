@@ -61,7 +61,7 @@ func TestLoadClientApplyOnSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.ApplyOnSuccess {
+	if cfg.ApplyOnSuccess == nil || !*cfg.ApplyOnSuccess {
 		t.Fatal("apply_on_success was not loaded")
 	}
 }

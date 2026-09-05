@@ -18,9 +18,13 @@ type Selection struct {
 	Project        string
 	Source         string
 	ApplyOnSuccess *bool
+	Peer           *string
 }
 
 type projectConfig struct {
+	Run struct {
+		Peer *string `toml:"peer"`
+	} `toml:"run"`
 	Workspace struct {
 		Root bool `toml:"root"`
 	} `toml:"workspace"`
@@ -49,10 +53,10 @@ func Discover(cwd, explicit string) (Selection, error) {
 		if err != nil {
 			return Selection{}, err
 		}
-		return selection(root, cwd, "--workspace-root", cfg.Changes.ApplyOnSuccess)
+		return selection(root, cwd, "--workspace-root", cfg)
 	}
 
-	var currentApplyOnSuccess *bool
+	var currentConfig projectConfig
 	for dir := cwd; ; dir = filepath.Dir(dir) {
 		marker := filepath.Join(dir, markerName)
 		if markerInfo, err := os.Stat(marker); err == nil {
@@ -66,10 +70,10 @@ func Discover(cwd, explicit string) (Selection, error) {
 					return Selection{}, fmt.Errorf("workspace: reading %s: %w", marker, err)
 				}
 				if dir == cwd {
-					currentApplyOnSuccess = cfg.Changes.ApplyOnSuccess
+					currentConfig = cfg
 				}
 				if cfg.Workspace.Root {
-					return selection(dir, cwd, marker, cfg.Changes.ApplyOnSuccess)
+					return selection(dir, cwd, marker, cfg)
 				}
 			}
 		}
@@ -78,7 +82,7 @@ func Discover(cwd, explicit string) (Selection, error) {
 			break
 		}
 	}
-	return selection(cwd, cwd, "current directory", currentApplyOnSuccess)
+	return selection(cwd, cwd, "current directory", currentConfig)
 }
 
 func readExplicitConfig(root string) (projectConfig, error) {
@@ -133,7 +137,7 @@ func canonicalDir(dir string) (string, error) {
 	return filepath.Clean(resolved), nil
 }
 
-func selection(root, cwd, source string, applyOnSuccess *bool) (Selection, error) {
+func selection(root, cwd, source string, cfg projectConfig) (Selection, error) {
 	rel, err := filepath.Rel(root, cwd)
 	if err != nil {
 		return Selection{}, fmt.Errorf("workspace: deriving command workdir: %w", err)
@@ -152,7 +156,7 @@ func selection(root, cwd, source string, applyOnSuccess *bool) (Selection, error
 	}
 	return Selection{
 		Root: root, Workdir: rel, Project: project, Source: source,
-		ApplyOnSuccess: applyOnSuccess,
+		ApplyOnSuccess: cfg.Changes.ApplyOnSuccess, Peer: cfg.Run.Peer,
 	}, nil
 }
 

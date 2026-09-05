@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -73,6 +75,7 @@ func TestListenUnixSocketReplacesStaleSocket(t *testing.T) {
 
 func TestSSHTransportEndToEnd(t *testing.T) {
 	bin := buildErrand(t)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	stateDir := t.TempDir()
 	d, err := daemon.New(daemon.Config{StateDir: stateDir, Version: "test"})
 	if err != nil {
@@ -99,7 +102,7 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 		"while [ $# -gt 0 ]; do case \"$1\" in --) shift; break;; -o) shift 2;; -*) shift;; *) break;; esac; done\n" +
 		"[ \"$1\" = \"george@fake-runner\" ] || exit 91\n" +
 		"shift\n" +
-		"[ \"$1\" = \"'/opt/errand' _stdio --socket '" + socket + "'\" ] || exit 92\n" +
+		"[ \"$1\" = \"'/opt/errand' _stdio --socket '" + socket + "'\" ] || [ \"$1\" = \"'errand' _stdio\" ] || exit 92\n" +
 		"exec " + bin + " _stdio --socket '" + socket + "'\n"
 	if err := os.WriteFile(fakeSSH, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -141,5 +144,66 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 	jobs, err := client.List(peer)
 	if err != nil || len(jobs) != 1 {
 		t.Fatalf("list over ssh = %v, %v", jobs, err)
+	}
+
+	writeClientConfig(t, fmt.Sprintf("[peers.test]\nssh = 'george@fake-runner'\nremote_command = '/opt/errand'\nremote_socket = %q\n", socket))
+	for _, target := range []struct{ name, flag, value string }{
+		{"raw URL", "--url", "ssh://george@fake-runner"},
+		{"configured alias", "--on", "test"},
+	} {
+		t.Run(target.name, func(t *testing.T) {
+			root := t.TempDir()
+			runCLI := func(args ...string) (string, string) {
+				t.Helper()
+				command := exec.Command(bin, args...)
+				command.Dir = root
+				var stdout, stderr bytes.Buffer
+				command.Stdout, command.Stderr = &stdout, &stderr
+				if err := command.Run(); err != nil {
+					t.Fatalf("errand %v: %v\n%s", args, err, &stderr)
+				}
+				return stdout.String(), stderr.String()
+			}
+			for _, apply := range []bool{false, true} {
+				policy := "--no-apply"
+				if apply {
+					policy = "--apply"
+				}
+				if err := os.WriteFile(filepath.Join(root, "report.txt"), []byte("original"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				_, logs := runCLI(target.flag, target.value, "--include-all", policy, "--", "/bin/sh", "-c", "printf changed > report.txt")
+				handle := ""
+				for _, line := range strings.Split(logs, "\n") {
+					if strings.HasPrefix(line, "errand: job ") {
+						handle = strings.Fields(line)[2]
+						break
+					}
+				}
+				if !strings.HasPrefix(handle, target.value+"/") {
+					t.Fatalf("unexpected handle %q in %s", handle, logs)
+				}
+				if apply {
+					out, _ := runCLI("status", "--json", handle)
+					var status statusJSON
+					if err := json.Unmarshal([]byte(out), &status); err != nil {
+						t.Fatal(err)
+					}
+					if status.AutomaticApply == nil || status.AutomaticApply.State != "applied" {
+						t.Fatalf("handle lost automatic-apply state: %s", out)
+					}
+				} else {
+					before, err := os.ReadFile(filepath.Join(root, "report.txt"))
+					if err != nil || string(before) != "original" {
+						t.Fatalf("no-apply changed workspace: %q, %v", before, err)
+					}
+					runCLI("fetch", "--apply", handle)
+				}
+				content, err := os.ReadFile(filepath.Join(root, "report.txt"))
+				if err != nil || string(content) != "changed" {
+					t.Fatalf("apply=%t: workspace content %q, %v", apply, content, err)
+				}
+			}
+		})
 	}
 }

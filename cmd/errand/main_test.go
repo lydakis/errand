@@ -87,36 +87,6 @@ func TestCmdRunShortEnvFlag(t *testing.T) {
 	}
 }
 
-func TestResolveApplyOnSuccessPrecedence(t *testing.T) {
-	workspaceTrue := true
-	workspaceFalse := false
-	for name, tc := range map[string]struct {
-		explicitApply   bool
-		explicitNoApply bool
-		workspace       *bool
-		global          bool
-		want            bool
-		wantErr         bool
-	}{
-		"explicit apply":    {explicitApply: true, workspace: &workspaceFalse, want: true},
-		"explicit no apply": {explicitNoApply: true, workspace: &workspaceTrue, global: true},
-		"workspace true":    {workspace: &workspaceTrue, want: true},
-		"workspace false":   {workspace: &workspaceFalse, global: true},
-		"global":            {global: true, want: true},
-		"safe default":      {},
-		"contradictory":     {explicitApply: true, explicitNoApply: true, wantErr: true},
-	} {
-		t.Run(name, func(t *testing.T) {
-			got, err := resolveApplyOnSuccess(
-				tc.explicitApply, tc.explicitNoApply, tc.workspace, tc.global,
-			)
-			if (err != nil) != tc.wantErr || got != tc.want {
-				t.Fatalf("resolveApplyOnSuccess() = %t, %v", got, err)
-			}
-		})
-	}
-}
-
 func TestCmdFetchRejectsConflictsWithoutApply(t *testing.T) {
 	id := proto.NewULID()
 	if code := cmdFetch([]string{"--conflicts", id}); code != 2 {
