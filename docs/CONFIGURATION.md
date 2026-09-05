@@ -4,12 +4,14 @@ Run submission and `errand config` share one resolver. For peer selection and
 automatic apply, precedence is:
 
 1. Explicit CLI flags.
-2. The selected workspace's `.errand.toml`.
-3. Personal configuration.
-4. Safe defaults: no automatic apply and no implicit peer.
+2. The explicitly selected profile.
+3. The selected workspace's `.errand.toml` defaults.
+4. Personal defaults.
+5. Safe defaults: no automatic apply and no implicit peer.
 
-Profiles are the next layer to add. Environment variables, forwarding,
-detachment, and broad snapshot opt-in remain CLI options in this slice.
+Profiles can also set a workdir, overriding the caller's relative directory;
+an explicit CLI workdir wins. Environment variables, forwarding, detachment,
+and broad snapshot opt-in remain CLI options.
 
 ## Personal configuration
 
@@ -73,16 +75,69 @@ it. Supplying both flag names is an error, regardless of their values.
 Workspace configuration should contain no secret values. Keep project commands
 and service orchestration in scripts, Make, Just, or Compose.
 
+## Profiles
+
+Define profiles in either personal configuration or the selected workspace's
+`.errand.toml`, using the same syntax in both:
+
+```toml
+[profiles.build.run]
+peer = "cabal"
+workdir = "packages/api"       # relative to the selected workspace root
+
+[profiles.build.changes]
+apply_on_success = false
+
+[profiles.format.run]
+workdir = "."                  # explicitly use the workspace root
+
+[profiles.format.changes]
+apply_on_success = true
+```
+
+Select one profile explicitly:
+
+```sh
+errand --profile build -- go test ./...
+errand --profile build --on mac-mini -- go test ./...
+errand --profile format -- gofmt -w .
+errand config --profile build --json
+```
+
+Without `--profile`, no profile is active. Unknown names fail even if other
+CLI flags supply all settings. An empty `--profile` value is an error.
+
+When the selected workspace and personal config define the same profile name,
+the workspace definition replaces the entire personal definition. Omitted
+fields inherit ordinary workspace/personal defaults, not fields from the
+shadowed personal profile. An empty workspace profile (`[profiles.build]`)
+therefore opts out of all settings in that personal profile. Other personal
+profiles remain available by name.
+
+Profiles support only `run.peer`, `run.workdir`, and
+`changes.apply_on_success`. Explicit `false` and empty workdir values override
+lower layers. Unsupported keys and incorrect value types are errors when
+loading configuration, including in inactive profiles. There is no profile
+inheritance, automatic profile selection, command definition, or transport
+configuration inside profiles.
+
+Workspace profiles follow the same boundary and trust rules as workspace
+defaults. With `--no-snapshot`, only profiles in the current directory and
+personal config are considered; the resulting workdir must be empty or `.`.
+Use `--workdir .` to override a profile's nested workdir for such an invocation.
+Profiles cannot move the snapshot boundary or enable broad snapshot selection.
+
 ## Inspect without submitting
 
 ```sh
 errand config
 errand config --json
 errand config --on cabal --no-apply
+errand config --profile build --json
 errand config --no-snapshot --json
 ```
 
-The table and JSON show effective peer, endpoint, configured SSH options,
+The table and JSON show the selected profile (when active), effective peer, endpoint, configured SSH options,
 workspace root, workdir, project label, apply policy, and snapshot mode, with
 sources. An empty workdir means the workspace root. SSH URLs are the configured
 endpoints, before the client assigns internal transport identities.

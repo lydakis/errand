@@ -14,6 +14,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/workspace"
 )
 
 type Peer struct {
@@ -44,9 +45,10 @@ func (c Client) SSHRemoteSocket(name string) string {
 }
 
 type Client struct {
-	DefaultPeer    string          `toml:"default_peer,omitempty"`
-	ApplyOnSuccess *bool           `toml:"apply_on_success,omitempty"`
-	Peers          map[string]Peer `toml:"peers,omitempty"`
+	Profiles       map[string]workspace.Profile `toml:"profiles,omitempty"`
+	DefaultPeer    string                       `toml:"default_peer,omitempty"`
+	ApplyOnSuccess *bool                        `toml:"apply_on_success,omitempty"`
+	Peers          map[string]Peer              `toml:"peers,omitempty"`
 }
 
 func dir() (string, error) {

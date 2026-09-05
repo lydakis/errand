@@ -179,8 +179,10 @@ command on that machine.
 of silently using the personal default. `errand config` shows the effective
 run settings and their sources; `errand config --json` provides the same
 information for scripts. Inspection stays local and does not resume automatic
-applications. See [configuration](docs/CONFIGURATION.md) for precedence and
-the supported workspace settings.
+applications. Named profiles in personal or workspace config can supply peer,
+workdir, and apply preferences: `errand --profile build -- go test ./...`.
+CLI flags override profiles; `errand config --profile build` explains the
+result. See [configuration](docs/CONFIGURATION.md) for syntax and precedence.
 
 ## Why not just ssh?
 

@@ -266,11 +266,16 @@ scope = "project"              # project | user | peer (opt-in beyond project)
 Personal aliases, addresses, and defaults live in
 `~/.config/errand/config.toml`. A workspace may prefer an alias with `run.peer`;
 it cannot define that alias's transport. Run resolution uses explicit CLI,
-then selected workspace preferences, then personal defaults, then safe defaults.
+then an explicitly selected profile, then selected workspace preferences,
+then personal defaults, then safe defaults.
 Unknown workspace peers fail instead of falling back. `errand config [--json]`
 uses the same resolver to explain the effective values without networking or
 resuming automatic applications. See [configuration](CONFIGURATION.md) for the
-currently supported fields. Profiles will layer onto this resolver separately.
+currently supported fields. `--profile NAME` selects peer, workdir, and apply
+preferences from `[profiles.NAME.run]` and `[profiles.NAME.changes]`. A selected
+workspace definition replaces a personal profile of the same name entirely;
+profiles are never selected automatically and cannot define transports or
+snapshot boundaries.
 For `--no-snapshot`, the current directory is the configuration root, so an
 ancestor marker cannot silently choose a peer or apply policy for an empty workspace.
 

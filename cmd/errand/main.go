@@ -34,7 +34,7 @@ var version = "0.1.0-dev"
 const usage = `errand — a personal job runner for machines you own
 
 usage:
-  errand [--on PEER | --url URL] [-d | --detach]
+  errand [--profile NAME] [--on PEER | --url URL] [-d | --detach]
          [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]...
          [--apply | --no-apply]
          [-e K=V | --env K=V]... [--passenv K]...
@@ -58,7 +58,7 @@ usage:
                    [-f | --force] [-n | --dry-run] [--no-verify] NAME HOST
   errand peers remove NAME
   errand peers discover [-a | --all] [--json]
-  errand config [--json] [--on PEER | --url URL]
+  errand config [--json] [--profile NAME] [--on PEER | --url URL]
                 [--workspace-root PATH] [-w REL | --workdir REL]
                 [--apply | --no-apply] [--no-snapshot]
   errand version

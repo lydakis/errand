@@ -19,10 +19,12 @@ type Selection struct {
 	Source         string
 	ApplyOnSuccess *bool
 	Peer           *string
+	Profiles       map[string]Profile
 }
 
 type projectConfig struct {
-	Run struct {
+	Profiles map[string]Profile `toml:"profiles"`
+	Run      struct {
 		Peer *string `toml:"peer"`
 	} `toml:"run"`
 	Workspace struct {
@@ -156,7 +158,7 @@ func selection(root, cwd, source string, cfg projectConfig) (Selection, error) {
 	}
 	return Selection{
 		Root: root, Workdir: rel, Project: project, Source: source,
-		ApplyOnSuccess: cfg.Changes.ApplyOnSuccess, Peer: cfg.Run.Peer,
+		ApplyOnSuccess: cfg.Changes.ApplyOnSuccess, Peer: cfg.Run.Peer, Profiles: cfg.Profiles,
 	}, nil
 }
 

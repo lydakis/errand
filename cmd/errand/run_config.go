@@ -15,11 +15,13 @@ import (
 
 // Both submission and inspection use these flags and the same resolver.
 type runConfigFlags struct {
+	profile                    string
 	on, url, workdir, root     string
 	apply, noApply, noSnapshot bool
 }
 
 func (f *runConfigFlags) bind(fs *flag.FlagSet) {
+	fs.StringVar(&f.profile, "profile", "", "named run preferences from workspace or personal configuration")
 	fs.StringVar(&f.on, "on", "", "peer name from personal configuration")
 	fs.StringVar(&f.url, "url", "", "peer base URL (mutually exclusive with --on)")
 	fs.StringVar(&f.workdir, "workdir", "", "working directory, relative to the workspace root")
@@ -34,6 +36,10 @@ func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error)
 	set := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	result := config.RunOverrides{Peer: f.on, URL: f.url, WorkspaceRoot: f.root, NoSnapshot: f.noSnapshot}
+	result.Profile = f.profile
+	if set["profile"] && f.profile == "" {
+		return result, fmt.Errorf("--profile requires a non-empty name")
+	}
 	if set["on"] && f.on == "" || set["url"] && f.url == "" {
 		return result, fmt.Errorf("--on and --url require non-empty values")
 	}
@@ -107,6 +113,7 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 			key   string
 			value any
 		}{
+			{"profile", effective.Profile},
 			{"peer", effective.Peer}, {"url", effective.URL},
 			{"remote_command", effective.RemoteCommand}, {"remote_socket", effective.RemoteSocket},
 			{"workspace_root", effective.Root}, {"workdir", effective.Workdir},

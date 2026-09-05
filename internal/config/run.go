@@ -11,6 +11,7 @@ import (
 // RunOverrides contains only explicit caller choices. Pointers distinguish
 // an absent override from false or an empty (workspace-root) workdir.
 type RunOverrides struct {
+	Profile                  string
 	Peer, URL, WorkspaceRoot string
 	Workdir                  *string
 	ApplyOnSuccess           *bool
@@ -20,6 +21,7 @@ type RunOverrides struct {
 // EffectiveRun is shared by submission and config inspection. URL is the
 // configured endpoint, before the client installs its private SSH identity.
 type EffectiveRun struct {
+	Profile        string            `json:"profile,omitempty"`
 	Peer           string            `json:"peer"`
 	URL            string            `json:"url"`
 	RemoteCommand  string            `json:"remote_command,omitempty"`
@@ -68,8 +70,24 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	}
 	personalSource := "personal: " + personalPath
 	workspaceSource := "workspace: " + filepath.Join(selected.Root, ".errand.toml")
+	var profile workspace.Profile
+	profileSource := ""
+	if cli.Profile != "" {
+		var found bool
+		profile, found = personal.Profiles[cli.Profile]
+		profileSource = personalSource
+		if local, exists := selected.Profiles[cli.Profile]; exists {
+			profile, found = local, true
+			profileSource = workspaceSource
+		}
+		if !found {
+			return result, fmt.Errorf("profile %q is not defined in %s or the selected workspace %s", cli.Profile, personalPath, selected.Root)
+		}
+		profileSource += " (profiles." + cli.Profile + ")"
+	}
 	result = EffectiveRun{
-		Root: selected.Root, Workdir: selected.Workdir, Project: selected.Project,
+		Profile: cli.Profile,
+		Root:    selected.Root, Workdir: selected.Workdir, Project: selected.Project,
 		NoSnapshot: cli.NoSnapshot,
 		Sources: map[string]string{
 			"workspace_root":   selected.Source,
@@ -79,6 +97,9 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 			"no_snapshot":      "default: false",
 		},
 	}
+	if cli.Profile != "" {
+		result.Sources["profile"] = profileSource
+	}
 	if cli.NoSnapshot {
 		result.Sources["workspace_root"] = "current directory (--no-snapshot)"
 		result.Sources["no_snapshot"] = "cli: --no-snapshot"
@@ -86,9 +107,16 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 		result.Project = ""
 		result.Sources["project"] = "empty workspace (--no-snapshot)"
 	}
+	if profile.Run.Workdir != nil {
+		result.Workdir = *profile.Run.Workdir
+		result.Sources["workdir"] = profileSource + " run.workdir"
+	}
 	if cli.Workdir != nil {
 		result.Workdir = *cli.Workdir
 		result.Sources["workdir"] = "cli: --workdir"
+	}
+	if cli.NoSnapshot && result.Workdir != "" && result.Workdir != "." {
+		return result, fmt.Errorf("workdir from %s must be the workspace root when using --no-snapshot", result.Sources["workdir"])
 	}
 	if personal.ApplyOnSuccess != nil {
 		result.ApplyOnSuccess = *personal.ApplyOnSuccess
@@ -97,6 +125,10 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	if selected.ApplyOnSuccess != nil {
 		result.ApplyOnSuccess = *selected.ApplyOnSuccess
 		result.Sources["apply_on_success"] = workspaceSource + " (changes.apply_on_success)"
+	}
+	if profile.Changes.ApplyOnSuccess != nil {
+		result.ApplyOnSuccess = *profile.Changes.ApplyOnSuccess
+		result.Sources["apply_on_success"] = profileSource + " changes.apply_on_success"
 	}
 	if cli.ApplyOnSuccess != nil {
 		result.ApplyOnSuccess = *cli.ApplyOnSuccess
@@ -107,6 +139,10 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	if selected.Peer != nil {
 		result.Peer = *selected.Peer
 		result.Sources["peer"] = workspaceSource + " (run.peer)"
+	}
+	if profile.Run.Peer != nil {
+		result.Peer = *profile.Run.Peer
+		result.Sources["peer"] = profileSource + " run.peer"
 	}
 	if cli.Peer != "" {
 		result.Peer = cli.Peer
