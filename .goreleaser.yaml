@@ -12,6 +12,10 @@ builds:
     flags: [-trimpath]
     ldflags:
       - -s -w -X main.version={{ .Version }}
+    hooks:
+      post:
+        - cmd: 'python3 scripts/notarize_macos.py "{{ .Path }}" "{{ .Target }}" "{{ .IsSnapshot }}"'
+          output: true
 
 archives:
   - ids: [errand]
