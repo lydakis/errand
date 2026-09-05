@@ -94,6 +94,14 @@ func TestCmdFetchRejectsConflictsWithoutApply(t *testing.T) {
 	}
 }
 
+func TestCmdFetchRejectsInvalidOutputOptions(t *testing.T) {
+	for _, args := range [][]string{{"--output", ""}, {"-o", ""}, {"--output", "out", "--apply"}, {"--output", "out", "--conflicts"}} {
+		if code := cmdFetch(append(args, proto.NewULID())); code != 2 {
+			t.Fatalf("fetch %v exit = %d, want 2", args, code)
+		}
+	}
+}
+
 func TestCmdGCRequiresExplicitTarget(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := cmdGCTo(nil, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "cache|jobs|changes|all") {

@@ -21,6 +21,7 @@ type ChangeFetchOptions struct {
 	MaterializeConflicts bool
 	Path                 string
 	CallerDir            string
+	OutputDir            string
 }
 
 func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifestRoot string) error {
@@ -64,10 +65,14 @@ func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifes
 	})
 }
 
-// FetchChanges downloads and verifies a terminal bundle. With Apply false it
-// only stages the bundle. With Apply true it requires the submission machine's
-// workspace identity record and applies every still-unapplied changed path.
+// FetchChanges downloads and verifies a terminal bundle. OutputDir exports
+// remote values into a new directory. Apply instead requires the submission
+// machine's workspace identity record and applies still-unapplied changes.
+// With neither option, it only stages the bundle.
 func FetchChanges(opts ChangeFetchOptions) (string, error) {
+	if opts.OutputDir != "" && (opts.Apply || opts.MaterializeConflicts) {
+		return "", fmt.Errorf("--output cannot be combined with --apply or --conflicts")
+	}
 	if opts.MaterializeConflicts && !opts.Apply {
 		return "", fmt.Errorf("--conflicts requires --apply")
 	}
@@ -93,7 +98,7 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 	}
 	var staged string
 	var bundle proto.ChangeBundle
-	if opts.Apply {
+	if opts.Apply || opts.OutputDir != "" {
 		key := localChangeKey(opts.PeerURL, opts.JobID)
 		unlock, lockErr := acquireLocalChangeLock(localChangeTransferLockName(key))
 		if lockErr != nil {
@@ -112,6 +117,16 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 	selected, err := selectChangePath(bundle, opts.Path)
 	if err != nil {
 		return staged, err
+	}
+	if opts.OutputDir != "" {
+		output, err := filepath.Abs(opts.OutputDir)
+		if err != nil {
+			return staged, err
+		}
+		if err := changeops.ExportRemote(staged, output, opts.Path, bundle); err != nil {
+			return staged, err
+		}
+		return output, nil
 	}
 	if opts.Apply {
 		if err := validateApplySelection(selected, opts.Path); err != nil {

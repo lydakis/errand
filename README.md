@@ -337,6 +337,23 @@ and inspect changes, but cannot apply them without the originating machine's
 workspace identity record. Change records are scoped by runner endpoint and
 job ID, so one peer cannot reuse another peer's apply state.
 
+Use `errand fetch --output DIR HANDLE [PATH]` (short form `-o DIR`) to copy
+retained remote files into a directory of your choice. For example,
+`errand fetch -o ./results HANDLE reports/test.html` creates
+`./results/reports/test.html`. Paths stay relative to the submitted workspace;
+the export contains remote values, without the staging metadata or base tree.
+The parent directory must exist and `DIR` must not exist, even as an empty
+directory or symlink. Errand verifies the selected contents before publishing
+the complete directory without overwriting an existing destination.
+Exports work for failed jobs and from a different client machine. They do not
+merge into the originating workspace or mark changes as applied, and cannot
+be combined with `--apply` or `--conflicts`. Selecting a deleted path has no
+remote value to export; use plain fetch to inspect its deletion metadata.
+
+This destination option exports files already retained by the job. Explicit
+artifact declarations for ignored build outputs and named reusable caches
+remain planned.
+
 Git is not required for non-Git snapshots, running jobs, status, logs, or plain
 fetches. Applying changes needs `git merge-file` on the client only when both
 the local and remote sides changed the same text file and a true three-way text

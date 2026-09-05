@@ -43,7 +43,8 @@ usage:
          [--include-all | --no-snapshot] -- CMD [ARG...]
   errand attach [--profile NAME] [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]... [--no-forward]
                 [--on PEER | --url URL] HANDLE
-  errand fetch [--apply [--conflicts]] [--on PEER | --url URL] HANDLE [PATH]
+  errand fetch [--apply [--conflicts] | -o DIR | --output DIR]
+               [--on PEER | --url URL] HANDLE [PATH]
   errand ps [-a | --all] [-n N | --last N] [--json] [--on PEER | --url URL]
   errand status [--json] [--on PEER | --url URL] HANDLE
   errand kill [-f | --force] [--on PEER | --url URL] HANDLE
@@ -344,10 +345,22 @@ func cmdFetch(args []string) int {
 	fs := flag.NewFlagSet("errand fetch", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "apply retained workspace changes with a clean-or-refuse three-way merge")
 	conflicts := fs.Bool("conflicts", false, "materialize text conflicts and apply clean changes")
+	output := fs.String("output", "", "export retained remote files into a new directory")
+	fs.StringVar(output, "o", "", "export retained remote files into a new directory")
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	setFlagUsage(fs, "errand fetch [options] HANDLE [PATH]")
 	fs.Parse(args)
+	invalidOutput := false
+	fs.Visit(func(f *flag.Flag) {
+		if (f.Name == "output" || f.Name == "o") && *output == "" {
+			invalidOutput = true
+		}
+	})
+	if invalidOutput || (*output != "" && (*apply || *conflicts)) {
+		fmt.Fprintln(os.Stderr, "errand fetch: --output requires a non-empty directory and cannot be combined with --apply or --conflicts")
+		return 2
+	}
 	if fs.NArg() < 1 || fs.NArg() > 2 {
 		fmt.Fprintln(os.Stderr, "errand fetch: HANDLE (peer/ULID) and at most one changed PATH are required")
 		return 2
@@ -375,7 +388,7 @@ func cmdFetch(args []string) int {
 	}
 	staged, err := client.FetchChanges(client.ChangeFetchOptions{
 		PeerURL: peerURL, JobID: jobID, Apply: *apply, MaterializeConflicts: *conflicts,
-		Path: changePath, CallerDir: callerDir,
+		Path: changePath, CallerDir: callerDir, OutputDir: *output,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)

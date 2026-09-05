@@ -106,7 +106,13 @@ machine skips those checks; a configured runner's missing socket or stopped
 installed service is an error. No outbound peer is a skip, while invalid peer
 preferences remain errors. `--on` retains its usual override semantics.
 It reports custom service-manager and command-line override limitations explicitly.
-The next milestones are artifacts and named caches.
+Fetch supports exporting retained remote values to a new directory with
+`--output` (`-o`), using the same retained bundles as staging and application.
+The next milestones are explicit artifact declarations and named caches.
+Artifact declarations will retain selected generated paths even when input
+selection ignores them, while keeping the existing fetch/apply lifecycle.
+Named caches will keep disposable, explicitly selected build data on a runner
+for reuse by later jobs; they are separate from retained job results.
 
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
 is a design constraint, not a v0 deliverable — the protocol and job model
@@ -620,6 +626,18 @@ ID. Pending apply journals are never collected. Pre-admission records follow an
 explicit local GC cutoff; unresolved submitted records receive a 30-day safety
 window before an explicit `gc changes` may retire them.
 
+`fetch --output DIR` exports the selected remote values into a new directory,
+preserving workspace-relative paths, file modes, and safe symlinks. It requires
+an existing parent and refuses every existing destination. Contents are
+verified in private temporary storage on the destination filesystem before
+an atomic rename that cannot replace another entry. Export holds the local
+bundle transfer lock throughout, so local change GC cannot remove its source.
+It requires no originating workspace identity, does not record an application,
+and works after failed commands. It cannot be combined with apply or conflict
+materialization. Deleted paths have no exported value; their metadata remains
+available through plain fetch. A partial path export can contain symlinks to
+unselected paths; the targets are not implicitly copied.
+
 ### Exit status: two layers
 
 - **Process result:** the remote exit code or signal, recorded exactly in
@@ -661,7 +679,7 @@ errand peers remove NAME
 errand peers discover [-a | --all] # runners on the caller's own tailnet; read-only
 errand ps [-a | --all] [-n N | --last N] [--on X] [--json] # N <= 200
 errand attach <peer/ulid>       # replay logs and follow to completion
-errand fetch [--apply [--conflicts]] <peer/ulid> [path]
+errand fetch [--apply [--conflicts] | -o DIR | --output DIR] <peer/ulid> [path]
 errand kill [-f | --force] <peer/ulid>
 errand df [--on X] [--json]    # fleet storage; read-own
 errand gc cache [--dry-run]     # shared cache policy; manage-caches

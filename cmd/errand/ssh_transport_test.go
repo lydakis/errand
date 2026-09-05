@@ -203,6 +203,14 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 						t.Fatalf("handle lost automatic-apply state: %s", out)
 					}
 				} else {
+					export := filepath.Join(t.TempDir(), "result")
+					out, _ := runCLI("fetch", "--output", export, handle, "report.txt")
+					if strings.TrimSpace(out) != export {
+						t.Fatalf("export output: %q", out)
+					}
+					if got, err := os.ReadFile(filepath.Join(export, "report.txt")); err != nil || string(got) != "changed" {
+						t.Fatalf("exported report: %q %v", got, err)
+					}
 					before, err := os.ReadFile(filepath.Join(root, "report.txt"))
 					if err != nil || string(before) != "original" {
 						t.Fatalf("no-apply changed workspace: %q, %v", before, err)
@@ -213,6 +221,27 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 				if err != nil || string(content) != "changed" {
 					t.Fatalf("apply=%t: workspace content %q, %v", apply, content, err)
 				}
+			}
+			failed := exec.Command(bin, target.flag, target.value, "--no-snapshot", "--no-apply", "--", "/bin/sh", "-c", "printf partial > failure.txt; exit 7")
+			failed.Dir = root
+			logs, err := failed.CombinedOutput()
+			if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 7 {
+				t.Fatalf("failed command: %v %s", err, logs)
+			}
+			handle := ""
+			for _, line := range strings.Split(string(logs), "\n") {
+				if strings.HasPrefix(line, "errand: job ") {
+					handle = strings.Fields(line)[2]
+					break
+				}
+			}
+			export := filepath.Join(t.TempDir(), "failure")
+			runCLI("fetch", "-o", export, handle)
+			if got, err := os.ReadFile(filepath.Join(export, "failure.txt")); err != nil || string(got) != "partial" {
+				t.Fatalf("failed-job export: %q %v", got, err)
+			}
+			if _, err := os.Lstat(filepath.Join(root, "failure.txt")); !os.IsNotExist(err) {
+				t.Fatalf("export changed originating workspace: %v", err)
 			}
 		})
 	}
