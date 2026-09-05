@@ -1,4 +1,4 @@
-# Run configuration
+# Configuration
 
 Run submission and `errand config` share one resolver. For peer selection and
 automatic apply, precedence is:
@@ -149,3 +149,49 @@ It does not hash files or validate a complete job: use `errand peers` to check
 runner availability; snapshot policy and remote command validation still happen
 when submitting. Peer lifecycle and job-handle commands retain their explicit
 targets and personal defaults; a workspace preference only selects new runs.
+
+## Runner access
+
+`errand access` manages the runner's saved `allow_users` array. Run it locally
+as the runner's OS user, using the config file that its service loads:
+
+```sh
+errand access list --config /path/to/errandd.toml
+errand access add --config /path/to/errandd.toml --dry-run friend@example.com
+errand access add --config /path/to/errandd.toml friend@example.com
+errand access remove --config /path/to/errandd.toml friend@example.com
+errand setup --config /path/to/errandd.toml
+```
+
+Omit `list` for the default operation. Without `--config`, the path is
+`~/.config/errand/errandd.toml`, matching the service installed by `errand setup`,
+even when `XDG_CONFIG_HOME` is set. Use `--config PATH` for a runner configured
+at another location. Personal aliases, workspace settings, and profiles do
+not select a runner config. There is no `--on` or remote edit operation.
+
+List output includes the file path, saved allowlist, capability name, and
+listen setting. It describes saved configuration only, not effective live
+authorization. Adding a login grants full runner access once activated,
+including command execution as the daemon's OS user. Logins must be exact,
+nonempty strings without whitespace, control characters, or wildcards.
+
+Edits require an existing regular file; missing files and symlinks are
+refused. Run `errand setup` first to create a new runner config. Adding an
+existing login or removing an absent one is a no-op. Removal clears all
+copies of a login. `-n`/`--dry-run` previews the before/after allowlist;
+previews and no-ops leave the file byte-for-byte unchanged. A real edit
+atomically replaces the file with mode `0600`, preserving other TOML values,
+including unknown settings, but reformatting the file and removing comments.
+
+No access command contacts tailscaled, edits tailnet grants, restarts a
+service, submits a job, or resumes pending automatic applications. Restart
+the runner with `errand setup --config PATH` to activate saved edits; setup
+refuses to restart while jobs are active. An allowlist removal is not a
+complete revocation: capability grants and SSH access remain independent.
+
+All operations accept `--json`. Listing emits `path`, `allow_users`,
+`capability`, `listen`, and an `activation` reminder. Mutations emit
+`operation`, `login`, `dry_run`, `path`, `before`, `after`, `changed`,
+`written`, and `activation`. `changed` describes whether the desired array
+differs, while `written` is true only after a successful write. Pass options
+before the login.

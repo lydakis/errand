@@ -108,6 +108,24 @@ a tailscaled LocalAPI socket when available and falls back to the `tailscale`
 CLI, including for the standalone macOS app. CLI-based WhoIs cannot provide
 destination-scoped capabilities, so that path requires `allow_users`.
 
+Manage the saved allowlist locally on the runner:
+
+```sh
+errand access
+errand access add -n friend@example.com
+errand access add friend@example.com
+errand access remove friend@example.com
+errand setup                         # restart to activate saved changes
+```
+
+Use `--config PATH` before the login for a custom runner config, and pass the
+same path to `setup`. `--json` is available on all access commands. These
+commands edit an existing local file; they do not contact or restart a peer.
+Removing an entry does not revoke capability grants or SSH access. Real edits
+preserve other TOML setting values but reformat the file and remove comments.
+See [runner access configuration](docs/CONFIGURATION.md#runner-access) for the
+full contract.
+
 An SSH peer uses the same HTTP protocol over `ssh HOST errand _stdio`. The
 daemon accepts the bridge through a private Unix socket and verifies that it
 runs as the daemon's OS user. Configure an ssh_config alias and an absolute

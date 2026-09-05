@@ -82,6 +82,11 @@ node list and probes each online node's errand port with an authenticated
 implied by holding any errand capability (plus network-level access); no
 separate probe grant exists in v0.
 
+`errand access [list|add|remove]` inspects or edits the local runner config's
+`allow_users`. It never changes a remote peer or active service. Activation
+requires a restart; independent tailnet capability grants and SSH access
+remain separate. See [runner access](CONFIGURATION.md#runner-access).
+
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
 is a design constraint, not a v0 deliverable — the protocol and job model
 assume nothing POSIX-only. The milestone 1 host backend uses a process group
