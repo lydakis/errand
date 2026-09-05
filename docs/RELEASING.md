@@ -49,6 +49,11 @@ is required to create the draft. A rerun does not overwrite an existing
 release. If a failed run left an incomplete draft, inspect it and delete only
 that draft before rerunning. Keep the tag intact.
 
+If the workflow itself needs repair, update it on the default branch, then
+run the **Release** workflow manually with the existing tag. Both CI and
+packaging check out that exact tag; the updated workflow can repair its runner
+setup without changing the released source or moving the tag.
+
 ## macOS signing and notarization
 
 Tagged releases run on macOS. After each Darwin binary is built, the GoReleaser

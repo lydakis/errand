@@ -3,17 +3,25 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to package without moving it
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   check:
     uses: ./.github/workflows/ci.yml
+    with:
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
 
   package:
     needs: check
@@ -27,6 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -35,7 +44,7 @@ jobs:
           cache-dependency-path: go.sum
       - name: Validate release tag
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo 'Expected a tag such as v0.1.0 or v0.1.0-rc.1' >&2
@@ -80,6 +89,26 @@ jobs:
             -P "$APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
             -k "$keychain_password" "$ERRAND_SIGNING_KEYCHAIN" >/dev/null
+          # codesign must be able to discover the temporary signing keychain.
+          security list-keychains -d user -s "$ERRAND_SIGNING_KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
+          python3 - <<'PY_SIGNING'
+          import os, re, subprocess
+          result = subprocess.run([
+              "security", "find-identity", "-v", "-p", "codesigning",
+              os.environ["ERRAND_SIGNING_KEYCHAIN"],
+          ], check=True, capture_output=True, text=True)
+          identities = re.findall(r'^\s*\d+\) ([0-9A-F]{40}) "([^"\n]+)"', result.stdout, re.M)
+          expected = os.environ["APPLE_DEVELOPER_ID_APPLICATION"].strip()
+          matches = [(fingerprint, name) for fingerprint, name in identities
+                     if expected in (fingerprint, name)]
+          if len(matches) != 1:
+              raise SystemExit(f"Signing identity preflight failed: {len(identities)} valid identities, "
+                               f"{len(matches)} match the configured identity. Check certificate validity, "
+                               "issuer chain, and APPLE_DEVELOPER_ID_APPLICATION.")
+          with open(os.environ["GITHUB_ENV"], "a") as output:
+              output.write("ERRAND_SIGNING_IDENTITY=" + matches[0][0] + "\n")
+          print("Configured signing identity is valid and available in the CI keychain.")
+          PY_SIGNING
           rm "$signing_dir/certificate.p12"
           echo "ERRAND_SIGNING_KEYCHAIN=$ERRAND_SIGNING_KEYCHAIN" >> "$GITHUB_ENV"
           echo "ERRAND_NOTARY_KEY=$ERRAND_NOTARY_KEY" >> "$GITHUB_ENV"
@@ -90,12 +119,12 @@ jobs:
           args: release --clean --skip=publish --timeout=40m
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_DEVELOPER_ID_APPLICATION: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+          APPLE_DEVELOPER_ID_APPLICATION: ${{ env.ERRAND_SIGNING_IDENTITY }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       - name: Package Homebrew formula and verify assets
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           version="${RELEASE_TAG#v}"
           python3 scripts/homebrew_formula.py "$version" "dist/errand_${version}_source.tar.gz" dist/errand.rb
@@ -115,7 +144,7 @@ jobs:
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           options=()
           if [[ "$RELEASE_TAG" == *-* ]]; then
