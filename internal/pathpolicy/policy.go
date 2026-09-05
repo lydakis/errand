@@ -31,6 +31,9 @@ type Matcher struct {
 }
 
 func Compile(policy proto.SelectionPolicy) (*Matcher, error) {
+	if err := ValidateCaches(policy.Caches); err != nil {
+		return nil, err
+	}
 	if err := ValidateArtifacts(policy.Artifacts); err != nil {
 		return nil, err
 	}

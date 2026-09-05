@@ -28,6 +28,7 @@ import (
 	"github.com/lydakis/errand/internal/archive"
 	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/logio"
+	"github.com/lydakis/errand/internal/namedcache"
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/tailnet"
@@ -61,6 +62,10 @@ type Config struct {
 	MaxLimits        proto.Limits // ceiling a spec may request
 	Version          string
 
+	NamedCacheDisabled bool
+	NamedCacheMaxBytes int64
+	NamedCacheTTL      time.Duration
+
 	CacheDisabled bool
 	CacheMaxBytes int64
 	CacheTTL      time.Duration
@@ -72,10 +77,11 @@ type Config struct {
 }
 
 type Daemon struct {
-	cfg      Config
-	identity tailnet.Provider
-	selfUID  uint32
-	cache    *blobCache // nil when the cache is disabled
+	namedCaches *namedcache.Store
+	cfg         Config
+	identity    tailnet.Provider
+	selfUID     uint32
+	cache       *blobCache // nil when the cache is disabled
 	// Kept per daemon so admission storage failures can be tested independently.
 	writeAdmissionReceipt func(*Job, string, any) error
 
@@ -119,6 +125,15 @@ func New(cfg Config) (*Daemon, error) {
 	if cfg.MaxUploadBytes <= cfg.MaxLimits.MaxWorkspaceBytes {
 		return nil, fmt.Errorf("max upload bytes must exceed the workspace byte ceiling")
 	}
+	if cfg.NamedCacheMaxBytes == 0 {
+		cfg.NamedCacheMaxBytes = defaultCacheMaxBytes
+	}
+	if cfg.NamedCacheTTL == 0 {
+		cfg.NamedCacheTTL = defaultCacheTTL
+	}
+	if cfg.NamedCacheMaxBytes < 0 || cfg.NamedCacheTTL < 0 {
+		return nil, fmt.Errorf("named cache size and TTL must not be negative")
+	}
 	if cfg.CacheMaxBytes == 0 {
 		cfg.CacheMaxBytes = defaultCacheMaxBytes
 	}
@@ -156,7 +171,17 @@ func New(cfg Config) (*Daemon, error) {
 		_ = d.Close()
 		return nil, err
 	}
+	namedStore, err := namedcache.Open(filepath.Join(cfg.StateDir, "cache", "named"), cfg.NamedCacheMaxBytes, cfg.NamedCacheTTL)
+	if err != nil {
+		_ = d.Close()
+		return nil, fmt.Errorf("opening named caches: %w", err)
+	}
+	d.namedCaches = namedStore
 	if err := d.loadExisting(); err != nil {
+		_ = d.Close()
+		return nil, err
+	}
+	if err := d.recoverNamedCaches(); err != nil {
 		_ = d.Close()
 		return nil, err
 	}
@@ -191,6 +216,9 @@ func (d *Daemon) lockStateDir() error {
 // Close releases the process-wide ownership of the daemon state directory.
 func (d *Daemon) Close() error {
 	d.closeOnce.Do(func() {
+		if d.namedCaches != nil {
+			d.closeErr = d.namedCaches.Close()
+		}
 		if d.lockFile == nil {
 			return
 		}
@@ -320,13 +348,13 @@ func (d *Daemon) loadExisting() error {
 		}
 		specRaw, err := os.ReadFile(filepath.Join(dir, "spec.json"))
 		if err != nil {
-			isolateUnreadableReceipt(j, "spec.json", err)
+			d.isolateUnreadableReceipt(j, "spec.json", err)
 			d.jobs[j.ID] = j
 			continue
 		}
 		var receipt proto.ReceiptSpec
 		if err := decodeStrictJSON(specRaw, &receipt); err != nil {
-			isolateUnreadableReceipt(j, "spec.json", err)
+			d.isolateUnreadableReceipt(j, "spec.json", err)
 			d.jobs[j.ID] = j
 			continue
 		}
@@ -340,7 +368,7 @@ func (d *Daemon) loadExisting() error {
 		if resRaw, err := os.ReadFile(filepath.Join(dir, "result.json")); err == nil {
 			var res proto.Result
 			if err := decodeStrictJSON(resRaw, &res); err != nil {
-				isolateUnreadableReceipt(j, "result.json", err)
+				d.isolateUnreadableReceipt(j, "result.json", err)
 				d.jobs[j.ID] = j
 				continue
 			}
@@ -350,7 +378,7 @@ func (d *Daemon) loadExisting() error {
 			j.result = &res
 			j.state = res.State
 		} else if !os.IsNotExist(err) {
-			isolateUnreadableReceipt(j, "result.json", err)
+			d.isolateUnreadableReceipt(j, "result.json", err)
 			d.jobs[j.ID] = j
 			continue
 		}
@@ -377,8 +405,8 @@ func (d *Daemon) loadExisting() error {
 	return nil
 }
 
-func isolateUnreadableReceipt(j *Job, name string, decodeErr error) {
-	_, cleanupErrs := cleanupPersistedRuntime(j)
+func (d *Daemon) isolateUnreadableReceipt(j *Job, name string, decodeErr error) {
+	_, cleanupErrs := d.cleanupPersistedRuntime(j)
 	settledAt := time.Now()
 	detail := fmt.Sprintf("receipt is unreadable: %s: %v", name, decodeErr)
 	res := &proto.Result{
@@ -400,7 +428,7 @@ func isolateUnreadableReceipt(j *Job, name string, decodeErr error) {
 // to find descendants that scrub the inherited marker, so it is retained
 // until the process scope is confirmed empty. The scope record is removed
 // only after both process and workspace cleanup succeed.
-func cleanupPersistedRuntime(j *Job) (killed []int, cleanupErrs []string) {
+func cleanupPersistedRuntime(j *Job, cacheDirs ...string) (killed []int, cleanupErrs []string) {
 	scopePath := filepath.Join(j.Dir, "scope.json")
 	workspace := filepath.Join(j.Dir, "workspace")
 	raw, err := os.ReadFile(scopePath)
@@ -411,7 +439,7 @@ func cleanupPersistedRuntime(j *Job) (killed []int, cleanupErrs []string) {
 		if err := json.Unmarshal(raw, &rec); err != nil {
 			return nil, []string{"scope record is unreadable; surviving processes cannot be found"}
 		}
-		scope, err := resumeProcessScope(rec.Token, workspace)
+		scope, err := resumeProcessScope(rec.Token, workspace, cacheDirs...)
 		if err != nil {
 			return nil, []string{err.Error()}
 		}
@@ -489,7 +517,7 @@ func (d *Daemon) reconcileQueued(j *Job) {
 // terminal result. The original CleanupOK=false remains a truthful record of
 // settlement; append-only events record the later recovery attempt.
 func (d *Daemon) reconcileSettledCleanup(j *Job) {
-	killed, cleanupErrs := cleanupPersistedRuntime(j)
+	killed, cleanupErrs := d.cleanupPersistedRuntime(j)
 	if len(killed) > 0 {
 		j.event("scope-killed", fmt.Sprintf("pids=%v (terminal recovery)", killed))
 	}
@@ -510,7 +538,7 @@ func (d *Daemon) reconcileUnfinished(j *Job) {
 	// because errand cannot know, and this wording keeps the receipt from
 	// reading as "never ran". The events file may still record a started pid.
 	detail := "daemon restarted before a result was recorded; execution state unknown; not replayed"
-	killed, cleanupErrs := cleanupPersistedRuntime(j)
+	killed, cleanupErrs := d.cleanupPersistedRuntime(j)
 	if len(killed) > 0 {
 		j.event("scope-killed", fmt.Sprintf("pids=%v (reconciliation)", killed))
 		detail = fmt.Sprintf(
@@ -748,7 +776,7 @@ func (d *Daemon) handleSnapshotDiff(w http.ResponseWriter, r *http.Request, _ Id
 }
 
 func (d *Daemon) handleCacheGC(w http.ResponseWriter, r *http.Request, _ Identity) {
-	if d.cache == nil {
+	if d.cache == nil && d.namedCaches == nil {
 		httpError(w, http.StatusNotFound, "snapshot cache is disabled on this runner")
 		return
 	}
@@ -763,7 +791,19 @@ func (d *Daemon) handleCacheGC(w http.ResponseWriter, r *http.Request, _ Identit
 		httpError(w, http.StatusBadRequest, "cache GC policy must contain one JSON object")
 		return
 	}
-	result, err := d.cache.GCContext(r.Context(), req.DryRun)
+	result := proto.CacheGCResult{DryRun: req.DryRun}
+	var err error
+	if d.cache != nil {
+		result, err = d.cache.GCContext(r.Context(), req.DryRun)
+	}
+	if err == nil && d.namedCaches != nil {
+		named, namedErr := d.namedCaches.GC(r.Context(), req.DryRun)
+		err = namedErr
+		result.RemovedCaches = named.Removed
+		result.ProtectedCaches = named.Protected
+		result.ReclaimedTemps = named.ReclaimedTemps
+		result.FreedBytes += named.FreedBytes
+	}
 	if err != nil {
 		if r.Context().Err() != nil {
 			return
@@ -829,6 +869,16 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 	if err := archive.Validate(manifest); err != nil {
 		httpError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if len(spec.Selection.Caches) != 0 && d.cfg.NamedCacheDisabled {
+		httpError(w, http.StatusBadRequest, "named caches are disabled on this runner")
+		return
+	}
+	for _, entry := range manifest.Entries {
+		if pathpolicy.InCache(entry.Path, spec.Selection.Caches) {
+			httpError(w, http.StatusBadRequest, "snapshot contains a named cache path")
+			return
+		}
 	}
 	workspace, err := nextPart(mr, "workspace")
 	if err != nil {
@@ -1199,6 +1249,10 @@ func validateSpec(s proto.Spec, maxLimits proto.Limits) error {
 	}
 	inputPolicy := s.Selection
 	inputPolicy.Artifacts = nil
+	inputPolicy.Caches = nil
+	if len(s.Selection.Caches) != 0 && !proto.ValidChangeClientID(s.CacheProjectID) {
+		return fmt.Errorf("named caches require a valid cache_project_id")
+	}
 	if s.NoSnapshot && !inputPolicy.IsZero() {
 		return fmt.Errorf("no-snapshot spec must use an empty selection policy")
 	}

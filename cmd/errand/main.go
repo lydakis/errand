@@ -40,6 +40,7 @@ usage:
          [--apply | --no-apply]
          [-e K=V | --env K=V]... [--passenv K]...
          [--artifact PATH]... [--no-artifacts]
+         [--cache NAME=PATH]... [--no-caches]
          [--workspace-root PATH] [-w REL | --workdir REL]
          [--include-all | --no-snapshot] -- CMD [ARG...]
   errand attach [--profile NAME] [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]... [--no-forward]
@@ -65,6 +66,7 @@ usage:
                 [--workspace-root PATH] [-w REL | --workdir REL]
                 [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
                 [--artifact PATH]... [--no-artifacts]
+                [--cache NAME=PATH]... [--no-caches]
                 [--forward [LOCAL:]REMOTE]... [--no-forward]
                 [--apply | --no-apply] [--no-snapshot]
   errand access [list] [--config PATH] [--json]
@@ -758,11 +760,11 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "errand: cache gc: %v\n", err)
 			failed = true
 		} else if result.DryRun {
-			fmt.Fprintf(stdout, "%s cache: would remove %d blobs and free %d bytes\n",
-				label, result.RemovedBlobs, result.FreedBytes)
+			fmt.Fprintf(stdout, "%s cache: would remove %d blobs and %d named caches and free %d bytes (%d protected; %d interrupted cleanups)\n",
+				label, result.RemovedBlobs, result.RemovedCaches, result.FreedBytes, result.ProtectedCaches, result.ReclaimedTemps)
 		} else {
-			fmt.Fprintf(stdout, "%s cache: removed %d blobs, freed %d bytes\n",
-				label, result.RemovedBlobs, result.FreedBytes)
+			fmt.Fprintf(stdout, "%s cache: removed %d blobs and %d named caches, freed %d bytes (%d protected; %d interrupted cleanups)\n",
+				label, result.RemovedBlobs, result.RemovedCaches, result.FreedBytes, result.ProtectedCaches, result.ReclaimedTemps)
 		}
 	}
 	if target == "jobs" || target == "all" {
@@ -856,20 +858,21 @@ func cmdServe(args []string) int {
 		}
 	}
 	d, err := daemon.New(daemon.Config{
-		Listen:           addr,
-		StateDir:         fileCfg.StateDir,
-		AllowUsers:       fileCfg.AllowUsers,
-		DenyUsers:        fileCfg.DenyUsers,
-		Capability:       fileCfg.Capability,
-		TailscaledSocket: fileCfg.TailscaledSocket,
-		Identity:         identity,
-		InsecureNoAuth:   *insecure,
-		Version:          version,
-		CacheDisabled:    fileCfg.Cache.Disabled,
-		CacheMaxBytes:    fileCfg.Cache.MaxBytes,
-		CacheTTL:         time.Duration(fileCfg.Cache.TTLHours) * time.Hour,
-		MaxJobs:          fileCfg.MaxJobs,
-		MaxQueued:        fileCfg.MaxQueued,
+		Listen:             addr,
+		StateDir:           fileCfg.StateDir,
+		AllowUsers:         fileCfg.AllowUsers,
+		DenyUsers:          fileCfg.DenyUsers,
+		Capability:         fileCfg.Capability,
+		TailscaledSocket:   fileCfg.TailscaledSocket,
+		Identity:           identity,
+		InsecureNoAuth:     *insecure,
+		Version:            version,
+		CacheDisabled:      fileCfg.Cache.Disabled,
+		CacheMaxBytes:      fileCfg.Cache.MaxBytes,
+		NamedCacheDisabled: fileCfg.NamedCache.Disabled, NamedCacheMaxBytes: fileCfg.NamedCache.MaxBytes, NamedCacheTTL: time.Duration(fileCfg.NamedCache.TTLHours) * time.Hour,
+		CacheTTL:  time.Duration(fileCfg.Cache.TTLHours) * time.Hour,
+		MaxJobs:   fileCfg.MaxJobs,
+		MaxQueued: fileCfg.MaxQueued,
 	})
 	if err != nil {
 		log.Fatalf("errand serve: %v", err)

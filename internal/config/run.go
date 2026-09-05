@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/workspace"
 )
 
@@ -17,6 +18,7 @@ var ErrNoPeerSelected = errors.New("no peer selected")
 // RunOverrides contains only explicit caller choices. Pointers distinguish
 // an absent override from false or an empty (workspace-root) workdir.
 type RunOverrides struct {
+	Caches                   []proto.CacheBinding
 	Artifacts                []string
 	Forwards                 []string
 	Environment              workspace.Environment
@@ -30,6 +32,7 @@ type RunOverrides struct {
 // EffectiveRun is shared by submission and config inspection. URL is the
 // configured endpoint, before the client installs its private SSH identity.
 type EffectiveRun struct {
+	Caches         []proto.CacheBinding  `json:"caches"`
 	Artifacts      []string              `json:"artifacts"`
 	Forwards       []string              `json:"forward"`
 	Environment    []EnvironmentVariable `json:"environment,omitempty"`
@@ -112,6 +115,10 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	}
 	result.Forwards, result.Sources["forward"] = session.Forwards, session.Source
 	result.Artifacts, result.Sources["artifacts"], err = resolveArtifacts(personal.Artifacts.Paths, selected.Artifacts.Paths, profile.Artifacts.Paths, cli.Artifacts, personalSource, workspaceSource, profileSource)
+	if err != nil {
+		return result, err
+	}
+	result.Caches, result.Sources["caches"], err = resolveCaches(personal.Caches.Bindings(), selected.Caches.Bindings(), profile.Caches.Bindings(), cli.Caches, personalSource, workspaceSource, profileSource)
 	if err != nil {
 		return result, err
 	}

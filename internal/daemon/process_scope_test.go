@@ -188,3 +188,34 @@ subprocess.Popen(
 		t.Fatalf("top-level exit cleanup result = %+v", status.Result)
 	}
 }
+
+func TestLinuxProcessScopeIncludesOnlyLeasedCacheDirectories(t *testing.T) {
+	procRoot, workspace, cache, other := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
+	for pid, cwd := range map[string]string{"104": filepath.Join(cache, "nested"), "105": other} {
+		dir := filepath.Join(procRoot, pid)
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "environ"), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(cwd, filepath.Join(dir, "cwd")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scope, err := newProcessScope(workspace, cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := resumeProcessScope(scope.token, workspace, cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range []*processScope{scope, resumed} {
+		candidate.procRoot = procRoot
+		pids, err := candidate.linuxPIDs()
+		if err != nil || !slices.Equal(pids, []int{104}) {
+			t.Fatalf("cache process membership: %v %v", pids, err)
+		}
+	}
+}

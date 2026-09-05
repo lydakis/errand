@@ -407,3 +407,36 @@ func TestInvalidIdentityAndCorruptMetadataAreRefused(t *testing.T) {
 		t.Fatalf("corrupt entry was replaced: %q %v", got, err)
 	}
 }
+
+func TestLeasePathsSurviveRestartAndStopAtRelease(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	s := openTestStore(t, root, 1024)
+	key, job := Key{"owner", "project", "build"}, proto.NewULID()
+	data, err := s.Acquire(ctx, key, job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := filepath.EvalSymlinks(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s = openTestStore(t, root, 1024)
+	paths, err := s.LeasePaths(ctx, job)
+	if err != nil || len(paths) != 1 || paths[0] != canonical {
+		t.Fatalf("restart paths: %v %v", paths, err)
+	}
+	if err := s.Release(ctx, key, job); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Acquire(ctx, key, proto.NewULID()); err != nil {
+		t.Fatal(err)
+	}
+	paths, err = s.LeasePaths(ctx, job)
+	if err != nil || len(paths) != 0 {
+		t.Fatalf("old job retained reused cache scope: %v %v", paths, err)
+	}
+}

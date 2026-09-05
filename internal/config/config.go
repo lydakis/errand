@@ -45,6 +45,7 @@ func (c Client) SSHRemoteSocket(name string) string {
 }
 
 type Client struct {
+	Caches         workspace.Caches             `toml:"caches"`
 	Artifacts      workspace.Artifacts          `toml:"artifacts"`
 	Session        workspace.Session            `toml:"session"`
 	Environment    workspace.Environment        `toml:"env,omitempty"`
@@ -152,6 +153,7 @@ type Daemon struct {
 	TailscaleCLI     string      `toml:"tailscale_cli"`
 	Socket           string      `toml:"socket"`
 	Cache            DaemonCache `toml:"cache"`
+	NamedCache       DaemonCache `toml:"named_cache"`
 
 	// MaxJobs defaults to 1. MaxQueued defaults to 8; zero disables queueing.
 	MaxJobs   int `toml:"max_jobs"`
@@ -191,6 +193,9 @@ func LoadDaemon(path string) (Daemon, error) {
 			return d, err
 		}
 		d.StateDir = filepath.Join(home, ".errand")
+	}
+	if d.NamedCache.TTLHours < 0 || int64(d.NamedCache.TTLHours) > int64((time.Duration(1<<63-1))/time.Hour) {
+		return d, fmt.Errorf("named_cache ttl_hours must fit in a time.Duration")
 	}
 	if d.Cache.TTLHours < 0 || int64(d.Cache.TTLHours) > int64((time.Duration(1<<63-1))/time.Hour) {
 		return d, fmt.Errorf("cache ttl_hours must fit in a time.Duration")

@@ -24,11 +24,12 @@ const processScopeEnv = "ERRAND_PROCESS_SCOPE"
 // not a security boundary against a process that deliberately scrubs its
 // environment.
 type processScope struct {
-	token    string
-	psPath   string
-	workdir  string
-	lsofPath string
-	procRoot string
+	token     string
+	psPath    string
+	workdir   string
+	lsofPath  string
+	procRoot  string
+	cacheDirs []string
 }
 
 // scopeRecord is the persisted form of a job's scope, written to the job
@@ -38,21 +39,21 @@ type scopeRecord struct {
 	Token string `json:"token"`
 }
 
-func newProcessScope(workdir string) (*processScope, error) {
+func newProcessScope(workdir string, cacheDirs ...string) (*processScope, error) {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
 		return nil, err
 	}
-	return newProcessScopeWithToken(hex.EncodeToString(raw[:]), workdir)
+	return newProcessScopeWithToken(hex.EncodeToString(raw[:]), workdir, cacheDirs...)
 }
 
 // resumeProcessScope reconstructs a scope from its persisted token, for
 // reconciliation after a daemon restart.
-func resumeProcessScope(token, workdir string) (*processScope, error) {
+func resumeProcessScope(token, workdir string, cacheDirs ...string) (*processScope, error) {
 	if err := validateProcessScopeToken(token); err != nil {
 		return nil, err
 	}
-	return newProcessScopeWithToken(token, workdir)
+	return newProcessScopeWithToken(token, workdir, cacheDirs...)
 }
 
 func validateProcessScopeToken(token string) error {
@@ -66,8 +67,8 @@ func validateProcessScopeToken(token string) error {
 	return nil
 }
 
-func newProcessScopeWithToken(token, workdir string) (*processScope, error) {
-	s := &processScope{token: token, workdir: workdir, procRoot: "/proc"}
+func newProcessScopeWithToken(token, workdir string, cacheDirs ...string) (*processScope, error) {
+	s := &processScope{token: token, workdir: workdir, procRoot: "/proc", cacheDirs: append([]string(nil), cacheDirs...)}
 	if runtime.GOOS != "linux" {
 		psPath, err := exec.LookPath("ps")
 		if err != nil {
@@ -152,7 +153,7 @@ func (s *processScope) linuxPIDs() ([]int, error) {
 		if environ, err := os.ReadFile(filepath.Join(pidDir, "environ")); err == nil && hasEnvEntry(environ, marker) {
 			seen[pid] = true
 		}
-		if cwd, err := os.Readlink(filepath.Join(pidDir, "cwd")); err == nil && withinDir(s.workdir, cwd) {
+		if cwd, err := os.Readlink(filepath.Join(pidDir, "cwd")); err == nil && s.containsCWD(cwd) {
 			seen[pid] = true
 		}
 	}
@@ -172,21 +173,36 @@ func hasEnvEntry(environ, want []byte) bool {
 	return false
 }
 
+func (s *processScope) containsCWD(cwd string) bool {
+	if withinDir(s.workdir, cwd) {
+		return true
+	}
+	for _, dir := range s.cacheDirs {
+		if withinDir(dir, cwd) {
+			return true
+		}
+	}
+	return false
+}
+
 // cwdPIDs is weaker on macOS than on Linux: lsof matches processes whose
-// cwd is exactly the workspace directory, while the Linux /proc scan
-// matches any cwd within it. A darwin job that chdirs into a subdirectory
-// and scrubs the env marker evades this scan where its Linux twin would
-// not. Do not assume platform parity when reasoning about scope coverage.
+// cwd is exactly the workspace or a leased cache directory, while the Linux
+// /proc scan matches any cwd within these roots. A darwin job that chdirs into
+// a subdirectory and scrubs the env marker evades this scan where its Linux
+// twin would not. Do not assume platform parity for scope coverage.
 func (s *processScope) cwdPIDs() ([]int, error) {
-	if runtime.GOOS == "darwin" && s.lsofPath != "" {
-		out, err := exec.Command(s.lsofPath, "-a", "-d", "cwd", "-Fp", "--", s.workdir).Output()
+	if runtime.GOOS != "darwin" || s.lsofPath == "" {
+		return nil, nil
+	}
+	var pids []int
+	for _, dir := range append([]string{s.workdir}, s.cacheDirs...) {
+		out, err := exec.Command(s.lsofPath, "-a", "-d", "cwd", "-Fp", "--", dir).Output()
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-				return nil, nil
+				continue
 			}
 			return nil, err
 		}
-		var pids []int
 		for _, line := range strings.Split(string(out), "\n") {
 			if !strings.HasPrefix(line, "p") {
 				continue
@@ -195,9 +211,8 @@ func (s *processScope) cwdPIDs() ([]int, error) {
 				pids = append(pids, pid)
 			}
 		}
-		return pids, nil
 	}
-	return nil, nil
+	return pids, nil
 }
 
 func withinDir(root, candidate string) bool {

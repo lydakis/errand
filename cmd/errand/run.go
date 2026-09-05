@@ -79,6 +79,9 @@ func cmdRun(args []string) int {
 		return 2
 	}
 	env, passenvs := effective.JobEnvironment()
+	for _, cache := range effective.Caches {
+		fmt.Fprintf(os.Stderr, "errand: using cache %q at %q\n", cache.Name, cache.Path)
+	}
 	for _, artifact := range effective.Artifacts {
 		fmt.Fprintf(os.Stderr, "errand: retaining artifact %q\n", artifact)
 	}
@@ -97,8 +100,8 @@ func cmdRun(args []string) int {
 		peerURL = client.ConfigureSSHPeer(peerURL, effective.Peer, effective.RemoteCommand, effective.RemoteSocket)
 	}
 	return client.Run(client.RunOptions{
-		Artifacts: effective.Artifacts,
-		PeerURL:   peerURL, PeerName: effective.Peer, Root: effective.Root,
+		Artifacts: effective.Artifacts, Caches: effective.Caches,
+		PeerURL: peerURL, PeerName: effective.Peer, Root: effective.Root,
 		Argv: argv, Env: env, PassEnv: passenvs, Workdir: effective.Workdir,
 		Project: effective.Project, IncludeAll: *includeAll, NoSnapshot: effective.NoSnapshot,
 		Detach: *detach, ApplyOnSuccess: effective.ApplyOnSuccess, Forwards: forwards,

@@ -13,6 +13,14 @@ import (
 
 func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id Identity) {
 	var stats proto.StorageStats
+	if d.namedCaches != nil {
+		entries, err := d.namedCaches.Inventory(r.Context())
+		if err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		stats.NamedCaches = namedCacheStats(entries, id.Owner(), d.cfg.InsecureNoAuth)
+	}
 	if d.cache != nil {
 		cacheStats, err := d.cache.StatsContext(r.Context())
 		if err != nil {

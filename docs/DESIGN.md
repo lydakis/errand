@@ -110,11 +110,11 @@ Fetch supports exporting retained remote values to a new directory with
 `--output` (`-o`), using the same retained bundles as staging and application.
 Artifact declarations retain selected generated paths even when input
 selection ignores them, while keeping the existing fetch/apply lifecycle.
-The next milestone is named caches.
-Named caches will keep disposable, explicitly selected build data on a runner
-for reuse by later jobs; they are separate from retained job results.
-Their [storage and durable lease foundation](NAMED_CACHES.md) is implemented;
-job bindings, configuration, and CLI lifecycle integration remain next.
+[Named caches](NAMED_CACHES.md) keep explicitly declared, disposable build data
+on the runner across jobs. They use owner and checkout identities, durable
+exclusive leases, and confirmed process cleanup before reuse. Cache paths are
+excluded from snapshots and retained results, including artifact declarations.
+`df` reports their usage and `gc cache` collects idle entries by TTL and budget.
 
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
 is a design constraint, not a v0 deliverable — the protocol and job model
@@ -273,8 +273,8 @@ permits the job to access runner-local services. Container and future Atlas
 adapters instead dial loopback inside the job's network environment. The CLI
 and tunnel transport do not depend on those runtime details.
 
-Per-project defaults (in the repo; backend and cache sections
-below describe planned configuration):
+Per-project defaults (in the repo; backend and image settings below remain
+planned configuration):
 
 ```toml
 # .errand.toml
@@ -298,10 +298,8 @@ set = { CI = "1" }
 [profiles.debug.env]
 pass = ["RUST_BACKTRACE"]      # opt in with --profile debug
 
-[[cache]]
-name  = "cargo-registry"
-path  = "/usr/local/cargo/registry"
-scope = "project"              # project | user | peer (opt-in beyond project)
+[caches]
+compiler = "target"            # reusable runner-local build directory
 ```
 
 Personal aliases, addresses, and defaults live in
@@ -342,7 +340,7 @@ Persistent state comes in three kinds, not one:
 
 - **Named caches** — errand-owned writable directories with explicit
   lifecycle: declared in config, measured by `errand df`, removed by
-  `errand gc cache`. Project-scoped by default.
+  `errand gc cache`. Scoped to the authenticated owner and client checkout.
 - **Backend stores** — container image layers, the nix store. Managed by
   the runtime, not by `errand gc`; pruning them is the runtime's own
   command, surfaced but never run implicitly.
@@ -746,8 +744,8 @@ Versioned HTTP+JSON: `PUT /v0/jobs/<ulid>` is idempotent;
 details used by `errand status`; SSE with event IDs powers
 `GET /v0/jobs/<ulid>/logs?from=<sequence>`; the signal and kill routes control owned
 jobs and return `204 No Content` on success; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;
-`GET /v0/storage` reports caller-visible storage, including the snapshot cache;
-`POST /v0/cache/gc` prunes the snapshot cache;
+`GET /v0/storage` reports caller-visible storage, including snapshot and named caches;
+`POST /v0/cache/gc` prunes snapshot blobs and idle named caches;
 `POST /v0/jobs/gc` applies bounded owner-scoped receipt retention;
 `GET /v0/jobs/<ulid>/changes` transfers the immutable retained workspace-change bundle;
 `POST /v0/jobs/<ulid>/ports/<port>/connect` carries one authenticated

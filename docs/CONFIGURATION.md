@@ -116,7 +116,7 @@ therefore opts out of all settings in that personal profile. Other personal
 profiles remain available by name.
 
 Profiles support `run.peer`, `run.workdir`, `changes.apply_on_success`,
-`env.set`, `env.pass`, `session.forward`, and `artifacts.paths`. Explicit `false` and empty workdir values override
+`env.set`, `env.pass`, `session.forward`, `artifacts.paths`, and `caches`. Explicit `false` and empty workdir values override
 lower layers. Unsupported keys and incorrect value types are errors when
 loading configuration, including in inactive profiles. There is no profile
 inheritance, automatic profile selection, command definition, or transport
@@ -127,6 +127,28 @@ defaults. With `--no-snapshot`, only profiles in the current directory and
 personal config are considered; the resulting workdir must be empty or `.`.
 Use `--workdir .` to override a profile's nested workdir for such an invocation.
 Profiles cannot move the snapshot boundary or enable broad snapshot selection.
+
+## Named caches
+
+Cache bindings use a table of stable names and exact workspace-relative directories:
+
+```toml
+[caches]
+compiler = "target"
+
+[profiles.clean.caches]
+```
+
+The empty profile table clears inherited caches. Personal, workspace, selected
+profile, and CLI settings use that precedence, replacing the whole binding list.
+Use repeatable `--cache NAME=PATH` for a run override, or `--no-caches` to disable
+bindings. `errand config` shows the effective list and its source.
+
+Caches are runner-local and disposable. They are excluded from snapshots and
+retained results even when artifact declarations include them. The runner
+refuses concurrent reuse of a leased cache until process cleanup completes.
+See [named caches](NAMED_CACHES.md) for lifecycle behavior, project identity,
+`df`, `gc cache`, and the runner's separate `[named_cache]` budget.
 
 ## Artifact declarations
 

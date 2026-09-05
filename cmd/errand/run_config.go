@@ -12,11 +12,14 @@ import (
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/pathpolicy"
+	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/workspace"
 )
 
 // Both submission and inspection use these flags and the same resolver.
 type runConfigFlags struct {
+	caches                     stringList
+	noCaches                   bool
 	artifacts                  stringList
 	noArtifacts                bool
 	session                    sessionFlags
@@ -28,6 +31,8 @@ type runConfigFlags struct {
 
 func (f *runConfigFlags) bind(fs *flag.FlagSet) {
 	f.session.bind(fs)
+	fs.Var(&f.caches, "cache", "reuse a runner cache NAME=PATH at a workspace-relative directory (repeatable; replaces configured list)")
+	fs.BoolVar(&f.noCaches, "no-caches", false, "disable configured named caches")
 	fs.Var(&f.artifacts, "artifact", "retain an exact workspace-relative file or directory, including ignored outputs (repeatable; replaces configured list)")
 	fs.BoolVar(&f.noArtifacts, "no-artifacts", false, "disable configured artifact declarations")
 	fs.Var(&f.envs, "env", "set NAME=VALUE in the job environment (repeatable; values hidden in diagnostics)")
@@ -50,6 +55,22 @@ func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error)
 	result := config.RunOverrides{Peer: f.on, URL: f.url, WorkspaceRoot: f.root, NoSnapshot: f.noSnapshot}
 	if set["artifact"] && set["no-artifacts"] {
 		return result, fmt.Errorf("--artifact and --no-artifacts are mutually exclusive")
+	}
+	if set["cache"] && set["no-caches"] {
+		return result, fmt.Errorf("--cache and --no-caches are mutually exclusive")
+	}
+	if set["cache"] || f.noCaches {
+		result.Caches = []proto.CacheBinding{}
+	}
+	for _, binding := range f.caches {
+		name, path, ok := strings.Cut(binding, "=")
+		if !ok {
+			return result, fmt.Errorf("--cache requires NAME=PATH")
+		}
+		result.Caches = append(result.Caches, proto.CacheBinding{Name: name, Path: path})
+	}
+	if err := pathpolicy.ValidateCaches(result.Caches); err != nil {
+		return result, err
 	}
 	result.Artifacts = f.artifacts
 	if f.noArtifacts {
@@ -168,6 +189,7 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 			{"no_snapshot", effective.NoSnapshot},
 			{"forward", effective.Forwards},
 			{"artifacts", effective.Artifacts},
+			{"caches", effective.Caches},
 		} {
 			if _, exists := effective.Sources[row.key]; !exists {
 				continue

@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
 )
@@ -350,6 +351,9 @@ func CollectWorkspaceChangesContext(
 	access, err := makeTreeAccessibleFilteredContext(ctx, workspace, entryLimit, byteLimit, selector.selectPath)
 	if err != nil {
 		return proto.ChangeBundle{}, false, err
+	}
+	if err := pathpolicy.ValidateCacheCasing(workspace, selection.Caches); err != nil {
+		return proto.ChangeBundle{}, false, errors.Join(err, access.restore())
 	}
 	bundle, collected, collectErr := collectAccessibleWorkspaceChangesContext(
 		ctx, workspace, jobDir, baseline, maxBytes, access, selector,

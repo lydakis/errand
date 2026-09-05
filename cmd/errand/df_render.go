@@ -14,11 +14,12 @@ import (
 )
 
 type dfRow struct {
-	Location   string                 `json:"location"`
-	Cache      *proto.CacheStats      `json:"cache,omitempty"`
-	Jobs       proto.StorageCategory  `json:"jobs"`
-	Changes    *proto.StorageCategory `json:"changes,omitempty"`
-	TotalBytes int64                  `json:"total_bytes"`
+	NamedCaches *proto.NamedCacheStats `json:"named_caches,omitempty"`
+	Location    string                 `json:"location"`
+	Cache       *proto.CacheStats      `json:"cache,omitempty"`
+	Jobs        proto.StorageCategory  `json:"jobs"`
+	Changes     *proto.StorageCategory `json:"changes,omitempty"`
+	TotalBytes  int64                  `json:"total_bytes"`
 }
 
 func cmdDf(args []string) int {
@@ -47,11 +48,14 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 	for _, result := range read.results {
 		row := dfRow{
 			Location: result.target.name,
-			Cache:    result.value.Cache,
-			Jobs:     result.value.Jobs,
+			Cache:    result.value.Cache, NamedCaches: result.value.NamedCaches,
+			Jobs: result.value.Jobs,
 		}
 		if row.Cache != nil {
 			row.TotalBytes += row.Cache.Bytes
+		}
+		if row.NamedCaches != nil {
+			row.TotalBytes += row.NamedCaches.Bytes
 		}
 		row.TotalBytes += row.Jobs.Bytes
 		rows = append(rows, row)
@@ -81,13 +85,20 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 
 func writeDf(w io.Writer, rows []dfRow) {
 	tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-	fmt.Fprintln(tw, "LOCATION\tCACHE\tJOBS\tCHANGES\tTOTAL")
+	fmt.Fprintln(tw, "LOCATION\tCACHE\tNAMED CACHES\tJOBS\tCHANGES\tTOTAL")
 	for _, row := range rows {
 		cache := "-"
 		if row.Cache != nil {
 			cache = formatByteSize(row.Cache.Bytes)
 			if row.Cache.MaxBytes > 0 {
 				cache += " / " + formatByteSize(row.Cache.MaxBytes)
+			}
+		}
+		named := "-"
+		if row.NamedCaches != nil {
+			named = formatByteSize(row.NamedCaches.Bytes)
+			if row.NamedCaches.Protected > 0 {
+				named += fmt.Sprintf(" (%d protected)", row.NamedCaches.Protected)
 			}
 		}
 		jobs := "-"
@@ -98,8 +109,8 @@ func writeDf(w io.Writer, rows []dfRow) {
 		if row.Changes != nil {
 			changes = formatByteSize(row.Changes.Bytes)
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
-			terminalSafeField(row.Location), cache, jobs, changes, formatByteSize(row.TotalBytes))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			terminalSafeField(row.Location), cache, named, jobs, changes, formatByteSize(row.TotalBytes))
 	}
 	_ = tw.Flush()
 }

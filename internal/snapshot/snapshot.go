@@ -38,6 +38,7 @@ type GitInfo struct {
 }
 
 type SelectOptions struct {
+	Caches []proto.CacheBinding // excluded before walking or hashing source files
 	// IncludeAll explicitly permits a recursive snapshot when root is neither a
 	// Git worktree nor governed by .errandignore. It also acknowledges the risk
 	// of using the user's home directory. Filesystem roots remain forbidden.
@@ -66,6 +67,12 @@ func SelectFiles(root string) ([]string, GitInfo, proto.SelectionPolicy, error) 
 }
 
 func SelectFilesWithOptions(root string, opts SelectOptions) ([]string, GitInfo, proto.SelectionPolicy, error) {
+	if err := pathpolicy.ValidateCaches(opts.Caches); err != nil {
+		return nil, GitInfo{}, proto.SelectionPolicy{}, err
+	}
+	if err := pathpolicy.ValidateCacheCasing(root, opts.Caches); err != nil {
+		return nil, GitInfo{}, proto.SelectionPolicy{}, err
+	}
 	if err := validateSnapshotRoot(root, opts); err != nil {
 		return nil, GitInfo{}, proto.SelectionPolicy{}, err
 	}
@@ -82,7 +89,7 @@ func SelectFilesWithOptions(root string, opts SelectOptions) ([]string, GitInfo,
 		if err != nil {
 			return nil, gi, proto.SelectionPolicy{}, fmt.Errorf("snapshot: compiling .errandignore: %w", err)
 		}
-		paths, err := walk(root, matcher)
+		paths, err := walk(root, matcher, opts.Caches...)
 		if err != nil {
 			return nil, gi, proto.SelectionPolicy{}, err
 		}
@@ -140,7 +147,7 @@ func selectFiles(root string, gi GitInfo, listGitFiles func(string) ([]string, e
 
 func selectFilesWithOptions(root string, gi GitInfo, listGitFiles func(string) ([]string, error), opts SelectOptions) ([]string, GitInfo, proto.SelectionPolicy, error) {
 	if gi.Repository {
-		paths, policy, err := stableGitSelection(root, listGitFiles)
+		paths, policy, err := stableGitSelection(root, listGitFiles, opts.Caches...)
 		if err != nil {
 			return nil, gi, proto.SelectionPolicy{}, fmt.Errorf("snapshot: listing git files: %w", err)
 		}
@@ -149,7 +156,7 @@ func selectFilesWithOptions(root string, gi GitInfo, listGitFiles func(string) (
 	if !opts.IncludeAll {
 		return nil, gi, proto.SelectionPolicy{}, fmt.Errorf("snapshot: %q is not a Git worktree and has no .errandignore; add an explicit policy or pass --include-all", root)
 	}
-	paths, err := walk(root, nil)
+	paths, err := walk(root, nil, opts.Caches...)
 	return paths, gi, proto.SelectionPolicy{}, err
 }
 
@@ -268,12 +275,16 @@ func gitListFiles(root string) ([]string, error) {
 	return paths, nil
 }
 
-func stableGitSelection(root string, listGitFiles func(string) ([]string, error)) ([]string, proto.SelectionPolicy, error) {
+func stableGitSelection(root string, listGitFiles func(string) ([]string, error), caches ...proto.CacheBinding) ([]string, proto.SelectionPolicy, error) {
 	paths, err := listGitFiles(root)
 	if err != nil {
 		return nil, proto.SelectionPolicy{}, err
 	}
-	policy, err := gitSelectionPolicy(root, paths)
+	paths, err = withoutCachePaths(root, paths, caches)
+	if err != nil {
+		return nil, proto.SelectionPolicy{}, err
+	}
+	policy, err := gitSelectionPolicy(root, caches)
 	if err != nil {
 		return nil, proto.SelectionPolicy{}, err
 	}
@@ -281,7 +292,11 @@ func stableGitSelection(root string, listGitFiles func(string) ([]string, error)
 	if err != nil {
 		return nil, proto.SelectionPolicy{}, err
 	}
-	afterPolicy, err := gitSelectionPolicy(root, afterPaths)
+	afterPaths, err = withoutCachePaths(root, afterPaths, caches)
+	if err != nil {
+		return nil, proto.SelectionPolicy{}, err
+	}
+	afterPolicy, err := gitSelectionPolicy(root, caches)
 	if err != nil {
 		return nil, proto.SelectionPolicy{}, err
 	}
@@ -293,7 +308,7 @@ func stableGitSelection(root string, listGitFiles func(string) ([]string, error)
 	return paths, policy, nil
 }
 
-func gitSelectionPolicy(root string, _ []string) (proto.SelectionPolicy, error) {
+func gitSelectionPolicy(root string, caches []proto.CacheBinding) (proto.SelectionPolicy, error) {
 	worktreeRoot, prefix, err := gitWorktreeContext(root)
 	if err != nil {
 		return proto.SelectionPolicy{}, err
@@ -331,7 +346,7 @@ func gitSelectionPolicy(root string, _ []string) (proto.SelectionPolicy, error) 
 	}
 	patterns = append(patterns, lines...)
 
-	ignoreFiles, err := gitIgnorePolicyFiles(root, worktreeRoot, prefix)
+	ignoreFiles, err := gitIgnorePolicyFiles(root, worktreeRoot, prefix, caches)
 	if err != nil {
 		return proto.SelectionPolicy{}, err
 	}
@@ -365,7 +380,7 @@ func gitSelectionPolicy(root string, _ []string) (proto.SelectionPolicy, error) 
 	return policy, nil
 }
 
-func gitIgnorePolicyFiles(root, worktreeRoot, prefix string) ([]string, error) {
+func gitIgnorePolicyFiles(root, worktreeRoot, prefix string, caches []proto.CacheBinding) ([]string, error) {
 	files := make(map[string]struct{})
 	for base := ""; ; {
 		name := path.Join(base, ".gitignore")
@@ -410,7 +425,13 @@ func gitIgnorePolicyFiles(root, worktreeRoot, prefix string) ([]string, error) {
 	for name := range files {
 		result = append(result, name)
 	}
-	return result, nil
+	// Git reports these paths relative to the worktree root. Shift cache
+	// declarations from the selected workspace before filtering policy files.
+	worktreeCaches := make([]proto.CacheBinding, 0, len(caches))
+	for _, cache := range caches {
+		worktreeCaches = append(worktreeCaches, proto.CacheBinding{Name: cache.Name, Path: path.Join(prefix, cache.Path)})
+	}
+	return withoutCachePaths(worktreeRoot, result, worktreeCaches)
 }
 
 func gitWorktreeContext(root string) (string, string, error) {
@@ -577,7 +598,7 @@ func escapeIgnorePatternPath(name string) string {
 	return escaped.String()
 }
 
-func walk(root string, matcher *pathpolicy.Matcher) ([]string, error) {
+func walk(root string, matcher *pathpolicy.Matcher, caches ...proto.CacheBinding) ([]string, error) {
 	var paths []string
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -591,7 +612,7 @@ func walk(root string, matcher *pathpolicy.Matcher) ([]string, error) {
 		if rel == "." {
 			return nil
 		}
-		if isLocalChangeTransactionPath(rel) {
+		if pathpolicy.InCache(rel, caches) || isLocalChangeTransactionPath(rel) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}

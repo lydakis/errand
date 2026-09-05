@@ -67,6 +67,7 @@ var maintenanceHTTP = &http.Client{
 }
 
 type RunOptions struct {
+	Caches         []proto.CacheBinding
 	Artifacts      []string
 	PeerURL        string
 	PeerName       string // config alias for handle printing; "" falls back to the host
@@ -125,6 +126,10 @@ func runWithDetachNotifications(
 		errf("--detach and --forward are mutually exclusive")
 		return ExitTransaction
 	}
+	if err := pathpolicy.ValidateCaches(opts.Caches); err != nil {
+		errf("%v", err)
+		return ExitTransaction
+	}
 	if err := pathpolicy.ValidateArtifacts(opts.Artifacts); err != nil {
 		errf("%v", err)
 		return ExitTransaction
@@ -166,7 +171,7 @@ func runWithDetachNotifications(
 	target := newInterruptTarget(opts.PeerURL, jobID, handle, errf, interruptsControl)
 
 	prepared := make(chan snapshotPreparation, 1)
-	go func() { prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot) }()
+	go func() { prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot, opts.Caches...) }()
 	var prep snapshotPreparation
 	select {
 	case <-sigCh:
@@ -228,6 +233,14 @@ func runWithDetachNotifications(
 		Selection:      prep.selection,
 	}
 	spec.Selection.Artifacts = opts.Artifacts
+	spec.Selection.Caches = opts.Caches
+	if len(opts.Caches) != 0 {
+		spec.CacheProjectID, err = cacheProjectID(opts.Root)
+		if err != nil {
+			errf("cache project identity: %v", err)
+			return ExitTransaction
+		}
+	}
 
 	type negotiationResult struct {
 		plan shipPlan
@@ -393,11 +406,11 @@ type snapshotPreparation struct {
 	err       error
 }
 
-func prepareSnapshot(root string, includeAll, noSnapshot bool) snapshotPreparation {
+func prepareSnapshot(root string, includeAll, noSnapshot bool, caches ...proto.CacheBinding) snapshotPreparation {
 	if noSnapshot {
 		return snapshotPreparation{}
 	}
-	paths, gitInfo, selection, guard, err := snapshot.SelectFilesGuarded(root, snapshot.SelectOptions{IncludeAll: includeAll})
+	paths, gitInfo, selection, guard, err := snapshot.SelectFilesGuarded(root, snapshot.SelectOptions{IncludeAll: includeAll, Caches: caches})
 	if err != nil {
 		return snapshotPreparation{stage: "selecting files", err: err}
 	}

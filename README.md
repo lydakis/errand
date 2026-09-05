@@ -258,8 +258,7 @@ transaction ssh doesn't attempt. The implemented milestones provide:
 - **A receipt:** an append-only record of what was asked, who asked, what
   ran, and what happened.
 
-The remaining v0 work includes explicitly declared named caches and
-fact-based peer selection.
+The remaining v0 work includes fact-based peer selection.
 
 ## Shape
 
@@ -297,8 +296,8 @@ connection.
 Detached jobs, `ps`, `attach`, `kill`, workspace-root discovery, automatic
 workspace change capture and conflict-safe application, TCP forwarding,
 snapshot caching, fleet storage reporting, and cache and receipt GC are
-implemented. Planned v0 commands still include fact-based peer selection and
-named-cache management.
+implemented, including named build caches. Fact-based peer selection remains
+planned.
 
 After every command, Errand compares the final remote workspace with the
 submitted snapshot and retains every snapshot-representable created, modified,
@@ -364,7 +363,13 @@ paths. `--no-artifacts` clears configured declarations. Declarations select
 remote outputs without uploading local ignored files. Failed jobs retain their
 outputs too; missing outputs are allowed. Fetch, export, and apply use the same
 retained bundle and conflict rules. See [artifact configuration](docs/CONFIGURATION.md#artifact-declarations)
-for profiles, precedence, and limits. Named reusable caches remain planned.
+for profiles, precedence, and limits.
+
+To reuse disposable build data on a runner, use `--cache compiler=target` or
+configure `[caches]` with `compiler = "target"`. `--no-caches` clears configured
+bindings. Cache contents stay on the runner and are excluded from both input
+snapshots and fetched results. See [named caches](docs/NAMED_CACHES.md) for
+ownership, exclusive leases, restart recovery, and cleanup.
 
 Git is not required for non-Git snapshots, running jobs, status, logs, or plain
 fetches. Applying changes needs `git merge-file` on the client only when both
@@ -432,7 +437,7 @@ cancelled durably before they start. A submission is rejected as busy only
 when both the configured running slots and bounded queue are full.
 
 `errand df` reports logical storage used by each runner's shared snapshot cache
-and the authenticated caller's job receipts, plus local change records and
+and the authenticated caller's named caches and job receipts, plus local change records and
 download staging. Human output uses readable binary units; `--json` preserves
 raw byte and item counts, cache limits, and cache TTL. Capability-based runners
 must grant `read-own` to use `errand df`; `manage-caches` remains required only

@@ -78,15 +78,21 @@ func (m Manifest) RootHash() string {
 // SelectionPolicy freezes the ignore rules and explicit artifact paths used
 // for retention. Artifacts never expand the input snapshot. Submitted manifest
 // paths remain eligible so their modification or deletion is always observable.
+type CacheBinding struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
 type SelectionPolicy struct {
-	Artifacts []string `json:"artifacts,omitempty"` // retention only; exact paths override ignores
-	Prefix    string   `json:"prefix,omitempty"`
-	Ignore    []string `json:"ignore,omitempty"`
-	CaseFold  bool     `json:"case_fold,omitempty"`
+	Caches    []CacheBinding `json:"caches,omitempty"`
+	Artifacts []string       `json:"artifacts,omitempty"` // retention only; exact paths override ignores
+	Prefix    string         `json:"prefix,omitempty"`
+	Ignore    []string       `json:"ignore,omitempty"`
+	CaseFold  bool           `json:"case_fold,omitempty"`
 }
 
 func (p SelectionPolicy) IsZero() bool {
-	return p.Prefix == "" && len(p.Ignore) == 0 && !p.CaseFold && len(p.Artifacts) == 0
+	return p.Prefix == "" && len(p.Ignore) == 0 && !p.CaseFold && len(p.Artifacts) == 0 && len(p.Caches) == 0
 }
 
 type Limits struct {
@@ -144,6 +150,7 @@ func (s ChangeSummary) Matches(bundle ChangeBundle) bool {
 // identity: same job ID + same digest is a retry, a different digest is a
 // conflict.
 type Spec struct {
+	CacheProjectID string            `json:"cache_project_id,omitempty"`
 	Argv           []string          `json:"argv"`
 	Env            map[string]string `json:"env,omitempty"`
 	EnvSources     map[string]string `json:"env_sources,omitempty"` // name -> literal | passenv
@@ -164,6 +171,7 @@ func (s Spec) Digest() string {
 // ReceiptSpec is the durable, non-secret view of an admitted request. No value
 // derived from the runtime environment is persisted.
 type ReceiptSpec struct {
+	CacheProjectID string            `json:"cache_project_id,omitempty"`
 	ReceiptVersion int               `json:"receipt_version"`
 	Argv           []string          `json:"argv"`
 	EnvNames       []string          `json:"env_names,omitempty"`
@@ -196,7 +204,7 @@ func NewReceiptSpec(s Spec) ReceiptSpec {
 		Argv:           s.Argv, EnvNames: names, EnvSources: s.EnvSources, Workdir: s.Workdir,
 		ManifestRoot: s.ManifestRoot, Limits: s.Limits,
 		GitCommit: s.GitCommit, GitDirty: s.GitDirty, NoSnapshot: s.NoSnapshot,
-		ChangeClientID: s.ChangeClientID, Selection: s.Selection,
+		ChangeClientID: s.ChangeClientID, Selection: s.Selection, CacheProjectID: s.CacheProjectID,
 	}
 }
 
@@ -204,7 +212,7 @@ func (r ReceiptSpec) SpecWithoutEnv() Spec {
 	return Spec{
 		Argv: r.Argv, EnvSources: r.EnvSources, Workdir: r.Workdir, ManifestRoot: r.ManifestRoot,
 		Limits: r.Limits, GitCommit: r.GitCommit, GitDirty: r.GitDirty, NoSnapshot: r.NoSnapshot,
-		ChangeClientID: r.ChangeClientID, Selection: r.Selection,
+		ChangeClientID: r.ChangeClientID, Selection: r.Selection, CacheProjectID: r.CacheProjectID,
 	}
 }
 
@@ -347,9 +355,16 @@ type StorageCategory struct {
 // StorageStats is the caller-visible storage inventory on one runner. Jobs
 // includes only receipts owned by the authenticated caller. Cache is nil when
 // the runner's shared snapshot cache is disabled.
+type NamedCacheStats struct {
+	Items     int   `json:"items"`
+	Bytes     int64 `json:"bytes"`
+	Protected int   `json:"protected"`
+}
+
 type StorageStats struct {
-	Cache *CacheStats     `json:"cache,omitempty"`
-	Jobs  StorageCategory `json:"jobs"`
+	NamedCaches *NamedCacheStats `json:"named_caches,omitempty"`
+	Cache       *CacheStats      `json:"cache,omitempty"`
+	Jobs        StorageCategory  `json:"jobs"`
 }
 
 type CacheGCRequest struct {
@@ -357,9 +372,12 @@ type CacheGCRequest struct {
 }
 
 type CacheGCResult struct {
-	RemovedBlobs int   `json:"removed_blobs"`
-	FreedBytes   int64 `json:"freed_bytes"`
-	DryRun       bool  `json:"dry_run"`
+	RemovedCaches   int   `json:"removed_caches,omitempty"`
+	ProtectedCaches int   `json:"protected_caches,omitempty"`
+	ReclaimedTemps  int   `json:"reclaimed_temps,omitempty"`
+	RemovedBlobs    int   `json:"removed_blobs"`
+	FreedBytes      int64 `json:"freed_bytes"`
+	DryRun          bool  `json:"dry_run"`
 }
 
 type JobGCRequest struct {

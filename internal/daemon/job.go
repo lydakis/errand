@@ -428,8 +428,20 @@ func (j *Job) launch(d *Daemon) error {
 		workdir = filepath.Join(workspace, wd)
 	}
 
+	if err := j.bindNamedCaches(d); err != nil {
+		logw.Close()
+		return fmt.Errorf("binding named caches: %w", err)
+	}
 	jobEnv := j.buildEnv()
-	scope, err := newProcessScope(workspace)
+	var cacheDirs []string
+	if len(j.Spec.Selection.Caches) != 0 {
+		cacheDirs, err = d.namedCaches.LeasePaths(context.Background(), j.ID)
+		if err != nil {
+			logw.Close()
+			return fmt.Errorf("reading cache process scope: %w", err)
+		}
+	}
+	scope, err := newProcessScope(workspace, cacheDirs...)
 	if err != nil {
 		logw.Close()
 		return err
@@ -961,6 +973,13 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	j.baseline = proto.Manifest{}
 	j.mu.Unlock()
 
+	var cacheErr error
+	if scopeCleanupOK {
+		cacheErr = d.settleNamedCaches(j)
+	}
+	if cacheErr != nil {
+		res.TransactionError = appendTransactionError(res.TransactionError, "settling named caches: "+cacheErr.Error())
+	}
 	var workspaceErr error
 	if scopeCleanupOK {
 		workspaceErr = removeOwnedTree(filepath.Join(j.Dir, "workspace"))
@@ -972,7 +991,7 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	// settled there is nothing left for reconciliation to find. Retain it
 	// after failed scope cleanup so a restart can still locate survivors.
 	var scopeRecordErr error
-	if scopeCleanupOK && workspaceErr == nil {
+	if scopeCleanupOK && workspaceErr == nil && cacheErr == nil {
 		scopeRecordErr = removeScopeRecord(filepath.Join(j.Dir, "scope.json"))
 	} else {
 		res.TransactionError = appendTransactionError(res.TransactionError, "process scope cleanup incomplete; recovery record retained")
@@ -991,7 +1010,7 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	}
 	// A queued marker on a never-started job is receipt evidence. Retaining it
 	// closes the crash gap between cleanup and the durable terminal result.
-	cleanupOK := workspaceErr == nil && baseErr == nil && scopeCleanupOK && scopeRecordErr == nil
+	cleanupOK := cacheErr == nil && workspaceErr == nil && baseErr == nil && scopeCleanupOK && scopeRecordErr == nil
 	if neverRan {
 		res.CleanupOK = cleanupOK
 	} else {

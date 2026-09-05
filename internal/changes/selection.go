@@ -10,6 +10,7 @@ import (
 )
 
 type retentionSelector struct {
+	caches    []proto.CacheBinding
 	artifacts map[string]bool
 	baseline  map[string]struct{}
 	ancestors map[string]struct{}
@@ -22,6 +23,7 @@ func newRetentionSelector(baseline proto.Manifest, policy proto.SelectionPolicy)
 		return nil, err
 	}
 	selector := &retentionSelector{
+		caches:    policy.Caches,
 		artifacts: make(map[string]bool, len(policy.Artifacts)),
 		baseline:  make(map[string]struct{}, len(baseline.Entries)),
 		ancestors: make(map[string]struct{}),
@@ -50,7 +52,7 @@ func (s *retentionSelector) selectPath(rel string, info fs.FileInfo) (bool, bool
 	if rel == "." {
 		return true, true
 	}
-	if pathContainsGitMetadata(rel) || pathUsesApplyTransaction(rel) {
+	if pathpolicy.InCache(rel, s.caches) || pathContainsGitMetadata(rel) || pathUsesApplyTransaction(rel) {
 		return false, false
 	}
 	if _, ok := s.baseline[rel]; ok {
