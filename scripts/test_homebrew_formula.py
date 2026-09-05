@@ -14,7 +14,7 @@ class FormulaTest(unittest.TestCase):
             formula = render_formula("0.1.0", archive)
         self.assertIn(hashlib.sha256(b"release source").hexdigest(), formula)
         self.assertIn("/releases/download/v0.1.0/errand_0.1.0_source.tar.gz", formula)
-        self.assertIn('version "0.1.0"', formula)
+        self.assertNotIn('  version "', formula)
         self.assertIn('depends_on "go" => :build', formula)
         self.assertIn('-X main.version=#{version}', formula)
         self.assertIn('"./cmd/errand"', formula)

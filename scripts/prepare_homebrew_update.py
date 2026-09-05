@@ -6,6 +6,9 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
+import sys
+import tempfile
 
 from homebrew_formula import render_formula
 
@@ -13,7 +16,8 @@ from homebrew_formula import render_formula
 STABLE_VERSION = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
 
 
-def prepare_update(tag: str, metadata: Path, assets: Path, current: Path):
+def prepare_update(tag: str, metadata: Path, assets: Path, current: Path,
+                   *, generator: Path | None = None):
     match = re.fullmatch("v" + STABLE_VERSION, tag)
     if not match:
         raise ValueError("expected a stable tag such as v0.1.0")
@@ -34,8 +38,15 @@ def prepare_update(tag: str, metadata: Path, assets: Path, current: Path):
     for path in [archive, formula_path]:
         if checksums.get(path.name) != hashlib.sha256(path.read_bytes()).hexdigest():
             raise ValueError(f"checksum mismatch or missing checksum for {path.name}")
-    formula = formula_path.read_bytes()
-    if formula != render_formula(version, archive).encode():
+    formula = render_formula(version, archive).encode()
+    expected_release_formula = formula
+    if generator is not None:
+        with tempfile.TemporaryDirectory() as directory:
+            expected = Path(directory) / "errand.rb"
+            subprocess.run([sys.executable, str(generator), version,
+                            str(archive), str(expected)], check=True)
+            expected_release_formula = expected.read_bytes()
+    if formula_path.read_bytes() != expected_release_formula:
         raise ValueError("release formula does not match the generated formula for this source")
 
     request = {
@@ -45,8 +56,10 @@ def prepare_update(tag: str, metadata: Path, assets: Path, current: Path):
     }
     if current.exists():
         previous = current.read_bytes()
-        versions = re.findall(r'^  version "(' + STABLE_VERSION + r')"$',
-                              previous.decode(), re.MULTILINE)
+        versions = re.findall(
+            r'^  url "https://github\.com/lydakis/errand/releases/download/v('
+            + STABLE_VERSION + r')/errand_\1_source\.tar\.gz"$',
+            previous.decode(), re.MULTILINE)
         if len(versions) != 1:
             raise ValueError("current formula must have one stable version")
         previous_version = tuple(map(int, versions[0][1:]))
@@ -71,15 +84,18 @@ def main():
     parser.add_argument("assets", type=Path)
     parser.add_argument("current", type=Path)
     parser.add_argument("request", type=Path)
+    parser.add_argument("--generator", type=Path,
+                        help="release tag's generator, used to verify immutable assets")
     args = parser.parse_args()
     args.request.unlink(missing_ok=True)
     try:
-        request = prepare_update(args.tag, args.metadata, args.assets, args.current)
+        request = prepare_update(args.tag, args.metadata, args.assets, args.current,
+                                 generator=args.generator)
         if request is not None:
             args.request.write_text(json.dumps(request))
         else:
             print("Tap already contains this version or a newer release; no update needed.")
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
 
 

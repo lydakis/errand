@@ -118,9 +118,13 @@ Homebrew. Publishing the stable draft starts the tap update immediately; install
 become available when that workflow passes. No separate tap release is needed.
 
 If publication fails, fix the reported problem and rerun **Publish Homebrew**
-manually with the already published stable tag. Both automatic publication and
-manual reruns use that tag's validation scripts and formula generator, so later
-changes on the default branch do not invalidate the release's formula.
+manually with the already published stable tag. The release formula is verified
+against that tag's generator. The workflow's checked-out packaging tools then
+generate the tap formula from the same checksum-verified source archive. This
+allows reviewed Homebrew packaging corrections without moving the release tag
+or replacing published assets. For example, the initial v0.1.0 formula included
+a redundant version declaration that Homebrew's strict audit rejects; the tap
+formula lets Homebrew infer that version from the source URL.
 Repeating an identical update does nothing, an older
 release cannot downgrade the tap, and a changed formula for the same version
 requires manual review rather than an overwrite. For token failures, check its

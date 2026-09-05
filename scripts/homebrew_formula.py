@@ -16,7 +16,6 @@ def render_formula(version: str, archive: Path) -> str:
   desc "Personal job runner for machines you own"
   homepage "https://github.com/lydakis/errand"
   url "https://github.com/lydakis/errand/releases/download/v{version}/{archive.name}"
-  version "{version}"
   sha256 "{sha256}"
   license "MIT"
 

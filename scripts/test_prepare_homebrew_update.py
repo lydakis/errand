@@ -45,7 +45,7 @@ class HomebrewUpdateTest(unittest.TestCase):
         self.assertNotIn("sha", request)
         self.assertEqual(self.current.read_bytes(), self.formula)
 
-        old = self.formula.replace(b'  version "0.2.0"', b'  version "0.1.0"')
+        old = self.formula.replace(b'0.2.0', b'0.1.0')
         self.current.write_bytes(old)
         request = self.prepare()
         self.assertEqual(request["sha"], hashlib.sha1(
@@ -56,7 +56,7 @@ class HomebrewUpdateTest(unittest.TestCase):
     def test_rerun_and_older_release_do_not_write(self):
         self.prepare()
         self.assertIsNone(self.prepare())
-        newer = self.formula.replace(b'  version "0.2.0"', b'  version "0.10.0"')
+        newer = self.formula.replace(b'0.2.0', b'0.10.0')
         self.current.write_bytes(newer)
         self.assertIsNone(self.prepare())
         self.assertEqual(self.current.read_bytes(), newer)
@@ -68,6 +68,28 @@ class HomebrewUpdateTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "same version"):
             self.prepare()
         self.assertEqual(self.current.read_bytes(), changed)
+
+    def test_tagged_generator_verifies_asset_before_packaging_correction(self):
+        legacy = self.formula.replace(b'  sha256 ', b'  version "0.2.0"\n  sha256 ')
+        (self.assets / "errand.rb").write_bytes(legacy)
+        self.write_checksums()
+        self.metadata.write_text(json.dumps(self.release))
+        generator = self.root / "tagged_generator.py"
+        generator.write_text(
+            "import pathlib, sys\n"
+            f"pathlib.Path(sys.argv[3]).write_bytes({legacy!r})\n"
+        )
+        request = prepare_update("v0.2.0", self.metadata, self.assets, self.current,
+                                 generator=generator)
+        self.assertEqual(base64.b64decode(request["content"]), self.formula)
+        self.assertEqual((self.assets / "errand.rb").read_bytes(), legacy)
+        self.assertIsNone(prepare_update("v0.2.0", self.metadata, self.assets,
+                                        self.current, generator=generator))
+        (self.assets / "errand.rb").write_bytes(legacy + b"# unexpected\n")
+        self.write_checksums()
+        with self.assertRaisesRegex(ValueError, "generated formula"):
+            prepare_update("v0.2.0", self.metadata, self.assets, self.current,
+                           generator=generator)
 
     def test_requires_matching_published_stable_release(self):
         for field, value in [
