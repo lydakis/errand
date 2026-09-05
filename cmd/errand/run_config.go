@@ -11,16 +11,21 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
+	"github.com/lydakis/errand/internal/workspace"
 )
 
 // Both submission and inspection use these flags and the same resolver.
 type runConfigFlags struct {
+	envs, passenvs             stringList
 	profile                    string
 	on, url, workdir, root     string
 	apply, noApply, noSnapshot bool
 }
 
 func (f *runConfigFlags) bind(fs *flag.FlagSet) {
+	fs.Var(&f.envs, "env", "set NAME=VALUE in the job environment (repeatable; values hidden in diagnostics)")
+	fs.Var(&f.envs, "e", "set NAME=VALUE in the job environment (repeatable)")
+	fs.Var(&f.passenvs, "passenv", "require and forward a local environment variable (repeatable; replaces configured pass list)")
 	fs.StringVar(&f.profile, "profile", "", "named run preferences from workspace or personal configuration")
 	fs.StringVar(&f.on, "on", "", "peer name from personal configuration")
 	fs.StringVar(&f.url, "url", "", "peer base URL (mutually exclusive with --on)")
@@ -36,6 +41,26 @@ func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error)
 	set := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	result := config.RunOverrides{Peer: f.on, URL: f.url, WorkspaceRoot: f.root, NoSnapshot: f.noSnapshot}
+	result.Environment.Pass = f.passenvs
+	for _, name := range f.passenvs {
+		if err := workspace.ValidateEnvironmentName(name); err != nil {
+			return result, err
+		}
+	}
+	result.Environment.Set = map[string]string{}
+	for _, assignment := range f.envs {
+		name, value, ok := strings.Cut(assignment, "=")
+		if !ok {
+			return result, fmt.Errorf("--env requires NAME=VALUE")
+		}
+		if err := workspace.ValidateEnvironmentName(name); err != nil {
+			return result, err
+		}
+		if strings.ContainsRune(value, 0) {
+			return result, fmt.Errorf("--env value for %q contains NUL", name)
+		}
+		result.Environment.Set[name] = value
+	}
 	result.Profile = f.profile
 	if set["profile"] && f.profile == "" {
 		return result, fmt.Errorf("--profile requires a non-empty name")
@@ -124,6 +149,16 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 				continue
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\n", row.key, terminalSafeField(fmt.Sprint(row.value)), terminalSafeField(effective.Sources[row.key]))
+		}
+		for _, entry := range effective.Environment {
+			state := "literal (value hidden)"
+			if entry.Kind == "passenv" {
+				state = "passenv (available)"
+				if !entry.Available {
+					state = "passenv (missing)"
+				}
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\n", terminalSafeField("env."+entry.Name), state, terminalSafeField(entry.Source))
 		}
 		err = w.Flush()
 	}

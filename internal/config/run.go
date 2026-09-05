@@ -11,6 +11,7 @@ import (
 // RunOverrides contains only explicit caller choices. Pointers distinguish
 // an absent override from false or an empty (workspace-root) workdir.
 type RunOverrides struct {
+	Environment              workspace.Environment
 	Profile                  string
 	Peer, URL, WorkspaceRoot string
 	Workdir                  *string
@@ -21,17 +22,18 @@ type RunOverrides struct {
 // EffectiveRun is shared by submission and config inspection. URL is the
 // configured endpoint, before the client installs its private SSH identity.
 type EffectiveRun struct {
-	Profile        string            `json:"profile,omitempty"`
-	Peer           string            `json:"peer"`
-	URL            string            `json:"url"`
-	RemoteCommand  string            `json:"remote_command,omitempty"`
-	RemoteSocket   string            `json:"remote_socket,omitempty"`
-	Root           string            `json:"workspace_root"`
-	Workdir        string            `json:"workdir"`
-	Project        string            `json:"project"`
-	ApplyOnSuccess bool              `json:"apply_on_success"`
-	NoSnapshot     bool              `json:"no_snapshot"`
-	Sources        map[string]string `json:"sources"`
+	Environment    []EnvironmentVariable `json:"environment,omitempty"`
+	Profile        string                `json:"profile,omitempty"`
+	Peer           string                `json:"peer"`
+	URL            string                `json:"url"`
+	RemoteCommand  string                `json:"remote_command,omitempty"`
+	RemoteSocket   string                `json:"remote_socket,omitempty"`
+	Root           string                `json:"workspace_root"`
+	Workdir        string                `json:"workdir"`
+	Project        string                `json:"project"`
+	ApplyOnSuccess bool                  `json:"apply_on_success"`
+	NoSnapshot     bool                  `json:"no_snapshot"`
+	Sources        map[string]string     `json:"sources"`
 }
 
 // ResolveRun reads personal configuration once and uses only the workspace
@@ -100,6 +102,12 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	if cli.Profile != "" {
 		result.Sources["profile"] = profileSource
 	}
+	result.Environment = resolveEnvironment(
+		environmentLayer{personal.Environment, personalSource + " env"},
+		environmentLayer{selected.Environment, workspaceSource + " env"},
+		environmentLayer{profile.Environment, profileSource + " env"},
+		environmentLayer{cli.Environment, "cli: --env/--passenv"},
+	)
 	if cli.NoSnapshot {
 		result.Sources["workspace_root"] = "current directory (--no-snapshot)"
 		result.Sources["no_snapshot"] = "cli: --no-snapshot"

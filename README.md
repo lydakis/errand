@@ -134,6 +134,21 @@ a warning. `--profile NAME` and `--json` are supported. Doctor submits no job
 and makes no configuration changes. See [doctor checks](docs/CONFIGURATION.md#diagnose-the-selected-runner)
 for scope and exit codes.
 
+Profiles can also shorten commands that need explicit environment settings:
+
+```toml
+# .errand.toml
+[profiles.integration.env]
+set = { CI = "1" }
+pass = ["NODE_AUTH_TOKEN"]
+```
+
+Run `errand --profile integration -- pnpm test:local`. Forwarded variables
+must be set in the initiating shell; diagnostics show availability without
+values. Store secret names, never secret values, in the profile. See
+[environment settings](docs/CONFIGURATION.md#environment-settings) for
+precedence, overrides, and clearing inherited forwarding.
+
 An SSH peer uses the same HTTP protocol over `ssh HOST errand _stdio`. The
 daemon accepts the bridge through a private Unix socket and verifies that it
 runs as the daemon's OS user. Configure an ssh_config alias and an absolute

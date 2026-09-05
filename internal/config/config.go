@@ -45,6 +45,7 @@ func (c Client) SSHRemoteSocket(name string) string {
 }
 
 type Client struct {
+	Environment    workspace.Environment        `toml:"env,omitempty"`
 	Profiles       map[string]workspace.Profile `toml:"profiles,omitempty"`
 	DefaultPeer    string                       `toml:"default_peer,omitempty"`
 	ApplyOnSuccess *bool                        `toml:"apply_on_success,omitempty"`

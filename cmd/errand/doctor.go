@@ -75,25 +75,35 @@ func cmdDoctorTo(args []string, stdout, stderr io.Writer, probe doctorProbe) int
 	} else {
 		report.Effective = &effective
 		report.Checks = []doctorCheck{{Name: "configuration", Status: "ok", Detail: fmt.Sprintf("Selected %s at %s (from %s)", effective.Peer, effective.URL, effective.Sources["peer"])}}
-		target := effective.URL
-		if overrides.URL == "" {
-			target = client.ConfigureSSHPeer(target, effective.Peer, effective.RemoteCommand, effective.RemoteSocket)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
-		info, probeErr := probe(ctx, target)
-		cancel()
-		if probeErr != nil {
-			report.Checks = append(report.Checks, doctorProbeFailure(effective.URL, probeErr))
+		if missing := effective.MissingEnvironment(); len(missing) != 0 {
+			report.Checks = append(report.Checks,
+				doctorCheck{Name: "environment", Status: "error", Detail: fmt.Sprintf("Required local variables are unset: %q", missing), Hint: "Set the required variables in the initiating shell, or change the selected environment settings."},
+				doctorCheck{Name: "runner", Status: "skipped", Detail: "No probe was made because required environment variables are missing."},
+			)
 		} else {
-			report.OK = true
-			report.Info = &info
-			check := doctorCheck{Name: "runner", Status: "ok", Detail: fmt.Sprintf("Runner %s answered with compatible protocol %d; this caller can read runner info.", info.Version, info.Proto)}
-			if info.Busy {
-				check.Status = "warning"
-				check.Detail += " Runner is currently busy."
-				check.Hint = "A later submission may queue or be refused; check capacity with errand peers."
+			if len(effective.Environment) != 0 {
+				report.Checks = append(report.Checks, doctorCheck{Name: "environment", Status: "ok", Detail: fmt.Sprintf("%d environment variables resolved; values hidden.", len(effective.Environment))})
 			}
-			report.Checks = append(report.Checks, check)
+			target := effective.URL
+			if overrides.URL == "" {
+				target = client.ConfigureSSHPeer(target, effective.Peer, effective.RemoteCommand, effective.RemoteSocket)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+			info, probeErr := probe(ctx, target)
+			cancel()
+			if probeErr != nil {
+				report.Checks = append(report.Checks, doctorProbeFailure(effective.URL, probeErr))
+			} else {
+				report.OK = true
+				report.Info = &info
+				check := doctorCheck{Name: "runner", Status: "ok", Detail: fmt.Sprintf("Runner %s answered with compatible protocol %d; this caller can read runner info.", info.Version, info.Proto)}
+				if info.Busy {
+					check.Status = "warning"
+					check.Detail += " Runner is currently busy."
+					check.Hint = "A later submission may queue or be refused; check capacity with errand peers."
+				}
+				report.Checks = append(report.Checks, check)
+			}
 		}
 	}
 	if err := writeDoctorReport(stdout, report, *asJSON); err != nil {

@@ -88,7 +88,8 @@ requires a restart; independent tailnet capability grants and SSH access
 remain separate. See [runner access](CONFIGURATION.md#runner-access).
 
 `errand doctor` combines effective run configuration with a bounded info
-probe of that selected peer and reports actionable failures. It is read-only;
+probe of that selected peer and reports actionable failures. It checks required
+environment names before probing and keeps values out of diagnostics. It is read-only;
 a successful info probe does not establish submission permission or validate
 the proposed snapshot or command. See [doctor checks](CONFIGURATION.md#diagnose-the-selected-runner).
 

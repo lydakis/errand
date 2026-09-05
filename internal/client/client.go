@@ -123,6 +123,29 @@ func runWithDetachNotifications(
 		errf("--detach and --forward are mutually exclusive")
 		return ExitTransaction
 	}
+	// Resolve required environment before opening forwards, preparing a
+	// snapshot, contacting the runner, or creating local submission state.
+	env := map[string]string{}
+	envSources := map[string]string{}
+	for _, name := range opts.PassEnv {
+		if _, overridden := opts.Env[name]; overridden {
+			continue
+		}
+		value, ok := os.LookupEnv(name)
+		if !ok {
+			errf("required environment variable %q is not set", name)
+			return ExitTransaction
+		}
+		env[name] = value
+		envSources[name] = "passenv"
+	}
+	for name, value := range opts.Env {
+		env[name] = value
+		envSources[name] = "literal"
+	}
+	if len(env) == 0 {
+		env, envSources = nil, nil
+	}
 	forwarding, err := bindPortForwards(opts.Forwards, opts.Stderr)
 	if err != nil {
 		errf("%v", err)
@@ -183,23 +206,6 @@ func runWithDetachNotifications(
 		fmt.Fprintln(opts.Stderr, "errand: no snapshot; using an empty remote workspace")
 	} else {
 		fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
-	}
-
-	env := map[string]string{}
-	envSources := map[string]string{}
-	for _, name := range opts.PassEnv {
-		if v, ok := os.LookupEnv(name); ok {
-			env[name] = v
-			envSources[name] = "passenv"
-		}
-	}
-	for k, v := range opts.Env {
-		env[k] = v
-		envSources[k] = "literal"
-	}
-	if len(env) == 0 {
-		env = nil
-		envSources = nil
 	}
 
 	spec := proto.Spec{

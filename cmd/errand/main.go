@@ -60,12 +60,14 @@ usage:
   errand peers discover [-a | --all] [--json]
   errand config [--json] [--profile NAME] [--on PEER | --url URL]
                 [--workspace-root PATH] [-w REL | --workdir REL]
+                [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
                 [--apply | --no-apply] [--no-snapshot]
   errand access [list] [--config PATH] [--json]
   errand access add [-n | --dry-run] [--config PATH] [--json] LOGIN
   errand access remove [-n | --dry-run] [--config PATH] [--json] LOGIN
   errand doctor [--json] [--profile NAME] [--on PEER | --url URL]
                 [--workspace-root PATH] [-w REL | --workdir REL]
+                [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
                 [--apply | --no-apply] [--no-snapshot]
   errand version
 
