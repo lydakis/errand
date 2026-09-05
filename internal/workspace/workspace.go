@@ -13,6 +13,7 @@ import (
 const markerName = ".errand.toml"
 
 type Selection struct {
+	Environment    Environment
 	Root           string
 	Workdir        string
 	Project        string
@@ -23,8 +24,9 @@ type Selection struct {
 }
 
 type projectConfig struct {
-	Profiles map[string]Profile `toml:"profiles"`
-	Run      struct {
+	Environment Environment        `toml:"env"`
+	Profiles    map[string]Profile `toml:"profiles"`
+	Run         struct {
 		Peer *string `toml:"peer"`
 	} `toml:"run"`
 	Workspace struct {
@@ -157,7 +159,8 @@ func selection(root, cwd, source string, cfg projectConfig) (Selection, error) {
 		project = strings.SplitN(rel, "/", 2)[0]
 	}
 	return Selection{
-		Root: root, Workdir: rel, Project: project, Source: source,
+		Environment: cfg.Environment,
+		Root:        root, Workdir: rel, Project: project, Source: source,
 		ApplyOnSuccess: cfg.Changes.ApplyOnSuccess, Peer: cfg.Run.Peer, Profiles: cfg.Profiles,
 	}, nil
 }

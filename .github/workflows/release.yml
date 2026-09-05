@@ -17,8 +17,8 @@ jobs:
 
   package:
     needs: check
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    runs-on: macos-15
+    timeout-minutes: 45
     permissions:
       contents: write
     defaults:
@@ -41,13 +41,58 @@ jobs:
             echo 'Expected a tag such as v0.1.0 or v0.1.0-rc.1' >&2
             exit 1
           fi
+      - name: Prepare Apple signing credentials
+        env:
+          APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_DEVELOPER_ID_APPLICATION: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          for name in APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD \
+            APPLE_DEVELOPER_ID_APPLICATION APP_STORE_CONNECT_API_KEY_P8 \
+            APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required signing secret: $name" >&2
+              exit 1
+            fi
+          done
+          umask 077
+          signing_dir="$RUNNER_TEMP/errand-signing"
+          mkdir "$signing_dir"
+          export ERRAND_SIGNING_KEYCHAIN="$signing_dir/signing.keychain-db"
+          export ERRAND_NOTARY_KEY="$signing_dir/notary.p8"
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          directory = Path(os.environ["ERRAND_SIGNING_KEYCHAIN"]).parent
+          (directory / "certificate.p12").write_bytes(base64.b64decode(
+              os.environ["APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64"], validate=True))
+          Path(os.environ["ERRAND_NOTARY_KEY"]).write_text(os.environ["APP_STORE_CONNECT_API_KEY_P8"])
+          PY
+          keychain_password="$(openssl rand -base64 32)"
+          echo "::add-mask::$keychain_password"
+          security create-keychain -p "$keychain_password" "$ERRAND_SIGNING_KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$ERRAND_SIGNING_KEYCHAIN"
+          security unlock-keychain -p "$keychain_password" "$ERRAND_SIGNING_KEYCHAIN"
+          security import "$signing_dir/certificate.p12" -k "$ERRAND_SIGNING_KEYCHAIN" \
+            -P "$APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+            -k "$keychain_password" "$ERRAND_SIGNING_KEYCHAIN" >/dev/null
+          rm "$signing_dir/certificate.p12"
+          echo "ERRAND_SIGNING_KEYCHAIN=$ERRAND_SIGNING_KEYCHAIN" >> "$GITHUB_ENV"
+          echo "ERRAND_NOTARY_KEY=$ERRAND_NOTARY_KEY" >> "$GITHUB_ENV"
       - name: Build release archives
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: v2.18.0
-          args: release --clean --skip=publish
+          args: release --clean --skip=publish --timeout=40m
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_DEVELOPER_ID_APPLICATION: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       - name: Package Homebrew formula and verify assets
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -56,10 +101,16 @@ jobs:
           python3 scripts/homebrew_formula.py "$version" "dist/errand_${version}_source.tar.gz" dist/errand.rb
           ruby -c dist/errand.rb
           cd dist
-          sha256sum errand.rb >> checksums.txt
-          sha256sum --check checksums.txt
+          shasum -a 256 errand.rb >> checksums.txt
+          shasum -a 256 --check checksums.txt
           mkdir smoke
-          tar -xzf "errand_${version}_linux_amd64.tar.gz" -C smoke
+          case "$(uname -m)" in
+            arm64) architecture=arm64 ;;
+            x86_64) architecture=amd64 ;;
+            *) echo 'Unsupported smoke-test architecture' >&2; exit 1 ;;
+          esac
+          tar -xzf "errand_${version}_darwin_${architecture}.tar.gz" -C smoke
+          codesign --verify --strict smoke/errand
           test "$(smoke/errand version)" = "errand ${version}"
       - name: Create draft release
         env:
@@ -72,3 +123,11 @@ jobs:
           fi
           gh release create "$RELEASE_TAG" dist/*.tar.gz dist/checksums.txt dist/errand.rb \
             --verify-tag --draft --title "$RELEASE_TAG" --generate-notes "${options[@]}"
+      - name: Remove temporary signing credentials
+        if: always()
+        run: |
+          signing_dir="$RUNNER_TEMP/errand-signing"
+          if [ -f "$signing_dir/signing.keychain-db" ]; then
+            security delete-keychain "$signing_dir/signing.keychain-db"
+          fi
+          rm -rf "$signing_dir"

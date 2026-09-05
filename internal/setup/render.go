@@ -26,6 +26,15 @@ func renderConfig(c ConfigChoice) string {
 		}
 		fmt.Fprintf(&b, "%q", u)
 	}
+	fmt.Fprintf(&b, "]\n")
+	fmt.Fprintf(&b, "# Exact tailnet logins refused even if allow_users or capability grants allow them.\n")
+	fmt.Fprintf(&b, "deny_users = [")
+	for i, u := range c.DenyUsers {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%q", u)
+	}
 	fmt.Fprintf(&b, "]\n\n")
 	switch {
 	case c.TailscaledSocket != "":

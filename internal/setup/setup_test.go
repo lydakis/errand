@@ -491,14 +491,15 @@ func TestExistingConfigDrivesTheEffectiveReport(t *testing.T) {
 	f := newFake(t, "linux")
 	f.cmdOutput["loginctl show-user george -p Linger"] = "Linger=yes"
 	path := "/home/george/.config/errand/errandd.toml"
-	f.files[path] = "listen = \"none\"\nsocket = \"/tmp/custom.sock\"\nmax_jobs = 3\nallow_users = [\"other@example.com\"]\n"
+	f.files[path] = "listen = \"none\"\nsocket = \"/tmp/custom.sock\"\nmax_jobs = 3\nallow_users = [\"other@example.com\"]\ndeny_users = [\"other@example.com\"]\n"
 
 	r, err := Run(context.Background(), Options{}, f)
 	if err != nil || r.Failed() {
 		t.Fatalf("setup failed: %v / %+v", err, r.Steps)
 	}
 	if r.Config.Listen != "none" || r.Config.MaxJobs != 3 ||
-		len(r.Config.AllowUsers) != 1 || r.Config.AllowUsers[0] != "other@example.com" {
+		len(r.Config.AllowUsers) != 1 || r.Config.AllowUsers[0] != "other@example.com" ||
+		len(r.Config.DenyUsers) != 1 || r.Config.DenyUsers[0] != "other@example.com" {
 		t.Fatalf("effective config = %+v", r.Config)
 	}
 	if r.SocketPath != "/tmp/custom.sock" {

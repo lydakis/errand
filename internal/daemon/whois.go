@@ -120,7 +120,7 @@ func unsupportedSelfTarget(remoteAddr string, localAddr net.Addr) bool {
 
 // identify resolves and authorizes a caller. Authorization comes from the
 // tailnet ACL capability (action schema, additive merge) or the runner's
-// local allowlist; anything else is refused.
+// local allowlist. An exact deny_users match overrides both sources.
 func (d *Daemon) identify(remoteAddr string, localAddr net.Addr) (Identity, error) {
 	if d.cfg.InsecureNoAuth {
 		return Identity{Login: "test@insecure", Method: "insecure-test", Actions: map[string]bool{"*": true}}, nil
@@ -135,6 +135,11 @@ func (d *Daemon) identify(remoteAddr string, localAddr net.Addr) (Identity, erro
 	}
 	if id.Owner() == "" {
 		return id, fmt.Errorf("whois returned no stable owner identity for %s (%s)", id.Login, id.Node)
+	}
+	for _, u := range d.cfg.DenyUsers {
+		if u != "" && u == id.Login {
+			return id, fmt.Errorf("caller %s (%s) is denied by runner policy", id.Login, id.Node)
+		}
 	}
 	if rules, ok := w.CapMap[d.cfg.Capability]; ok {
 		id.Method = "capability"

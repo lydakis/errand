@@ -45,6 +45,7 @@ func (c Client) SSHRemoteSocket(name string) string {
 }
 
 type Client struct {
+	Environment    workspace.Environment        `toml:"env,omitempty"`
 	Profiles       map[string]workspace.Profile `toml:"profiles,omitempty"`
 	DefaultPeer    string                       `toml:"default_peer,omitempty"`
 	ApplyOnSuccess *bool                        `toml:"apply_on_success,omitempty"`
@@ -143,6 +144,7 @@ type Daemon struct {
 	Listen           string      `toml:"listen"`
 	StateDir         string      `toml:"state_dir"`
 	AllowUsers       []string    `toml:"allow_users"`
+	DenyUsers        []string    `toml:"deny_users"`
 	Capability       string      `toml:"capability"`
 	TailscaledSocket string      `toml:"tailscaled_socket"`
 	TailscaleCLI     string      `toml:"tailscale_cli"`

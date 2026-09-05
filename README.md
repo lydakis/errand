@@ -103,10 +103,56 @@ daemon over its own socket. `-n` or `--dry-run` shows every decision;
 
 Runner access can use a tailnet URL or SSH. Tailnet callers are authorized by
 WhoIs identity through an ACL app capability or `allow_users`; an allow-listed
-login receives full runner access. The daemon uses
+login receives full runner access unless its exact login is in `deny_users`.
+A denial overrides both grant sources. The daemon uses
 a tailscaled LocalAPI socket when available and falls back to the `tailscale`
 CLI, including for the standalone macOS app. CLI-based WhoIs cannot provide
 destination-scoped capabilities, so that path requires `allow_users`.
+
+Manage the saved access lists locally on the runner:
+
+```sh
+errand access
+errand access add -n friend@example.com
+errand access add friend@example.com
+errand access remove friend@example.com
+errand access deny friend@example.com # override tailnet grants
+errand access undeny friend@example.com # restore any remaining grants
+errand setup                         # restart to activate saved changes
+```
+
+Use `--config PATH` before the login for a custom runner config, and pass the
+same path to `setup`. `--json` is available on all access commands. These
+commands edit an existing local file; they do not contact or restart a peer.
+`remove` only edits the allowlist. `deny` overrides tailnet grants after restart;
+SSH access remains separate. Saved edits do not cancel jobs or existing
+streams. Real edits preserve other TOML setting values but reformat the file
+and remove comments.
+See [runner access configuration](docs/CONFIGURATION.md#runner-access) for the
+full contract.
+
+Diagnose the runner selected for your next invocation with `errand doctor`,
+or choose one with `errand doctor --on cabal`. It resolves the same run
+settings as `errand config`, then checks runner connectivity, access to info,
+and protocol compatibility. Failures include next steps; busy runners produce
+a warning. `--profile NAME` and `--json` are supported. Doctor submits no job
+and makes no configuration changes. See [doctor checks](docs/CONFIGURATION.md#diagnose-the-selected-runner)
+for scope and exit codes.
+
+Profiles can also shorten commands that need explicit environment settings:
+
+```toml
+# .errand.toml
+[profiles.integration.env]
+set = { CI = "1" }
+pass = ["NODE_AUTH_TOKEN"]
+```
+
+Run `errand --profile integration -- pnpm test:local`. Forwarded variables
+must be set in the initiating shell; diagnostics show availability without
+values. Store secret names, never secret values, in the profile. See
+[environment settings](docs/CONFIGURATION.md#environment-settings) for
+precedence, overrides, and clearing inherited forwarding.
 
 An SSH peer uses the same HTTP protocol over `ssh HOST errand _stdio`. The
 daemon accepts the bridge through a private Unix socket and verifies that it

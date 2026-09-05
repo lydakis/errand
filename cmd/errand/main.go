@@ -60,6 +60,16 @@ usage:
   errand peers discover [-a | --all] [--json]
   errand config [--json] [--profile NAME] [--on PEER | --url URL]
                 [--workspace-root PATH] [-w REL | --workdir REL]
+                [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
+                [--apply | --no-apply] [--no-snapshot]
+  errand access [list] [--config PATH] [--json]
+  errand access add [-n | --dry-run] [--config PATH] [--json] LOGIN
+  errand access remove [-n | --dry-run] [--config PATH] [--json] LOGIN
+  errand access deny [-n | --dry-run] [--config PATH] [--json] LOGIN
+  errand access undeny [-n | --dry-run] [--config PATH] [--json] LOGIN
+  errand doctor [--json] [--profile NAME] [--on PEER | --url URL]
+                [--workspace-root PATH] [-w REL | --workdir REL]
+                [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
                 [--apply | --no-apply] [--no-snapshot]
   errand version
 
@@ -92,7 +102,7 @@ func main() {
 	}
 	skipResume := cliHelpRequested(args)
 	switch args[0] {
-	case "serve", "setup", "_automatic-apply", "_stdio", "version", "config":
+	case "serve", "setup", "_automatic-apply", "_stdio", "version", "config", "access", "doctor":
 		skipResume = true
 	}
 	if !skipResume {
@@ -109,6 +119,10 @@ func main() {
 		os.Exit(cmdPeers(args[1:]))
 	case "config":
 		os.Exit(cmdConfig(args[1:]))
+	case "access":
+		os.Exit(cmdAccess(args[1:]))
+	case "doctor":
+		os.Exit(cmdDoctor(args[1:]))
 	case "attach":
 		os.Exit(cmdAttach(args[1:]))
 	case "fetch":
@@ -812,6 +826,7 @@ func cmdServe(args []string) int {
 		Listen:           addr,
 		StateDir:         fileCfg.StateDir,
 		AllowUsers:       fileCfg.AllowUsers,
+		DenyUsers:        fileCfg.DenyUsers,
 		Capability:       fileCfg.Capability,
 		TailscaledSocket: fileCfg.TailscaledSocket,
 		Identity:         identity,

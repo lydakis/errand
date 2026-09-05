@@ -5,7 +5,8 @@ import "fmt"
 // Profile is a named set of run preferences shared by personal and workspace
 // configuration. It cannot change snapshot boundaries or define transports.
 type Profile struct {
-	Run struct {
+	Environment Environment `toml:"env,omitempty"`
+	Run         struct {
 		Peer    *string `toml:"peer,omitempty"`
 		Workdir *string `toml:"workdir,omitempty"`
 	} `toml:"run,omitempty"`
@@ -23,6 +24,12 @@ func (p *Profile) UnmarshalTOML(value any) error {
 	}
 	*p = Profile{}
 	for section, raw := range table {
+		if section == "env" {
+			if err := p.Environment.UnmarshalTOML(raw); err != nil {
+				return err
+			}
+			continue
+		}
 		if section != "run" && section != "changes" {
 			return fmt.Errorf("unsupported profile section %q", section)
 		}

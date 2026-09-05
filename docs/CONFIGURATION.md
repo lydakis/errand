@@ -1,4 +1,4 @@
-# Run configuration
+# Configuration
 
 Run submission and `errand config` share one resolver. For peer selection and
 automatic apply, precedence is:
@@ -10,8 +10,9 @@ automatic apply, precedence is:
 5. Safe defaults: no automatic apply and no implicit peer.
 
 Profiles can also set a workdir, overriding the caller's relative directory;
-an explicit CLI workdir wins. Environment variables, forwarding, detachment,
-and broad snapshot opt-in remain CLI options.
+an explicit CLI workdir wins. Environment settings use the same layers, with
+merge rules described below. Forwarding, detachment, and broad snapshot opt-in
+remain CLI options.
 
 ## Personal configuration
 
@@ -114,8 +115,8 @@ shadowed personal profile. An empty workspace profile (`[profiles.build]`)
 therefore opts out of all settings in that personal profile. Other personal
 profiles remain available by name.
 
-Profiles support only `run.peer`, `run.workdir`, and
-`changes.apply_on_success`. Explicit `false` and empty workdir values override
+Profiles support `run.peer`, `run.workdir`, `changes.apply_on_success`,
+`env.set`, and `env.pass`. Explicit `false` and empty workdir values override
 lower layers. Unsupported keys and incorrect value types are errors when
 loading configuration, including in inactive profiles. There is no profile
 inheritance, automatic profile selection, command definition, or transport
@@ -126,6 +127,62 @@ defaults. With `--no-snapshot`, only profiles in the current directory and
 personal config are considered; the resulting workdir must be empty or `.`.
 Use `--workdir .` to override a profile's nested workdir for such an invocation.
 Profiles cannot move the snapshot boundary or enable broad snapshot selection.
+
+## Environment settings
+
+Personal config, workspace config, and named profiles accept the same
+environment section. Put non-secret literals in `set` and names of variables
+from the initiating shell in `pass`:
+
+```toml
+[env]
+set = { CI = "1" }
+
+[profiles.integration.env]
+pass = ["NODE_AUTH_TOKEN", "BLUE_API_KEY"]
+```
+
+```sh
+errand --profile integration -- pnpm test:local
+errand --profile integration --env CI=0 -- pnpm test:local
+errand config --profile integration --json
+errand doctor --profile integration
+```
+
+Only the explicitly selected profile contributes settings. Keep sensitive
+variable names in the profiles that need them: selecting that profile forwards
+their local values to the selected runner. Do not store secret values in
+configuration files. Docker and database setup remain repository scripts.
+
+Settings resolve from personal defaults through workspace and selected profile
+to CLI overrides. `set` merges by variable name; higher layers replace lower
+values, including with an empty string. A specified `pass` list replaces all
+inherited forwarding. `pass = []` clears forwarded variables while retaining
+literal settings. Omitting `pass` inherits it. A higher-layer literal replaces
+forwarding of that name, and a higher-layer forwarded name replaces a literal.
+One config layer cannot put the same name in both `set` and `pass`.
+
+Repeated CLI `--passenv NAME` options form a replacement pass list. CLI
+`--env NAME=VALUE`/`-e NAME=VALUE` overrides that name, including a `--passenv`
+of the same name. The last repeated literal wins. An omitted CLI pass list
+inherits config forwarding. Names must be nonempty and contain neither `=`
+nor NUL; literal values must be strings without NUL. Unknown environment keys
+and incorrect types fail configuration loading, even in inactive profiles.
+
+Every forwarded variable is required, including explicit CLI `--passenv`.
+An unset variable stops submission before snapshot preparation, runner contact,
+or local submission-state creation. A variable set to an empty string is
+available and is forwarded as empty. The client captures values once before
+preparing the submission. Runner receipts retain names and `literal`/`passenv`
+provenance, not values; commands can still print values into their own logs.
+
+`errand config` lists resolved variable names, kinds, sources, and availability
+without showing values, including literal values. Missing variables remain
+visible in its successful inspection report. `errand doctor` reports missing
+variables as a failed environment check and skips its runner probe. Both
+commands accept `--env` and `--passenv` to inspect the same overrides as a run.
+JSON contains an `environment` array with `name`, `kind`, `source`, and
+`available`; it contains no environment values.
 
 ## Inspect without submitting
 
@@ -149,3 +206,105 @@ It does not hash files or validate a complete job: use `errand peers` to check
 runner availability; snapshot policy and remote command validation still happen
 when submitting. Peer lifecycle and job-handle commands retain their explicit
 targets and personal defaults; a workspace preference only selects new runs.
+
+## Runner access
+
+`errand access` manages the runner's saved `allow_users` and `deny_users`
+arrays. Run it locally as the runner's OS user, using the config file that
+its service loads:
+
+```sh
+errand access list --config /path/to/errandd.toml
+errand access add --config /path/to/errandd.toml --dry-run friend@example.com
+errand access add --config /path/to/errandd.toml friend@example.com
+errand access remove --config /path/to/errandd.toml friend@example.com
+errand access deny --config /path/to/errandd.toml friend@example.com
+errand access undeny --config /path/to/errandd.toml friend@example.com
+errand setup --config /path/to/errandd.toml
+```
+
+Omit `list` for the default operation. Without `--config`, the path is
+`~/.config/errand/errandd.toml`, matching the service installed by `errand setup`,
+even when `XDG_CONFIG_HOME` is set. Use `--config PATH` for a runner configured
+at another location. Personal aliases, workspace settings, and profiles do
+not select a runner config. There is no `--on` or remote edit operation.
+
+List output includes the file path, saved allowlist and denylist, capability
+name, and listen setting. It describes saved configuration only, not effective live
+authorization. Adding an allowlist login grants full runner access once
+activated, unless denied, including command execution as the daemon's OS user.
+Logins must be exact,
+nonempty strings without whitespace, control characters, or wildcards.
+
+Edits require an existing regular file; missing files and symlinks are
+refused. Run `errand setup` first to create a new runner config. Adding an
+existing login or removing an absent one is a no-op. Removal clears all
+copies of a login. `-n`/`--dry-run` previews the before/after selected list;
+previews and no-ops leave the file byte-for-byte unchanged. A real edit
+atomically replaces the file with mode `0600`, preserving other TOML values,
+including unknown settings, but reformatting the file and removing comments.
+
+No access command contacts tailscaled, edits tailnet grants, restarts a
+service, submits a job, or resumes pending automatic applications. Restart
+the runner with `errand setup --config PATH` to activate saved edits; setup
+refuses to restart while jobs are active. An allowlist removal is not a
+complete revocation: capability grants and SSH access remain independent.
+
+`deny LOGIN` adds an exact tailnet login to `deny_users`. Once activated, the
+runner refuses requests from that login before applying capability grants or
+`allow_users`. Denial wins when a login is present in both lists; the runner
+still starts. Existing grants are preserved. `undeny LOGIN` removes all copies
+of the denial and restores whatever authorization those grants provide; it
+does not add a grant. `add` and `remove` edit only `allow_users`. All four
+mutations support dry runs and idempotent edits.
+
+This is a tailnet login policy. It does not deny tagged nodes without that
+login, Unix-socket callers, or SSH access to the runner account. Saved denials
+do not affect the running daemon until restart, and do not cancel jobs or
+terminate existing streams. The test-only `--insecure-no-auth` flag bypasses
+all authorization, including denials.
+
+All operations accept `--json`. Listing emits `path`, `allow_users`, `deny_users`,
+`capability`, `listen`, and an `activation` reminder. Mutations emit
+`operation`, `login`, `dry_run`, `path`, `field`, `before`, `after`, `changed`,
+`written`, and `activation`. `field` identifies `allow_users` or `deny_users`.
+`changed` describes whether the desired array differs, while `written` is true
+only after a successful write. Pass options before the login.
+
+## Diagnose the selected runner
+
+```sh
+errand doctor
+errand doctor --on cabal
+errand doctor --profile build --json
+errand doctor --url ssh://my-runner --no-snapshot
+```
+
+Doctor resolves the same run settings and accepts the same override flags as
+`errand config`. It then makes one logical `GET /v0/info` probe to the selected
+runner, with a four-second deadline. Configured SSH aliases retain their
+`remote_command` and `remote_socket` settings. The displayed endpoint remains
+the configured URL. No other peers are discovered or probed.
+
+The configuration check reports resolver errors such as malformed TOML,
+unknown profiles, missing peers, and invalid workspace boundaries. When
+resolution fails, the runner check is skipped. Required environment variables
+are checked next, and missing variables also skip the probe. The runner check distinguishes
+connection failures, refused info access, and responses that do not match the
+current Errand protocol, with next steps for each. A reachable busy runner
+produces a warning; it is still a successful diagnostic check.
+
+Doctor reads local configuration and workspace metadata and probes the runner.
+It does not select or hash snapshot files, validate command availability,
+submit jobs, change grants or configuration, restart services, or resume
+pending automatic applications. Successful info access establishes only the
+ability to read runner info; a caller can have that access without permission
+to submit. Admission and capacity can also change after the check.
+
+Exit codes are `0` for successful checks (including busy warnings), `1` for
+configuration, probe, or report-output failures, and `2` for invalid command
+usage. Help exits `0`. With `--json`, diagnostic reports go to stdout and
+include `ok`, `checks`, `scope`, the resolved `effective` configuration when
+available, and `info` after a successful probe. Each check has `name`,
+`status` (`ok`, `warning`, `error`, or `skipped`), `detail`, and an optional
+`hint`. Usage errors go to stderr without a JSON report.

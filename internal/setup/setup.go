@@ -47,6 +47,7 @@ type ConfigChoice struct {
 	Listen           string
 	MaxJobs          int
 	AllowUsers       []string
+	DenyUsers        []string
 	TailscaledSocket string
 	TailscaleCLI     string
 }
@@ -239,7 +240,7 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	}
 	r.Config = ConfigChoice{
 		Listen: effective.Listen, MaxJobs: effective.MaxJobs,
-		AllowUsers: effective.AllowUsers, TailscaledSocket: effective.TailscaledSocket,
+		AllowUsers: effective.AllowUsers, DenyUsers: effective.DenyUsers, TailscaledSocket: effective.TailscaledSocket,
 		TailscaleCLI: effective.TailscaleCLI,
 	}
 	r.SocketPath = effective.SocketPath()

@@ -18,12 +18,8 @@ func cmdRun(args []string) int {
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
 	fs.BoolVar(detach, "d", false, "return after admission, printing the job handle on stdout")
 	var forwards portForwardList
-	var envs, passenvs stringList
 	fs.Var(&forwards, "forward", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
 	fs.Var(&forwards, "L", "forward local loopback [LOCAL:]REMOTE while attached (repeatable)")
-	fs.Var(&envs, "env", "set K=V in the job environment (repeatable)")
-	fs.Var(&envs, "e", "set K=V in the job environment (repeatable)")
-	fs.Var(&passenvs, "passenv", "forward the named local env var (repeatable)")
 	fs.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
 
 	// Everything after "--" is the command; flags come before it.
@@ -66,15 +62,6 @@ func cmdRun(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
-	env := map[string]string{}
-	for _, kv := range envs {
-		k, v, ok := strings.Cut(kv, "=")
-		if !ok || k == "" {
-			fmt.Fprintf(os.Stderr, "errand: --env wants K=V, got %q\n", kv)
-			return 2
-		}
-		env[k] = v
-	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
@@ -85,6 +72,7 @@ func cmdRun(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return client.ExitTransaction
 	}
+	env, passenvs := effective.JobEnvironment()
 	if !effective.NoSnapshot {
 		shownWorkdir := effective.Workdir
 		if shownWorkdir == "" {

@@ -82,6 +82,24 @@ node list and probes each online node's errand port with an authenticated
 implied by holding any errand capability (plus network-level access); no
 separate probe grant exists in v0.
 
+`errand access [list|add|remove|deny|undeny]` inspects or edits the local runner
+config's `allow_users` and `deny_users`. It never changes a remote peer or
+active service. Activation requires a restart. Exact `deny_users` matches override both allowlist entries
+and tailnet capability grants. Grants remain saved, so `undeny` restores their
+effect. SSH access remains separate. See [runner access](CONFIGURATION.md#runner-access).
+
+`errand doctor` combines effective run configuration with a bounded info
+probe of that selected peer and reports actionable failures. It checks required
+environment names before probing and keeps values out of diagnostics. It is read-only;
+a successful info probe does not establish submission permission or validate
+the proposed snapshot or command. See [doctor checks](CONFIGURATION.md#diagnose-the-selected-runner).
+
+The next doctor milestone follows session-forwarding configuration and real
+Blue workflow validation, before artifacts and named caches. It will reuse
+setup machinery for service status, socket availability and permissions,
+PATH/binary checks, SSH transport diagnostics, and runner-side checks.
+These checks remain planned; the current doctor does not perform them.
+
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
 is a design constraint, not a v0 deliverable — the protocol and job model
 assume nothing POSIX-only. The milestone 1 host backend uses a process group
@@ -162,7 +180,9 @@ The capability carries an **action schema from day one** (not a boolean):
 `submit`, `read-own`, `kill-own`, `forward-own`, `manage-caches`, `gc-own`,
 and later `read-all`.
 Matching grants are additive; errand merges capability objects
-deliberately (union of actions).
+deliberately (union of actions). A nonempty exact `deny_users` login match is
+checked first and refuses authorization even when `allow_users` also matches.
+Denials are loaded at startup; saving a policy edit alone has no live effect.
 
 Authorization is checked on submission **and on every** logs, fetch, forward,
 signal, kill, and listing request. Revocation prevents new control, retrieval,
