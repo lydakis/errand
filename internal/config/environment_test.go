@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -98,5 +99,38 @@ func TestEnvironmentConfigSurvivesPeerRewrite(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWorkspaceEnvironmentRequiresExplicitForwardingChoice(t *testing.T) {
+	t.Setenv("ERRAND_CONSENT_TEST", "dummy-value")
+	root := runFixture(t, personalPeers+"\n[env]\npass = ['ERRAND_CONSENT_TEST']\n", "[env]\npass = ['ERRAND_CONSENT_TEST']\n")
+	if _, err := ResolveRun(root, RunOverrides{}); err == nil || !strings.Contains(err.Error(), "workspace env.pass") {
+		t.Fatalf("workspace must not select ambient values: %v", err)
+	}
+	// Explicit CLI choices must not accidentally hide an invalid workspace
+	// default that would become active again on the next ordinary invocation.
+	if _, err := ResolveRun(root, RunOverrides{Environment: workspace.Environment{Pass: []string{"ERRAND_CONSENT_TEST"}}}); err == nil {
+		t.Fatal("CLI override hid an invalid workspace forwarding default")
+	}
+	project := "[env]\npass = []\n[profiles.integration.env]\npass = ['ERRAND_CONSENT_TEST']\n"
+	if err := os.WriteFile(filepath.Join(root, ".errand.toml"), []byte(project), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ResolveRun(root, RunOverrides{Profile: "integration"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, pass := got.JobEnvironment()
+	if !reflect.DeepEqual(pass, []string{"ERRAND_CONSENT_TEST"}) {
+		t.Fatal("explicit profile lost its forwarding choice")
+	}
+	got, err = ResolveRun(root, RunOverrides{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, pass = got.JobEnvironment()
+	if len(pass) != 0 {
+		t.Fatal("empty workspace pass list did not clear inherited forwarding")
 	}
 }

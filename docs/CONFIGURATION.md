@@ -130,16 +130,18 @@ Profiles cannot move the snapshot boundary or enable broad snapshot selection.
 
 ## Environment settings
 
-Personal config, workspace config, and named profiles accept the same
-environment section. Put non-secret literals in `set` and names of variables
-from the initiating shell in `pass`:
+Put non-secret literals in `env.set`. Ambient variables may be selected by
+personal `env.pass`, an explicitly selected profile, or CLI `--passenv`.
+A workspace's top-level `env.pass` must be absent or empty: repository defaults
+cannot grant themselves access to the initiating shell's environment.
+For example, a workspace can define:
 
 ```toml
 [env]
 set = { CI = "1" }
 
 [profiles.integration.env]
-pass = ["NODE_AUTH_TOKEN", "BLUE_API_KEY"]
+pass = ["NODE_AUTH_TOKEN", "SERVICE_API_TOKEN"]
 ```
 
 ```sh
@@ -152,7 +154,15 @@ errand doctor --profile integration
 Only the explicitly selected profile contributes settings. Keep sensitive
 variable names in the profiles that need them: selecting that profile forwards
 their local values to the selected runner. Do not store secret values in
-configuration files. Docker and database setup remain repository scripts.
+configuration files. Personal `env.pass` authorizes forwarding across runs;
+review a workspace profile's variable names before explicitly selecting it.
+Docker and database setup remain repository scripts.
+
+A nonempty top-level workspace `env.pass` stops run/config/doctor resolution
+with a migration hint, even when CLI options would override it. Move those
+names to personal configuration or an explicitly selected profile, or remove
+the workspace default and use `--passenv`. `pass = []` remains allowed in
+workspace defaults to clear inherited forwarding; it never selects a value.
 
 Settings resolve from personal defaults through workspace and selected profile
 to CLI overrides. `set` merges by variable name; higher layers replace lower

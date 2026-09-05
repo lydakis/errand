@@ -77,6 +77,30 @@ func TestMissingEnvironmentStopsDoctorAndSubmission(t *testing.T) {
 	}
 }
 
+func TestWorkspacePassStopsDoctorAndRunBeforeContact(t *testing.T) {
+	writeClientConfig(t, "default_peer = 'test'\n[peers.test]\nurl = 'http://runner.invalid'\n")
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile(".errand.toml", []byte("[env]\npass = ['ERRAND_CONSENT_TEST']\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ERRAND_CONSENT_TEST", "dummy-value")
+	t.Setenv("XDG_STATE_HOME", "invalid-state-root")
+	var out, errOut bytes.Buffer
+	code := cmdDoctorTo([]string{"--json"}, &out, &errOut, func(context.Context, string) (proto.Info, error) {
+		t.Fatal("doctor contacted the runner with an invalid workspace forwarding default")
+		return proto.Info{}, nil
+	})
+	if code != 1 || !strings.Contains(out.String(), "workspace env.pass") || strings.Contains(out.String(), "dummy-value") {
+		t.Fatalf("doctor: %d %s", code, &out)
+	}
+	if code := cmdRun([]string{"--no-snapshot", "--", "true"}); code != client.ExitTransaction {
+		t.Fatalf("run accepted workspace env.pass: %d", code)
+	}
+	if _, err := os.Stat("invalid-state-root"); !os.IsNotExist(err) {
+		t.Fatal("invalid workspace policy touched submission state")
+	}
+}
+
 func TestConfiguredEnvironmentReachesJobWithoutPersistingValues(t *testing.T) {
 	t.Setenv("ERRAND_TEST_PASS", "dummy-forwarded-value")
 	t.Setenv("ERRAND_TEST_INACTIVE", "dummy-inactive-value")

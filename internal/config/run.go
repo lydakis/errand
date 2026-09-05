@@ -74,6 +74,11 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	}
 	personalSource := "personal: " + personalPath
 	workspaceSource := "workspace: " + filepath.Join(selected.Root, ".errand.toml")
+	// A repository may provide literal defaults, but cannot select ambient
+	// caller variables without a personal setting or explicit profile choice.
+	if len(selected.Environment.Pass) != 0 {
+		return result, fmt.Errorf("%s: nonempty workspace env.pass requires an explicit choice; move the names to personal config or an explicitly selected profile, or remove this default and use --passenv", workspaceSource)
+	}
 	profile, profileSource, err := selectProfile(personal, selected, cli.Profile, personalSource, workspaceSource)
 	if err != nil {
 		return result, err

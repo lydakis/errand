@@ -94,10 +94,9 @@ environment names before probing and keeps values out of diagnostics. It is read
 a successful info probe does not establish submission permission or validate
 the proposed snapshot or command. See [doctor checks](CONFIGURATION.md#diagnose-the-selected-runner).
 
-The next doctor milestone follows session-forwarding configuration and real
-Blue workflow validation, before artifacts and named caches. It will reuse
-setup machinery for service status, socket availability and permissions,
-PATH/binary checks, SSH transport diagnostics, and runner-side checks.
+The next milestone is the remaining doctor work, before artifacts and named
+caches. It will reuse setup machinery for service status, socket availability
+and permissions, PATH/binary checks, SSH transport diagnostics, and runner-side checks.
 These checks remain planned; the current doctor does not perform them.
 
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
@@ -274,8 +273,10 @@ backend = "container"
 image   = "rust:1.86"          # receipt records the resolved digest
 
 [env]
-pass = ["RUST_BACKTRACE"]      # forwarded from initiator by name only
-set  = { CI = "1" }
+set = { CI = "1" }
+
+[profiles.debug.env]
+pass = ["RUST_BACKTRACE"]      # opt in with --profile debug
 
 [[cache]]
 name  = "cargo-registry"
@@ -300,9 +301,12 @@ For `--no-snapshot`, the current directory is the configuration root, so an
 ancestor marker cannot silently choose a peer or apply policy for an empty workspace.
 
 Environment defaults to **nothing forwarded**: target's PATH, plus `pass`
-by name and `set` literals. The initiator's ambient environment is never
-shipped silently. Secret-designated values and value-derived hashes are not
-written into the receipt. Only names and provenance are retained.
+by name and `set` literals. Ambient variables require personal configuration,
+an explicitly selected profile, or CLI `--passenv`. Nonempty top-level
+workspace `env.pass` is rejected; repository defaults cannot authorize access
+to the caller's environment. An empty list can clear inherited forwarding.
+Secret-designated values and value-derived hashes are not written into the
+receipt. Only names and provenance are retained.
 
 ### Cleanup, honestly
 
