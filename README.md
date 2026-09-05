@@ -388,6 +388,12 @@ execute again.
 Linux and macOS first; Windows is a design constraint, not yet a
 deliverable.
 
+## Performance
+
+The [performance baseline](docs/PERFORMANCE.md) records cold, cached, and
+no-snapshot overhead, with a reproducible synthetic harness and local snapshot
+benchmarks.
+
 ## Non-goals
 
 Not a CI system, not interactive (no PTY in v0), not a security boundary
