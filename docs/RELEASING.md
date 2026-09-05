@@ -113,8 +113,10 @@ Homebrew. Publishing the stable draft starts the tap update immediately; install
 become available when that workflow passes. No separate tap release is needed.
 
 If publication fails, fix the reported problem and rerun **Publish Homebrew**
-manually with the already published stable tag. The workflow uses the default
-branch's validation scripts. Repeating an identical update does nothing, an older
+manually with the already published stable tag. Both automatic publication and
+manual reruns use that tag's validation scripts and formula generator, so later
+changes on the default branch do not invalidate the release's formula.
+Repeating an identical update does nothing, an older
 release cannot downgrade the tap, and a changed formula for the same version
 requires manual review rather than an overwrite. For token failures, check its
 expiration and repository access, then rerun; do not recreate the Errand release.
