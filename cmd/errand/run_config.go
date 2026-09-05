@@ -11,11 +11,14 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
+	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/workspace"
 )
 
 // Both submission and inspection use these flags and the same resolver.
 type runConfigFlags struct {
+	artifacts                  stringList
+	noArtifacts                bool
 	session                    sessionFlags
 	envs, passenvs             stringList
 	profile                    string
@@ -25,6 +28,8 @@ type runConfigFlags struct {
 
 func (f *runConfigFlags) bind(fs *flag.FlagSet) {
 	f.session.bind(fs)
+	fs.Var(&f.artifacts, "artifact", "retain an exact workspace-relative file or directory, including ignored outputs (repeatable; replaces configured list)")
+	fs.BoolVar(&f.noArtifacts, "no-artifacts", false, "disable configured artifact declarations")
 	fs.Var(&f.envs, "env", "set NAME=VALUE in the job environment (repeatable; values hidden in diagnostics)")
 	fs.Var(&f.envs, "e", "set NAME=VALUE in the job environment (repeatable)")
 	fs.Var(&f.passenvs, "passenv", "require and forward a local environment variable (repeatable; replaces configured pass list)")
@@ -43,6 +48,16 @@ func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error)
 	set := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	result := config.RunOverrides{Peer: f.on, URL: f.url, WorkspaceRoot: f.root, NoSnapshot: f.noSnapshot}
+	if set["artifact"] && set["no-artifacts"] {
+		return result, fmt.Errorf("--artifact and --no-artifacts are mutually exclusive")
+	}
+	result.Artifacts = f.artifacts
+	if f.noArtifacts {
+		result.Artifacts = []string{}
+	}
+	if err := pathpolicy.ValidateArtifacts(result.Artifacts); err != nil {
+		return result, err
+	}
 	var err error
 	result.Forwards, err = f.session.overrides(fs)
 	if err != nil {
@@ -152,6 +167,7 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 			{"project", effective.Project}, {"apply_on_success", effective.ApplyOnSuccess},
 			{"no_snapshot", effective.NoSnapshot},
 			{"forward", effective.Forwards},
+			{"artifacts", effective.Artifacts},
 		} {
 			if _, exists := effective.Sources[row.key]; !exists {
 				continue

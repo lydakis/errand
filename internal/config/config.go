@@ -45,6 +45,7 @@ func (c Client) SSHRemoteSocket(name string) string {
 }
 
 type Client struct {
+	Artifacts      workspace.Artifacts          `toml:"artifacts"`
 	Session        workspace.Session            `toml:"session"`
 	Environment    workspace.Environment        `toml:"env,omitempty"`
 	Profiles       map[string]workspace.Profile `toml:"profiles,omitempty"`

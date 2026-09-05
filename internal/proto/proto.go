@@ -75,17 +75,18 @@ func (m Manifest) RootHash() string {
 	return digest(m)
 }
 
-// SelectionPolicy freezes the ignore rules used to choose newly created paths
-// for retention. Submitted manifest paths remain eligible regardless of these
-// rules so their modification or deletion is always observable.
+// SelectionPolicy freezes the ignore rules and explicit artifact paths used
+// for retention. Artifacts never expand the input snapshot. Submitted manifest
+// paths remain eligible so their modification or deletion is always observable.
 type SelectionPolicy struct {
-	Prefix   string   `json:"prefix,omitempty"`
-	Ignore   []string `json:"ignore,omitempty"`
-	CaseFold bool     `json:"case_fold,omitempty"`
+	Artifacts []string `json:"artifacts,omitempty"` // retention only; exact paths override ignores
+	Prefix    string   `json:"prefix,omitempty"`
+	Ignore    []string `json:"ignore,omitempty"`
+	CaseFold  bool     `json:"case_fold,omitempty"`
 }
 
 func (p SelectionPolicy) IsZero() bool {
-	return p.Prefix == "" && len(p.Ignore) == 0 && !p.CaseFold
+	return p.Prefix == "" && len(p.Ignore) == 0 && !p.CaseFold && len(p.Artifacts) == 0
 }
 
 type Limits struct {

@@ -5,6 +5,7 @@ import "fmt"
 // Profile is a named set of run preferences shared by personal and workspace
 // configuration. It cannot change snapshot boundaries or define transports.
 type Profile struct {
+	Artifacts   Artifacts   `toml:"artifacts"`
 	Session     Session     `toml:"session"`
 	Environment Environment `toml:"env,omitempty"`
 	Run         struct {
@@ -25,6 +26,12 @@ func (p *Profile) UnmarshalTOML(value any) error {
 	}
 	*p = Profile{}
 	for section, raw := range table {
+		if section == "artifacts" {
+			if err := p.Artifacts.UnmarshalTOML(raw); err != nil {
+				return err
+			}
+			continue
+		}
 		if section == "session" {
 			if err := p.Session.UnmarshalTOML(raw); err != nil {
 				return err

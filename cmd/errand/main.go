@@ -39,6 +39,7 @@ usage:
          [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]... [--no-forward]
          [--apply | --no-apply]
          [-e K=V | --env K=V]... [--passenv K]...
+         [--artifact PATH]... [--no-artifacts]
          [--workspace-root PATH] [-w REL | --workdir REL]
          [--include-all | --no-snapshot] -- CMD [ARG...]
   errand attach [--profile NAME] [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]... [--no-forward]
@@ -63,6 +64,7 @@ usage:
   errand config [--json] [--profile NAME] [--on PEER | --url URL]
                 [--workspace-root PATH] [-w REL | --workdir REL]
                 [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
+                [--artifact PATH]... [--no-artifacts]
                 [--forward [LOCAL:]REMOTE]... [--no-forward]
                 [--apply | --no-apply] [--no-snapshot]
   errand access [list] [--config PATH] [--json]

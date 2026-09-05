@@ -350,9 +350,21 @@ merge into the originating workspace or mark changes as applied, and cannot
 be combined with `--apply` or `--conflicts`. Selecting a deleted path has no
 remote value to export; use plain fetch to inspect its deletion metadata.
 
-This destination option exports files already retained by the job. Explicit
-artifact declarations for ignored build outputs and named reusable caches
-remain planned.
+To retain generated outputs that Git or `.errandignore` excludes, declare exact
+workspace-relative files or directories:
+
+```toml
+# .errand.toml
+[artifacts]
+paths = ["reports", "dist/app"]
+```
+
+Or use `errand --artifact reports -- make test`; repeat `--artifact` for multiple
+paths. `--no-artifacts` clears configured declarations. Declarations select
+remote outputs without uploading local ignored files. Failed jobs retain their
+outputs too; missing outputs are allowed. Fetch, export, and apply use the same
+retained bundle and conflict rules. See [artifact configuration](docs/CONFIGURATION.md#artifact-declarations)
+for profiles, precedence, and limits. Named reusable caches remain planned.
 
 Git is not required for non-Git snapshots, running jobs, status, logs, or plain
 fetches. Applying changes needs `git merge-file` on the client only when both

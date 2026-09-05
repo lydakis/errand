@@ -11,8 +11,8 @@ automatic apply, precedence is:
 
 Profiles can also set a workdir, overriding the caller's relative directory;
 an explicit CLI workdir wins. Environment settings use the same layers, with
-merge rules described below. Session forwarding uses list replacement at each
-layer. Detachment and broad snapshot opt-in remain CLI options.
+merge rules described below. Session forwarding and artifact declarations use
+list replacement at each layer. Detachment and broad snapshot opt-in remain CLI options.
 
 ## Personal configuration
 
@@ -116,7 +116,7 @@ therefore opts out of all settings in that personal profile. Other personal
 profiles remain available by name.
 
 Profiles support `run.peer`, `run.workdir`, `changes.apply_on_success`,
-`env.set`, `env.pass`, and `session.forward`. Explicit `false` and empty workdir values override
+`env.set`, `env.pass`, `session.forward`, and `artifacts.paths`. Explicit `false` and empty workdir values override
 lower layers. Unsupported keys and incorrect value types are errors when
 loading configuration, including in inactive profiles. There is no profile
 inheritance, automatic profile selection, command definition, or transport
@@ -127,6 +127,58 @@ defaults. With `--no-snapshot`, only profiles in the current directory and
 personal config are considered; the resulting workdir must be empty or `.`.
 Use `--workdir .` to override a profile's nested workdir for such an invocation.
 Profiles cannot move the snapshot boundary or enable broad snapshot selection.
+
+## Artifact declarations
+
+Artifacts add workspace outputs to ordinary change retention, including files
+excluded by Git or `.errandignore`. Use the same table in personal config,
+workspace config, or an explicitly selected profile:
+
+```toml
+[artifacts]
+paths = ["reports", "dist/app"]
+
+[profiles.test.artifacts]
+paths = ["reports"]
+```
+
+Each path names an exact file or directory relative to the workspace root,
+including when the command runs in a nested workdir. Directories include their
+descendants. Paths must be clean and relative, with no glob syntax, backslashes,
+Git metadata, or Errand's reserved `.errand-change-` namespace. Duplicate paths
+are errors. Lists are bounded to 10,000 entries, 8 KiB per path, and 256 KiB total.
+
+The highest specified list replaces lower layers: CLI, selected profile,
+workspace, personal, then no declarations. `paths = []` clears inherited
+declarations; omitting it inherits. Workspace profiles still replace personal
+profiles of the same name as a whole.
+
+```sh
+errand --artifact reports --artifact dist/app -- make test
+errand --no-artifacts -- make test
+errand config --profile test --json
+```
+
+`--artifact` is repeatable and replaces the configured list. `--no-artifacts`
+clears that list; supplying both flag names is an error. It only disables the
+extra declarations; ordinary workspace change retention continues.
+Submission prints the effective declarations, and `errand config` reports
+their source. The immutable job spec and receipt record the paths.
+
+Declarations never upload local ignored files or change the snapshot boundary.
+They select outputs from the job's workspace after execution, including failed
+commands, subject to the existing byte, entry, and cleanup limits. Missing
+outputs are allowed, and symlinks follow the existing safe-link retention rules.
+`--no-snapshot` accepts declarations too, using the current directory's config.
+Both client and runner must support artifact declarations; older runners refuse
+the request rather than executing with a different admission digest.
+
+Retrieve artifacts with ordinary `fetch`, `fetch --output DIR`, or `fetch --apply`.
+Workspace-relative paths and the existing clean-or-refuse merge rules are
+unchanged. In particular, an ignored local directory wasn't part of the submitted
+baseline: a different remote addition at that path can conflict. Use export to
+retrieve it separately, or resolve the local collision before applying. Errand
+never treats an artifact declaration as permission to overwrite local files.
 
 ## Environment settings
 

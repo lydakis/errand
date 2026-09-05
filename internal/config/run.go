@@ -17,6 +17,7 @@ var ErrNoPeerSelected = errors.New("no peer selected")
 // RunOverrides contains only explicit caller choices. Pointers distinguish
 // an absent override from false or an empty (workspace-root) workdir.
 type RunOverrides struct {
+	Artifacts                []string
 	Forwards                 []string
 	Environment              workspace.Environment
 	Profile                  string
@@ -29,6 +30,7 @@ type RunOverrides struct {
 // EffectiveRun is shared by submission and config inspection. URL is the
 // configured endpoint, before the client installs its private SSH identity.
 type EffectiveRun struct {
+	Artifacts      []string              `json:"artifacts"`
 	Forwards       []string              `json:"forward"`
 	Environment    []EnvironmentVariable `json:"environment,omitempty"`
 	Profile        string                `json:"profile,omitempty"`
@@ -109,6 +111,10 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 		return result, err
 	}
 	result.Forwards, result.Sources["forward"] = session.Forwards, session.Source
+	result.Artifacts, result.Sources["artifacts"], err = resolveArtifacts(personal.Artifacts.Paths, selected.Artifacts.Paths, profile.Artifacts.Paths, cli.Artifacts, personalSource, workspaceSource, profileSource)
+	if err != nil {
+		return result, err
+	}
 	result.Environment = resolveEnvironment(
 		environmentLayer{personal.Environment, personalSource + " env"},
 		environmentLayer{selected.Environment, workspaceSource + " env"},

@@ -19,6 +19,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
 )
@@ -66,6 +67,7 @@ var maintenanceHTTP = &http.Client{
 }
 
 type RunOptions struct {
+	Artifacts      []string
 	PeerURL        string
 	PeerName       string // config alias for handle printing; "" falls back to the host
 	Root           string
@@ -121,6 +123,10 @@ func runWithDetachNotifications(
 	}
 	if opts.Detach && len(opts.Forwards) != 0 {
 		errf("--detach and --forward are mutually exclusive")
+		return ExitTransaction
+	}
+	if err := pathpolicy.ValidateArtifacts(opts.Artifacts); err != nil {
+		errf("%v", err)
 		return ExitTransaction
 	}
 	// Resolve required environment before opening forwards, preparing a
@@ -221,6 +227,7 @@ func runWithDetachNotifications(
 		ChangeClientID: opts.changeClientID,
 		Selection:      prep.selection,
 	}
+	spec.Selection.Artifacts = opts.Artifacts
 
 	type negotiationResult struct {
 		plan shipPlan

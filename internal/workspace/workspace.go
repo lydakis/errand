@@ -13,6 +13,7 @@ import (
 const markerName = ".errand.toml"
 
 type Selection struct {
+	Artifacts      Artifacts
 	Session        Session
 	Environment    Environment
 	Root           string
@@ -25,6 +26,7 @@ type Selection struct {
 }
 
 type projectConfig struct {
+	Artifacts   Artifacts          `toml:"artifacts"`
 	Session     Session            `toml:"session"`
 	Environment Environment        `toml:"env"`
 	Profiles    map[string]Profile `toml:"profiles"`
@@ -161,6 +163,7 @@ func selection(root, cwd, source string, cfg projectConfig) (Selection, error) {
 		project = strings.SplitN(rel, "/", 2)[0]
 	}
 	return Selection{
+		Artifacts:   cfg.Artifacts,
 		Environment: cfg.Environment, Session: cfg.Session,
 		Root: root, Workdir: rel, Project: project, Source: source,
 		ApplyOnSuccess: cfg.Changes.ApplyOnSuccess, Peer: cfg.Run.Peer, Profiles: cfg.Profiles,

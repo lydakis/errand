@@ -108,9 +108,9 @@ preferences remain errors. `--on` retains its usual override semantics.
 It reports custom service-manager and command-line override limitations explicitly.
 Fetch supports exporting retained remote values to a new directory with
 `--output` (`-o`), using the same retained bundles as staging and application.
-The next milestones are explicit artifact declarations and named caches.
-Artifact declarations will retain selected generated paths even when input
+Artifact declarations retain selected generated paths even when input
 selection ignores them, while keeping the existing fetch/apply lifecycle.
+The next milestone is named caches.
 Named caches will keep disposable, explicitly selected build data on a runner
 for reuse by later jobs; they are separate from retained job results.
 
@@ -271,7 +271,7 @@ permits the job to access runner-local services. Container and future Atlas
 adapters instead dial loopback inside the job's network environment. The CLI
 and tunnel transport do not depend on those runtime details.
 
-Per-project defaults (in the repo; backend, environment, and cache sections
+Per-project defaults (in the repo; backend and cache sections
 below describe planned configuration):
 
 ```toml
@@ -281,6 +281,9 @@ root = true                    # this directory is the snapshot boundary
 
 [changes]
 apply_on_success = true        # apply after clean successful completion
+
+[artifacts]
+paths = ["reports"]            # extra retained outputs
 
 [run]
 peer    = "mac-mini"           # optional convenience; alias is personal
@@ -637,6 +640,16 @@ and works after failed commands. It cannot be combined with apply or conflict
 materialization. Deleted paths have no exported value; their metadata remains
 available through plain fetch. A partial path export can contain symlinks to
 unselected paths; the targets are not implicitly copied.
+
+Explicit `artifacts.paths` declarations (or repeatable `--artifact PATH` flags)
+are frozen in the spec's selection policy and recorded in the receipt. Only
+retention consumes them: input ignore matching stays unchanged. They name exact
+workspace-relative paths, with directories selecting descendants. Ignored
+ancestors are traversed only as needed, and unrelated ignored siblings remain
+excluded. Missing declarations are allowed; existing retention limits, reserved
+metadata exclusions, safe symlink rules, and cleanup requirements still apply.
+`--no-artifacts` clears configured declarations. Declared outputs use the same
+bundle, three-way merge, and local collision refusal as ordinary changes.
 
 ### Exit status: two layers
 

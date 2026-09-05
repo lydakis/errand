@@ -2,9 +2,30 @@ package proto
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 )
+
+func TestArtifactDeclarationsPersistAndAffectAdmissionIdentity(t *testing.T) {
+	spec := Spec{Argv: []string{"true"}}
+	original := spec.Digest()
+	spec.Selection.Artifacts = []string{"reports"}
+	if spec.Digest() == original {
+		t.Fatal("artifact declaration did not change admission identity")
+	}
+	raw, err := json.Marshal(NewReceiptSpec(spec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt ReceiptSpec
+	if err := json.Unmarshal(raw, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(receipt.SpecWithoutEnv().Selection.Artifacts, spec.Selection.Artifacts) {
+		t.Fatal("receipt lost artifact declarations")
+	}
+}
 
 func TestRequestAndReceiptDoNotEmbedProtocolVersion(t *testing.T) {
 	for name, value := range map[string]any{
