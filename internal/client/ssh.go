@@ -203,6 +203,19 @@ func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, er
 }
 
 func sshControlDir() (string, error) {
+	dir, err := sshControlDirPath()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// sshControlDirPath also lets read-only diagnostics reuse an existing master
+// without creating cache directories or control sockets.
+func sshControlDirPath() (string, error) {
 	base, err := os.UserCacheDir()
 	if err != nil {
 		home, herr := os.UserHomeDir()
@@ -211,11 +224,7 @@ func sshControlDir() (string, error) {
 		}
 		base = filepath.Join(home, ".cache")
 	}
-	dir := filepath.Join(base, "errand", "ssh")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	return dir, nil
+	return filepath.Join(base, "errand", "ssh"), nil
 }
 
 type stdioConn struct {

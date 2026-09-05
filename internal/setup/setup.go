@@ -270,7 +270,13 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	return r, nil
 }
 
-func serviceActive(ctx context.Context, sys System) (bool, error) {
+type serviceSystem interface {
+	GOOS() string
+	UID() int
+	Run(context.Context, string, ...string) (string, error)
+}
+
+func serviceActive(ctx context.Context, sys serviceSystem) (bool, error) {
 	switch sys.GOOS() {
 	case "linux":
 		out, err := sys.Run(ctx, "systemctl", "--user", "is-active", DefaultServiceName+".service")

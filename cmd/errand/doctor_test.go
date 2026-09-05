@@ -107,6 +107,7 @@ func TestDoctorOnlyRequestsInfoAndDoesNotResumeApplies(t *testing.T) {
 		return
 	}
 	requests := make(chan string, 8)
+	isolateDoctorHost(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests <- r.Method + " " + r.URL.Path
 		_ = json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: "test"})

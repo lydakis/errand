@@ -195,9 +195,22 @@ func (RealSystem) Probe(ctx context.Context, socket string) (proto.Info, error) 
 	if res.StatusCode != http.StatusOK {
 		return proto.Info{}, fmt.Errorf("daemon answered %s", res.Status)
 	}
-	var info proto.Info
-	if err := json.NewDecoder(res.Body).Decode(&info); err != nil {
+	body, err := io.ReadAll(io.LimitReader(res.Body, (1<<20)+1))
+	if err != nil {
 		return proto.Info{}, err
+	}
+	if len(body) > 1<<20 {
+		return proto.Info{}, fmt.Errorf("runner info exceeds 1 MiB")
+	}
+	var info proto.Info
+	var wire struct {
+		Proto *int `json:"proto"`
+	}
+	if err := json.Unmarshal(body, &info); err != nil {
+		return proto.Info{}, fmt.Errorf("invalid runner info: %w", err)
+	}
+	if err := json.Unmarshal(body, &wire); err != nil || wire.Proto == nil || *wire.Proto != proto.ProtoVersion || info.Version == "" {
+		return proto.Info{}, fmt.Errorf("socket did not return compatible Errand info")
 	}
 	return info, nil
 }

@@ -1,12 +1,18 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/lydakis/errand/internal/workspace"
 )
+
+// ErrNoPeerSelected distinguishes an unconfigured target from an invalid
+// preference. ResolveRun still returns the other effective settings so doctor
+// can inspect them without requiring every machine to have an outbound peer.
+var ErrNoPeerSelected = errors.New("no peer selected")
 
 // RunOverrides contains only explicit caller choices. Pointers distinguish
 // an absent override from false or an empty (workspace-root) workdir.
@@ -168,6 +174,9 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 		return result, nil
 	}
 	if result.Peer == "" {
+		if selected.Peer == nil && profile.Run.Peer == nil {
+			return result, fmt.Errorf("%w by %s; set --on or configure a peer", ErrNoPeerSelected, result.Sources["peer"])
+		}
 		return result, fmt.Errorf("no peer selected by %s; set --on or configure a peer", result.Sources["peer"])
 	}
 	result.URL, err = personal.PeerURL(result.Peer)

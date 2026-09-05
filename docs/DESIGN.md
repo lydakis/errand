@@ -88,16 +88,25 @@ active service. Activation requires a restart. Exact `deny_users` matches overri
 and tailnet capability grants. Grants remain saved, so `undeny` restores their
 effect. SSH access remains separate. See [runner access](CONFIGURATION.md#runner-access).
 
-`errand doctor` combines effective run configuration with a bounded info
-probe of that selected peer and reports actionable failures. It checks required
-environment names before probing and keeps values out of diagnostics. It is read-only;
+`errand doctor` checks this installation, any configured local runner, effective
+run configuration, and a bounded info probe of the selected peer when one exists.
+It checks required environment names before contacting that peer and keeps
+values out of diagnostics. Local checks continue if run configuration fails. It is read-only;
 a successful info probe does not establish submission permission or validate
 the proposed snapshot or command. See [doctor checks](CONFIGURATION.md#diagnose-the-selected-runner).
 
-The next milestone is the remaining doctor work, before artifacts and named
-caches. It will reuse setup machinery for service status, socket availability
-and permissions, PATH/binary checks, SSH transport diagnostics, and runner-side checks.
-These checks remain planned; the current doctor does not perform them.
+For SSH peers, doctor first checks non-interactive access and remote executable
+resolution. On a configured runner, doctor reuses setup's service-status and
+socket-probe machinery as the service user. It checks saved runner
+configuration, binary/PATH availability, socket permissions and responsiveness,
+Tailscale identity-provider readiness, and Linux user-service persistence.
+Local runner checks activate for a saved runner config, an installed or loaded
+user service, an existing socket, or explicit `--config PATH`. A client-only
+machine skips those checks; a configured runner's missing socket or stopped
+installed service is an error. No outbound peer is a skip, while invalid peer
+preferences remain errors. `--on` retains its usual override semantics.
+It reports custom service-manager and command-line override limitations explicitly.
+The next milestones are artifacts and named caches.
 
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
 is a design constraint, not a v0 deliverable — the protocol and job model

@@ -75,6 +75,7 @@ func TestListenUnixSocketReplacesStaleSocket(t *testing.T) {
 
 func TestSSHTransportEndToEnd(t *testing.T) {
 	bin := buildErrand(t)
+	isolateDoctorHost(t)
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	stateDir := t.TempDir()
 	d, err := daemon.New(daemon.Config{StateDir: stateDir, Version: "test"})
@@ -102,6 +103,7 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 		"while [ $# -gt 0 ]; do case \"$1\" in --) shift; break;; -o) shift 2;; -*) shift;; *) break;; esac; done\n" +
 		"[ \"$1\" = \"george@fake-runner\" ] || exit 91\n" +
 		"shift\n" +
+		"case \"$1\" in \"command -v '/opt/errand' >/dev/null || exit 127\"|\"command -v 'errand' >/dev/null || exit 127\") exit 0;; esac\n" +
 		"[ \"$1\" = \"'/opt/errand' _stdio --socket '" + socket + "'\" ] || [ \"$1\" = \"'errand' _stdio\" ] || exit 92\n" +
 		"exec " + bin + " _stdio --socket '" + socket + "'\n"
 	if err := os.WriteFile(fakeSSH, []byte(script), 0o755); err != nil {
@@ -160,7 +162,7 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 				var stdout, stderr bytes.Buffer
 				command.Stdout, command.Stderr = &stdout, &stderr
 				if err := command.Run(); err != nil {
-					t.Fatalf("errand %v: %v\n%s", args, err, &stderr)
+					t.Fatalf("errand %v: %v\n%s\n%s", args, err, &stdout, &stderr)
 				}
 				return stdout.String(), stderr.String()
 			}

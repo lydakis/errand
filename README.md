@@ -137,13 +137,15 @@ Save recurring mappings with `[profiles.dev.session]` and
 `--no-forward` disables them, including for detached submission. See
 [session configuration](docs/CONFIGURATION.md#session-forwarding).
 
-Diagnose the runner selected for your next invocation with `errand doctor`,
-or choose one with `errand doctor --on cabal`. It resolves the same run
-settings as `errand config`, then checks runner connectivity, access to info,
-and protocol compatibility. Failures include next steps; busy runners produce
-a warning. `--profile NAME` and `--json` are supported. Doctor submits no job
-and makes no configuration changes. See [doctor checks](docs/CONFIGURATION.md#diagnose-the-selected-runner)
-for scope and exit codes.
+Run `errand doctor` to check this installation, any configured local runner,
+and the peer selected for your next invocation. `--on cabal` overrides the peer
+as usual; `--profile NAME` and `--json` are also supported. A client-only machine
+skips local runner checks. An installed service that stopped or a configured
+socket that disappeared is an error. Use `--config PATH` to include a custom
+local runner configuration alongside the other checks. Doctor checks SSH
+readiness, reports next steps, and submits no job or configuration changes.
+See [doctor checks](docs/CONFIGURATION.md#diagnose-the-selected-runner) for scope
+and exit codes.
 
 Profiles can also shorten commands that need explicit environment settings:
 

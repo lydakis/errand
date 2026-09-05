@@ -342,33 +342,94 @@ errand doctor
 errand doctor --on cabal
 errand doctor --profile build --json
 errand doctor --url ssh://my-runner --no-snapshot
+errand doctor --config /absolute/path/errandd.toml --json
 ```
 
-Doctor resolves the same run settings and accepts the same override flags as
-`errand config`. It then makes one logical `GET /v0/info` probe to the selected
-runner, with a four-second deadline. Configured SSH aliases retain their
-`remote_command` and `remote_socket` settings. The displayed endpoint remains
-the configured URL. No other peers are discovered or probed.
+Doctor checks this installation, any configured local runner, and the selected
+peer in one report. It resolves the same run settings as `errand config`;
+`--on`, `--url`, and profiles retain their usual precedence. `--config PATH`
+explicitly includes that local runner configuration without changing the peer.
 
-The configuration check reports resolver errors such as malformed TOML,
-unknown profiles, missing peers, and invalid workspace boundaries. When
-resolution fails, the runner check is skipped. Required environment variables
-are checked next, and missing variables also skip the probe. The runner check distinguishes
-connection failures, refused info access, and responses that do not match the
-current Errand protocol, with next steps for each. A reachable busy runner
-produces a warning; it is still a successful diagnostic check.
+A machine with no outbound peer skips the peer probe. Unknown aliases, empty
+workspace peer preferences, malformed TOML, invalid boundaries, and missing
+required environment variables remain errors. Local installation and runner
+checks continue independently when run configuration fails. Conversely, a
+healthy peer cannot hide a local runner failure.
 
-Doctor reads local configuration and workspace metadata and probes the runner.
-It does not select or hash snapshot files, validate command availability,
-submit jobs, change grants or configuration, restart services, or resume
-pending automatic applications. Successful info access establishes only the
-ability to read runner info; a caller can have that access without permission
-to submit. Admission and capacity can also change after the check.
+### Local installation and runner checks
 
-Exit codes are `0` for successful checks (including busy warnings), `1` for
-configuration, probe, or report-output failures, and `2` for invalid command
-usage. Help exits `0`. With `--json`, diagnostic reports go to stdout and
-include `ok`, `checks`, `scope`, the resolved `effective` configuration when
-available, and `info` after a successful probe. Each check has `name`,
-`status` (`ok`, `warning`, `error`, or `skipped`), `detail`, and an optional
-`hint`. Usage errors go to stderr without a JSON report.
+The executable and this shell's PATH are always inspected. Local runner checks
+activate when there is a saved runner configuration, an installed or loaded
+setup-managed user service, an existing default/configured socket, or an
+explicit `--config PATH`. Inaccessible or dangling files are not treated as
+absent. A client-only machine reports `local.runner: skipped` with the reason
+“Local runner not configured.” If service status is unavailable and no saved
+configuration, service definition, or socket exists, the skip explains that
+service-manager status could not be established.
+
+For a configured local runner, doctor loads the same runner settings and
+defaults as `serve`, then checks:
+
+- Setup's systemd user service or launch agent, plus Linux linger. An installed
+  service that is stopped or cannot be queried is an error. Manually managed
+  runners can still pass without a setup-managed service definition.
+- The configured Unix socket, its private `0600` permissions, and a bounded
+  info request that verifies protocol compatibility and caller access. A
+  configured socket that disappeared or no longer answers is an error.
+- Tailscale identity-provider readiness and listener resolution, skipped when
+  `listen = "none"`. The backend must be `Running`; cached identity and IP
+  information from a stopped or logged-out backend does not establish readiness.
+- Setup's `/usr/local/bin/errand` path for non-interactive SSH callers. A missing
+  installation there produces a warning with an absolute `remote_command` hint.
+
+Run doctor as the daemon's user when checking a runner. Use the service's actual
+`--config` path for custom configuration. Doctor cannot infer arbitrary service
+names, custom service definitions, or `serve` CLI overrides such as `--state-dir`;
+put those settings in the runner configuration to inspect them. Socket paths
+must be absolute to avoid assuming the service's working directory. Service
+status alone does not establish daemon health; the socket probe checks that.
+
+Each service command, identity query, and local info probe has a four-second
+deadline; local diagnosis uses a twenty-second context. Service-manager output
+is never copied into reports because it may contain environment values.
+
+### Selected peer checks
+
+After resolving run settings and checking required environment variables,
+doctor makes one logical `GET /v0/info` probe to the selected peer with a
+four-second deadline. Configured SSH aliases retain their `remote_command` and
+`remote_socket` settings. The displayed endpoint remains the configured URL.
+No other peers are discovered or probed.
+
+For SSH peers, a separate four-second check first verifies non-interactive SSH
+and resolves `remote_command` (or the existing `ERRAND_SSH_COMMAND`/`errand`
+fallback) with the remote shell's `command -v`. It does not execute the resolved
+binary. This check reuses Errand's existing SSH control connection when available,
+without creating a control socket or its cache directory. A fresh connection
+uses batch authentication and requires an already trusted host key; it never
+prompts or adds or updates host keys. Missing binaries get a PATH or
+`remote_command` hint; connection failures get SSH authentication/connectivity
+hints. On success, the ordinary info probe exercises the actual bridge and its
+configured socket. The SSH portion can therefore take up to eight seconds.
+Restricted SSH shells must support the command-resolution check.
+
+The peer probe distinguishes connection failures, refused info access, and
+responses that do not match the current Errand protocol. A reachable busy peer
+produces a warning. Local Unix-socket access does not establish another
+machine's tailnet grants; run doctor from the initiating machine to check its
+selected peer. Info access does not prove permission to submit, and admission
+or capacity can change after the check.
+
+Doctor does not select or hash snapshot files, validate job command
+availability, submit jobs, change grants or configuration, restart services,
+acquire restart leases, or resume pending automatic applications.
+
+Exit codes are `0` when no check failed (warnings and unconfigured skips are
+allowed), `1` when any local or peer check failed or report output failed, and
+`2` for invalid command usage. Help exits `0`. With `--json`, reports go to
+stdout and include `ok`, `checks`, `scope`, and the resolved `effective` run
+configuration when available. `info` belongs to the selected peer; `local_info`
+is the local daemon's response, and `socket_path` identifies that local socket.
+Local check names have a `local.` prefix. Each check has `name`, `status`
+(`ok`, `warning`, `error`, or `skipped`), `detail`, and an optional `hint`.
+Usage errors go to stderr without a JSON report.

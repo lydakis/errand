@@ -78,12 +78,18 @@ func TestSelfRefusesLoggedOutNode(t *testing.T) {
 	}
 }
 
-func TestPeersRefuseNonRunningBackendWithCachedIdentity(t *testing.T) {
+func TestSelfAndPeersRefuseNonRunningBackendWithCachedIdentity(t *testing.T) {
 	var wire statusWire
 	if err := json.Unmarshal([]byte(`{"BackendState":"NeedsLogin","Self":{"UserID":42},"User":{"42":{"LoginName":"george@example.com"}},"Peer":{"stale":{"DNSName":"old.example.ts.net.","Online":true}}}`), &wire); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := wire.toPeers(); err == nil {
-		t.Fatal("a non-running backend with cached identity exposed stale peers")
+	for _, state := range []string{"NeedsLogin", "Stopped", "Starting", ""} {
+		wire.BackendState = state
+		if _, err := wire.toSelf(); err == nil {
+			t.Errorf("backend %q exposed cached identity as ready", state)
+		}
+		if _, err := wire.toPeers(); err == nil {
+			t.Errorf("backend %q exposed stale peers", state)
+		}
 	}
 }

@@ -69,7 +69,7 @@ usage:
   errand access remove [-n | --dry-run] [--config PATH] [--json] LOGIN
   errand access deny [-n | --dry-run] [--config PATH] [--json] LOGIN
   errand access undeny [-n | --dry-run] [--config PATH] [--json] LOGIN
-  errand doctor [--json] [--profile NAME] [--on PEER | --url URL]
+  errand doctor [--json] [--config PATH] [--profile NAME] [--on PEER | --url URL]
                 [--workspace-root PATH] [-w REL | --workdir REL]
                 [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
                 [--forward [LOCAL:]REMOTE]... [--no-forward]

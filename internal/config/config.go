@@ -170,11 +170,11 @@ func LoadDaemon(path string) (Daemon, error) {
 	d := Daemon{MaxJobs: 1, MaxQueued: 8}
 	explicitPath := path != ""
 	if path == "" {
-		configDir, err := dir()
+		var err error
+		path, err = DaemonPath()
 		if err != nil {
 			return d, err
 		}
-		path = filepath.Join(configDir, "errandd.toml")
 	}
 	if _, err := toml.DecodeFile(path, &d); err != nil {
 		if explicitPath || !os.IsNotExist(err) {
@@ -201,6 +201,15 @@ func LoadDaemon(path string) (Daemon, error) {
 		return d, fmt.Errorf("max_queued must not be negative")
 	}
 	return d, nil
+}
+
+// DaemonPath is the default runner config path, including XDG overrides.
+func DaemonPath() (string, error) {
+	configDir, err := dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, "errandd.toml"), nil
 }
 
 // ResolveListen turns "tailnet:PORT" into an address assigned to this node by

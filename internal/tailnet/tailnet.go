@@ -90,9 +90,6 @@ type statusWire struct {
 }
 
 func (w statusWire) toPeers() ([]Peer, error) {
-	if w.BackendState != "Running" {
-		return nil, fmt.Errorf("tailscaled is not running (state %q); is Tailscale up?", w.BackendState)
-	}
 	if _, err := w.toSelf(); err != nil {
 		return nil, err
 	}
@@ -108,6 +105,9 @@ func (w statusWire) toPeers() ([]Peer, error) {
 }
 
 func (w statusWire) toSelf() (Self, error) {
+	if w.BackendState != "Running" {
+		return Self{}, fmt.Errorf("tailscaled is not running (state %q); is Tailscale up?", w.BackendState)
+	}
 	self := Self{
 		UserID:   w.Self.UserID,
 		DNSName:  strings.TrimSuffix(w.Self.DNSName, "."),
