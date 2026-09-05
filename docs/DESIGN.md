@@ -113,6 +113,8 @@ selection ignores them, while keeping the existing fetch/apply lifecycle.
 The next milestone is named caches.
 Named caches will keep disposable, explicitly selected build data on a runner
 for reuse by later jobs; they are separate from retained job results.
+Their [storage and durable lease foundation](NAMED_CACHES.md) is implemented;
+job bindings, configuration, and CLI lifecycle integration remain next.
 
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
 is a design constraint, not a v0 deliverable — the protocol and job model
