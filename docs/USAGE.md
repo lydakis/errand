@@ -14,6 +14,13 @@ and mutating workspace options remain long-form so their meaning stays explicit.
 Use `--help` at the relevant level, for example `errand peers --help` or
 `errand gc jobs --help`.
 
+## Exit status
+
+Errand returns the remote process's exit code. If that code is zero but the
+transaction fails, Errand exits 120. A secondary transaction failure is
+reported without replacing a nonzero process exit code. Detaching successfully
+returns zero for the detach action, before the remote command has finished.
+
 ## Workspace selection and run preferences
 
 Run errand from a Git worktree for automatic snapshot selection. A non-Git

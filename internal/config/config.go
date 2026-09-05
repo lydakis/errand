@@ -14,6 +14,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/tomlconfig"
 	"github.com/lydakis/errand/internal/workspace"
 )
 
@@ -89,7 +90,7 @@ func LoadClient() (Client, error) {
 		return c, err
 	}
 	path := filepath.Join(configDir, "config.toml")
-	if _, err := toml.DecodeFile(path, &c); err != nil && !os.IsNotExist(err) {
+	if _, err := tomlconfig.DecodeFile(path, &c); err != nil && !os.IsNotExist(err) {
 		return c, fmt.Errorf("%s: %w", path, err)
 	}
 	return c, nil
@@ -179,7 +180,7 @@ func LoadDaemon(path string) (Daemon, error) {
 			return d, err
 		}
 	}
-	if _, err := toml.DecodeFile(path, &d); err != nil {
+	if _, err := tomlconfig.DecodeFile(path, &d); err != nil {
 		if explicitPath || !os.IsNotExist(err) {
 			return d, fmt.Errorf("%s: %w", path, err)
 		}
@@ -345,7 +346,7 @@ func prepareAddPeer(path, name string, peer Peer, replace bool) (addPeerState, e
 	if raw, readErr := os.ReadFile(path); readErr == nil {
 		state.existing = true
 		state.raw = string(raw)
-		metadata, err := toml.Decode(state.raw, &state.client)
+		metadata, err := tomlconfig.Decode(state.raw, &state.client)
 		if err != nil {
 			return state, fmt.Errorf("%s: %w", path, err)
 		}
@@ -368,7 +369,7 @@ func RemovePeer(path, name string) (clearedDefault bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	if _, err := toml.Decode(string(raw), &c); err != nil {
+	if _, err := tomlconfig.Decode(string(raw), &c); err != nil {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
 	if _, ok := c.Peers[name]; !ok {

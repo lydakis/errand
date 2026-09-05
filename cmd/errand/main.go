@@ -32,75 +32,54 @@ import (
 
 var version = "0.1.0-dev"
 
-const usage = `errand — a personal job runner for machines you own
+const usage = `errand: run a command on another machine you own
 
-usage:
-  errand [--profile NAME] [--on PEER | --url URL] [-d | --detach]
-         [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]... [--no-forward]
-         [--apply | --no-apply]
-         [-e K=V | --env K=V]... [--passenv K]...
-         [--artifact PATH]... [--no-artifacts]
-         [--cache NAME=PATH]... [--no-caches]
-         [--workspace-root PATH] [-w REL | --workdir REL]
-         [--include-all | --no-snapshot] -- CMD [ARG...]
-  errand attach [--profile NAME] [-L [LOCAL:]REMOTE | --forward [LOCAL:]REMOTE]... [--no-forward]
-                [--on PEER | --url URL] HANDLE
-  errand fetch [--apply [--conflicts] | -o DIR | --output DIR]
-               [--on PEER | --url URL] HANDLE [PATH]
-  errand ps [-a | --all] [-n N | --last N] [--json] [--on PEER | --url URL]
-  errand status [--json] [--on PEER | --url URL] HANDLE
-  errand kill [-f | --force] [--on PEER | --url URL] HANDLE
-  errand df [--json] [--on PEER | --url URL]
-  errand gc cache [-n | --dry-run] [--on PEER | --url URL]
-  errand gc jobs [--older-than DURATION] [--keep N] [-n | --dry-run] [--on PEER | --url URL]
-  errand gc changes --older-than DURATION [-n | --dry-run]
-  errand gc all --older-than DURATION [--keep N] [-n | --dry-run] [--on PEER | --url URL]
-  errand setup [--config PATH] [--max-jobs N] [--allow-user LOGIN]...
-               [-f | --force] [-n | --dry-run] [--print-acl]
-  errand peers [--json] [--on PEER | --url URL]
-  errand peers add [--ssh] [--remote-command PATH] [--remote-socket PATH]
-                   [-f | --force] [-n | --dry-run] [--no-verify] NAME HOST
-  errand peers remove NAME
-  errand peers discover [-a | --all] [--json]
-  errand config [--json] [--profile NAME] [--on PEER | --url URL]
-                [--workspace-root PATH] [-w REL | --workdir REL]
-                [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
-                [--artifact PATH]... [--no-artifacts]
-                [--cache NAME=PATH]... [--no-caches]
-                [--forward [LOCAL:]REMOTE]... [--no-forward]
-                [--apply | --no-apply] [--no-snapshot]
-  errand access [list] [--config PATH] [--json]
-  errand access add [-n | --dry-run] [--config PATH] [--json] LOGIN
-  errand access remove [-n | --dry-run] [--config PATH] [--json] LOGIN
-  errand access deny [-n | --dry-run] [--config PATH] [--json] LOGIN
-  errand access undeny [-n | --dry-run] [--config PATH] [--json] LOGIN
-  errand doctor [--json] [--config PATH] [--profile NAME] [--on PEER | --url URL]
-                [--workspace-root PATH] [-w REL | --workdir REL]
-                [-e NAME=VALUE | --env NAME=VALUE]... [--passenv NAME]...
-                [--forward [LOCAL:]REMOTE]... [--no-forward]
-                [--apply | --no-apply] [--no-snapshot]
-  errand version
+Usage:
+  errand [options] -- COMMAND [ARG...]
+  errand COMMAND --help
 
-A HANDLE is peer/ULID as printed at submission (a bare ULID works with
---on/--url or a configured default peer). --detach prints the handle on
-stdout and returns after admission; the job keeps running on the peer.
-When attached from a terminal, Ctrl-D detaches locally and prints the
-reattach command without changing the job. Ctrl-C sends SIGINT to the remote
-job and a second Ctrl-C sends SIGKILL. "errand kill" requests SIGTERM;
-"errand kill --force" sends SIGKILL. Ctrl-D exits 0 for successful local
-detachment, not job completion.
+Run options:
+  --on PEER | --url URL           Select a runner
+  --profile NAME                 Use a named configuration profile
+  -d, --detach                   Return a job handle after admission
+  -w, --workdir REL               Command directory within the workspace
+  -e, --env NAME=VALUE            Set an environment variable (repeatable)
+  --passenv NAME                 Forward a local variable (repeatable)
+  -L, --forward [LOCAL:]REMOTE    Forward a port while attached (repeatable)
+  --no-forward                   Clear configured forwarding
+  --apply | --no-apply            Apply retained changes after clean success
+  --artifact PATH                Retain an ignored output (repeatable)
+  --no-artifacts                 Clear configured artifact declarations
+  --cache NAME=PATH               Reuse a runner cache (repeatable)
+  --no-caches                    Clear configured caches
+  --workspace-root PATH          Select an explicit workspace boundary
+  --include-all                  Allow a broad snapshot (never /)
+  --no-snapshot                  Run with an empty remote workspace
 
-Exit status: the remote process's own exit code. If that code is 0 but the
-transaction itself fails, errand exits 120; secondary failures accompanying
-a nonzero remote exit are reported without replacing that exit code.
+Commands:
+  errand peers                   List, add, remove, or discover runners
+  errand ps                      List jobs
+  errand status HANDLE           Inspect a job and its results
+  errand attach HANDLE           Follow a job's logs
+  errand fetch HANDLE [PATH]      Stage, apply, or export retained files
+  errand kill HANDLE             Stop a job
+  errand df                      Show storage use
+  errand gc TARGET               Collect caches, jobs, or local changes
+  errand config                  Explain effective configuration
+  errand doctor                  Diagnose installation and connectivity
+  errand setup                   Install or restart this machine's runner
+  errand access                  Manage this runner's saved access policy
+  errand serve                   Run the daemon in the foreground
+  errand version                 Print the version
 
-Snapshot safety: Git worktrees are selected automatically. Other directories
-require .errandignore or --include-all. Filesystem roots are always refused;
-the user's home directory requires --include-all. --no-snapshot runs in a
-fresh empty remote workspace without inspecting or transferring local files.
-A marked ancestor with [workspace] root=true in .errand.toml, or an explicit
---workspace-root, selects a shared snapshot root containing the current
-directory without weakening those safety checks.`
+Examples:
+  errand --on buildbox -- make test
+  errand --apply -- gofmt -w .
+  errand fetch --output ./results HANDLE
+
+A HANDLE is peer/ULID, printed when a job is submitted.
+While attached: Ctrl-D detaches; Ctrl-C interrupts the remote command.
+Full command options: errand COMMAND --help`
 
 func main() {
 	args := os.Args[1:]

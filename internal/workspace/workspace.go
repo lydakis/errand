@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/BurntSushi/toml"
+	"github.com/lydakis/errand/internal/tomlconfig"
 )
 
 const markerName = ".errand.toml"
@@ -76,7 +76,7 @@ func Discover(cwd, explicit string) (Selection, error) {
 			}
 			if trusted {
 				var cfg projectConfig
-				if _, err := toml.DecodeFile(marker, &cfg); err != nil {
+				if _, err := tomlconfig.DecodeFile(marker, &cfg); err != nil {
 					return Selection{}, fmt.Errorf("workspace: reading %s: %w", marker, err)
 				}
 				if dir == cwd {
@@ -108,7 +108,7 @@ func readExplicitConfig(root string) (projectConfig, error) {
 	if !info.Mode().IsRegular() {
 		return cfg, fmt.Errorf("workspace: %s is not a regular file", marker)
 	}
-	if _, err := toml.DecodeFile(marker, &cfg); err != nil {
+	if _, err := tomlconfig.DecodeFile(marker, &cfg); err != nil {
 		return cfg, fmt.Errorf("workspace: reading %s: %w", marker, err)
 	}
 	return cfg, nil

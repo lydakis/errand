@@ -157,3 +157,31 @@ func TestDoctorUsageDoesNotProbe(t *testing.T) {
 		}
 	}
 }
+
+func TestDoctorHumanReportKeepsFailuresDetailed(t *testing.T) {
+	for _, status := range []string{"ok", "warning", "error"} {
+		t.Run(status, func(t *testing.T) {
+			report := doctorReport{OK: status != "error", Scope: doctorScope,
+				Checks: []doctorCheck{{Name: "runner", Status: status, Detail: "diagnostic detail", Hint: "repair guidance"}}}
+			var out bytes.Buffer
+			if err := writeDoctorReport(&out, report, false); err != nil {
+				t.Fatal(err)
+			}
+			if status == "ok" {
+				if !strings.Contains(out.String(), "runner") || strings.Contains(out.String(), doctorScope) || strings.Contains(out.String(), "diagnostic detail") {
+					t.Fatalf("healthy report should be compact: %s", &out)
+				}
+			} else if !strings.Contains(out.String(), "diagnostic detail") || !strings.Contains(out.String(), "repair guidance") {
+				t.Fatalf("unhealthy report lost guidance: %s", &out)
+			}
+			out.Reset()
+			if err := writeDoctorReport(&out, report, true); err != nil {
+				t.Fatal(err)
+			}
+			var got doctorReport
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil || got.Scope != doctorScope || got.Checks[0].Detail != "diagnostic detail" {
+				t.Fatalf("JSON lost detail: %s, %v", &out, err)
+			}
+		})
+	}
+}

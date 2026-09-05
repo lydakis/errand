@@ -97,7 +97,7 @@ func TestDiscoverMarkerWithoutRootDoesNotSelectAncestor(t *testing.T) {
 	if err := os.Mkdir(cwd, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, markerName), []byte("[run]\nbackend = 'host'\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, markerName), []byte("[run]\npeer = 'build'\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	got, err := Discover(cwd, "")

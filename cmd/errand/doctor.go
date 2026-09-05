@@ -61,6 +61,11 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 	asJSON := fs.Bool("json", false, "emit diagnostic checks, next steps, and effective configuration as JSON")
 	configPath := fs.String("config", "", "explicitly check this local runner configuration")
 	setFlagUsage(fs, "errand doctor [options]")
+	flagUsage := fs.Usage
+	fs.Usage = func() {
+		flagUsage()
+		fmt.Fprintln(stderr, "\n"+doctorScope)
+	}
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			return 0
@@ -205,6 +210,34 @@ func writeDoctorReport(w io.Writer, report doctorReport, asJSON bool) error {
 		encoder := json.NewEncoder(w)
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(report)
+	}
+	healthy := report.OK
+	var passed []string
+	for _, check := range report.Checks {
+		if check.Status == "ok" {
+			passed = append(passed, check.Name)
+		} else if check.Status != "skipped" {
+			healthy = false
+		}
+	}
+	if healthy {
+		if _, err := fmt.Fprintf(w, "OK: %s\n", terminalSafeField(strings.Join(passed, ", "))); err != nil {
+			return err
+		}
+		if report.Effective != nil && report.Effective.URL != "" {
+			if _, err := fmt.Fprintf(w, "Peer: %s\n", terminalSafeField(report.Effective.URL)); err != nil {
+				return err
+			}
+		}
+		for _, check := range report.Checks {
+			if check.Status == "skipped" {
+				if _, err := fmt.Fprintf(w, "SKIPPED %s: %s\n", terminalSafeField(check.Name), terminalSafeField(check.Detail)); err != nil {
+					return err
+				}
+			}
+		}
+		_, err := fmt.Fprintln(w, "Full details: errand doctor --json")
+		return err
 	}
 	for _, check := range report.Checks {
 		if _, err := fmt.Fprintf(w, "%s %s: %s\n", strings.ToUpper(check.Status), check.Name, terminalSafeField(check.Detail)); err != nil {

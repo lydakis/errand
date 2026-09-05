@@ -14,6 +14,10 @@ an explicit CLI workdir wins. Environment settings use the same layers, with
 merge rules described below. Session forwarding and artifact declarations use
 list replacement at each layer. Detachment and broad snapshot opt-in remain CLI options.
 
+Personal, runner, and workspace configuration reject unknown keys, including
+nested settings. Errors identify the file and key so misspellings cannot
+silently change behavior. Peer edits also refuse to rewrite invalid config.
+
 ## Personal configuration
 
 `~/.config/errand/config.toml` holds aliases and transport details. When
@@ -429,6 +433,10 @@ workspace peer preferences, malformed TOML, invalid boundaries, and missing
 required environment variables remain errors. Local installation and runner
 checks continue independently when run configuration fails. Conversely, a
 healthy peer cannot hide a local runner failure.
+
+Healthy human output summarizes passed checks and identifies skipped checks.
+Warnings and failures retain their diagnostic details and next steps. Use
+`--json` for the complete report, or `--help` for the diagnostic scope.
 
 ### Local installation and runner checks
 
