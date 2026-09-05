@@ -47,6 +47,9 @@ jobs:
       - name: Test release packaging helpers
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Test with race detector
+        env:
+          # Avoid competing subprocess-heavy packages on the macOS runner.
+          GOFLAGS: ${{ runner.os == 'macOS' && '-p=1' || '' }}
         run: go test -race -count=1 -timeout=5m ./...
       - name: Build and check binary
         run: |
