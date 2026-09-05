@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,7 +23,8 @@ import (
 )
 
 const peersUsage = `usage:
-  errand peers                       # configured peers and whether they answer
+  errand peers [--json] [--on PEER | --url URL]
+                                    # runner status, capacity, and capabilities
   errand peers add NAME HOST         # verify a runner, then record it (HOST: name, host:port, URL, or --ssh)
   errand peers remove NAME
   errand peers discover [-a | --all] [--json]
@@ -291,102 +291,6 @@ func cmdPeersRemove(args []string, stdout, stderr io.Writer, deps peersDeps) int
 	if clearedDefault {
 		fmt.Fprintln(stdout, "it was the default peer; set another with `errand peers add` or edit default_peer")
 	}
-	return 0
-}
-
-type peerRow struct {
-	Name    string `json:"name"`
-	Target  string `json:"target"`
-	Default bool   `json:"default"`
-	Status  string `json:"status"`
-	Detail  string `json:"detail,omitempty"`
-}
-
-func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
-	fs := flag.NewFlagSet("errand peers", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
-	setFlagUsage(fs, "errand peers [--json]")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "errand peers: unexpected arguments: %s\n", strings.Join(fs.Args(), " "))
-		return 2
-	}
-	cfg, err := deps.load()
-	if err != nil {
-		fmt.Fprintf(stderr, "errand peers: %v\n", err)
-		return 1
-	}
-	if len(cfg.Peers) == 0 {
-		fmt.Fprintln(stderr, "errand peers: no peers configured; try `errand peers discover` or `errand peers add NAME HOST`")
-		return 1
-	}
-	names := make([]string, 0, len(cfg.Peers))
-	for n := range cfg.Peers {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	rows := make([]peerRow, len(names))
-	var wg sync.WaitGroup
-	for i, n := range names {
-		p := cfg.Peers[n]
-		rows[i] = peerRow{Name: n, Target: peerURLOf(p), Default: n == cfg.DefaultPeer}
-		dialURL, err := configuredPeerURL(cfg, n)
-		if err != nil {
-			rows[i].Status = "misconfigured"
-			rows[i].Detail = err.Error()
-			continue
-		}
-		wg.Add(1)
-		go func(i int, target string) {
-			defer wg.Done()
-			_, err := deps.probe(context.Background(), target)
-			if err != nil {
-				kind, _ := client.ProbeKindOf(err)
-				rows[i].Status = string(kind)
-				rows[i].Detail = err.Error()
-				return
-			}
-			rows[i].Status = "reachable"
-		}(i, dialURL)
-	}
-	wg.Wait()
-	if *jsonOutput {
-		return writeJSONRows(stdout, stderr, rows)
-	}
-	hasDetails := false
-	for _, r := range rows {
-		if r.Detail != "" {
-			hasDetails = true
-			break
-		}
-	}
-	w := tabwriter.NewWriter(stdout, 2, 8, 2, ' ', 0)
-	if hasDetails {
-		fmt.Fprintln(w, "NAME\tDEFAULT\tTARGET\tSTATUS\tDETAIL")
-	} else {
-		fmt.Fprintln(w, "NAME\tDEFAULT\tTARGET\tSTATUS")
-	}
-	for _, r := range rows {
-		isDefault := ""
-		if r.Default {
-			isDefault = "yes"
-		}
-		if hasDetails {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-				terminalSafeField(r.Name), isDefault, terminalSafeField(r.Target),
-				terminalSafeField(r.Status), terminalSafeField(r.Detail))
-		} else {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-				terminalSafeField(r.Name), isDefault, terminalSafeField(r.Target), terminalSafeField(r.Status))
-		}
-	}
-	w.Flush()
 	return 0
 }
 

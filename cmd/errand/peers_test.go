@@ -237,7 +237,79 @@ func TestPeersRejectUnexpectedArgumentsBeforeIO(t *testing.T) {
 	}
 }
 
-func TestPeersListIsCompactAndRejectsHiddenSubcommands(t *testing.T) {
+func TestPeersSelectionAndPartialFailures(t *testing.T) {
+	deps := peersDeps{
+		load: func() (config.Client, error) {
+			return config.Client{DefaultPeer: "cabal", Peers: map[string]config.Peer{
+				"cabal":   {URL: "http://cabal:7443"},
+				"offline": {URL: "http://offline:7443"},
+				"broken":  {},
+			}}, nil
+		},
+		probe: func(_ context.Context, target string) (proto.Info, error) {
+			if target == "http://offline:7443" {
+				return proto.Info{}, &client.ProbeError{Kind: client.ProbeUnreachable, Detail: "connection refused"}
+			}
+			if target != "http://cabal:7443" {
+				t.Errorf("unexpected probe target %q", target)
+			}
+			return proto.Info{Busy: true, MaxJobs: 2, RunningJobs: 1, StartingJobs: 1,
+				MaxQueued: 8, QueuedJobs: 3, StagingJobs: 2, Version: "test",
+				Facts: proto.Facts{OS: "linux", Arch: "amd64", KVM: true,
+					Tools: map[string]string{"nix": "/bin/nix", "docker": "/bin/docker"}}}, nil
+		},
+	}
+	var out, errb bytes.Buffer
+	if code := cmdPeersTo([]string{"--json"}, &out, &errb, deps); code != 1 {
+		t.Fatalf("partial fleet exit = %d: %s", code, errb.String())
+	}
+	var rows []peerRow
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 || rows[0].Name != "broken" || rows[0].Status != "misconfigured" || rows[0].Info != nil ||
+		rows[1].Name != "cabal" || !rows[1].Default || rows[1].Status != "busy" || rows[1].Info == nil || rows[1].Info.Version != "test" ||
+		rows[2].Name != "offline" || rows[2].Info != nil || rows[2].Detail == "" {
+		t.Fatalf("partial fleet lost configuration, facts, or failures: %+v", rows)
+	}
+	for _, args := range [][]string{{"--on", "cabal"}, {"--url", "http://cabal:7443/"}} {
+		out.Reset()
+		errb.Reset()
+		if code := cmdPeersTo(args, &out, &errb, deps); code != 0 {
+			t.Fatalf("targeted peers exit = %d: %s", code, errb.String())
+		}
+		for _, want := range []string{"busy", "2/2", "3/8", "linux/amd64", "docker,kvm,nix"} {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("targeted peers missing %q: %s", want, out.String())
+			}
+		}
+	}
+}
+
+func TestPeersURLBypassesConfigAndRejectsConflictingSelectors(t *testing.T) {
+	deps := peersDeps{
+		load: func() (config.Client, error) { t.Fatal("unexpected config read"); return config.Client{}, nil },
+		probe: func(_ context.Context, target string) (proto.Info, error) {
+			if target != "http://runner:7443" {
+				t.Fatalf("target = %q", target)
+			}
+			return proto.Info{Version: "test"}, nil
+		},
+	}
+	var out, errb bytes.Buffer
+	if code := cmdPeersTo([]string{"--json", "--url", "http://runner:7443"}, &out, &errb, deps); code != 0 {
+		t.Fatalf("direct URL exit = %d: %s", code, errb.String())
+	}
+	var rows []peerRow
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil || len(rows) != 1 || rows[0].Target != "http://runner:7443" || rows[0].Default || rows[0].Info == nil {
+		t.Fatalf("direct URL response = %s, error %v", out.String(), err)
+	}
+	if code := cmdPeersTo([]string{"--on", "cabal", "--url", "http://runner:7443"}, &out, &errb, peersDeps{}); code != 2 {
+		t.Fatalf("conflicting selectors exit = %d", code)
+	}
+}
+
+func TestPeersListIncludesCapacityAndRejectsHiddenSubcommands(t *testing.T) {
 	runner := fakeRunner(t, false)
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	deps := testDeps(t, cfgPath, stubProvider{})
@@ -251,14 +323,9 @@ func TestPeersListIsCompactAndRejectsHiddenSubcommands(t *testing.T) {
 		t.Fatalf("list exit %d: %s", code, errb.String())
 	}
 	text := out.String()
-	for _, want := range []string{"NAME", "DEFAULT", "TARGET", "STATUS", "reachable"} {
+	for _, want := range []string{"NAME", "DEFAULT", "STATUS", "ready", "SLOTS", "0/2", "QUEUE", "STAGING", "SYSTEM", "linux/amd64", "CAPABILITIES"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("compact peers output missing %q:\n%s", want, text)
-		}
-	}
-	for _, unwanted := range []string{"CPU", "KVM", "SLOTS", "linux/amd64"} {
-		if strings.Contains(text, unwanted) {
-			t.Fatalf("peers output overlaps with info via %q:\n%s", unwanted, text)
 		}
 	}
 	if strings.Contains(text, "DETAIL") {
@@ -288,7 +355,7 @@ func TestPeersListShowsDetailWhenAProbeFails(t *testing.T) {
 		},
 	}
 	var out, errb bytes.Buffer
-	if code := cmdPeersTo(nil, &out, &errb, deps); code != 0 {
+	if code := cmdPeersTo(nil, &out, &errb, deps); code != 1 {
 		t.Fatalf("list exit %d: %s", code, errb.String())
 	}
 	for _, want := range []string{"DETAIL", "unreachable", "connection refused"} {
@@ -389,11 +456,22 @@ func TestPeersHumanOutputEscapesControlCharacters(t *testing.T) {
 		return proto.Info{}, &client.ProbeError{Kind: client.ProbeNotErrand, Detail: "bad\x1b[2J"}
 	}
 	var out, errb bytes.Buffer
-	if code := cmdPeersTo(nil, &out, &errb, deps); code != 0 {
+	if code := cmdPeersTo(nil, &out, &errb, deps); code != 1 {
 		t.Fatalf("peers exit %d: %s", code, errb.String())
 	}
 	if strings.ContainsRune(out.String(), '\x1b') || !strings.Contains(out.String(), `\x1b`) {
 		t.Fatalf("peers emitted unsafe terminal text: %q", out.String())
+	}
+	deps.probe = func(context.Context, string) (proto.Info, error) {
+		return proto.Info{Facts: proto.Facts{OS: "linux\x1b[2J", Arch: "amd64",
+			Tools: map[string]string{"tool\x1b[2J": "/bin/tool"}}}, nil
+	}
+	out.Reset()
+	if code := cmdPeersTo(nil, &out, &errb, deps); code != 0 {
+		t.Fatalf("peers facts exit %d: %s", code, errb.String())
+	}
+	if strings.ContainsRune(out.String(), '\x1b') || !strings.Contains(out.String(), `tool\x1b`) || !strings.Contains(out.String(), `linux\x1b`) {
+		t.Fatalf("peers emitted unsafe runner facts: %q", out.String())
 	}
 
 	deps.load = func() (config.Client, error) { return config.Client{}, nil }

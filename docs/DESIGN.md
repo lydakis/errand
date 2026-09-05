@@ -604,14 +604,12 @@ vaguer is promised.
 errand [--on X | --where facts] [-d | --detach] [--apply | --no-apply] -- <cmd...>
 errand setup [--max-jobs N] [--allow-user LOGIN]...
              [-f | --force] [-n | --dry-run] [--print-acl]
-errand peers [--json]           # configured peers and reachability
+errand peers [--on X | --url URL] [--json] # runner status, capacity, and capabilities
 errand peers add NAME HOST      # verify first (403 → accurate allow-list remedy), then record
 errand peers remove NAME
 errand peers discover [-a | --all] # runners on the caller's own tailnet; read-only
 errand ps [-a | --all] [-n N | --last N] [--on X] [--json] # N <= 200
-errand info [--on X] [--json]  # human-readable fleet facts unless JSON is requested
-errand logs <peer/ulid> [-f]    # resumes from last seen seq
-errand attach <peer/ulid>
+errand attach <peer/ulid>       # replay logs and follow to completion
 errand fetch [--apply [--conflicts]] <peer/ulid> [path]
 errand kill [-f | --force] <peer/ulid>
 errand df [--on X] [--json]    # fleet storage; read-own

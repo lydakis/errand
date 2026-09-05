@@ -27,8 +27,8 @@ errand serve                  # what the service runs; config: ~/.config/errand/
 # on a caller
 errand peers discover         # runners on your tailnet that admit you, with exact add commands
 errand peers add cabal cabal  # verify it answers you, then record it (first peer becomes default)
-errand info                   # human-readable facts from every configured peer
-errand info --json            # the same facts for scripts and agents
+errand peers                  # human-readable facts from every configured peer
+errand peers --json           # the same facts for scripts and agents
 errand -- python3 -m unittest # runs your working tree over there
 errand --apply -- gofmt -w .  # applies retained changes only after clean success
 errand --no-snapshot -- uname -a # runs in a fresh empty remote workspace
@@ -50,10 +50,10 @@ Frequent execution flags follow familiar CLI conventions: `-d` is
 `--dry-run`; setup and peer mutation use the same `-f` and `-n` forms, while
 peer discovery uses `-a` for `--all`. Safety boundaries, transport details,
 and mutating workspace options remain long-form so their meaning stays explicit.
-Use `--help` at the relevant level, for example `errand info --help` or
+Use `--help` at the relevant level, for example `errand peers --help` or
 `errand gc jobs --help`.
 
-`errand peers` shows configured peers and whether they answer. `errand peers
+`errand peers` shows runner status, capacity, platform, and capabilities. `errand peers
 add NAME HOST` probes the runner with an authenticated `/v0/info` *before*
 writing anything: a 403 prints your tailnet login and tells you to add it to
 the runner's `allow_users`, then restart through `errand setup`; an unreachable
@@ -66,7 +66,12 @@ it asks tailscaled for the node list, probes each online node's errand
 port, and prints exact `peers add` commands for runners that admit you,
 flagging ones already configured (by name or IP) and ones that refused you.
 It never scans arbitrary hosts and never writes config.
-Use `errand info` for detailed runner capacity, platform, KVM, and tool facts.
+Use `errand peers --on NAME` or `--url URL` to query one runner.
+`errand peers --json` always returns an array of peer records, including
+`name`, `target`, `default`, and `status`. Reachable peers include the complete
+runner response under `info`, including CPU count, version, capacity, and tool
+paths. Failed peers remain in the array with a `detail` message and no `info`.
+The command exits nonzero if any selected peer cannot be queried.
 
 `errand setup` is idempotent: it keeps an existing config or service
 definition unless `--force` is given, enables user-service linger on Linux
@@ -264,7 +269,7 @@ applied by each runner before its bounded receipt window, so retained terminal
 jobs cannot hide a long-running job. `--all` includes terminal receipts;
 `--last N` includes all states and applies one global limit after merging.
 `--on` and `--url` explicitly narrow either view to one runner. Bare
-`errand info` and `errand df` follow the same all-configured-peers rule.
+`errand peers` and `errand df` follow the same all-configured-peers rule.
 These read-only fleet commands share target selection, concurrent querying,
 partial-failure reporting, and exit semantics. Commands that mutate runner
 state remain explicitly single-runner.

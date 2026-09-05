@@ -52,15 +52,13 @@ usage:
   errand gc jobs [--older-than DURATION] [--keep N] [-n | --dry-run] [--on PEER | --url URL]
   errand gc changes --older-than DURATION [-n | --dry-run]
   errand gc all --older-than DURATION [--keep N] [-n | --dry-run] [--on PEER | --url URL]
-  errand serve [--config PATH] [--listen ADDR] [--state-dir DIR] [--allow-user LOGIN]...
   errand setup [--config PATH] [--max-jobs N] [--allow-user LOGIN]...
                [-f | --force] [-n | --dry-run] [--print-acl]
-  errand peers [--json]
+  errand peers [--json] [--on PEER | --url URL]
   errand peers add [--ssh] [--remote-command PATH] [--remote-socket PATH]
                    [-f | --force] [-n | --dry-run] [--no-verify] NAME HOST
   errand peers remove NAME
   errand peers discover [-a | --all] [--json]
-  errand info [--json] [--on PEER | --url URL]
   errand version
 
 A HANDLE is peer/ULID as printed at submission (a bare ULID works with
@@ -121,8 +119,6 @@ func main() {
 		os.Exit(cmdDf(args[1:]))
 	case "gc":
 		os.Exit(cmdGC(args[1:]))
-	case "info":
-		os.Exit(cmdInfo(args[1:]))
 	case "version":
 		os.Exit(cmdVersion(args[1:]))
 	case "_automatic-apply":
@@ -936,51 +932,6 @@ func parseRetentionDuration(value string) (time.Duration, error) {
 		return time.Duration(days) * 24 * time.Hour, nil
 	}
 	return time.ParseDuration(value)
-}
-
-func cmdInfo(args []string) int {
-	return cmdInfoTo(args, os.Stdout, os.Stderr)
-}
-
-func cmdInfoTo(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("errand info", flag.ExitOnError)
-	fs.SetOutput(stderr)
-	on := fs.String("on", "", "peer name")
-	rawURL := fs.String("url", "", "peer base URL")
-	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
-	setFlagUsage(fs, "errand info [options]")
-	fs.Parse(args)
-	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "errand: unexpected info arguments: %s\n", strings.Join(fs.Args(), " "))
-		return 2
-	}
-	read, err := readFleet(*rawURL, *on, stderr, client.Info)
-	if err != nil {
-		fmt.Fprintf(stderr, "errand: %v\n", err)
-		return 1
-	}
-	if *jsonOutput {
-		infos := make(map[string]proto.Info, len(read.results))
-		for _, result := range read.results {
-			infos[result.target.name] = result.value
-		}
-
-		var output any = infos
-		if (*rawURL != "" || *on != "") && len(infos) == 1 {
-			for _, info := range infos {
-				output = info
-			}
-		}
-		encoded, err := json.MarshalIndent(output, "", "  ")
-		if err != nil {
-			fmt.Fprintf(stderr, "errand: encoding runner info: %v\n", err)
-			return 1
-		}
-		fmt.Fprintln(stdout, string(encoded))
-	} else if len(read.results) != 0 {
-		writeInfo(stdout, read.results)
-	}
-	return read.exitCode()
 }
 
 func cmdServe(args []string) int {

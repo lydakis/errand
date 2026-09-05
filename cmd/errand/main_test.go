@@ -172,7 +172,7 @@ func TestCmdGCHelpOnlyShowsFlagsForTarget(t *testing.T) {
 func TestCLIHelpDetectionStopsAtCommandSeparator(t *testing.T) {
 	for _, args := range [][]string{
 		{"--help"},
-		{"info", "--help"},
+		{"peers", "--help"},
 		{"gc", "jobs", "-h"},
 	} {
 		if !cliHelpRequested(args) {
@@ -623,7 +623,7 @@ func TestCmdPsPresentsTimingSourceAndWorkdir(t *testing.T) {
 	}
 }
 
-func TestCmdInfoAggregatesConfiguredPeers(t *testing.T) {
+func TestCmdPeersAggregatesConfiguredPeers(t *testing.T) {
 	started := make(chan struct{}, 2)
 	release := make(chan struct{})
 	serveInfo := func(version, goos, arch string) *httptest.Server {
@@ -657,50 +657,50 @@ url = %q
 
 	var stdout, stderr bytes.Buffer
 	done := make(chan int, 1)
-	go func() { done <- cmdInfoTo(nil, &stdout, &stderr) }()
+	go func() { done <- cmdPeersTo(nil, &stdout, &stderr, realPeersDeps()) }()
 	for i := 0; i < 2; i++ {
 		select {
 		case <-started:
 		case <-time.After(time.Second):
 			close(release)
-			t.Fatal("info did not query configured peers concurrently")
+			t.Fatal("peers did not query configured peers concurrently")
 		}
 	}
 	close(release)
 	if code := <-done; code != 0 {
-		t.Fatalf("info exit = %d; stderr=%q", code, stderr.String())
+		t.Fatalf("peers exit = %d; stderr=%q", code, stderr.String())
 	}
 	for _, want := range []string{
-		"PEER", "STATUS", "SLOTS", "QUEUE", "SYSTEM",
-		"cabal", "linux/amd64", "linux-runner",
-		"mac-mini", "darwin/arm64", "darwin-runner", "git",
+		"NAME", "STATUS", "SLOTS", "QUEUE", "SYSTEM",
+		"cabal", "linux/amd64",
+		"mac-mini", "darwin/arm64", "git",
 	} {
 		if !strings.Contains(stdout.String(), want) {
-			t.Errorf("human info missing %q:\n%s", want, stdout.String())
+			t.Errorf("human peers missing %q:\n%s", want, stdout.String())
 		}
 	}
 
 	stdout.Reset()
 	stderr.Reset()
-	if code := cmdInfoTo([]string{"--json"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("JSON info exit = %d; stderr=%q", code, stderr.String())
+	if code := cmdPeersTo([]string{"--json"}, &stdout, &stderr, realPeersDeps()); code != 0 {
+		t.Fatalf("JSON peers exit = %d; stderr=%q", code, stderr.String())
 	}
-	var got map[string]proto.Info
+	var got []peerRow
 	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
 		t.Fatalf("decoding aggregate info: %v; output=%q", err, stdout.String())
 	}
-	if got["cabal"].Version != "linux-runner" || got["mac-mini"].Version != "darwin-runner" {
-		t.Fatalf("aggregate info = %+v", got)
+	if len(got) != 2 || got[0].Name != "cabal" || got[0].Info == nil || got[0].Info.Version != "linux-runner" || got[1].Name != "mac-mini" || got[1].Info == nil || got[1].Info.Version != "darwin-runner" {
+		t.Fatalf("aggregate peers = %+v", got)
 	}
 
 	stdout.Reset()
 	stderr.Reset()
-	if code := cmdInfoTo([]string{"--json", "--on", "cabal"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("targeted info exit = %d; stderr=%q", code, stderr.String())
+	if code := cmdPeersTo([]string{"--json", "--on", "cabal"}, &stdout, &stderr, realPeersDeps()); code != 0 {
+		t.Fatalf("targeted peers exit = %d; stderr=%q", code, stderr.String())
 	}
-	var targeted proto.Info
-	if err := json.Unmarshal(stdout.Bytes(), &targeted); err != nil || targeted.Version != "linux-runner" {
-		t.Fatalf("targeted info = %+v, %v; output=%q", targeted, err, stdout.String())
+	var targeted []peerRow
+	if err := json.Unmarshal(stdout.Bytes(), &targeted); err != nil || len(targeted) != 1 || targeted[0].Name != "cabal" || targeted[0].Info == nil || targeted[0].Info.Version != "linux-runner" {
+		t.Fatalf("targeted peers = %+v, %v; output=%q", targeted, err, stdout.String())
 	}
 }
 
