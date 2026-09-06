@@ -145,6 +145,7 @@ func ValidatePeer(name string, peer Peer) error {
 }
 
 type Daemon struct {
+	Transport        string      `toml:"transport"` // both, ssh, or tailscale; empty preserves legacy listener semantics
 	Listen           string      `toml:"listen"`
 	StateDir         string      `toml:"state_dir"`
 	AllowUsers       []string    `toml:"allow_users"`
@@ -159,6 +160,46 @@ type Daemon struct {
 	// MaxJobs defaults to 1. MaxQueued defaults to 8; zero disables queueing.
 	MaxJobs   int `toml:"max_jobs"`
 	MaxQueued int `toml:"max_queued"`
+}
+
+const (
+	TransportBoth      = "both"
+	TransportSSH       = "ssh"
+	TransportTailscale = "tailscale"
+)
+
+// TransportMode preserves explicit legacy SSH-only configurations. New setup
+// writes "both" so an unavailable tailnet can be enabled by a later setup.
+func (d Daemon) TransportMode() (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(d.Transport))
+	if mode == "" {
+		if strings.EqualFold(strings.TrimSpace(d.Listen), DisabledListener) {
+			return TransportSSH, nil
+		}
+		return TransportBoth, nil
+	}
+	switch mode {
+	case TransportBoth, TransportSSH, TransportTailscale:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("transport must be both, ssh, or tailscale (got %q)", d.Transport)
+	}
+}
+
+// NormalizeTransport makes the saved transport preference authoritative.
+func (d *Daemon) NormalizeTransport() error {
+	mode, err := d.TransportMode()
+	if err != nil {
+		return err
+	}
+	d.Transport = mode
+	if mode == TransportSSH {
+		d.Listen = DisabledListener
+	}
+	if d.Listen == "" || mode == TransportTailscale && strings.EqualFold(strings.TrimSpace(d.Listen), DisabledListener) {
+		d.Listen = "tailnet:7443"
+	}
+	return nil
 }
 
 // DaemonCache uses a 5 GiB, 14-day default when fields are zero.
@@ -185,8 +226,8 @@ func LoadDaemon(path string) (Daemon, error) {
 			return d, fmt.Errorf("%s: %w", path, err)
 		}
 	}
-	if d.Listen == "" {
-		d.Listen = "tailnet:7443"
+	if err := d.NormalizeTransport(); err != nil {
+		return d, err
 	}
 	if d.StateDir == "" {
 		home, err := userHomeDir()

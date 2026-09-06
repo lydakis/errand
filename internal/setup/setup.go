@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -33,6 +34,7 @@ const (
 
 // Options are the operator's choices; everything else is discovered.
 type Options struct {
+	Transport  string // empty respects saved config; new runners default to both
 	ConfigPath string // empty uses ~/.config/errand/errandd.toml
 	MaxJobs    int    // zero uses 1
 	AllowUsers []string
@@ -44,6 +46,7 @@ type Options struct {
 
 // ConfigChoice is the runner config setup decided to write.
 type ConfigChoice struct {
+	Transport        string
 	Listen           string
 	MaxJobs          int
 	AllowUsers       []string
@@ -95,7 +98,7 @@ func (r *Report) Failed() bool {
 }
 
 // Run performs the setup. It stops at the first error that makes later
-// steps meaningless (no tailscaled, no home) and otherwise records
+// steps meaningless (unavailable identity provider, no home) and otherwise records
 // per-step outcomes so the operator sees everything at once.
 func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	r := &Report{}
@@ -115,12 +118,14 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	r.ConfigPath = configPath
 	configExists := sys.Exists(configPath)
 	var existingConfig *config.Daemon
+	var existingRaw []byte
 	if configExists {
 		data, readErr := sys.ReadFile(configPath)
 		if readErr != nil {
 			r.fail("config", fmt.Errorf("reading %s: %w", configPath, readErr))
 			return r, nil
 		}
+		existingRaw = data
 		d := config.Daemon{MaxJobs: 1, MaxQueued: 8}
 		if decodeErr := toml.Unmarshal(data, &d); decodeErr != nil {
 			if !opts.Force {
@@ -133,10 +138,13 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	}
 	restartSocketPath := filepath.Join(home, ".errand", "errand.sock")
 	if existingConfig != nil {
-		previous, normalizeErr := normalizeDaemonConfig(home, *existingConfig)
-		if normalizeErr == nil {
-			restartSocketPath = previous.SocketPath()
+		// Socket identity is independent of transport validation, including
+		// when an explicit override repairs an invalid saved mode.
+		previous := *existingConfig
+		if previous.StateDir == "" {
+			previous.StateDir = filepath.Join(home, ".errand")
 		}
+		restartSocketPath = previous.SocketPath()
 	}
 	exe, err := sys.Executable()
 	if err != nil {
@@ -146,27 +154,153 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	r.RemoteCommand = exe
 	runnerPath := servicePath(sys.Getenv("PATH"))
 
-	// 1. Identity provider, version gate, self.
-	providerSocket, providerCLI := opts.Socket, opts.CLI
-	if providerSocket == "" && providerCLI == "" && existingConfig != nil {
-		providerSocket = existingConfig.TailscaledSocket
-		providerCLI = existingConfig.TailscaleCLI
+	// 1. The configuration is the source of truth. Flags edit the preference;
+	// availability only determines whether a requested tailnet can be enabled.
+	mode := config.TransportBoth
+	if opts.Transport != "" {
+		mode, err = (config.Daemon{Transport: opts.Transport}).TransportMode()
+	} else if existingConfig != nil {
+		mode, err = existingConfig.TransportMode()
 	}
-	provider, err := sys.Discover(providerSocket, providerCLI)
 	if err != nil {
 		return r, err
 	}
-	r.Provider = provider.Name()
-	self, err := provider.Self(ctx)
+	sshOnly := mode == config.TransportSSH
+	explicitTailnet := opts.Socket != "" || opts.CLI != "" || len(opts.AllowUsers) != 0
+	if sshOnly && explicitTailnet {
+		return r, fmt.Errorf("SSH-only setup cannot use --tailscaled-socket, --tailscale-cli, or --allow-user")
+	}
+	// Retained listeners carry an existing policy even while SSH-only.
+	// Tailscale-only also enables the default listener when listen is "none".
+	tailnetConfigured := existingConfig != nil && !strings.EqualFold(strings.TrimSpace(existingConfig.Listen), config.DisabledListener)
+	if existingConfig != nil {
+		oldMode, modeErr := existingConfig.TransportMode()
+		// An unknown saved mode cannot establish first-time activation;
+		// preserve its implicit authorization policy when repairing it.
+		tailnetConfigured = tailnetConfigured || oldMode == config.TransportTailscale || modeErr != nil
+	}
+	var provider tailnet.Provider
+	if !sshOnly {
+		providerSocket, providerCLI := opts.Socket, opts.CLI
+		if providerSocket == "" && providerCLI == "" && existingConfig != nil {
+			providerSocket = existingConfig.TailscaledSocket
+			providerCLI = existingConfig.TailscaleCLI
+		}
+		provider, err = sys.Discover(providerSocket, providerCLI)
+		var self tailnet.Self
+		if err == nil {
+			identityCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+			self, err = provider.Self(identityCtx)
+			cancel()
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				return r, ctx.Err()
+			}
+			if tailnetConfigured || mode == config.TransportTailscale || explicitTailnet || configExists && existingConfig == nil {
+				return r, err
+			}
+			sshOnly = true
+			r.step("tailnet", "unavailable: "+err.Error()+"; connect Tailscale and rerun errand setup to enable tailnet access", false)
+		} else {
+			if !tailnet.SupportsDestinationScopedWhoIs(self.Version) {
+				return r, fmt.Errorf("tailscaled %q is too old: errand requires 1.100 or newer", self.Version)
+			}
+			r.Provider = provider.Name()
+			r.Self = self
+			r.step("tailnet", fmt.Sprintf("%s via %s; this node is %s, owned by %s",
+				self.Version, provider.Name(), self.DNSName, self.Login), false)
+		}
+	}
+	if mode != config.TransportTailscale {
+		r.step("ssh", "SSH bridge enabled; enable SSH login to this account on the runner if needed", false)
+	}
+
+	// Prepare and validate the effective config before any mutation or restart.
+	choice := ConfigChoice{Transport: mode, Listen: fmt.Sprintf("tailnet:%d", DefaultPort), MaxJobs: opts.MaxJobs}
+	if choice.MaxJobs <= 0 {
+		choice.MaxJobs = 1
+	}
+	if sshOnly {
+		choice.Listen = config.DisabledListener
+	} else {
+		if existingConfig != nil && !opts.Force && existingConfig.Listen != "" && !strings.EqualFold(strings.TrimSpace(existingConfig.Listen), config.DisabledListener) {
+			choice.Listen = existingConfig.Listen
+		}
+		choice.AllowUsers = uniqueSorted(append([]string{r.Self.Login}, opts.AllowUsers...))
+		switch {
+		case strings.HasPrefix(provider.Name(), "localapi:"):
+			choice.TailscaledSocket = strings.TrimPrefix(provider.Name(), "localapi:")
+		case strings.HasPrefix(provider.Name(), "cli:"):
+			choice.TailscaleCLI = strings.TrimPrefix(provider.Name(), "cli:")
+		}
+	}
+	rendered := renderConfig(choice)
+	configChanged := !configExists || opts.Force
+	effective := config.Daemon{Transport: choice.Transport, Listen: choice.Listen, AllowUsers: choice.AllowUsers,
+		TailscaledSocket: choice.TailscaledSocket, TailscaleCLI: choice.TailscaleCLI, MaxJobs: choice.MaxJobs, MaxQueued: 8}
+	if existingConfig != nil && !opts.Force {
+		r.Existing = true
+		effective = *existingConfig
+		oldMode, modeErr := effective.TransportMode()
+		previous := effective
+		if modeErr != nil {
+			// A valid explicit override permits repair. Use the saved listener
+			// as-is to retain its address without interpreting the invalid mode.
+			previous.Transport = ""
+		}
+		if err := previous.NormalizeTransport(); err != nil {
+			return r, err
+		}
+		oldListen := previous.Listen
+		if !strings.EqualFold(strings.TrimSpace(oldListen), choice.Listen) || oldMode != mode || opts.Transport != "" && effective.Transport != mode {
+			var document map[string]any
+			if err := toml.Unmarshal(existingRaw, &document); err != nil {
+				return r, err
+			}
+			document["transport"] = mode
+			// Disabling a transport need not discard a custom listener address.
+			if mode != config.TransportSSH {
+				document["listen"] = choice.Listen
+			} else if oldMode != config.TransportSSH {
+				// Retain the effective listener, including a Tailscale-only
+				// listener normalized from "none", across an SSH round trip.
+				document["listen"] = oldListen
+			}
+			if !sshOnly {
+				// Missing policy keys already mean default-capability access
+				// for an established listener. Only seed a first activation.
+				_, hasUsers := document["allow_users"]
+				_, hasCapability := document["capability"]
+				if !tailnetConfigured && !hasUsers && !hasCapability {
+					document["allow_users"] = choice.AllowUsers
+				}
+				if choice.TailscaledSocket != "" {
+					document["tailscaled_socket"] = choice.TailscaledSocket
+					delete(document, "tailscale_cli")
+				}
+				if choice.TailscaleCLI != "" {
+					document["tailscale_cli"] = choice.TailscaleCLI
+					delete(document, "tailscaled_socket")
+				}
+			}
+			var encoded bytes.Buffer
+			if err := toml.NewEncoder(&encoded).Encode(document); err != nil {
+				return r, err
+			}
+			rendered = encoded.String()
+			effective = config.Daemon{MaxJobs: 1, MaxQueued: 8}
+			if err := toml.Unmarshal([]byte(rendered), &effective); err != nil {
+				return r, err
+			}
+			configChanged = true
+		}
+	}
+	effective, err = normalizeDaemonConfig(home, effective)
 	if err != nil {
-		return r, err
+		r.fail("config", fmt.Errorf("reading effective config: %w", err))
+		return r, nil
 	}
-	if !tailnet.SupportsDestinationScopedWhoIs(self.Version) {
-		return r, fmt.Errorf("tailscaled %q is too old: errand requires 1.100 or newer", self.Version)
-	}
-	r.Self = self
-	r.step("tailnet", fmt.Sprintf("%s via %s; this node is %s, owned by %s",
-		self.Version, provider.Name(), self.DNSName, self.Login), false)
 
 	var leaseToken string
 	restartCompleted := false
@@ -197,49 +331,28 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 		}()
 	}
 
-	// 2. Runner config.
-	choice := ConfigChoice{Listen: fmt.Sprintf("tailnet:%d", DefaultPort), MaxJobs: opts.MaxJobs}
-	if choice.MaxJobs <= 0 {
-		choice.MaxJobs = 1
-	}
-	choice.AllowUsers = uniqueSorted(append([]string{self.Login}, opts.AllowUsers...))
+	// 2. Save only intentional mode changes or newly available transports.
 	switch {
-	case strings.HasPrefix(provider.Name(), "localapi:"):
-		choice.TailscaledSocket = strings.TrimPrefix(provider.Name(), "localapi:")
-	case strings.HasPrefix(provider.Name(), "cli:"):
-		choice.TailscaleCLI = strings.TrimPrefix(provider.Name(), "cli:")
-	}
-	rendered := renderConfig(choice)
-	switch {
-	case configExists && !opts.Force:
-		r.Existing = true
+	case !configChanged:
 		r.step("config", "kept existing "+configPath+" (use --force to rewrite it)", false)
 	case opts.DryRun:
 		r.step("config", "would write "+configPath+":\n"+indent(rendered), true)
 	default:
+		if configExists {
+			current, readErr := sys.ReadFile(configPath)
+			if readErr != nil || !bytes.Equal(current, existingRaw) {
+				r.fail("config", fmt.Errorf("config changed during setup; rerun setup"))
+				return r, nil
+			}
+		}
 		if err := sys.WriteFile(configPath, []byte(rendered), 0o600); err != nil {
 			r.fail("config", err)
 			return r, nil
 		}
 		r.step("config", "wrote "+configPath, true)
 	}
-	// An existing operator-owned config remains authoritative for both the
-	// probe and the client instructions in the final report.
-	effective := config.Daemon{
-		Listen: choice.Listen, AllowUsers: choice.AllowUsers,
-		TailscaledSocket: choice.TailscaledSocket, TailscaleCLI: choice.TailscaleCLI,
-		MaxJobs: choice.MaxJobs, MaxQueued: 8,
-	}
-	if r.Existing {
-		effective = *existingConfig
-	}
-	effective, err = normalizeDaemonConfig(home, effective)
-	if err != nil {
-		r.fail("config", fmt.Errorf("reading effective config: %w", err))
-		return r, nil
-	}
 	r.Config = ConfigChoice{
-		Listen: effective.Listen, MaxJobs: effective.MaxJobs,
+		Transport: effective.Transport, Listen: effective.Listen, MaxJobs: effective.MaxJobs,
 		AllowUsers: effective.AllowUsers, DenyUsers: effective.DenyUsers, TailscaledSocket: effective.TailscaledSocket,
 		TailscaleCLI: effective.TailscaleCLI,
 	}
@@ -256,7 +369,9 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	}
 
 	// 4. PATH for SSH callers.
-	ensureOnPath(sys, r, exe, opts.Force, opts.DryRun)
+	if mode != config.TransportTailscale {
+		ensureOnPath(sys, r, exe, opts.Force, opts.DryRun)
+	}
 
 	// 5. Prove it.
 	if opts.DryRun {
@@ -510,6 +625,9 @@ func probe(ctx context.Context, sys System, r *Report) {
 }
 
 func normalizeDaemonConfig(home string, d config.Daemon) (config.Daemon, error) {
+	if err := d.NormalizeTransport(); err != nil {
+		return d, err
+	}
 	if d.Listen == "" {
 		d.Listen = fmt.Sprintf("tailnet:%d", DefaultPort)
 	}

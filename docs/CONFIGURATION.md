@@ -349,6 +349,33 @@ source. Inspection validates syntax but does not bind ports or test forwarding
 permission, remote port availability, or application readiness. Actual run and
 attach commands bind all requested local ports before contacting the runner.
 
+## Runner transports
+
+The runner config at `~/.config/errand/errandd.toml` is the source of truth:
+
+```toml
+transport = "both" # "both", "ssh", or "tailscale"
+listen = "tailnet:7443"
+```
+
+New setups save `"both"`. If Tailscale is unavailable, setup saves
+`listen = "none"` temporarily while keeping `transport = "both"`; rerunning
+setup after connecting Tailscale enables the listener. Once enabled, a
+Tailscale outage does not rewrite the saved listener or access policy.
+
+`errand setup --ssh` and `errand setup --tailscale` are shortcuts for changing
+`transport`. Edit it directly and run `errand setup` to apply it. The SSH mode
+disables the TCP listener regardless of `listen`; a saved custom address is
+retained for future tailnet use. The Tailscale mode disables SSH job access
+and requires Tailscale; the private socket still supports health checks and
+setup. Setting Tailscale mode with `listen = "none"` selects `tailnet:7443`.
+SSH access also requires an OS SSH server and login access to the runner account.
+
+Without a `transport` setting, legacy configs keep their existing behavior:
+`listen = "none"` selects SSH-only; other listeners permit both. Add
+`transport = "both"` to let setup enable Tailscale on a legacy SSH-only runner.
+See [runner setup](OPERATIONS.md#runner-setup) for preservation and restart behavior.
+
 ## Runner access
 
 `errand access` manages the runner's saved `allow_users` and `deny_users`

@@ -107,7 +107,12 @@ func Diagnose(ctx context.Context, configPath string, sys DiagnosticSystem) Diag
 		r.SocketPath = d.SocketPath()
 		r.add("configuration", "ok", "Loaded runner settings; local socket: "+r.SocketPath, "")
 	}
-	diagnoseSSHPath(sys, &r)
+	mode, _ := d.TransportMode()
+	if configErr == nil && mode == config.TransportTailscale {
+		r.add("ssh-path", "skipped", "SSH transport is disabled in the runner config.", "")
+	} else {
+		diagnoseSSHPath(sys, &r)
+	}
 	diagnoseService(ctx, sys, &r, expectService, active, serviceErr)
 	if configErr != nil {
 		r.add("socket", "skipped", "Runner configuration did not resolve.", "")

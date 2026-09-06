@@ -706,3 +706,37 @@ func TestIdempotentSubmitChecksOwnerBeforeUnavailableDigest(t *testing.T) {
 		t.Fatalf("owner unavailable-digest status = %d, want 409", w.Code)
 	}
 }
+
+func TestTailscaleOnlyKeepsLocalControlButDisablesSSHJobs(t *testing.T) {
+	d, err := New(Config{StateDir: t.TempDir(), Version: "test", DisableSSH: true, InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	for _, tc := range []struct {
+		method, path string
+		local        bool
+		status       int
+	}{
+		{"GET", "/v0/info", true, 200},
+		{"GET", "/v0/jobs", true, 403},
+		{"GET", "/v0/jobs", false, 200},
+		{"POST", "/v0/setup/quiesce", true, 201},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		if tc.local {
+			req = req.WithContext(context.WithValue(req.Context(), localPeerKey{}, LocalPeer{UID: currentUID()}))
+		}
+		out := httptest.NewRecorder()
+		d.Handler().ServeHTTP(out, req)
+		if out.Code != tc.status {
+			t.Fatalf("%s %s local=%v: %d %s", tc.method, tc.path, tc.local, out.Code, out.Body.String())
+		}
+		if tc.path == "/v0/info" {
+			var info proto.Info
+			if err := json.Unmarshal(out.Body.Bytes(), &info); err != nil || !info.SSHDisabled {
+				t.Fatalf("missing transport state: %v / %+v", err, info)
+			}
+		}
+	}
+}

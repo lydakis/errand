@@ -431,8 +431,9 @@ type Facts struct {
 }
 
 type Info struct {
-	Proto   int    `json:"proto"`
-	Version string `json:"version"`
+	SSHDisabled bool   `json:"ssh_disabled,omitempty"` // absent on older runners, which support SSH
+	Proto       int    `json:"proto"`
+	Version     string `json:"version"`
 	// Busy means a submission right now would be refused because capacity is
 	// full or the runner is temporarily quiesced for setup.
 	Busy         bool  `json:"busy"`

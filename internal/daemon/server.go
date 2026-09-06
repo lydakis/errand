@@ -50,6 +50,7 @@ const (
 )
 
 type Config struct {
+	DisableSSH       bool // retain local setup/health access, but reject local job operations
 	Listen           string
 	StateDir         string
 	AllowUsers       []string
@@ -725,6 +726,10 @@ func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 			httpError(w, http.StatusForbidden, err.Error())
 			return
 		}
+		if id.Local && d.cfg.DisableSSH && r.URL.Path != "/v0/info" && r.URL.Path != "/v0/setup/quiesce" {
+			httpError(w, http.StatusForbidden, "SSH transport is disabled in the runner config")
+			return
+		}
 		if action != "" && !id.Allowed(action) {
 			httpError(w, http.StatusForbidden,
 				fmt.Sprintf("caller %s lacks the %q action", id.Owner(), action))
@@ -740,6 +745,7 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) 
 	busy := d.capacityFullLocked() || d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil)
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, proto.Info{
+		SSHDisabled:  d.cfg.DisableSSH,
 		Proto:        proto.ProtoVersion,
 		Version:      d.cfg.Version,
 		Busy:         busy,

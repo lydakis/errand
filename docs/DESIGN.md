@@ -160,7 +160,10 @@ daemon authorizes against an explicit, revocable, directed grant:
    path when the non-interactive SSH `PATH` does not contain it, and
    `remote_socket` when the runner was started with a non-default config,
    state directory, or socket path.
-   Set `listen = "none"` for an SSH-only runner with no Tailscale. The Unix
+   Set `transport = "ssh"` for an SSH-only runner with no Tailscale.
+   `transport = "tailscale"` disables the SSH bridge and local job operations;
+   the private socket retains health and setup access. Legacy configs without
+   `transport` use `listen = "none"` to select SSH-only operation. The Unix
    socket is the sanctioned loopback route; the TCP listener still refuses
    loopback and self-target connections, which WhoIs cannot identify.
 

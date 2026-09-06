@@ -246,3 +246,32 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 		})
 	}
 }
+
+func TestSSHBridgeHonorsRunningDaemonTransportConfig(t *testing.T) {
+	bin := buildErrand(t)
+	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), Version: "test", DisableSSH: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	dir, err := os.MkdirTemp("/tmp", "errand-transport-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	socket := filepath.Join(dir, "runner.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &http.Server{Handler: d.Handler(), ConnContext: daemon.ConnContext}
+	go server.Serve(listener)
+	defer server.Close()
+	// An explicit socket must consult the live daemon rather than a different
+	// default config file on disk. Control-plane health remains available.
+	cmd := exec.Command(bin, "_stdio", "--socket", socket)
+	out, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "SSH transport is disabled") {
+		t.Fatalf("bridge: %v / %s", err, out)
+	}
+}

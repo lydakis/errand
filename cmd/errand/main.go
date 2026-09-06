@@ -26,6 +26,7 @@ import (
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/setup"
 	"github.com/lydakis/errand/internal/tailnet"
 	"github.com/lydakis/errand/internal/workspace"
 )
@@ -837,6 +838,7 @@ func cmdServe(args []string) int {
 		}
 	}
 	d, err := daemon.New(daemon.Config{
+		DisableSSH:         fileCfg.Transport == config.TransportTailscale,
 		Listen:             addr,
 		StateDir:           fileCfg.StateDir,
 		AllowUsers:         fileCfg.AllowUsers,
@@ -869,8 +871,12 @@ func cmdServe(args []string) int {
 		if identity != nil {
 			mode = "tailnet whois via " + identity.Name()
 		}
-		log.Printf("errand %s serving on %s (%s) and %s (SSH); state %s",
-			version, addr, mode, socketPath, fileCfg.StateDir)
+		socketUse := "SSH and local control"
+		if fileCfg.Transport == config.TransportTailscale {
+			socketUse = "local control only"
+		}
+		log.Printf("errand %s serving on %s (%s) and %s (%s); state %s",
+			version, addr, mode, socketPath, socketUse, fileCfg.StateDir)
 	} else {
 		log.Printf("errand %s serving on %s (SSH only); state %s", version, socketPath, fileCfg.StateDir)
 	}
@@ -981,9 +987,20 @@ func cmdStdio(args []string) int {
 		}
 		socket = cfg.SocketPath()
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	info, err := (setup.RealSystem{}).Probe(ctx, socket)
+	cancel()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errand _stdio: cannot reach runner at %s (run errand setup): %v\n", socket, err)
+		return 1
+	}
+	if info.SSHDisabled {
+		fmt.Fprintln(os.Stderr, "errand _stdio: SSH transport is disabled in the runner config; edit transport and rerun errand setup")
+		return 1
+	}
 	conn, err := net.DialTimeout("unix", socket, 5*time.Second)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand _stdio: no runner at %s (is errand serve running here?): %v\n", socket, err)
+		fmt.Fprintf(os.Stderr, "errand _stdio: no runner at %s (run errand setup on the runner): %v\n", socket, err)
 		return 1
 	}
 	defer conn.Close()

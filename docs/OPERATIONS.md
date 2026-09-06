@@ -28,15 +28,18 @@ The command exits nonzero if any selected peer cannot be queried.
 
 ## Runner setup
 
-`errand setup` is idempotent: it keeps an existing config or service
-definition unless `--force` is given, enables user-service linger on Linux
-(so the runner survives logout), installs a launch agent on macOS, and
-restarts the service so preserved configuration edits are active. Before
+`errand setup` defaults to both SSH and Tailscale for new runners.
+`errand setup --ssh` saves an SSH-only preference; `errand setup --tailscale`
+saves a Tailscale-only preference. These flags update `transport` in the runner
+config without requiring `--force`. Plain setup respects that saved setting.
+All modes install and start the same platform service, with user-service
+linger on Linux and a launch agent on macOS. Setup preserves unrelated config
+values and existing service definitions unless `--force` is given. Before
 writing anything, it reserves an idle runner and blocks new admissions until
 restart; it refuses while jobs are staging, starting, running, or queued.
 Generated services retain the absolute entries from the setup shell's `PATH`
 and add the standard system directories, so runner-installed developer tools
-remain available to jobs. Setup also links `/usr/local/bin/errand` when it can
+remain available to jobs. When SSH is enabled, setup also links `/usr/local/bin/errand` when it can
 (so SSH callers find it on the non-interactive PATH); otherwise its client
 snippet includes the required absolute `remote_command`. It then probes the
 daemon over its own socket. `-n` or `--dry-run` shows every decision;
@@ -86,6 +89,61 @@ readiness, reports next steps, and submits no job or configuration changes.
 See [doctor checks](CONFIGURATION.md#diagnose-the-selected-runner) for scope
 and exit codes.
 
+## SSH-only setup
+
+Install Errand on both machines and enable SSH access to the runner account.
+On the runner, install the service as that account:
+
+```sh
+errand setup
+```
+
+For a default installation, setup saves `transport = "both"`. If Tailscale
+is unavailable, it reports why and writes `listen = "none"` for now. After
+installing or connecting Tailscale, rerun `errand setup`: it enables the
+listener and records the discovered identity provider. On first activation,
+it grants the runner's tailnet owner access only if no explicit allowlist or
+capability policy is already configured. Existing denials are preserved.
+
+To explicitly use SSH alone, run `errand setup --ssh`. It saves
+`transport = "ssh"` and skips Tailscale discovery. SSH login to the runner's
+OS account must be enabled separately; setup configures Errand's bridge,
+not the operating system's SSH server. For Tailscale alone, use
+`errand setup --tailscale`; Tailscale must be available and authenticated.
+That mode disables the SSH bridge and local job operations, while retaining
+the private socket for health checks and setup.
+
+Edit `transport` in `~/.config/errand/errandd.toml` anytime, then rerun setup:
+`"both"`, `"ssh"`, and `"tailscale"` are the supported values. A custom config
+uses `errand setup --config PATH`. Existing configs without `transport` keep
+their legacy behavior: `listen = "none"` means SSH-only; any other listener
+permits both. Set `transport = "both"` to opt a legacy SSH-only runner into
+later tailnet discovery.
+
+An explicit `--ssh` or `--tailscale` also repairs an invalid saved transport.
+Use `--force` (`-f`) only if you want to regenerate the rest of the config
+and service definitions too; `--dry-run` (`-n`) previews either operation.
+
+Setup does not remove an enabled tailnet listener during an outage: it stops
+before making changes. Pending tailnet access in `"both"` mode can remain
+pending across reruns. Explicit tailnet options also require Tailscale;
+a running installation must meet Errand's version requirement. Mode changes
+and first-time tailnet activation preserve unrelated config values, including
+queue limits, cache settings, custom sockets, and access policy, but reformat
+the TOML and remove comments. Unchanged configs remain byte-for-byte intact.
+`--force` regenerates config and service definitions and replaces custom settings.
+
+On the client, register the SSH host or ssh_config alias:
+
+```sh
+errand peers add buildbox YOUR_SSH_HOST --ssh
+```
+
+SSH must log in as the user running the daemon. If Errand is not on the
+non-interactive SSH PATH, add `--remote-command /absolute/path/to/errand`
+to the registration command. For custom daemon sockets, also pass
+`--remote-socket /absolute/path/to/errand.sock`.
+
 ## SSH and runner capacity
 
 An SSH peer uses the same HTTP protocol over `ssh HOST errand _stdio`. The
@@ -102,7 +160,7 @@ remote_socket = "/srv/errand/errand.sock"
 
 `errand setup` always prints the effective `remote_socket`, so the SSH peer
 remains correct when setup uses a custom config, state directory, or socket.
-Set `listen = "none"` in `errandd.toml` for an SSH-only runner. SSH handles
+Set `transport = "ssh"` in `errandd.toml` for an SSH-only runner. SSH handles
 host authentication, keys, jump hosts, and caller access. Jobs submitted over
 SSH and the tailnet have separate owners.
 Runners execute one job at a time by default and queue up to eight more. Set

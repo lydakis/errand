@@ -36,6 +36,8 @@ type fakeSystem struct {
 	releasedLeases []string
 	writableChecks []string
 	writes         []string
+	discoverCalls  int
+	discoverErr    error
 	discoverSocket string
 	discoverCLI    string
 }
@@ -103,6 +105,10 @@ func (f *fakeSystem) Run(_ context.Context, name string, args ...string) (string
 	return f.cmdOutput[line], nil
 }
 func (f *fakeSystem) Discover(socket, cli string) (tailnet.Provider, error) {
+	f.discoverCalls++
+	if f.discoverErr != nil {
+		return nil, f.discoverErr
+	}
 	f.discoverSocket = socket
 	f.discoverCLI = cli
 	return f.provider, nil
@@ -143,8 +149,9 @@ func (f *fakeSystem) ReleaseQuiesce(_ context.Context, socket, token string) err
 }
 
 type fakeProvider struct {
-	name string
-	self tailnet.Self
+	name    string
+	self    tailnet.Self
+	selfErr error
 }
 
 func (p fakeProvider) Name() string { return p.name }
@@ -152,7 +159,7 @@ func (p fakeProvider) WhoIs(context.Context, string, string) (tailnet.WhoIs, err
 	return tailnet.WhoIs{}, errors.New("not used")
 }
 func (p fakeProvider) SelfIPs(context.Context) ([]string, error)  { return p.self.IPs, nil }
-func (p fakeProvider) Self(context.Context) (tailnet.Self, error) { return p.self, nil }
+func (p fakeProvider) Self(context.Context) (tailnet.Self, error) { return p.self, p.selfErr }
 
 func ran(f *fakeSystem, prefix string) bool {
 	for _, c := range f.commands {

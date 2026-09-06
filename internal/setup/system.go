@@ -1,6 +1,6 @@
 // Package setup turns a machine into an errand runner idempotently:
-// discover how to reach tailscaled, write a runner config that names the
-// machine's own owner, install the platform service, make the binary
+// discover tailnet access or configure SSH-only access for a new runner,
+// write a runner config, install the platform service, make the binary
 // reachable for SSH callers, and prove the daemon answers. Every side
 // effect goes through System so the decisions are testable without
 // touching a real systemd or launchd.

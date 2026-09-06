@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -15,9 +16,17 @@ import (
 func renderConfig(c ConfigChoice) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# errand runner configuration written by `errand setup`.\n")
-	fmt.Fprintf(&b, "# Edit freely; setup never rewrites this file without --force.\n\n")
+	fmt.Fprintf(&b, "# Edit freely; setup preserves settings while reconciling requested transports.\n\n")
+	if c.Transport != "" {
+		fmt.Fprintf(&b, "transport = %q\n", c.Transport)
+	}
 	fmt.Fprintf(&b, "listen = %q\n", c.Listen)
 	fmt.Fprintf(&b, "max_jobs = %d\n", c.MaxJobs)
+	if strings.EqualFold(strings.TrimSpace(c.Listen), config.DisabledListener) {
+		fmt.Fprintln(&b, "\n# SSH callers must log in as the user running this service.")
+		fmt.Fprintln(&b, "# Only the private Unix socket is enabled; Tailscale is not required.")
+		return b.String()
+	}
 	fmt.Fprintf(&b, "\n# Tailnet logins granted full runner access (the runner's owner by default).\n")
 	fmt.Fprintf(&b, "allow_users = [")
 	for i, u := range c.AllowUsers {
