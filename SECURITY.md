@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Errand is under pre-release v0 development. Security fixes target the current
+Errand is in early v0 development. Security fixes target the current
 `main` branch. Older commits and development snapshots are not separately
 supported unless the issue also affects current `main`.
 
@@ -29,6 +29,12 @@ kernel peer credentials match its OS user. Jobs run directly as the runner's OS
 user, transfer workspace snapshots, and can return selected workspace changes
 to the originating client.
 
+Both transports reach the same daemon, HTTP handlers, job queue, and state.
+The daemon accepts tailnet HTTP traffic on its network listener; SSH starts
+an `errand _stdio` bridge to the daemon's private Unix socket. They retain
+distinct ownership principals: a tailnet user or node and a local OS user
+are not interchangeable identities for access to an existing job.
+
 This policy covers the CLI, daemon, HTTP protocol, authorization, snapshots,
 archives, caches, receipts, retained changes, local change application, process
 cleanup, attached TCP forwarding, configuration and profiles, local access
@@ -41,6 +47,18 @@ and [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 The following properties must hold:
 
 - Requests fail closed unless the caller has the required Errand action.
+- The runner's saved `transport` preference selects `both`, `ssh`, or
+  `tailscale`. SSH-only mode disables the network listener. Tailscale-only
+  mode rejects SSH bridging and local job operations, while retaining
+  same-user Unix-socket access to `/v0/info` and `/v0/setup/quiesce` for health
+  checks and safe setup restarts. These controls do not grant access to jobs.
+- Setup preserves existing authorization policy when changing transports
+  unless the operator explicitly requests a configuration rewrite with `--force`.
+  Unavailable Tailscale may defer first-time activation on a new default
+  runner, but must not silently disable an established tailnet listener.
+  Setup validates its planned configuration and checks for active jobs before
+  rewriting the configuration or restarting a managed service; dry runs do
+  neither.
 - An active exact `deny_users` login match overrides tailnet capabilities and
   `allow_users`. Saved access edits take effect only after daemon restart;
   tailnet login denials do not revoke SSH or Unix-socket access, deny tagged
@@ -92,6 +110,10 @@ outside a protected client or runner boundary are high-impact findings.
   execution of those values is expected behavior, not command injection.
 - Host jobs run trusted code and are not isolated from the runner account.
   Errand is not a containment boundary for hostile workloads.
+- Transport preferences govern Errand's connection paths, not OS account
+  access. Tailscale-only mode does not disable the host's SSH service or
+  revoke shell access; an actor with the runner account's authority can
+  modify its configuration and restart the daemon.
 - For host jobs, forwarding's job check is an ownership and liveness gate, not
   a network-isolation boundary. The tunnel can reach any service listening on
   the runner's shared IPv4 or IPv6 loopback at the selected port.
