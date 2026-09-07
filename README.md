@@ -73,8 +73,7 @@ errand peers add mac-mini YOUR_SSH_HOST --ssh
 ```
 
 See [SSH runner setup](docs/OPERATIONS.md#ssh-only-setup) for setup and custom
-paths. Setup without Tailscale requires a source build until the next release;
-Homebrew's v0.1.0 still requires Tailscale during setup.
+paths. Setup without Tailscale requires Errand v0.1.1 or newer.
 
 </details>
 
