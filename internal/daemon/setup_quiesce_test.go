@@ -13,7 +13,7 @@ import (
 )
 
 func TestSetupQuiesceBlocksAdmissionUntilReleased(t *testing.T) {
-	_, client := unixDaemon(t, Config{})
+	d, client := unixDaemon(t, Config{})
 	res, err := client.Post("http://errand/v0/setup/quiesce", "application/json", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
@@ -82,6 +82,19 @@ func TestSetupQuiesceBlocksAdmissionUntilReleased(t *testing.T) {
 	admitted.Body.Close()
 	if admitted.StatusCode != http.StatusCreated {
 		t.Fatalf("submission after release = %s, want 201", admitted.Status)
+	}
+	// Admission starts the job asynchronously. Wait for its final writes before
+	// the test closes the daemon and removes its state directory.
+	d.mu.Lock()
+	j := d.jobs[jobID]
+	d.mu.Unlock()
+	if j == nil {
+		t.Fatal("admitted job is missing")
+	}
+	select {
+	case <-j.done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("admitted job did not finish")
 	}
 }
 
