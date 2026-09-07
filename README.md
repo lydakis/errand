@@ -1,8 +1,16 @@
 # errand
 
-Run a command on another machine you own, with your current working tree.
-Logs stream to your terminal, the exit code comes back, and changed files
-can be fetched or applied locally. No remote checkout to maintain.
+Run your usual commands on another machine, from your laptop. Errand sends
+your current working tree, including uncommitted edits, streams logs to your
+terminal, and returns the exit code. No remote checkout to maintain.
+
+Let your Mac mini run tests or a coding agent while you keep working,
+start a development server elsewhere, or use a GPU machine for training.
+Put `errand --` in front of the command you'd normally run:
+
+```sh
+errand -- make test
+```
 
 <p align="center">
   <img src="docs/assets/errand-astral-projection.png" width="600" alt="Errand: running it elsewhere is a lot like astral projection.">
@@ -10,21 +18,17 @@ can be fetched or applied locally. No remote checkout to maintain.
 
 <p align="center"><sub>Adapted from Figure 7.1 in Daniel P. Dern's <i>The Internet Guide for New Users</i> (1994).</sub></p>
 
-One binary for macOS and Linux. Connect through Tailscale or SSH; each machine
-can send jobs, receive them, or both. Commands run directly on the runner, so
-install the tools your project needs there. Errand is for trusted code on
-machines you control. Interactive programs requiring a PTY are not supported.
-
 ## Install
+
+Install Errand on both machines. It supports macOS and Linux.
 
 With [Homebrew](https://brew.sh):
 
 ```sh
 brew install lydakis/errand/errand
-errand version
 ```
 
-Or download a macOS/Linux binary from [GitHub Releases](https://github.com/lydakis/errand/releases).
+Or download a binary from [GitHub Releases](https://github.com/lydakis/errand/releases).
 To build from source, use the Go version in [go.mod](go.mod):
 
 ```sh
@@ -33,109 +37,122 @@ go build -trimpath -o errand ./cmd/errand
 
 ## Quickstart
 
-Install Errand on both machines. For this example, both should be connected
-to the same Tailscale network under your login.
+The machine that runs your commands is the **runner**. For this walkthrough,
+connect both machines to the same Tailscale network under your login.
 
-On the machine that will run jobs:
+On the runner:
 
 ```sh
 errand setup
 ```
 
-Setup installs and starts the runner service. On your laptop, add that
-machine using its Tailscale hostname, then run a command from a Git worktree:
+Setup installs and starts the runner service. On your laptop, find it:
 
 ```sh
-errand peers add buildbox YOUR_RUNNER_HOSTNAME
-errand --on buildbox -- make test
+errand peers discover
 ```
 
-Errand sends the selected workspace, including uncommitted changes, streams
-the logs, and returns the command's exit code. Git-ignored files are excluded
-by default. Your local files stay unchanged unless you request application.
-The first peer you add becomes the default, so subsequent commands can use
-`errand -- make test`.
-
-For SSH, use `errand peers add buildbox YOUR_SSH_HOST --ssh`. See
-[runner setup and access](docs/OPERATIONS.md) for other logins, custom paths,
-and SSH-only runners.
-
-## Everyday use
-
-Run in the background and reconnect later:
+Discovery prints the command to add each available new runner. Run the one
+for your machine. For example:
 
 ```sh
-job=$(errand -d -- make build)
-errand ps
-errand status "$job"
-errand attach "$job"
+errand peers add mac-mini YOUR_RUNNER_HOSTNAME
 ```
 
-While attached, Ctrl-D detaches and leaves the job running. Ctrl-C interrupts
-the remote command. `errand kill HANDLE` stops a job you have detached from.
+`mac-mini` is the name you'll use for this runner. The first peer you add
+becomes the default.
 
-Bring changed files back:
+<details>
+<summary>Using SSH instead?</summary>
+
+Use a host or alias you already connect to with SSH, logging in as the user
+running Errand:
 
 ```sh
-errand fetch HANDLE                 # download into local staging
-errand fetch --apply HANDLE         # merge into the originating workspace
-errand fetch -o ./results HANDLE    # export remote files to a new directory
-errand --apply -- gofmt -w .        # apply automatically after clean success
+errand peers add mac-mini YOUR_SSH_HOST --ssh
 ```
 
-Ordinary workspace changes are retained automatically, including on failed
-jobs. Apply checks for local conflicts before changing your files. Attach
-only follows logs; it does not fetch or apply results.
+See [SSH runner setup](docs/OPERATIONS.md#ssh-only-setup) for setup and custom
+paths. Setup without Tailscale requires a source build until the next release;
+Homebrew's v0.1.0 still requires Tailscale during setup.
 
-Retain ignored outputs, or reuse a build cache on the runner:
+</details>
+
+### Run a command
+
+From your project's Git worktree, use the command you'd normally run:
 
 ```sh
-errand --artifact reports -- make test
-errand fetch -o ./test-results HANDLE reports
-errand --cache compiler=target -- cargo test
+errand -- make test
 ```
 
-Artifacts add files to the results you can fetch. Caches stay on the runner
-for later jobs and are excluded from uploads and results. Here `compiler`
-is a name you choose and `target` is its workspace-relative directory.
+Output streams here, and the exit code comes back. Your local files stay
+unchanged by default. Choose another runner with `errand --on NAME -- COMMAND`.
 
-Reach a remote development server through localhost:
+Each job gets a fresh workspace with your files, including uncommitted edits.
+Install the required tools on the runner. Git-ignored dependencies such as
+`node_modules` don't travel with your files; install them within the job
+when needed.
+
+### Leave it running and come back
+
+If you don't want to keep watching, press **Ctrl-D**. The command keeps
+running on the other machine. Later, find its handle and reattach:
 
 ```sh
-errand -L 3000 -- pnpm dev
+errand ps --last 5
+errand attach HANDLE
 ```
 
-Save recurring choices in `.errand.toml`:
+Ctrl-C interrupts the remote command. Reattaching follows logs; it doesn't
+bring changed files back. To start detached, use `errand -d -- COMMAND`.
 
-```toml
-[profiles.test.run]
-peer = "buildbox"
+## Open a remote development server locally
 
-[profiles.test.artifacts]
-paths = ["reports"]
-```
+Start your project's development server on your Mac mini, including its
+dependency install in the same job:
 
 ```sh
-errand --profile test -- make test
-errand config --profile test        # explain effective settings and sources
-errand doctor                      # check installation, runner, and connection
+errand --on mac-mini -L 3000 -- sh -c 'pnpm install && pnpm dev'
 ```
 
-Profiles are explicitly selected. Personal settings live in
-`~/.config/errand/config.toml`; CLI flags override configuration. See the
-[configuration guide](docs/CONFIGURATION.md) for precedence, environment
-forwarding, workspace roots, and all supported settings.
+For a server listening on port 3000, open `http://localhost:3000` on your
+laptop. The server runs on the mini; the port is available locally while
+you're attached.
 
-## Learn more
+Each run uses the files sent when it starts; later local edits aren't
+continuously synced. See [port forwarding](docs/USAGE.md#attached-sessions-and-forwarding)
+for multiple ports and reconnecting.
 
-- [Usage guide](docs/USAGE.md): command conventions, snapshots, sessions, fetch, and apply.
-- [Operations](docs/OPERATIONS.md): setup, access, SSH, diagnostics, and cleanup.
-- [Named caches](docs/NAMED_CACHES.md): reuse, ownership, leases, and removal.
-- [Design](docs/DESIGN.md): admission, receipts, failure recovery, and trust boundaries.
-- [Performance](docs/PERFORMANCE.md): measurements and reproducible benchmarks.
-- [Releases and upgrades](docs/RELEASING.md): packaging, publication, and runner migration.
+## Bring changed files back
 
-Use `errand --help` or `errand COMMAND --help` for flags and examples.
+Fetch stages a job's retained changes locally for inspection. Apply merges
+them into the workspace you submitted from:
+
+```sh
+errand fetch HANDLE
+errand fetch --apply HANDLE
+```
+
+Changes are retained even if the command fails. Apply checks for conflicts
+with your local edits before changing files. See [fetch and apply](docs/USAGE.md#retained-changes-fetch-and-apply)
+for details.
+
+## When you need more
+
+- **Collect a test report:** `errand --artifact reports -- make test` retains
+  ignored output too. [Artifacts and exporting results](docs/USAGE.md#artifacts-and-caches).
+- **Speed up repeat builds:** `errand --cache compiler=target -- cargo test`
+  reuses the runner's build cache. [Named caches](docs/NAMED_CACHES.md).
+- **Save recurring choices:** use `.errand.toml` and named profiles, then
+  inspect them with `errand config`. [Configuration](docs/CONFIGURATION.md).
+- **Troubleshoot a connection:** run `errand doctor`.
+  [Runner setup and troubleshooting](docs/OPERATIONS.md).
+
+Errand runs trusted code directly on machines you control. Commands must
+work without an interactive terminal; for coding agents, use their
+noninteractive mode. Use `errand --help` or `errand COMMAND --help` for flags
+and examples, or read the [usage guide](docs/USAGE.md).
 
 ## License
 
