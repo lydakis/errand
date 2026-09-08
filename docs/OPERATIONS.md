@@ -30,7 +30,8 @@ The command exits nonzero if any selected peer cannot be queried.
 
 `errand setup` defaults to both SSH and Tailscale for new runners.
 `errand setup --ssh` saves an SSH-only preference; `errand setup --tailscale`
-saves a Tailscale-only preference. These flags update `transport` in the runner
+saves a Tailscale-only preference. `errand setup --local` enables only local
+Unix-socket jobs. These flags update `transport` in the runner
 config without requiring `--force`. Plain setup respects that saved setting.
 All modes install and start the same platform service, with user-service
 linger on Linux and a launch agent on macOS. Setup preserves unrelated config
@@ -89,6 +90,59 @@ readiness, reports next steps, and submits no job or configuration changes.
 See [doctor checks](CONFIGURATION.md#diagnose-the-selected-runner) for scope
 and exit codes.
 
+## Local-only setup
+
+Available in the next release after v0.1.1. To run jobs on your laptop in
+separate workspaces without enabling remote access to its runner:
+
+```sh
+errand setup --local
+errand --on local -- make test
+errand doctor --on local
+```
+
+This installs the same background service with `transport = "local"`. Only
+its private Unix socket accepts jobs, restricted to the daemon's OS user.
+It opens no TCP listener, refuses `errand _stdio` SSH bridging, and requires
+neither Tailscale nor SSH. It does not install the SSH PATH shim. Plain setup,
+including after an upgrade, preserves local-only mode. Your remote default
+peer stays unchanged, and a failed remote run never falls back to local.
+`peers` and `ps` include the installed local runner alongside personal aliases.
+
+On an existing remote runner, `setup --local` switches that service to local
+access after the normal idle-runner check. Saved remote listener addresses
+and authorization policy remain available if you explicitly enable a remote
+transport later. Use `--dry-run` to preview the switch. A differing service
+definition is rejected before any changes: inspect it, then use
+`setup --local --force` if you want setup to replace it. Setup only reports
+success after the running daemon confirms local-only mode.
+This does not disable OS SSH login: anyone who can already run commands as your account can use
+its local socket too. A job runs with your account's permissions, even though
+its working directory is a separate snapshot.
+
+Setup and the built-in `local` target use the same default runner config,
+`$XDG_CONFIG_HOME/errand/errandd.toml` when set, otherwise
+`~/.config/errand/errandd.toml`, to determine the socket path. If your service
+uses `setup --config PATH`, put its effective absolute socket path in a personal peer table, then select that alias:
+
+```toml
+# ~/.config/errand/config.toml
+[peers.sandbox]
+socket = "/absolute/path/to/errand.sock"
+```
+
+```sh
+errand --on sandbox -- make test
+```
+
+Earlier setup versions always used `~/.config/errand/errandd.toml`. If that
+file exists but the XDG location is empty, setup stops before changing anything,
+including with `--force`. Use `errand setup --config ~/.config/errand/errandd.toml`
+to keep the existing configuration and transport settings; use a personal socket
+alias as above when the config is outside the current default location.
+
+For job lifecycle and apply behavior, see [local jobs](USAGE.md#local-jobs).
+
 ## SSH-only setup
 
 Install Errand on both machines and enable SSH access to the runner account.
@@ -114,13 +168,13 @@ That mode disables the SSH bridge and local job operations, while retaining
 the private socket for health checks and setup.
 
 Edit `transport` in `~/.config/errand/errandd.toml` anytime, then rerun setup:
-`"both"`, `"ssh"`, and `"tailscale"` are the supported values. A custom config
+`"both"`, `"ssh"`, `"tailscale"`, and `"local"` are the supported values. A custom config
 uses `errand setup --config PATH`. Existing configs without `transport` keep
 their legacy behavior: `listen = "none"` means SSH-only; any other listener
 permits both. Set `transport = "both"` to opt a legacy SSH-only runner into
 later tailnet discovery.
 
-An explicit `--ssh` or `--tailscale` also repairs an invalid saved transport.
+An explicit `--ssh`, `--tailscale`, or `--local` also repairs an invalid saved transport.
 Use `--force` (`-f`) only if you want to regenerate the rest of the config
 and service definitions too; `--dry-run` (`-n`) previews either operation.
 
@@ -170,9 +224,18 @@ Runners execute one job at a time by default and queue up to eight more. Set
 ## Storage and garbage collection
 
 `errand df` reports logical storage used by each runner's shared snapshot cache
-and the authenticated caller's named caches and job receipts, plus local change records and
-download staging. Human output uses readable binary units; `--json` preserves
-raw byte and item counts, cache limits, and cache TTL. Capability-based runners
+and the authenticated caller's named caches and job receipts. Each runner also
+reports aggregate change records and download staging for its OS account,
+including results it fetched while acting as a client. Only counts and byte
+totals are exposed, never filenames or contents. This uses the service's
+`XDG_STATE_HOME`, or its account's default state directory.
+
+The `local` row combines Unix-connected runner storage and the invoking
+client's fetched changes, counting shared change storage only once. Without a
+local runner it shows fetched changes alone. Older runners that do not report
+fetched-change usage show `-` for that column; upgrade the runner to include it
+in its total. Human output uses readable binary units; `--json` preserves
+raw byte and item counts and cache limits. Capability-based runners
 must grant `read-own` to use `errand df`; `manage-caches` remains required only
 for `errand gc cache`. Job receipt collection uses the separate `gc-own` action.
 The frozen design's ACL example includes the complete action set.

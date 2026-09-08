@@ -25,6 +25,7 @@ import (
 
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/unixpeer"
 )
 
 // System is the seam between setup's decisions and the machine.
@@ -263,8 +264,7 @@ func (RealSystem) ReleaseQuiesce(ctx context.Context, socket, token string) erro
 func unixHTTPClient(socket string) *http.Client {
 	return &http.Client{Transport: &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			var dialer net.Dialer
-			return dialer.DialContext(ctx, "unix", socket)
+			return unixpeer.Dial(ctx, socket, unixpeer.CurrentUID())
 		},
 	}}
 }

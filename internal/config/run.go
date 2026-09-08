@@ -192,6 +192,11 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 		}
 		return result, fmt.Errorf("no peer selected by %s; set --on or configure a peer", result.Sources["peer"])
 	}
+	if result.Peer == "local" && cli.Peer == "" && profile.Run.Peer == nil && selected.Peer != nil && personal.DefaultPeer != "local" {
+		if _, explicit := personal.Peers["local"]; !explicit {
+			return result, fmt.Errorf("workspace run.peer = local requires personal configuration, an explicitly selected profile, or --on local")
+		}
+	}
 	result.URL, err = personal.PeerURL(result.Peer)
 	if err != nil {
 		return result, fmt.Errorf("%s: %w", result.Sources["peer"], err)
@@ -199,6 +204,10 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	result.RemoteCommand = personal.SSHRemoteCommand(result.Peer)
 	result.RemoteSocket = personal.SSHRemoteSocket(result.Peer)
 	result.Sources["url"] = personalSource + " (peers." + result.Peer + ")"
+	if result.Peer == "local" && personal.Peers["local"].Socket == "" {
+		path, _ := DaemonPath()
+		result.Sources["url"] = "local runner configuration: " + path
+	}
 	if result.RemoteCommand != "" {
 		result.Sources["remote_command"] = result.Sources["url"]
 	}

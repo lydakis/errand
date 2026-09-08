@@ -352,19 +352,28 @@ type StorageCategory struct {
 	Bytes int64 `json:"bytes"`
 }
 
-// StorageStats is the caller-visible storage inventory on one runner. Jobs
-// includes only receipts owned by the authenticated caller. Cache is nil when
-// the runner's shared snapshot cache is disabled.
 type NamedCacheStats struct {
 	Items     int   `json:"items"`
 	Bytes     int64 `json:"bytes"`
 	Protected int   `json:"protected"`
 }
 
+// ChangeStorageStats describes fetched-change storage for the runner OS account.
+// StoreID is an opaque identity used only to deduplicate local storage roots.
+// It does not identify a machine across peers.
+type ChangeStorageStats struct {
+	StorageCategory
+	StoreID string `json:"store_id,omitempty"`
+}
+
+// StorageStats is the caller-visible storage inventory on one runner. Jobs and
+// named caches remain caller-owned; fetched changes are aggregate usage for
+// the runner OS account. Cache is nil when the shared snapshot cache is disabled.
 type StorageStats struct {
-	NamedCaches *NamedCacheStats `json:"named_caches,omitempty"`
-	Cache       *CacheStats      `json:"cache,omitempty"`
-	Jobs        StorageCategory  `json:"jobs"`
+	Changes     *ChangeStorageStats `json:"changes,omitempty"` // absent on older runners
+	NamedCaches *NamedCacheStats    `json:"named_caches,omitempty"`
+	Cache       *CacheStats         `json:"cache,omitempty"`
+	Jobs        StorageCategory     `json:"jobs"`
 }
 
 type CacheGCRequest struct {
@@ -431,6 +440,7 @@ type Facts struct {
 }
 
 type Info struct {
+	LocalOnly   bool   `json:"local_only,omitempty"`   // confirms network requests and SSH bridging are disabled
 	SSHDisabled bool   `json:"ssh_disabled,omitempty"` // absent on older runners, which support SSH
 	Proto       int    `json:"proto"`
 	Version     string `json:"version"`

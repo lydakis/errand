@@ -63,7 +63,7 @@ func TestSetupSSHReportWithoutTailnetIdentity(t *testing.T) {
 }
 
 func TestSetupTransportFlagConflicts(t *testing.T) {
-	for _, args := range [][]string{{"--ssh", "--tailscale"}, {"--ssh", "--allow-user", "friend@example.com"}, {"--ssh", "--print-acl"}} {
+	for _, args := range [][]string{{"--local", "--ssh"}, {"--local", "--tailscale"}, {"--local", "--print-acl"}, {"--local", "--allow-user", "friend@example.com"}, {"--ssh", "--tailscale"}, {"--ssh", "--allow-user", "friend@example.com"}, {"--ssh", "--print-acl"}} {
 		var out, errOut bytes.Buffer
 		if code := cmdSetupTo(args, &out, &errOut, nil); code != 2 {
 			t.Fatalf("%v: exit %d", args, code)
@@ -113,7 +113,7 @@ func (transportSetupDryRunSystem) Discover(string, string) (tailnet.Provider, er
 }
 
 func TestSetupTransportRepairFlagSpellings(t *testing.T) {
-	for _, mode := range []string{"ssh", "tailscale"} {
+	for _, mode := range []string{"ssh", "tailscale", "local"} {
 		for _, force := range []bool{false, true} {
 			name := mode + "/preserve"
 			if force {

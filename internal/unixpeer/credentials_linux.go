@@ -1,6 +1,6 @@
 //go:build linux
 
-package daemon
+package unixpeer
 
 import (
 	"net"
@@ -8,14 +8,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func currentUID() uint32 { return uint32(unix.Geteuid()) }
+func CurrentUID() uint32 { return uint32(unix.Geteuid()) }
 
-func peerCredentials(conn *net.UnixConn) (LocalPeer, error) {
+func Credentials(conn *net.UnixConn) (Peer, error) {
 	raw, err := conn.SyscallConn()
 	if err != nil {
-		return LocalPeer{}, err
+		return Peer{}, err
 	}
-	var peer LocalPeer
+	var peer Peer
 	var credErr error
 	if err := raw.Control(func(fd uintptr) {
 		cred, err := unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
@@ -23,9 +23,9 @@ func peerCredentials(conn *net.UnixConn) (LocalPeer, error) {
 			credErr = err
 			return
 		}
-		peer = LocalPeer{UID: cred.Uid, GID: cred.Gid}
+		peer = Peer{UID: cred.Uid, GID: cred.Gid}
 	}); err != nil {
-		return LocalPeer{}, err
+		return Peer{}, err
 	}
 	return peer, credErr
 }

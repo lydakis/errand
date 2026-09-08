@@ -27,7 +27,13 @@ type ChangeGCResult struct {
 // Bytes uses the same accounting as GC so the inventory and reclaimed-space
 // reports remain comparable.
 func ChangeStats() (proto.StorageCategory, error) {
-	return changeStatsWithCollector(collectChangeGCCandidates)
+	return changeStatsContext(context.Background())
+}
+
+func changeStatsContext(ctx context.Context) (proto.StorageCategory, error) {
+	return changeStatsWithCollector(func(jobs, downloads string, candidates map[string]*localChangeCandidate) error {
+		return collectChangeGCCandidatesContext(ctx, jobs, downloads, candidates, false)
+	})
 }
 
 func changeStatsWithCollector(
@@ -410,8 +416,18 @@ func collectChangeGCCandidatesMode(
 	candidates map[string]*localChangeCandidate,
 	readOnly bool,
 ) error {
+	return collectChangeGCCandidatesContext(context.Background(), jobs, downloads, candidates, readOnly)
+}
+
+func collectChangeGCCandidatesContext(ctx context.Context, jobs, downloads string, candidates map[string]*localChangeCandidate, readOnly bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if entries, err := os.ReadDir(jobs); err == nil {
 		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 				continue
 			}
@@ -430,6 +446,9 @@ func collectChangeGCCandidatesMode(
 	}
 	if entries, err := os.ReadDir(downloads); err == nil {
 		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			info, err := entry.Info()
 			if err != nil {
 				return err
@@ -452,7 +471,7 @@ func collectChangeGCCandidatesMode(
 					continue
 				}
 			} else {
-				unlock, err = acquireLocalChangeLock(localChangeTransferLockName(key))
+				unlock, err = acquireLocalChangeLockContext(ctx, localChangeTransferLockName(key))
 				if err != nil {
 					return err
 				}
@@ -461,7 +480,7 @@ func collectChangeGCCandidatesMode(
 			if readOnly {
 				size, err = readOnlyTreeSize(downloadPath)
 			} else {
-				size, err = changeops.TreeSize(downloadPath)
+				size, err = changeops.TreeSizeContext(ctx, downloadPath)
 			}
 			unlock()
 			if err != nil {

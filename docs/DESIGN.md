@@ -70,8 +70,10 @@ One Go binary. Every machine that installs it can both delegate and receive;
 there is no controller. This is a **symmetric peer-to-peer runner, not a
 mesh**: no peer relaying, no gossip, no shared scheduler, no distributed
 membership — and none should be accidentally grown. Symmetry describes the
-two roles, not self-execution: a client may target other peers, but a runner
-rejects connections originating from its own machine. Run local work directly.
+two roles. Explicit `--on local` execution uses the same snapshot and job
+lifecycle through the private Unix socket. TCP self-targeting remains rejected;
+there is no implicit local fallback. `setup --local` configures a daemon for
+same-user socket jobs without a network listener or Errand SSH bridge.
 
 Peers are **explicit** in personal config; `errand peers` probes configured
 peers' `/v0/info`; `--where` searches only those. Discovery is scoped, not
@@ -137,8 +139,8 @@ container runtime must actually respond, not merely sit on PATH.
 
 ## Transport and identity
 
-Two transports behind one peer abstraction, each yielding an identity the
-daemon authorizes against an explicit, revocable, directed grant:
+Two remote transports and a direct local socket path share one peer
+abstraction. Remote access requires an explicit, revocable, directed grant:
 
 1. **Tailnet (preferred).** Daemon binds the host's tailnet address.
    Callers are identified via destination-scoped WhoIs; the runner reaches
@@ -172,8 +174,17 @@ daemon authorizes against an explicit, revocable, directed grant:
    In errand vocabulary the sides are the **caller** (may submit) and the
    **runner** (accepts). A bidirectional relationship is two one-way grants.
 
-No third transport. No tailcat mode: control-plane-less tunnels discard the
-identity story errand depends on.
+3. **Local (amendment, 2026-09-07).** `--on local` connects directly to the
+   daemon's private Unix socket with the same kernel-verified OS-user identity
+   as the SSH bridge. `transport = "local"` disables the TCP listener and
+   refuses Errand SSH bridging while allowing local jobs. Plain setup preserves
+   this preference. This is not a restriction on an existing same-account SSH
+   shell, which can access the socket or change daemon settings. Workspace
+   preferences cannot select the built-in local target without personal opt-in,
+   a selected profile choosing local, or an explicit CLI selection.
+
+No additional remote transport. No tailcat mode: control-plane-less tunnels
+would discard the identity story errand depends on.
 
 ### Tailnet authorization, precisely
 
@@ -814,6 +825,17 @@ versions are not a compatibility contract.
    abstraction that also supports macOS runners.
 7. Nix backend.
 8. Facts-based `--where` selection with admission-time revalidation.
+
+### Next slices (2026-09-07)
+
+The core, SSH, forwarding, retention, and named caches above are implemented.
+The next sequence is explicit local execution and local-only setup, followed
+by persistent workspaces for iteration across separate job IDs, then the
+rootless container backend. Persistent workspaces will need an explicit
+lifecycle and one writer at a time; attaching to a job remains observation.
+Nix and facts-based selection remain later work. A harness wrapper can build
+on job execution and workspace continuity while owning its own agent-thread
+resumption; Errand need not own harness-specific conversation state.
 
 Milestone 1 alone replaces `scripts/remote-check` in the Atlas workflow and
 proves the shape on a real daily need.

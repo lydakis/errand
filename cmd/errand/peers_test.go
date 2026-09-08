@@ -238,6 +238,8 @@ func TestPeersRejectUnexpectedArgumentsBeforeIO(t *testing.T) {
 }
 
 func TestPeersSelectionAndPartialFailures(t *testing.T) {
+	// This fleet fixture has no installed local daemon.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	deps := peersDeps{
 		load: func() (config.Client, error) {
 			return config.Client{DefaultPeer: "cabal", Peers: map[string]config.Peer{
@@ -601,5 +603,15 @@ func TestDiscoverRecognizesPeersConfiguredByIPOrShortName(t *testing.T) {
 	}
 	if configuredAliasFor(hosts, other) != "" {
 		t.Fatal("unconfigured node wrongly matched")
+	}
+}
+
+func TestMisconfiguredSocketPeerRetainsItsDiagnosticTarget(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	rows, targets, err := peerListTargets("", "", peersDeps{load: func() (config.Client, error) {
+		return config.Client{Peers: map[string]config.Peer{"sandbox": {Socket: "relative/socket"}}}, nil
+	}})
+	if err != nil || len(rows) != 1 || rows[0].Status != "misconfigured" || rows[0].Target != "relative/socket" || targets[0] != "" {
+		t.Fatalf("socket diagnostic: rows=%+v targets=%v err=%v", rows, targets, err)
 	}
 }

@@ -41,6 +41,37 @@ is retained through peer edits and appears as a personal choice in provenance.
 The resolver reads the personal file once per resolution; malformed TOML is
 an error even when CLI flags override its settings.
 
+### Local targets
+
+Available in the next release after v0.1.1. `--on local` is a built-in target
+that uses the socket from the default `errandd.toml`, or its default socket
+path when that file is absent. Configure the daemon with
+[`errand setup --local`](OPERATIONS.md#local-only-setup). Setup does not change
+your default peer. To make local execution your personal default, set
+`default_peer = "local"` at the top of your personal config.
+
+For a custom local daemon, a personal alias can define an absolute socket path:
+
+```toml
+[peers.sandbox]
+socket = "/absolute/path/to/errand.sock"
+```
+
+Use `--on sandbox` or select it through the normal defaults and profiles.
+`socket` cannot be combined with `url`, `ssh`, `remote_command`, or
+`remote_socket`. The name `local` is reserved for a local target; an existing
+remote alias with that name must be renamed. `[peers.local]` may override the
+built-in socket path, or be empty to explicitly permit workspace preferences
+for local execution. Merely installing a local daemon does not grant that
+workspace preference. Alternatively, choose `local` in an explicitly selected
+profile or with `--on local`. A personal `default_peer = "local"` also permits
+workspace preferences for it. Resolution failures never fall back to local.
+
+Local jobs use the socket's OS-user identity. They share ownership with SSH
+jobs submitted to that same socket as the same account, but not with jobs
+submitted through tailnet identity. Existing SSH-enabled daemons accept local
+clients too; Tailscale-only daemons permit only socket health and setup calls.
+
 ## Workspace configuration
 
 ```toml
@@ -354,7 +385,7 @@ attach commands bind all requested local ports before contacting the runner.
 The runner config at `~/.config/errand/errandd.toml` is the source of truth:
 
 ```toml
-transport = "both" # "both", "ssh", or "tailscale"
+transport = "both" # "both", "ssh", "tailscale", or "local"
 listen = "tailnet:7443"
 ```
 
@@ -363,12 +394,15 @@ New setups save `"both"`. If Tailscale is unavailable, setup saves
 setup after connecting Tailscale enables the listener. Once enabled, a
 Tailscale outage does not rewrite the saved listener or access policy.
 
-`errand setup --ssh` and `errand setup --tailscale` are shortcuts for changing
-`transport`. Edit it directly and run `errand setup` to apply it. The SSH mode
+`errand setup --ssh`, `errand setup --tailscale`, and `errand setup --local`
+are shortcuts for changing `transport`. Edit it directly and run `errand setup` to apply it. The SSH mode
 disables the TCP listener regardless of `listen`; a saved custom address is
 retained for future tailnet use. The Tailscale mode disables SSH job access
 and requires Tailscale; the private socket still supports health checks and
 setup. Setting Tailscale mode with `listen = "none"` selects `tailnet:7443`.
+Local mode permits same-user Unix-socket jobs while disabling both the TCP
+listener and Errand SSH bridge. Like SSH mode, it preserves a saved listener
+address without activating it. Plain setup preserves the saved local mode.
 SSH access also requires an OS SSH server and login access to the runner account.
 
 Without a `transport` setting, legacy configs keep their existing behavior:

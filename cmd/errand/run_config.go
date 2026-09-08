@@ -39,14 +39,14 @@ func (f *runConfigFlags) bind(fs *flag.FlagSet) {
 	fs.Var(&f.envs, "e", "set NAME=VALUE in the job environment (repeatable)")
 	fs.Var(&f.passenvs, "passenv", "require and forward a local environment variable (repeatable; replaces configured pass list)")
 	fs.StringVar(&f.profile, "profile", "", "named run preferences from workspace or personal configuration")
-	fs.StringVar(&f.on, "on", "", "peer name from personal configuration")
+	fs.StringVar(&f.on, "on", "", "peer name from personal configuration, or local")
 	fs.StringVar(&f.url, "url", "", "peer base URL (mutually exclusive with --on)")
 	fs.StringVar(&f.workdir, "workdir", "", "working directory, relative to the workspace root")
 	fs.StringVar(&f.workdir, "w", "", "working directory, relative to the workspace root")
 	fs.StringVar(&f.root, "workspace-root", "", "snapshot root containing the current directory")
 	fs.BoolVar(&f.apply, "apply", false, "apply retained workspace changes after successful completion")
 	fs.BoolVar(&f.noApply, "no-apply", false, "do not apply retained workspace changes after the run")
-	fs.BoolVar(&f.noSnapshot, "no-snapshot", false, "run in an empty remote workspace")
+	fs.BoolVar(&f.noSnapshot, "no-snapshot", false, "run in an empty job workspace")
 }
 
 func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error) {

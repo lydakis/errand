@@ -129,7 +129,13 @@ func peerURLOf(p config.Peer) string {
 	if p.URL != "" {
 		return p.URL
 	}
-	return "ssh://" + p.SSH
+	if p.Socket != "" {
+		return p.Socket
+	}
+	if p.SSH != "" {
+		return "ssh://" + p.SSH
+	}
+	return ""
 }
 
 func cmdPeersAdd(args []string, stdout, stderr io.Writer, deps peersDeps) int {

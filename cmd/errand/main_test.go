@@ -745,8 +745,9 @@ func TestCmdDfJSONPreservesRawUsageAndNarrowsWithOn(t *testing.T) {
 			return
 		}
 		json.NewEncoder(w).Encode(proto.StorageStats{
-			Cache: &proto.CacheStats{Blobs: 3, Bytes: 42, MaxBytes: 100, TTLHours: 24},
-			Jobs:  proto.StorageCategory{Items: 2, Bytes: 58},
+			Cache:   &proto.CacheStats{Blobs: 3, Bytes: 42, MaxBytes: 100, TTLHours: 24},
+			Changes: &proto.ChangeStorageStats{StorageCategory: proto.StorageCategory{Items: 3, Bytes: 25}},
+			Jobs:    proto.StorageCategory{Items: 2, Bytes: 58},
 		})
 	}))
 	defer server.Close()
@@ -766,7 +767,7 @@ url = %q
 		t.Fatalf("df JSON does not expose local changes: %s", stdout.String())
 	}
 	if len(rows) != 2 || rows[0].Location != "cabal" || rows[0].Cache == nil ||
-		rows[0].Cache.Bytes != 42 || rows[0].Jobs.Bytes != 58 || rows[0].TotalBytes != 100 ||
+		rows[0].Cache.Bytes != 42 || rows[0].Jobs.Bytes != 58 || rows[0].TotalBytes != 125 || rows[0].Changes == nil || rows[0].Changes.Bytes != 25 ||
 		rows[1].Location != "local" || rows[1].Changes == nil {
 		t.Fatalf("df JSON = %+v", rows)
 	}

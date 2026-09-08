@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"io/fs"
 	"net/http"
@@ -15,6 +16,9 @@ import (
 func TestStorageEndpointReportsCacheAndOwnedJobBytes(t *testing.T) {
 	d, ts := testDaemon(t)
 	insertContent(t, d.cache, "cached")
+	d.cfg.ChangeStorage = func(context.Context) (proto.ChangeStorageStats, error) {
+		return proto.ChangeStorageStats{StorageCategory: proto.StorageCategory{Items: 2, Bytes: 123}, StoreID: "opaque"}, nil
+	}
 
 	jobID := proto.NewULID()
 	jobDir := filepath.Join(d.jobsDir(), jobID)
@@ -39,7 +43,7 @@ func TestStorageEndpointReportsCacheAndOwnedJobBytes(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusOK || stats.Cache == nil || stats.Cache.Blobs != 1 ||
 		stats.Cache.Bytes != int64(len("cached")) || stats.Jobs.Items != 1 ||
-		stats.Jobs.Bytes != int64(len("job-data")) {
+		stats.Jobs.Bytes != int64(len("job-data")) || stats.Changes == nil || stats.Changes.Bytes != 123 || stats.Changes.Items != 2 {
 		t.Fatalf("storage response = %s %+v", resp.Status, stats)
 	}
 }

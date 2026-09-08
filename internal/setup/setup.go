@@ -34,7 +34,7 @@ const (
 // Options are the operator's choices; everything else is discovered.
 type Options struct {
 	Transport  string // empty respects saved config; new runners default to both
-	ConfigPath string // empty uses ~/.config/errand/errandd.toml
+	ConfigPath string // empty uses the default runner path, honoring XDG_CONFIG_HOME
 	MaxJobs    int    // zero uses 1
 	AllowUsers []string
 	Socket     string // explicit tailscaled socket
@@ -107,7 +107,19 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	}
 	configPath := opts.ConfigPath
 	if configPath == "" {
-		configPath = filepath.Join(home, ".config", "errand", "errandd.toml")
+		configDir, err := config.Directory(home, sys.Getenv("XDG_CONFIG_HOME"))
+		if err != nil {
+			return r, err
+		}
+		configPath = filepath.Join(configDir, "errandd.toml")
+		// Released setup versions ignored XDG_CONFIG_HOME. Do not mistake an
+		// existing installation for a fresh one and change its transport policy.
+		legacyPath := filepath.Join(home, ".config", "errand", "errandd.toml")
+		if configPath != legacyPath && !sys.Exists(configPath) && sys.Exists(legacyPath) {
+			r.ConfigPath = configPath
+			r.fail("config", fmt.Errorf("existing runner config found at %s, but the XDG config %s is missing; rerun errand setup --config %q to keep using the existing configuration", legacyPath, configPath, legacyPath))
+			return r, nil
+		}
 	} else {
 		configPath, err = sys.Abs(configPath)
 		if err != nil {
@@ -166,6 +178,13 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	if err != nil {
 		r.fail("config", fmt.Errorf("reading effective config: %w", err))
 		return r, nil
+	}
+
+	if effective.Transport == config.TransportLocal && !opts.Force {
+		if err := preflightLocalService(sys, home, exe, configPath, runnerPath); err != nil {
+			r.fail("service", err)
+			return r, nil
+		}
 	}
 
 	var leaseToken string
@@ -235,7 +254,7 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	}
 
 	// 4. PATH for SSH callers.
-	if effective.Transport != config.TransportTailscale {
+	if effective.Transport != config.TransportTailscale && effective.Transport != config.TransportLocal {
 		ensureOnPath(sys, r, exe, opts.Force, opts.DryRun)
 	}
 
@@ -480,6 +499,10 @@ func probe(ctx context.Context, sys System, r *Report) {
 		cancel()
 		if err == nil {
 			r.Info = &info
+			if r.Config.Transport == config.TransportLocal && (!info.LocalOnly || !info.SSHDisabled) {
+				r.fail("probe", fmt.Errorf("daemon at %s did not confirm local-only mode; check the service command, overrides, and binary version", r.SocketPath))
+				return
+			}
 			r.step("probe", fmt.Sprintf("daemon %s answers on %s (%s/%s, %d cpu, kvm=%v, %d slots)",
 				info.Version, r.SocketPath, info.Facts.OS, info.Facts.Arch, info.Facts.NumCPU, info.Facts.KVM, info.MaxJobs), false)
 			return

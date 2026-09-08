@@ -108,7 +108,7 @@ func Diagnose(ctx context.Context, configPath string, sys DiagnosticSystem) Diag
 		r.add("configuration", "ok", "Loaded runner settings; local socket: "+r.SocketPath, "")
 	}
 	mode, _ := d.TransportMode()
-	if configErr == nil && mode == config.TransportTailscale {
+	if configErr == nil && (mode == config.TransportTailscale || mode == config.TransportLocal) {
 		r.add("ssh-path", "skipped", "SSH transport is disabled in the runner config.", "")
 	} else {
 		diagnoseSSHPath(sys, &r)
@@ -245,7 +245,7 @@ func diagnosticServiceDefinition(sys DiagnosticSystem) (bool, error) {
 
 func diagnoseTailnet(ctx context.Context, sys DiagnosticSystem, d config.Daemon, r *Diagnosis) {
 	if strings.EqualFold(strings.TrimSpace(d.Listen), config.DisabledListener) {
-		r.add("tailnet", "skipped", "TCP listening is disabled; this runner uses its local socket and SSH.", "")
+		r.add("tailnet", "skipped", "TCP listening is disabled; this runner uses its private Unix socket.", "")
 		return
 	}
 	provider, err := sys.Discover(d.TailscaledSocket, d.TailscaleCLI)

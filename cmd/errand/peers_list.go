@@ -98,6 +98,14 @@ func peerListTargets(on, rawURL string, deps peersDeps) ([]peerRow, []string, er
 	if err != nil {
 		return nil, nil, err
 	}
+	cfg = cfg.WithLocalPeer()
+	if on == "local" {
+		target, err := configuredPeerURL(cfg, on)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []peerRow{{Name: on, Target: target, Default: cfg.DefaultPeer == on}}, []string{target}, nil
+	}
 	if on != "" {
 		if _, ok := cfg.Peers[on]; !ok {
 			return nil, nil, fmt.Errorf("unknown peer %q", on)
@@ -123,6 +131,9 @@ func peerListTargets(on, rawURL string, deps peersDeps) ([]peerRow, []string, er
 			continue
 		}
 		targets[i] = target
+		if strings.HasPrefix(target, "unix://") {
+			rows[i].Target = target
+		}
 	}
 	return rows, targets, nil
 }

@@ -16,6 +16,7 @@ func TestDaemonTransportConfig(t *testing.T) {
 		{"transport = 'both'\nlisten = 'none'", "both", "none", false},
 		{"transport = 'ssh'\nlisten = 'tailnet:7443'", "ssh", "none", false},
 		{"transport = 'tailscale'\nlisten = 'none'", "tailscale", "tailnet:7443", false},
+		{"transport = 'local'\nlisten = 'tailnet:7443'", "local", "none", false},
 		{"transport = 'invalid'", "", "", true},
 	} {
 		p := filepath.Join(t.TempDir(), "runner.toml")

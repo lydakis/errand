@@ -51,12 +51,16 @@ func resolveTransport(ctx context.Context, opts Options, sys transportSystem, sa
 	if err != nil {
 		return transportPlan{}, err
 	}
-	sshOnly := mode == config.TransportSSH
+	socketOnly := mode == config.TransportSSH || mode == config.TransportLocal
 	explicitTailnet := opts.Socket != "" || opts.CLI != "" || len(opts.AllowUsers) != 0
-	if sshOnly && explicitTailnet {
-		return transportPlan{}, fmt.Errorf("SSH-only setup cannot use --tailscaled-socket, --tailscale-cli, or --allow-user")
+	if socketOnly && explicitTailnet {
+		label := mode
+		if mode == config.TransportSSH {
+			label = "SSH"
+		}
+		return transportPlan{}, fmt.Errorf("%s-only setup cannot use --tailscaled-socket, --tailscale-cli, or --allow-user", label)
 	}
-	// Retained listeners carry an existing policy even while SSH-only.
+	// Retained listeners carry an existing policy even while socket-only.
 	// Tailscale-only also enables the default listener when listen is "none".
 	tailnetConfigured := saved.daemon != nil && !strings.EqualFold(strings.TrimSpace(saved.daemon.Listen), config.DisabledListener)
 	if saved.daemon != nil {
@@ -66,7 +70,7 @@ func resolveTransport(ctx context.Context, opts Options, sys transportSystem, sa
 		tailnetConfigured = tailnetConfigured || oldMode == config.TransportTailscale || modeErr != nil
 	}
 	var provider tailnet.Provider
-	if !sshOnly {
+	if !socketOnly {
 		providerSocket, providerCLI := opts.Socket, opts.CLI
 		if providerSocket == "" && providerCLI == "" && saved.daemon != nil {
 			providerSocket = saved.daemon.TailscaledSocket
@@ -86,7 +90,7 @@ func resolveTransport(ctx context.Context, opts Options, sys transportSystem, sa
 			if tailnetConfigured || mode == config.TransportTailscale || explicitTailnet || saved.exists && saved.daemon == nil {
 				return transportPlan{}, err
 			}
-			sshOnly = true
+			socketOnly = true
 			r.step("tailnet", "unavailable: "+err.Error()+"; connect Tailscale and rerun errand setup to enable tailnet access", false)
 		} else {
 			if !tailnet.SupportsDestinationScopedWhoIs(self.Version) {
@@ -98,7 +102,7 @@ func resolveTransport(ctx context.Context, opts Options, sys transportSystem, sa
 				self.Version, provider.Name(), self.DNSName, self.Login), false)
 		}
 	}
-	if mode != config.TransportTailscale {
+	if mode != config.TransportTailscale && mode != config.TransportLocal {
 		r.step("ssh", "SSH bridge enabled; enable SSH login to this account on the runner if needed", false)
 	}
 
@@ -107,7 +111,7 @@ func resolveTransport(ctx context.Context, opts Options, sys transportSystem, sa
 	if choice.MaxJobs <= 0 {
 		choice.MaxJobs = 1
 	}
-	if sshOnly {
+	if socketOnly {
 		choice.Listen = config.DisabledListener
 	} else {
 		if saved.daemon != nil && !opts.Force && saved.daemon.Listen != "" && !strings.EqualFold(strings.TrimSpace(saved.daemon.Listen), config.DisabledListener) {
@@ -155,11 +159,11 @@ func reconcileConfig(opts Options, saved savedConfig, transport transportPlan) (
 			}
 			document["transport"] = mode
 			// Disabling a transport need not discard a custom listener address.
-			if mode != config.TransportSSH {
+			if mode != config.TransportSSH && mode != config.TransportLocal {
 				document["listen"] = choice.Listen
-			} else if oldMode != config.TransportSSH {
+			} else if oldMode != config.TransportSSH && oldMode != config.TransportLocal {
 				// Retain the effective listener, including a Tailscale-only
-				// listener normalized from "none", across an SSH round trip.
+				// listener normalized from "none", across a socket-only round trip.
 				document["listen"] = oldListen
 			}
 			if choice.Listen != config.DisabledListener {

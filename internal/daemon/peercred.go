@@ -5,6 +5,8 @@ import (
 	"net"
 	"os/user"
 	"strconv"
+
+	"github.com/lydakis/errand/internal/unixpeer"
 )
 
 // LocalPeer is the kernel-attested identity of a Unix-socket caller.
@@ -35,4 +37,10 @@ func ConnContext(ctx context.Context, conn net.Conn) context.Context {
 func localPeerFromContext(ctx context.Context) (LocalPeer, bool) {
 	peer, ok := ctx.Value(localPeerKey{}).(LocalPeer)
 	return peer, ok
+}
+
+func currentUID() uint32 { return unixpeer.CurrentUID() }
+func peerCredentials(conn *net.UnixConn) (LocalPeer, error) {
+	peer, err := unixpeer.Credentials(conn)
+	return LocalPeer{UID: peer.UID, GID: peer.GID}, err
 }

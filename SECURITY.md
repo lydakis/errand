@@ -29,7 +29,11 @@ kernel peer credentials match its OS user. Jobs run directly as the runner's OS
 user, transfer workspace snapshots, and can return selected workspace changes
 to the originating client.
 
-Both transports reach the same daemon, HTTP handlers, job queue, and state.
+Local clients can use the private Unix socket directly with `--on local`.
+Before sending requests, local clients and setup verify the connected server's
+kernel-attested UID matches their effective UID. This also protects custom
+socket paths against impersonation by another local user.
+All connection paths reach the same daemon, HTTP handlers, job queue, and state.
 The daemon accepts tailnet HTTP traffic on its network listener; SSH starts
 an `errand _stdio` bridge to the daemon's private Unix socket. They retain
 distinct ownership principals: a tailnet user or node and a local OS user
@@ -47,11 +51,17 @@ and [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 The following properties must hold:
 
 - Requests fail closed unless the caller has the required Errand action.
-- The runner's saved `transport` preference selects `both`, `ssh`, or
-  `tailscale`. SSH-only mode disables the network listener. Tailscale-only
+- The runner's saved `transport` preference selects `both`, `ssh`,
+  `tailscale`, or `local`. SSH-only mode disables the network listener. Tailscale-only
   mode rejects SSH bridging and local job operations, while retaining
   same-user Unix-socket access to `/v0/info` and `/v0/setup/quiesce` for health
-  checks and safe setup restarts. These controls do not grant access to jobs.
+  checks and safe setup restarts. Local-only mode permits same-user socket
+  jobs, disables the network listener, and refuses Errand SSH bridging.
+  Setup refuses differing service definitions before local-only configuration
+  changes unless explicitly replaced with `--force`, and verifies the running
+  daemon reports local-only mode before declaring success.
+  Plain setup preserves local-only mode; enabling remote access requires
+  an explicit transport change.
 - Setup preserves existing authorization policy when changing transports
   unless the operator explicitly requests a configuration rewrite with `--force`.
   Unavailable Tailscale may defer first-time activation on a new default
@@ -63,6 +73,10 @@ The following properties must hold:
   `allow_users`. Saved access edits take effect only after daemon restart;
   tailnet login denials do not revoke SSH or Unix-socket access, deny tagged
   nodes without that login, or terminate existing jobs and streams.
+- Storage inspection (`read-own`) exposes aggregate fetched-change counts and
+  bytes for the runner OS account, alongside shared cache usage. It does not
+  expose fetched filenames, contents, workspace paths, or job access across
+  ownership principals.
 - Job status, logs, changes, signals, forwarding, and collection respect the
   authenticated ownership boundary.
 - Job identifiers, manifests, archives, cache addresses, and change bundles
@@ -81,7 +95,10 @@ The following properties must hold:
 - Workspace defaults and explicitly selected profiles may choose personally
   configured peer aliases, apply preferences, and session forwards. They cannot
   define peer transports or bypass snapshot-boundary protections. Profiles are
-  never selected automatically; attachment profiles cannot retarget a job or
+  never selected automatically. A workspace preference for built-in `local`
+  requires personal opt-in (`default_peer = "local"` or `[peers.local]`),
+  an explicitly selected profile choosing local, or CLI `--on local`.
+  Attachment profiles cannot retarget a job or
   apply run environment, workdir, or apply preferences to it.
 - Retries cannot execute an admitted job twice. Ambiguous state is reported and
   is never treated as permission to replay execution.
@@ -111,9 +128,12 @@ outside a protected client or runner boundary are high-impact findings.
 - Host jobs run trusted code and are not isolated from the runner account.
   Errand is not a containment boundary for hostile workloads.
 - Transport preferences govern Errand's connection paths, not OS account
-  access. Tailscale-only mode does not disable the host's SSH service or
-  revoke shell access; an actor with the runner account's authority can
-  modify its configuration and restart the daemon.
+  access. Local-only and Tailscale-only modes do not disable the host's SSH
+  service or revoke shell access. A same-account SSH login can run a local
+  client, access the socket directly, or change the daemon configuration.
+  Local-only mode prevents Errand from enabling remote entry points; it
+  cannot distinguish local code from code launched through an existing shell
+  login under the same UID.
 - For host jobs, forwarding's job check is an ownership and liveness gate, not
   a network-isolation boundary. The tunnel can reach any service listening on
   the runner's shared IPv4 or IPv6 loopback at the selected port.

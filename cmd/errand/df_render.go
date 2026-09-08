@@ -1,19 +1,23 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
 )
 
 type dfRow struct {
+	hasRunner   bool
 	NamedCaches *proto.NamedCacheStats `json:"named_caches,omitempty"`
 	Location    string                 `json:"location"`
 	Cache       *proto.CacheStats      `json:"cache,omitempty"`
@@ -40,35 +44,21 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 	}
 
 	read, err := readFleet(*rawURL, *on, stderr, client.StorageStats)
-	if err != nil {
+	if err != nil && !errors.Is(err, errNoUsablePeers) {
 		fmt.Fprintf(stderr, "errand: %v\n", err)
 		return 1
 	}
-	rows := make([]dfRow, 0, len(read.results)+1)
-	for _, result := range read.results {
-		row := dfRow{
-			Location: result.target.name,
-			Cache:    result.value.Cache, NamedCaches: result.value.NamedCaches,
-			Jobs: result.value.Jobs,
-		}
-		if row.Cache != nil {
-			row.TotalBytes += row.Cache.Bytes
-		}
-		if row.NamedCaches != nil {
-			row.TotalBytes += row.NamedCaches.Bytes
-		}
-		row.TotalBytes += row.Jobs.Bytes
-		rows = append(rows, row)
-	}
-	changes, err := client.ChangeStats()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	changes, err := client.ChangeStorageStats(ctx)
+	var localChanges *proto.ChangeStorageStats
 	if err != nil {
 		fmt.Fprintf(stderr, "errand: local changes: %v\n", err)
 		read.failed = true
 	} else {
-		rows = append(rows, dfRow{
-			Location: "local", Changes: &changes, TotalBytes: changes.Bytes,
-		})
+		localChanges = &changes
 	}
+	rows := storageRows(read.results, localChanges)
 
 	if *jsonOutput {
 		encoder := json.NewEncoder(stdout)
@@ -80,7 +70,10 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 	} else {
 		writeDf(stdout, rows)
 	}
-	return read.exitCode()
+	if read.failed {
+		return 1
+	}
+	return 0
 }
 
 func writeDf(w io.Writer, rows []dfRow) {
@@ -102,7 +95,7 @@ func writeDf(w io.Writer, rows []dfRow) {
 			}
 		}
 		jobs := "-"
-		if row.Location != "local" {
+		if row.hasRunner {
 			jobs = formatByteSize(row.Jobs.Bytes)
 		}
 		changes := "-"

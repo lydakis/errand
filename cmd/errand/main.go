@@ -40,7 +40,7 @@ Usage:
   errand COMMAND --help
 
 Run options:
-  --on PEER | --url URL           Select a runner
+  --on PEER | --url URL           Select a runner (local for this machine)
   --profile NAME                 Use a named configuration profile
   -d, --detach                   Return a job handle after admission
   -w, --workdir REL               Command directory within the workspace
@@ -55,7 +55,7 @@ Run options:
   --no-caches                    Clear configured caches
   --workspace-root PATH          Select an explicit workspace boundary
   --include-all                  Allow a broad snapshot (never /)
-  --no-snapshot                  Run with an empty remote workspace
+  --no-snapshot                  Run with an empty job workspace
 
 Commands:
   errand peers                   List, add, remove, or discover runners
@@ -74,12 +74,13 @@ Commands:
   errand version                 Print the version
 
 Examples:
-  errand --on buildbox -- make test
+  errand --on mac-mini -- make test
+  errand --on local -- make test
   errand --apply -- gofmt -w .
   errand fetch --output ./results HANDLE
 
 A HANDLE is peer/ULID, printed when a job is submitted.
-While attached: Ctrl-D detaches; Ctrl-C interrupts the remote command.
+While attached: Ctrl-D detaches; Ctrl-C interrupts the command.
 Full command options: errand COMMAND --help`
 
 func main() {
@@ -232,7 +233,7 @@ func resolveHandle(handleArg, rawURL, on string) (peerURL, label, jobID string, 
 	switch {
 	case rawURL != "":
 		effectiveURL := strings.TrimSuffix(rawURL, "/")
-		if strings.HasPrefix(prefix, "http://") || strings.HasPrefix(prefix, "https://") || strings.HasPrefix(prefix, "ssh://") {
+		if strings.HasPrefix(prefix, "http://") || strings.HasPrefix(prefix, "https://") || strings.HasPrefix(prefix, "ssh://") || strings.HasPrefix(prefix, "unix://") {
 			handleURL := strings.TrimSuffix(prefix, "/")
 			if handleURL != effectiveURL {
 				return "", "", "", fmt.Errorf("handle peer %q conflicts with --url %q", handleURL, effectiveURL)
@@ -249,7 +250,7 @@ func resolveHandle(handleArg, rawURL, on string) (peerURL, label, jobID string, 
 		}
 	case prefix == "":
 		peerURL, label, err = resolvePeerTarget("", "")
-	case strings.HasPrefix(prefix, "http://") || strings.HasPrefix(prefix, "https://") || strings.HasPrefix(prefix, "ssh://"):
+	case strings.HasPrefix(prefix, "http://") || strings.HasPrefix(prefix, "https://") || strings.HasPrefix(prefix, "ssh://") || strings.HasPrefix(prefix, "unix://"):
 		peerURL = strings.TrimSuffix(prefix, "/")
 		label = peerURL
 	default:
@@ -460,6 +461,8 @@ func queryPeerTargets[T any](targets []peerTarget, query func(string) (T, error)
 	return results
 }
 
+var errNoUsablePeers = errors.New("no usable peers configured; check ~/.config/errand/config.toml")
+
 // readFleet standardizes the CLI contract for read-only discovery commands:
 // query every configured peer unless explicitly narrowed, preserve partial
 // results, report peer-specific failures, and fail the command if any selected
@@ -474,7 +477,7 @@ func readFleet[T any](rawURL, on string, stderr io.Writer, query func(string) (T
 		fmt.Fprintf(stderr, "errand: %v\n", warning)
 	}
 	if len(targets) == 0 {
-		return read, fmt.Errorf("no usable peers configured; check ~/.config/errand/config.toml")
+		return read, errNoUsablePeers
 	}
 	for _, result := range queryPeerTargets(targets, query) {
 		if result.err != nil {
@@ -516,6 +519,7 @@ func peerTargets(rawURL, on string) ([]peerTarget, []error, error) {
 		return []peerTarget{{name: on, url: url}}, nil, nil
 	}
 
+	cfg = cfg.WithLocalPeer()
 	names := make([]string, 0, len(cfg.Peers))
 	for name := range cfg.Peers {
 		names = append(names, name)
@@ -806,7 +810,7 @@ func parseRetentionDuration(value string) (time.Duration, error) {
 func cmdServe(args []string) int {
 	fs := flag.NewFlagSet("errand serve", flag.ExitOnError)
 	cfgPath := fs.String("config", "", "path to errandd.toml")
-	listen := fs.String("listen", "", `listen address ("tailnet:7443" resolves the tailnet IP; "none" is SSH-only)`)
+	listen := fs.String("listen", "", `listen address ("tailnet:7443" resolves the tailnet IP; "none" disables TCP)`)
 	stateDir := fs.String("state-dir", "", "receipt and job state directory")
 	insecure := fs.Bool("insecure-no-auth", false, "DANGEROUS: skip all authorization (tests only)")
 	var allowUsers stringList
@@ -817,6 +821,10 @@ func cmdServe(args []string) int {
 	fileCfg, err := config.LoadDaemon(*cfgPath)
 	if err != nil {
 		log.Fatalf("errand serve: %v", err)
+	}
+	if fileCfg.Transport == config.TransportLocal && *listen != "" && !strings.EqualFold(strings.TrimSpace(*listen), config.DisabledListener) {
+		log.Print("errand serve: local-only transport cannot enable a network listener; change the saved transport explicitly")
+		return 2
 	}
 	if *listen != "" {
 		fileCfg.Listen = *listen
@@ -838,7 +846,9 @@ func cmdServe(args []string) int {
 		}
 	}
 	d, err := daemon.New(daemon.Config{
+		ChangeStorage:      client.ChangeStorageStats,
 		DisableSSH:         fileCfg.Transport == config.TransportTailscale,
+		LocalOnly:          fileCfg.Transport == config.TransportLocal,
 		Listen:             addr,
 		StateDir:           fileCfg.StateDir,
 		AllowUsers:         fileCfg.AllowUsers,
@@ -878,7 +888,11 @@ func cmdServe(args []string) int {
 		log.Printf("errand %s serving on %s (%s) and %s (%s); state %s",
 			version, addr, mode, socketPath, socketUse, fileCfg.StateDir)
 	} else {
-		log.Printf("errand %s serving on %s (SSH only); state %s", version, socketPath, fileCfg.StateDir)
+		mode := "SSH and local jobs"
+		if fileCfg.Transport == config.TransportLocal {
+			mode = "local jobs only"
+		}
+		log.Printf("errand %s serving on %s (%s); state %s", version, socketPath, mode, fileCfg.StateDir)
 	}
 
 	unixServer := &http.Server{

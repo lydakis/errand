@@ -22,6 +22,10 @@ func renderConfig(c ConfigChoice) string {
 	}
 	fmt.Fprintf(&b, "listen = %q\n", c.Listen)
 	fmt.Fprintf(&b, "max_jobs = %d\n", c.MaxJobs)
+	if c.Transport == config.TransportLocal {
+		fmt.Fprintln(&b, "\n# Local jobs use the private Unix socket; no network listener or SSH bridge.")
+		return b.String()
+	}
 	if strings.EqualFold(strings.TrimSpace(c.Listen), config.DisabledListener) {
 		fmt.Fprintln(&b, "\n# SSH callers must log in as the user running this service.")
 		fmt.Fprintln(&b, "# Only the private Unix socket is enabled; Tailscale is not required.")

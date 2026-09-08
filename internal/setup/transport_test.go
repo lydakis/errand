@@ -13,23 +13,25 @@ import (
 )
 
 func TestSetupTransportPreferences(t *testing.T) {
-	for _, mode := range []string{"both", "ssh", "tailscale"} {
+	for _, mode := range []string{"both", "ssh", "tailscale", "local"} {
 		for _, goos := range []string{"linux", "darwin"} {
 			t.Run(mode+"/"+goos, func(t *testing.T) {
 				f := newFake(t, goos)
+				f.probeInfo.LocalOnly = mode == "local"
+				f.probeInfo.SSHDisabled = mode == "local" || mode == "tailscale"
 				r, err := Run(context.Background(), Options{Transport: mode}, f)
 				if err != nil || r.Failed() || r.Config.Transport != mode {
 					t.Fatalf("setup: %v / %+v", err, r)
 				}
-				if mode == "ssh" {
+				if mode == "ssh" || mode == "local" {
 					if f.discoverCalls != 0 || r.Config.Listen != "none" {
-						t.Fatal("SSH-only enabled Tailscale")
+						t.Fatal("socket-only enabled Tailscale")
 					}
 				} else if f.discoverCalls != 1 || r.Config.Listen != "tailnet:7443" {
 					t.Fatal("tailnet not configured")
 				}
-				if mode == "tailscale" && len(f.writableChecks) != 0 {
-					t.Fatal("Tailscale-only installed SSH path")
+				if (mode == "tailscale" || mode == "local") && len(f.writableChecks) != 0 {
+					t.Fatal("mode with SSH disabled installed SSH path")
 				}
 				var cfg config.Daemon
 				if err := toml.Unmarshal([]byte(f.files[r.ConfigPath]), &cfg); err != nil {

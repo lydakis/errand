@@ -1,6 +1,6 @@
 //go:build darwin
 
-package daemon
+package unixpeer
 
 import (
 	"net"
@@ -8,14 +8,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func currentUID() uint32 { return uint32(unix.Geteuid()) }
+func CurrentUID() uint32 { return uint32(unix.Geteuid()) }
 
-func peerCredentials(conn *net.UnixConn) (LocalPeer, error) {
+func Credentials(conn *net.UnixConn) (Peer, error) {
 	raw, err := conn.SyscallConn()
 	if err != nil {
-		return LocalPeer{}, err
+		return Peer{}, err
 	}
-	var peer LocalPeer
+	var peer Peer
 	var credErr error
 	if err := raw.Control(func(fd uintptr) {
 		cred, err := unix.GetsockoptXucred(int(fd), unix.SOL_LOCAL, unix.LOCAL_PEERCRED)
@@ -23,12 +23,12 @@ func peerCredentials(conn *net.UnixConn) (LocalPeer, error) {
 			credErr = err
 			return
 		}
-		peer = LocalPeer{UID: cred.Uid}
+		peer = Peer{UID: cred.Uid}
 		if cred.Ngroups > 0 {
 			peer.GID = cred.Groups[0]
 		}
 	}); err != nil {
-		return LocalPeer{}, err
+		return Peer{}, err
 	}
 	return peer, credErr
 }

@@ -77,6 +77,17 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 		stats.Jobs.Items++
 		stats.Jobs.Bytes += bytes
 	}
+	if d.cfg.ChangeStorage != nil {
+		changes, err := d.cfg.ChangeStorage(r.Context())
+		if err != nil {
+			if r.Context().Err() != nil {
+				return
+			}
+			httpError(w, http.StatusInternalServerError, "cannot inspect fetched-change storage")
+			return
+		}
+		stats.Changes = &changes
+	}
 	writeJSON(w, http.StatusOK, stats)
 }
 

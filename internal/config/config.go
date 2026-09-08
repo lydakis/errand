@@ -19,6 +19,7 @@ import (
 )
 
 type Peer struct {
+	Socket        string `toml:"socket,omitempty"` // local Unix socket; mutually exclusive with remote transports
 	URL           string `toml:"url"`
 	SSH           string `toml:"ssh,omitempty"`
 	RemoteCommand string `toml:"remote_command,omitempty"`
@@ -56,18 +57,32 @@ type Client struct {
 	Peers          map[string]Peer              `toml:"peers,omitempty"`
 }
 
-func dir() (string, error) {
-	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
-		if !filepath.IsAbs(x) {
+// Directory resolves the shared client and runner configuration directory.
+// Explicit inputs let setup use the same rule through its System boundary.
+func Directory(home, xdg string) (string, error) {
+	if xdg != "" {
+		if !filepath.IsAbs(xdg) {
 			return "", fmt.Errorf("XDG_CONFIG_HOME must be an absolute path")
 		}
-		return filepath.Join(x, "errand"), nil
+		return filepath.Join(xdg, "errand"), nil
 	}
-	home, err := userHomeDir()
-	if err != nil {
-		return "", err
+	if !filepath.IsAbs(home) {
+		return "", fmt.Errorf("user home directory must be an absolute path")
 	}
 	return filepath.Join(home, ".config", "errand"), nil
+}
+
+func dir() (string, error) {
+	xdg := os.Getenv("XDG_CONFIG_HOME")
+	var home string
+	if xdg == "" {
+		var err error
+		home, err = userHomeDir()
+		if err != nil {
+			return "", err
+		}
+	}
+	return Directory(home, xdg)
 }
 
 func userHomeDir() (string, error) {
@@ -105,6 +120,23 @@ func (c Client) PeerURL(name string) (string, error) {
 		return "", fmt.Errorf("no peer named and no default_peer configured")
 	}
 	p, ok := c.Peers[name]
+	if name == "local" || p.Socket != "" {
+		if p.URL != "" || p.SSH != "" || p.RemoteCommand != "" || p.RemoteSocket != "" {
+			if name == "local" {
+				return "", fmt.Errorf("peer %q: local socket access cannot define remote transports; rename any existing remote alias named local", name)
+			}
+			return "", fmt.Errorf("peer %q: socket cannot be combined with url, ssh, remote_command, or remote_socket", name)
+		}
+		socket := p.Socket
+		if socket == "" {
+			d, err := LoadDaemon("")
+			if err != nil {
+				return "", err
+			}
+			socket = d.SocketPath()
+		}
+		return LocalURL(socket)
+	}
 	if !ok || (p.URL == "" && p.SSH == "") {
 		return "", fmt.Errorf("peer %q is not configured", name)
 	}
@@ -145,7 +177,7 @@ func ValidatePeer(name string, peer Peer) error {
 }
 
 type Daemon struct {
-	Transport        string      `toml:"transport"` // both, ssh, or tailscale; empty preserves legacy listener semantics
+	Transport        string      `toml:"transport"` // both, ssh, tailscale, or local; empty preserves legacy listener semantics
 	Listen           string      `toml:"listen"`
 	StateDir         string      `toml:"state_dir"`
 	AllowUsers       []string    `toml:"allow_users"`
@@ -166,6 +198,7 @@ const (
 	TransportBoth      = "both"
 	TransportSSH       = "ssh"
 	TransportTailscale = "tailscale"
+	TransportLocal     = "local"
 )
 
 // TransportMode preserves explicit legacy SSH-only configurations. New setup
@@ -179,10 +212,10 @@ func (d Daemon) TransportMode() (string, error) {
 		return TransportBoth, nil
 	}
 	switch mode {
-	case TransportBoth, TransportSSH, TransportTailscale:
+	case TransportBoth, TransportSSH, TransportTailscale, TransportLocal:
 		return mode, nil
 	default:
-		return "", fmt.Errorf("transport must be both, ssh, or tailscale (got %q)", d.Transport)
+		return "", fmt.Errorf("transport must be both, ssh, tailscale, or local (got %q)", d.Transport)
 	}
 }
 
@@ -193,7 +226,7 @@ func (d *Daemon) NormalizeTransport() error {
 		return err
 	}
 	d.Transport = mode
-	if mode == TransportSSH {
+	if mode == TransportSSH || mode == TransportLocal {
 		d.Listen = DisabledListener
 	}
 	if d.Listen == "" || mode == TransportTailscale && strings.EqualFold(strings.TrimSpace(d.Listen), DisabledListener) {
@@ -338,9 +371,11 @@ func AddPeer(path, name string, peer Peer, replace bool) (madeDefault bool, err 
 	}
 	var block strings.Builder
 	block.WriteString(fmt.Sprintf("\n[peers.%s]\n", name))
-	if peer.URL != "" {
+	if peer.Socket != "" {
+		block.WriteString(fmt.Sprintf("socket = %q\n", peer.Socket))
+	} else if peer.URL != "" {
 		block.WriteString(fmt.Sprintf("url = %q\n", peer.URL))
-	} else {
+	} else if peer.SSH != "" {
 		block.WriteString(fmt.Sprintf("ssh = %q\n", peer.SSH))
 		if peer.RemoteCommand != "" {
 			block.WriteString(fmt.Sprintf("remote_command = %q\n", peer.RemoteCommand))

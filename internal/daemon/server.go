@@ -50,6 +50,10 @@ const (
 )
 
 type Config struct {
+	// ChangeStorage reports aggregate fetched-change usage for this process's OS
+	// account. It exposes no workspace paths or contents to remote callers.
+	ChangeStorage    func(context.Context) (proto.ChangeStorageStats, error)
+	LocalOnly        bool // reject network requests and SSH bridging; allow same-user socket jobs
 	DisableSSH       bool // retain local setup/health access, but reject local job operations
 	Listen           string
 	StateDir         string
@@ -726,6 +730,10 @@ func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 			httpError(w, http.StatusForbidden, err.Error())
 			return
 		}
+		if !id.Local && d.cfg.LocalOnly {
+			httpError(w, http.StatusForbidden, "runner permits local Unix-socket requests only")
+			return
+		}
 		if id.Local && d.cfg.DisableSSH && r.URL.Path != "/v0/info" && r.URL.Path != "/v0/setup/quiesce" {
 			httpError(w, http.StatusForbidden, "SSH transport is disabled in the runner config")
 			return
@@ -745,7 +753,8 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) 
 	busy := d.capacityFullLocked() || d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil)
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, proto.Info{
-		SSHDisabled:  d.cfg.DisableSSH,
+		SSHDisabled:  d.cfg.DisableSSH || d.cfg.LocalOnly,
+		LocalOnly:    d.cfg.LocalOnly,
 		Proto:        proto.ProtoVersion,
 		Version:      d.cfg.Version,
 		Busy:         busy,

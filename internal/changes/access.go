@@ -441,6 +441,14 @@ func (a *treeAccess) restore() error {
 
 // TreeSize measures a retained tree while preserving its logical permissions.
 func TreeSize(rootPath string) (int64, error) {
+	return TreeSizeContext(context.Background(), rootPath)
+}
+
+// TreeSizeContext supports canceling an inventory while restoring temporary access.
+func TreeSizeContext(ctx context.Context, rootPath string) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	info, err := os.Lstat(rootPath)
 	if err != nil {
 		return 0, err
@@ -448,7 +456,7 @@ func TreeSize(rootPath string) (int64, error) {
 	if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
 		return info.Size(), nil
 	}
-	access, err := makeTreeAccessible(rootPath)
+	access, err := makeTreeAccessibleContext(ctx, rootPath, -1, -1)
 	if err != nil {
 		return 0, err
 	}

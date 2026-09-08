@@ -20,6 +20,7 @@ const setupUsage = `usage: errand setup [options]
 Turn this machine into an errand runner. New runners default to both SSH
 and Tailscale; connect Tailscale later and rerun setup if it is unavailable.
 --ssh and --tailscale save a single-transport preference in errandd.toml.
+--local saves local-only access, without a network listener or SSH bridge.
 Plain setup respects the saved transport setting, which you can edit anytime.
 
 Install and start the platform service (systemd user unit + linger on Linux,
@@ -34,6 +35,7 @@ func cmdSetup(args []string) int {
 func cmdSetupTo(args []string, stdout, stderr io.Writer, sys setup.System) int {
 	fs := flag.NewFlagSet("errand setup", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	local := fs.Bool("local", false, "save local-only transport; no network listener or SSH bridge")
 	ssh := fs.Bool("ssh", false, "save SSH-only transport in the runner config")
 	tailscale := fs.Bool("tailscale", false, "save Tailscale-only transport in the runner config")
 	maxJobs := fs.Int("max-jobs", 1, "concurrent job slots")
@@ -70,11 +72,18 @@ func cmdSetupTo(args []string, stdout, stderr io.Writer, sys setup.System) int {
 		fmt.Fprintln(stderr, "errand setup: --tailscaled-socket and --tailscale-cli are mutually exclusive")
 		return 2
 	}
+	if *local && (*ssh || *tailscale || *socket != "" || *cli != "" || len(allow) != 0 || *printACL) {
+		fmt.Fprintln(stderr, "errand setup: --local conflicts with remote transport options")
+		return 2
+	}
 	if *ssh && (*tailscale || *socket != "" || *cli != "" || len(allow) != 0 || *printACL) {
 		fmt.Fprintln(stderr, "errand setup: --ssh conflicts with Tailscale options")
 		return 2
 	}
 	transport := ""
+	if *local {
+		transport = config.TransportLocal
+	}
 	if *ssh {
 		transport = config.TransportSSH
 	}
@@ -119,6 +128,17 @@ func printSetupReport(w io.Writer, r *setup.Report, dryRun bool) {
 			mark = "✓"
 		}
 		fmt.Fprintf(w, "%s %-8s %s\n", mark, s.Name, s.Detail)
+	}
+	if !r.Failed() && r.Config.Transport == config.TransportLocal {
+		if dryRun {
+			fmt.Fprintln(w, "\nlocal runner would be configured")
+		} else {
+			fmt.Fprintln(w, "\nlocal runner is ready")
+		}
+		fmt.Fprintln(w, "access: local Unix socket only; no network listener or SSH bridge")
+		fmt.Fprintln(w, "Run a local job: errand --on local -- COMMAND")
+		fmt.Fprintf(w, "For a custom runner config, set socket = %q in a personal [peers.NAME] table.\n", r.SocketPath)
+		return
 	}
 	sshOnly := strings.EqualFold(strings.TrimSpace(r.Config.Listen), "none")
 	if r.Failed() || r.Config.Listen == "" || (r.Self.DNSName == "" && !sshOnly) {

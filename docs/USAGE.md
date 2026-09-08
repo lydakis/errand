@@ -78,6 +78,42 @@ workdir, and apply preferences: `errand --profile build -- go test ./...`.
 CLI flags override profiles; `errand config --profile build` explains the
 result. See [configuration](CONFIGURATION.md) for syntax and precedence.
 
+## Local jobs
+
+Available in the next release after v0.1.1. Run a command in a separate
+workspace on this machine:
+
+```sh
+errand setup --local
+errand --on local -- make test
+```
+
+The command receives a snapshot with the same file-selection rules as a remote
+job. Its ordinary workspace edits stay in the job; your original checkout
+changes only through apply. The process still has your account's permissions,
+so this is a workspace copy, not a security sandbox.
+
+Start attached, press Ctrl-D if you want to stop watching, then use the
+printed `local/JOB_ID` handle:
+
+```sh
+errand ps --on local --last 5
+errand attach local/JOB_ID
+errand fetch local/JOB_ID
+errand fetch --apply local/JOB_ID
+```
+
+Exit codes, retained artifacts, named caches, explicit `-d`, and `--apply` /
+`--no-apply` follow the same rules as remote jobs. Each new invocation starts
+a new job workspace; attaching resumes observation, not execution in a
+completed workspace. Nothing automatically falls back to local execution.
+
+For a local development server, connect directly to its listening port.
+Local host jobs share your machine's ports; if you use forwarding, choose a
+different local port, such as `-L 8080:3000`, to avoid binding the server's port.
+See [local-only setup](OPERATIONS.md#local-only-setup) and
+[local target configuration](CONFIGURATION.md#local-targets).
+
 ## Attached sessions and forwarding
 
 An attached terminal can detach at any time with Ctrl-D and later resume with
@@ -189,6 +225,10 @@ jobs cannot hide a long-running job. `--all` includes terminal receipts;
 `--last N` includes all states and applies one global limit after merging.
 `--on` and `--url` explicitly narrow either view to one runner. Bare
 `errand peers` and `errand df` follow the same all-configured-peers rule.
+`df` groups local runner storage and fetched changes into one `local` row.
+Remote rows also include changes fetched by that runner's OS account when the
+runner supports this report. See [storage maintenance](OPERATIONS.md#storage-and-garbage-collection)
+for accounting and cleanup details.
 These read-only fleet commands share target selection, concurrent querying,
 partial-failure reporting, and exit semantics. Commands that mutate runner
 state remain explicitly single-runner.
