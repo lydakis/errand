@@ -17,13 +17,16 @@ import (
 )
 
 type dfRow struct {
-	hasRunner   bool
-	NamedCaches *proto.NamedCacheStats `json:"named_caches,omitempty"`
-	Location    string                 `json:"location"`
-	Cache       *proto.CacheStats      `json:"cache,omitempty"`
-	Jobs        proto.StorageCategory  `json:"jobs"`
-	Changes     *proto.StorageCategory `json:"changes,omitempty"`
-	TotalBytes  int64                  `json:"total_bytes"`
+	detailsUnavailable bool
+	Details            *proto.StorageDetails  `json:"details,omitempty"`
+	Workspaces         *proto.StorageCategory `json:"workspaces,omitempty"`
+	hasRunner          bool
+	NamedCaches        *proto.NamedCacheStats `json:"named_caches,omitempty"`
+	Location           string                 `json:"location"`
+	Cache              *proto.CacheStats      `json:"cache,omitempty"`
+	Jobs               proto.StorageCategory  `json:"jobs"`
+	Changes            *proto.StorageCategory `json:"changes,omitempty"`
+	TotalBytes         int64                  `json:"total_bytes"`
 }
 
 func cmdDf(args []string) int {
@@ -36,6 +39,9 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 	on := fs.String("on", "", "restrict to one peer name")
 	rawURL := fs.String("url", "", "restrict to one peer base URL")
 	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
+	verbose := false
+	fs.BoolVar(&verbose, "verbose", false, "show individual workspace, named-cache, and job storage")
+	fs.BoolVar(&verbose, "v", false, "show individual workspace, named-cache, and job storage")
 	setFlagUsage(fs, "errand df [options]")
 	fs.Parse(args)
 	if fs.NArg() != 0 {
@@ -43,7 +49,11 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
-	read, err := readFleet(*rawURL, *on, stderr, client.StorageStats)
+	query := client.StorageStats
+	if verbose {
+		query = client.StorageStatsDetailed
+	}
+	read, err := readFleet(*rawURL, *on, stderr, query)
 	if err != nil && !errors.Is(err, errNoUsablePeers) {
 		fmt.Fprintf(stderr, "errand: %v\n", err)
 		return 1
@@ -69,6 +79,9 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 		}
 	} else {
 		writeDf(stdout, rows)
+		if verbose {
+			writeDfDetails(stdout, rows)
+		}
 	}
 	if read.failed {
 		return 1
@@ -78,7 +91,7 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 
 func writeDf(w io.Writer, rows []dfRow) {
 	tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-	fmt.Fprintln(tw, "LOCATION\tCACHE\tNAMED CACHES\tJOBS\tCHANGES\tTOTAL")
+	fmt.Fprintln(tw, "LOCATION\tCACHE\tNAMED CACHES\tWORKSPACES\tJOBS\tCHANGES\tTOTAL")
 	for _, row := range rows {
 		cache := "-"
 		if row.Cache != nil {
@@ -102,8 +115,12 @@ func writeDf(w io.Writer, rows []dfRow) {
 		if row.Changes != nil {
 			changes = formatByteSize(row.Changes.Bytes)
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			terminalSafeField(row.Location), cache, named, jobs, changes, formatByteSize(row.TotalBytes))
+		workspaces := "-"
+		if row.Workspaces != nil {
+			workspaces = formatByteSize(row.Workspaces.Bytes)
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			terminalSafeField(row.Location), cache, named, workspaces, jobs, changes, formatByteSize(row.TotalBytes))
 	}
 	_ = tw.Flush()
 }

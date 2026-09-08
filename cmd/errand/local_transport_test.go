@@ -141,6 +141,17 @@ func TestLocalRunnerEndToEnd(t *testing.T) {
 		t.Fatal(id)
 	}
 	run("status", target+"/"+id)
+	// Persistent workspaces use the same local-only socket and owner identity.
+	run("workspaces", "create", "--on", "local", "--include-all", "experiment")
+	run("--on", "local", "--workspace", "experiment", "--no-apply", "--", "/bin/sh", "-c", "test \"$(cat file.txt)\" = automatic; printf persistent > file.txt")
+	persistentOutput, _ := run("--on", "local", "--workspace", "experiment", "--no-apply", "--", "cat", "file.txt")
+	if persistentOutput != "persistent" {
+		t.Fatalf("persistent local contents: %q", persistentOutput)
+	}
+	if content, _ := os.ReadFile(filepath.Join(root, "file.txt")); string(content) != "automatic" {
+		t.Fatal("persistent job changed local checkout")
+	}
+	run("workspaces", "rm", "--on", "local", "experiment")
 	storage, _ := run("df", "--on", "local", "--json")
 	var rows []dfRow
 	if err := json.Unmarshal([]byte(storage), &rows); err != nil || len(rows) != 1 || rows[0].Location != "local" || rows[0].Changes == nil || rows[0].Changes.Bytes == 0 || rows[0].Jobs.Bytes == 0 {

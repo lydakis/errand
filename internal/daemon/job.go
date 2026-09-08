@@ -42,12 +42,16 @@ type queuedRecord struct {
 
 // Job is one admitted transaction. Its directory is the receipt.
 type Job struct {
-	ID            string
-	Dir           string
-	Spec          proto.Spec
-	Admission     proto.Admission
-	RequestDigest string
-	baseline      proto.Manifest
+	returnWorkspace   func() error
+	workspaceRoot     string
+	workspaceLeaseID  string
+	workspaceLeaseErr error
+	ID                string
+	Dir               string
+	Spec              proto.Spec
+	Admission         proto.Admission
+	RequestDigest     string
+	baseline          proto.Manifest
 
 	mu                  sync.Mutex
 	state               string
@@ -156,7 +160,8 @@ func (j *Job) summary() proto.JobListEntry {
 	project, projectTruncated := boundedListField(j.Admission.Project, maxListProjectBytes)
 	projectTruncated = projectTruncated || j.Admission.ProjectTruncated
 	e := proto.JobListEntry{
-		ID: j.ID, State: j.state, Command: command, CommandTruncated: truncated,
+		WorkspaceID: j.Spec.WorkspaceID,
+		ID:          j.ID, State: j.state, Command: command, CommandTruncated: truncated,
 		AdmittedAt:   j.Admission.Time,
 		ManifestRoot: manifestRoot, ManifestRootTruncated: manifestRootTruncated,
 		GitCommit: gitCommit, GitCommitTruncated: gitCommitTruncated, GitDirty: j.Spec.GitDirty,
@@ -337,8 +342,20 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 	stagingCtx, cancelStaging := j.beginStaging(workspaceTar)
 	defer cancelStaging()
 	defer j.markStagingDone()
+	if j.Spec.WorkspaceID != "" {
+		if err := d.acquireWorkspace(stagingCtx, j); err != nil {
+			return false, err
+		}
+		j.event("persistent-workspace", j.Spec.WorkspaceID)
+		j.markStagingDone()
+		if res := j.cancelledBeforeStart(); res != nil {
+			j.finalize(d, res, true)
+			return true, nil
+		}
+		return false, nil
+	}
 
-	workspace := filepath.Join(j.Dir, "workspace")
+	workspace := j.workspacePath()
 	if err := os.Mkdir(workspace, 0o700); err != nil {
 		return false, err
 	}
@@ -398,7 +415,7 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 // launch runs a staged job: log writer, process scope, exec, and the wait
 // goroutine that finalizes. The scheduler settles any launch error durably.
 func (j *Job) launch(d *Daemon) error {
-	workspace := filepath.Join(j.Dir, "workspace")
+	workspace := j.workspacePath()
 	var (
 		logw *logio.Writer
 		err  error
@@ -982,7 +999,7 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	}
 	var workspaceErr error
 	if scopeCleanupOK {
-		workspaceErr = removeOwnedTree(filepath.Join(j.Dir, "workspace"))
+		workspaceErr = j.cleanupWorkspace()
 	} else {
 		res.TransactionError = appendTransactionError(res.TransactionError, "workspace retained for process recovery")
 	}

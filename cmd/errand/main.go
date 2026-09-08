@@ -54,11 +54,13 @@ Run options:
   --cache NAME=PATH               Reuse a runner cache (repeatable)
   --no-caches                    Clear configured caches
   --workspace-root PATH          Select an explicit workspace boundary
+  --workspace NAME               Use an explicitly created persistent workspace
   --include-all                  Allow a broad snapshot (never /)
   --no-snapshot                  Run with an empty job workspace
 
 Commands:
   errand peers                   List, add, remove, or discover runners
+  errand workspaces              Create, list, or remove persistent workspaces
   errand ps                      List jobs
   errand status HANDLE           Inspect a job and its results
   errand attach HANDLE           Follow a job's logs
@@ -106,6 +108,8 @@ func main() {
 		os.Exit(cmdSetup(args[1:]))
 	case "peers":
 		os.Exit(cmdPeers(args[1:]))
+	case "workspaces":
+		os.Exit(cmdWorkspaces(args[1:]))
 	case "config":
 		os.Exit(cmdConfig(args[1:]))
 	case "access":
@@ -548,6 +552,7 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	on := fs.String("on", "", "restrict to one peer name")
 	rawURL := fs.String("url", "", "restrict to one peer base URL")
 	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
+	workspace := fs.String("workspace", "", "restrict to jobs in a persistent workspace name or ID")
 	all := false
 	last := 0
 	fs.BoolVar(&all, "all", false, "include terminal jobs")
@@ -564,6 +569,18 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "errand: --last must be positive")
 		return 2
 	}
+	workspaceSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "workspace" {
+			workspaceSet = true
+		}
+	})
+	if workspaceSet && !proto.ValidULID(*workspace) {
+		if err := proto.ValidateWorkspaceName(*workspace); err != nil {
+			fmt.Fprintln(stderr, "errand:", err)
+			return 2
+		}
+	}
 	if last > proto.MaxJobListEntries {
 		fmt.Fprintf(stderr, "errand: --last must not exceed %d\n", proto.MaxJobListEntries)
 		return 2
@@ -571,6 +588,11 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	list := client.List
 	if !all && last == 0 {
 		list = client.ListActive
+	}
+	if workspaceSet {
+		list = func(url string) ([]proto.JobListEntry, error) {
+			return client.ListWorkspace(url, *workspace, !all && last == 0)
+		}
 	}
 	read, err := readFleet(*rawURL, *on, stderr, list)
 	if err != nil {

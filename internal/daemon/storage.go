@@ -7,12 +7,48 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/lydakis/errand/internal/proto"
 )
 
 func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id Identity) {
 	var stats proto.StorageStats
+	if r.URL.Query().Get("verbose") == "1" {
+		stats.Details = &proto.StorageDetails{Workspaces: []proto.WorkspaceStorage{}, NamedCaches: []proto.NamedCacheStorage{}, Jobs: []proto.JobStorage{}}
+	}
+	if d.workspaces != nil {
+		d.workspaces.mu.Lock()
+		rows, err := d.workspaces.records()
+		d.workspaces.mu.Unlock()
+		if err == nil {
+			stats.Workspaces = &proto.StorageCategory{}
+			for _, row := range rows {
+				if row.Owner != d.workspaceOwner(id) {
+					continue
+				}
+				var usage proto.WorkspaceStorage
+				usage, err = workspaceStorageBytes(r.Context(), filepath.Join(d.workspaces.dir, row.ID), row)
+				if os.IsNotExist(err) {
+					// Removal may have renamed the directory after enumeration.
+					err = nil
+					continue
+				}
+				if err != nil {
+					break
+				}
+				stats.Workspaces.Items++
+				stats.Workspaces.Bytes += usage.Bytes
+				if stats.Details != nil {
+					stats.Details.Workspaces = append(stats.Details.Workspaces, usage)
+				}
+			}
+		}
+		if err != nil {
+			httpError(w, 500, err.Error())
+			return
+		}
+	}
 	if d.namedCaches != nil {
 		entries, err := d.namedCaches.Inventory(r.Context())
 		if err != nil {
@@ -20,6 +56,21 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 			return
 		}
 		stats.NamedCaches = namedCacheStats(entries, id.Owner(), d.cfg.InsecureNoAuth)
+		if stats.Details != nil {
+			for _, entry := range entries {
+				if !d.cfg.InsecureNoAuth && entry.Key.Owner != id.Owner() {
+					continue
+				}
+				stats.Details.NamedCaches = append(stats.Details.NamedCaches, proto.NamedCacheStorage{Name: entry.Key.Name, ProjectID: entry.Key.Project, JobID: entry.LeaseID, Bytes: entry.Bytes})
+			}
+			sort.Slice(stats.Details.NamedCaches, func(i, j int) bool {
+				a, b := stats.Details.NamedCaches[i], stats.Details.NamedCaches[j]
+				if a.Name != b.Name {
+					return a.Name < b.Name
+				}
+				return a.ProjectID < b.ProjectID
+			})
+		}
 	}
 	if d.cache != nil {
 		cacheStats, err := d.cache.StatsContext(r.Context())
@@ -44,9 +95,15 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 
 	d.mu.Lock()
 	roots := make([]string, 0, len(d.jobs))
+	jobDetails := make(map[string]proto.JobStorage)
 	for _, job := range d.jobs {
 		if d.ownsJob(id, job) {
 			roots = append(roots, job.Dir)
+			if stats.Details != nil {
+				job.mu.Lock()
+				jobDetails[job.Dir] = proto.JobStorage{ID: job.ID, WorkspaceID: job.Spec.WorkspaceID}
+				job.mu.Unlock()
+			}
 		}
 	}
 	d.mu.Unlock()
@@ -56,7 +113,9 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 		}
 		jobID, ok := gcTombstoneJobID(entry.Name())
 		if ok && d.ownsCollectedJob(id, jobID) {
-			roots = append(roots, filepath.Join(d.jobsDir(), entry.Name()))
+			root := filepath.Join(d.jobsDir(), entry.Name())
+			roots = append(roots, root)
+			jobDetails[root] = proto.JobStorage{ID: jobID, CleanupPending: true}
 		}
 	}
 
@@ -76,6 +135,14 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 		}
 		stats.Jobs.Items++
 		stats.Jobs.Bytes += bytes
+		if stats.Details != nil {
+			detail := jobDetails[root]
+			detail.Bytes = bytes
+			stats.Details.Jobs = append(stats.Details.Jobs, detail)
+		}
+	}
+	if stats.Details != nil {
+		sort.Slice(stats.Details.Jobs, func(i, j int) bool { return stats.Details.Jobs[i].ID > stats.Details.Jobs[j].ID })
 	}
 	if d.cfg.ChangeStorage != nil {
 		changes, err := d.cfg.ChangeStorage(r.Context())

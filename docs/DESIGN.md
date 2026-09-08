@@ -350,7 +350,11 @@ deliberately scrubs the inherited marker. `result.json` records `cleanup_ok`
 separately from the exit code, and errand never reports pristine when scope
 inspection or cleanup failed.
 
-Persistent state comes in three kinds, not one:
+Persistent state has separate lifecycles:
+
+- **Persistent workspaces** keep working files across jobs after explicit
+  creation. They are measured by `errand df` and removed by `errand workspaces rm`,
+  independently of job and cache GC.
 
 - **Named caches** — errand-owned writable directories with explicit
   lifecycle: declared in config, measured by `errand df`, removed by
@@ -385,7 +389,7 @@ events.ndjson    # append-only lifecycle + control events
 io.log           # framed, base64-payload stdout/stderr in daemon-observed order
 result.json      # written once at terminal completion
 scope.json       # transient recovery marker; retained until runtime cleanup
-workspace/       # deleted at cleanup
+workspace/       # ephemeral jobs only; deleted at cleanup
 changes/         # immutable workspace-change bundle; retained with the job receipt
 ```
 
@@ -584,6 +588,65 @@ Both limits are per-machine choices for the operator who knows its workloads.
 - Archive extraction (both directions) rejects absolute paths, `..`,
   symlinks escaping the workspace, and unsafe hardlinks. A strange archive
   must not write outside `workspace/`.
+
+## Persistent workspace lifecycle
+
+Persistent workspaces require explicit `workspaces create NAME`. Ordinary jobs
+remain ephemeral. `--workspace NAME` selects an existing caller-owned workspace;
+it never creates one or uploads the invocation's current local files.
+
+Creation publishes a verified working tree, an immutable base snapshot, and
+metadata under a separate runner `workspaces/` store. Human names are scoped to
+the authenticated owner; opaque IDs prevent deletion/recreation from retargeting
+an in-flight request. Listing and reads require `read-own`, creation and use
+require `submit`, and removal requires `gc-own`, with owner checks on every path.
+
+A durable job lease precedes execution in the tree's stable directory. It covers
+staging, queueing, execution, and process cleanup. Finishing a job releases the
+lease rather than deleting or moving the directory. Restart recovery locates
+current leases by job ID, cleans surviving processes before releasing them, and
+never replays a command. Old receipts without a current lease cannot target a
+workspace now used by another job. Uncertain process cleanup or mismatched
+directory identity leaves the lease protected. Named-cache links are removed
+when the lease is released; cache storage remains independently managed.
+The job receipt durably records its workspace reference before lease publication.
+Recovery validates that reference against the current lease, so a broken sibling
+record cannot prevent unrelated job cleanup. Terminal pre-launch failures also
+retry lease release on restart. Unreadable lease state protects the affected job
+while the daemon continues serving other jobs. Inventory errors remain visible
+rather than presenting incomplete storage totals as complete.
+Tree copying, traversal, cache-path settlement, and deletion happen outside the
+global metadata lock. A cache binding replaced by a command is moved into a
+unique `.errand-cache-recovery-ID/` directory in the live tree, preserving its files
+without preventing subsequent cache binding.
+
+The exclusive job limit is a current runtime constraint, not an attempt to infer
+whether commands are read-only. Process cleanup uses the workspace directory to
+find escaped descendants, and cache leases assume exclusive execution. Concurrent
+jobs require independent process ownership and cache lifetime management first;
+merely removing the busy check could let one job's cleanup kill another job.
+
+Each job retains an immutable result relative to the workspace creation base.
+The wire request names that initial manifest; its workspace archive carries no
+new local files. Existing job fetch/apply behavior remains separate from future
+workspace synchronization checkpoints. Removing the live workspace does not
+remove prior job results, and collecting a job does not remove the live tree.
+This cumulative result supports fetching only the final iteration. It is not a
+per-job delta. Previously applied identical content merges without conflict;
+subsequent overlapping edits can still require conflict resolution. Changing to
+a job-start baseline would require a separate cumulative workspace transfer path
+to preserve the final-iteration workflow.
+
+Persistent workspaces appear in `df` and are removed only by explicit
+`workspaces rm`. There is no automatic workspace TTL in this slice. Workspaces
+do not provide isolation from arbitrary processes running as the runner OS user.
+
+`df --verbose` exposes owner-scoped per-workspace working/base/metadata byte
+counts alongside separate named-cache and job entries. Summary and workspace
+detail come from one traversal, which never follows cache symlinks. Counts are
+logical file sizes, not unique physical allocation. `ps --workspace` resolves
+names to current IDs and filters owned jobs before the listing cap; IDs can
+still select retained receipts after workspace removal.
 
 ## Workspace changes
 
@@ -828,11 +891,20 @@ versions are not a compatibility contract.
 
 ### Next slices (2026-09-07)
 
-The core, SSH, forwarding, retention, and named caches above are implemented.
-The next sequence is explicit local execution and local-only setup, followed
-by persistent workspaces for iteration across separate job IDs, then the
-rootless container backend. Persistent workspaces will need an explicit
-lifecycle and one writer at a time; attaching to a job remains observation.
+The core, SSH, forwarding, retention, named caches, local execution, local-only
+setup, and explicit persistent workspace lifecycle are implemented. The next
+slice is directional transfer between an originating checkout and a persistent
+workspace, followed by the rootless container backend. Attaching to a job
+remains observation.
+
+The agreed transfer interface mirrors fetch: plain `push` stages remotely,
+`push --apply` merges remotely, and `push --apply --conflicts` permits conflict
+materialization there. Fetch provides the corresponding local operations.
+Without `--conflicts`, a new conflict leaves selected destination files untouched.
+Existing conflict markers are ordinary file contents and may travel in either
+direction. No conflict index, resolution lifecycle, or transfer `--force` is
+planned. Transfer checkpoint and retry handling, including partial conflict
+materialization, must be implemented before these workspace operations ship.
 Nix and facts-based selection remain later work. A harness wrapper can build
 on job execution and workspace continuity while owning its own agent-thread
 resumption; Errand need not own harness-specific conversation state.

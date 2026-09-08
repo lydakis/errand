@@ -67,6 +67,8 @@ var maintenanceHTTP = &http.Client{
 }
 
 type RunOptions struct {
+	Workspace      string // explicitly selected existing persistent workspace
+	workspaceID    string
 	Caches         []proto.CacheBinding
 	Artifacts      []string
 	PeerURL        string
@@ -171,7 +173,13 @@ func runWithDetachNotifications(
 	target := newInterruptTarget(opts.PeerURL, jobID, handle, errf, interruptsControl)
 
 	prepared := make(chan snapshotPreparation, 1)
-	go func() { prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot, opts.Caches...) }()
+	go func() {
+		if opts.Workspace != "" {
+			prepared <- prepareWorkspaceRun(opts)
+			return
+		}
+		prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot, opts.Caches...)
+	}()
 	var prep snapshotPreparation
 	select {
 	case <-sigCh:
@@ -184,6 +192,13 @@ func runWithDetachNotifications(
 		return ExitTransaction
 	}
 	opts.selectionGuard = prep.guard
+	if prep.workspace != nil {
+		opts.workspaceID = prep.workspace.ID
+		opts.Caches = prep.workspace.Selection.Caches
+		if opts.Artifacts == nil {
+			opts.Artifacts = prep.workspace.Selection.Artifacts
+		}
+	}
 	changeStateInitialized := true
 	submissionStarted := false
 	defer func() {
@@ -213,13 +228,16 @@ func runWithDetachNotifications(
 	}
 	paths, gitInfo, manifest := prep.paths, prep.gitInfo, prep.manifest
 	files, snapshotBytes := snapshotSize(manifest)
-	if opts.NoSnapshot {
+	if opts.Workspace != "" {
+		fmt.Fprintf(opts.Stderr, "errand: using persistent workspace %s; local files are not uploaded\n", opts.Workspace)
+	} else if opts.NoSnapshot {
 		fmt.Fprintln(opts.Stderr, "errand: no snapshot; using an empty remote workspace")
 	} else {
 		fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
 	}
 
 	spec := proto.Spec{
+		WorkspaceID:    opts.workspaceID,
 		Argv:           opts.Argv,
 		Env:            env,
 		EnvSources:     envSources,
@@ -234,7 +252,9 @@ func runWithDetachNotifications(
 	}
 	spec.Selection.Artifacts = opts.Artifacts
 	spec.Selection.Caches = opts.Caches
-	if len(opts.Caches) != 0 {
+	if prep.workspace != nil {
+		spec.CacheProjectID = prep.workspace.CacheProjectID
+	} else if len(opts.Caches) != 0 {
 		spec.CacheProjectID, err = cacheProjectID(opts.Root)
 		if err != nil {
 			errf("cache project identity: %v", err)
@@ -314,8 +334,11 @@ func runWithDetachNotifications(
 		}
 	}
 	automaticWorkerStarted, _ := ensureAutomaticApplyWorker(opts, jobID, false)
-	fmt.Fprintf(opts.Stderr, "errand: job %s (%d files, commit %s)\n",
-		handle, len(paths), shortCommit(gitInfo))
+	if opts.Workspace != "" {
+		fmt.Fprintf(opts.Stderr, "errand: job %s in workspace %s\n", handle, opts.Workspace)
+	} else {
+		fmt.Fprintf(opts.Stderr, "errand: job %s (%d files, commit %s)\n", handle, len(paths), shortCommit(gitInfo))
+	}
 	forwarding.Start(opts.PeerURL, jobID)
 
 	detachRequested := false
@@ -397,6 +420,7 @@ func ensureAutomaticApplyWorker(opts RunOptions, jobID string, alreadyStarted bo
 }
 
 type snapshotPreparation struct {
+	workspace *proto.Workspace
 	paths     []string
 	gitInfo   snapshot.GitInfo
 	selection proto.SelectionPolicy
@@ -638,10 +662,22 @@ func getJobDetailsContext(ctx context.Context, peerURL, jobID string) (proto.Job
 }
 
 func StorageStats(peerURL string) (proto.StorageStats, error) {
+	return storageStats(peerURL, false)
+}
+
+func StorageStatsDetailed(peerURL string) (proto.StorageStats, error) {
+	return storageStats(peerURL, true)
+}
+
+func storageStats(peerURL string, detailed bool) (proto.StorageStats, error) {
 	var stats proto.StorageStats
 	ctx, cancel := context.WithTimeout(context.Background(), storageRequestTimeout)
 	defer cancel()
-	err := getJSONWithClientContext(ctx, maintenanceHTTP, peerURL+"/v0/storage", 1<<20, "storage stats", &stats)
+	target := peerURL + "/v0/storage"
+	if detailed {
+		target += "?verbose=1"
+	}
+	err := getJSONWithClientContext(ctx, maintenanceHTTP, target, 16<<20, "storage stats", &stats)
 	return stats, err
 }
 
@@ -675,14 +711,28 @@ func ListActive(peerURL string) ([]proto.JobListEntry, error) {
 }
 
 func list(peerURL string, activeOnly bool) ([]proto.JobListEntry, error) {
+	return listWorkspaceJobs(peerURL, activeOnly, "")
+}
+
+func listWorkspaceJobs(peerURL string, activeOnly bool, workspaceID string) ([]proto.JobListEntry, error) {
 	var entries []proto.JobListEntry
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
-	url := peerURL + "/v0/jobs"
+	url := peerURL + "/v0/jobs?"
 	if activeOnly {
-		url += "?active=1"
+		url += "active=1&"
+	}
+	if workspaceID != "" {
+		url += "workspace_id=" + workspaceID
 	}
 	err := getJSONContext(ctx, url, 1<<20, "job listing", &entries)
+	if err == nil && workspaceID != "" {
+		for _, entry := range entries {
+			if entry.WorkspaceID != workspaceID {
+				return nil, fmt.Errorf("runner did not honor workspace job filter")
+			}
+		}
+	}
 	return entries, err
 }
 
@@ -749,6 +799,9 @@ func (p shipPlan) ships(entry proto.ManifestEntry) bool {
 }
 
 func negotiateSnapshot(ctx context.Context, opts RunOptions, manifest proto.Manifest) (shipPlan, error) {
+	if opts.workspaceID != "" {
+		return shipPlan{}, nil
+	}
 	refs := make([]proto.BlobRef, 0, len(manifest.Entries))
 	for _, e := range manifest.Entries {
 		if e.Type == proto.EntryFile {
@@ -861,7 +914,11 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 			if plan.partial {
 				shipFile = plan.ships
 			}
-			if err := snapshot.PackPartial(part, opts.Root, manifest, shipFile); err != nil {
+			transferManifest := manifest
+			if opts.workspaceID != "" {
+				transferManifest = proto.Manifest{}
+			}
+			if err := snapshot.PackPartial(part, opts.Root, transferManifest, shipFile); err != nil {
 				return err
 			}
 			if err := opts.selectionGuard.Verify(); err != nil {

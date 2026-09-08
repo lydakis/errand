@@ -150,6 +150,7 @@ func (s ChangeSummary) Matches(bundle ChangeBundle) bool {
 // identity: same job ID + same digest is a retry, a different digest is a
 // conflict.
 type Spec struct {
+	WorkspaceID    string            `json:"workspace_id,omitempty"`
 	CacheProjectID string            `json:"cache_project_id,omitempty"`
 	Argv           []string          `json:"argv"`
 	Env            map[string]string `json:"env,omitempty"`
@@ -171,6 +172,7 @@ func (s Spec) Digest() string {
 // ReceiptSpec is the durable, non-secret view of an admitted request. No value
 // derived from the runtime environment is persisted.
 type ReceiptSpec struct {
+	WorkspaceID    string            `json:"workspace_id,omitempty"`
 	CacheProjectID string            `json:"cache_project_id,omitempty"`
 	ReceiptVersion int               `json:"receipt_version"`
 	Argv           []string          `json:"argv"`
@@ -200,6 +202,7 @@ func NewReceiptSpec(s Spec) ReceiptSpec {
 	}
 	sort.Strings(names)
 	return ReceiptSpec{
+		WorkspaceID:    s.WorkspaceID,
 		ReceiptVersion: ReceiptVersion,
 		Argv:           s.Argv, EnvNames: names, EnvSources: s.EnvSources, Workdir: s.Workdir,
 		ManifestRoot: s.ManifestRoot, Limits: s.Limits,
@@ -210,7 +213,8 @@ func NewReceiptSpec(s Spec) ReceiptSpec {
 
 func (r ReceiptSpec) SpecWithoutEnv() Spec {
 	return Spec{
-		Argv: r.Argv, EnvSources: r.EnvSources, Workdir: r.Workdir, ManifestRoot: r.ManifestRoot,
+		WorkspaceID: r.WorkspaceID,
+		Argv:        r.Argv, EnvSources: r.EnvSources, Workdir: r.Workdir, ManifestRoot: r.ManifestRoot,
 		Limits: r.Limits, GitCommit: r.GitCommit, GitDirty: r.GitDirty, NoSnapshot: r.NoSnapshot,
 		ChangeClientID: r.ChangeClientID, Selection: r.Selection, CacheProjectID: r.CacheProjectID,
 	}
@@ -304,6 +308,7 @@ type JobDetails struct {
 // JobListEntry is one row of a runner's job listing: enough to identify,
 // time, reproduce, and triage a job without fetching its full receipt.
 type JobListEntry struct {
+	WorkspaceID           string     `json:"workspace_id,omitempty"`
 	ID                    string     `json:"id"`
 	State                 string     `json:"state"`
 	Command               string     `json:"command,omitempty"`
@@ -370,6 +375,8 @@ type ChangeStorageStats struct {
 // named caches remain caller-owned; fetched changes are aggregate usage for
 // the runner OS account. Cache is nil when the shared snapshot cache is disabled.
 type StorageStats struct {
+	Details     *StorageDetails     `json:"details,omitempty"`
+	Workspaces  *StorageCategory    `json:"workspaces,omitempty"`
 	Changes     *ChangeStorageStats `json:"changes,omitempty"` // absent on older runners
 	NamedCaches *NamedCacheStats    `json:"named_caches,omitempty"`
 	Cache       *CacheStats         `json:"cache,omitempty"`

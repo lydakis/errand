@@ -8,12 +8,14 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
+	"github.com/lydakis/errand/internal/proto"
 )
 
 func cmdRun(args []string) int {
 	fs := flag.NewFlagSet("errand", flag.ContinueOnError)
 	var settings runConfigFlags
 	settings.bind(fs)
+	workspace := fs.String("workspace", "", "run in an explicitly created persistent workspace; never upload local edits")
 	includeAll := fs.Bool("include-all", false, "allow an otherwise refused broad snapshot (never permits a filesystem root)")
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
 	fs.BoolVar(detach, "d", false, "return after admission, printing the job handle on stdout")
@@ -42,6 +44,22 @@ func cmdRun(args []string) int {
 		return 2
 	}
 	argv := args[split+1:]
+	workspaceSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "workspace" {
+			workspaceSet = true
+		}
+	})
+	if workspaceSet {
+		if err := proto.ValidateWorkspaceName(*workspace); err != nil {
+			fmt.Fprintln(os.Stderr, "errand:", err)
+			return 2
+		}
+		if settings.noSnapshot || *includeAll {
+			fmt.Fprintln(os.Stderr, "errand: --workspace cannot use --no-snapshot or --include-all")
+			return 2
+		}
+	}
 	if len(argv) == 0 {
 		fmt.Fprintln(os.Stderr, "errand: empty command after \"--\"")
 		return 2
@@ -79,13 +97,21 @@ func cmdRun(args []string) int {
 		return 2
 	}
 	env, passenvs := effective.JobEnvironment()
+	if *workspace != "" {
+		if !effective.CachesOverride {
+			effective.Caches = nil
+		}
+		if !effective.ArtifactsOverride {
+			effective.Artifacts = nil
+		}
+	}
 	for _, cache := range effective.Caches {
 		fmt.Fprintf(os.Stderr, "errand: using cache %q at %q\n", cache.Name, cache.Path)
 	}
 	for _, artifact := range effective.Artifacts {
 		fmt.Fprintf(os.Stderr, "errand: retaining artifact %q\n", artifact)
 	}
-	if !effective.NoSnapshot {
+	if !effective.NoSnapshot && *workspace == "" {
 		shownWorkdir := effective.Workdir
 		if shownWorkdir == "" {
 			shownWorkdir = "."
@@ -100,6 +126,7 @@ func cmdRun(args []string) int {
 		peerURL = client.ConfigureSSHPeer(peerURL, effective.Peer, effective.RemoteCommand, effective.RemoteSocket)
 	}
 	return client.Run(client.RunOptions{
+		Workspace: *workspace,
 		Artifacts: effective.Artifacts, Caches: effective.Caches,
 		PeerURL: peerURL, PeerName: effective.Peer, Root: effective.Root,
 		Argv: argv, Env: env, PassEnv: passenvs, Workdir: effective.Workdir,

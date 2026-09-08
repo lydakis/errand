@@ -28,9 +28,15 @@ func TestCachePrecedence(t *testing.T) {
 	if err != nil || len(resolved.Caches) != 1 || resolved.Caches[0].Path != "target" {
 		t.Fatalf("workspace caches: %+v %v", resolved, err)
 	}
+	if resolved.CachesOverride {
+		t.Fatal("ambient cache config overrides persistent bindings")
+	}
 	resolved, err = ResolveRun(root, RunOverrides{Profile: "clean"})
 	if err != nil || len(resolved.Caches) != 0 {
 		t.Fatalf("clear caches: %+v %v", resolved, err)
+	}
+	if !resolved.CachesOverride {
+		t.Fatal("explicit profile cache choice was lost")
 	}
 }
 

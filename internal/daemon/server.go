@@ -82,6 +82,7 @@ type Config struct {
 }
 
 type Daemon struct {
+	workspaces  *workspaceStore
 	namedCaches *namedcache.Store
 	cfg         Config
 	identity    tailnet.Provider
@@ -182,6 +183,11 @@ func New(cfg Config) (*Daemon, error) {
 		return nil, fmt.Errorf("opening named caches: %w", err)
 	}
 	d.namedCaches = namedStore
+	d.workspaces, err = openWorkspaces(filepath.Join(cfg.StateDir, "workspaces"))
+	if err != nil {
+		_ = d.Close()
+		return nil, fmt.Errorf("opening workspaces: %w", err)
+	}
 	if err := d.loadExisting(); err != nil {
 		_ = d.Close()
 		return nil, err
@@ -221,6 +227,9 @@ func (d *Daemon) lockStateDir() error {
 // Close releases the process-wide ownership of the daemon state directory.
 func (d *Daemon) Close() error {
 	d.closeOnce.Do(func() {
+		if d.workspaces != nil {
+			_ = d.workspaces.root.Close()
+		}
 		if d.namedCaches != nil {
 			d.closeErr = d.namedCaches.Close()
 		}
@@ -345,6 +354,13 @@ func (d *Daemon) loadExisting() error {
 			return fmt.Errorf("cleaning interrupted change collection %s: %w", ent.Name(), err)
 		}
 		j := newJob(ent.Name(), dir)
+		j.returnWorkspace = func() error { return d.returnWorkspace(j) }
+		if err := d.restoreWorkspaceLease(j); err != nil {
+			// Protect this job's uncertain runtime state without taking other
+			// workspaces or ordinary ephemeral jobs offline.
+			j.workspaceLeaseErr = err
+			j.event("workspace-recovery-protected", err.Error())
+		}
 		close(j.done)
 		j.markExecutionDone()
 		j.markLogReady()
@@ -395,7 +411,7 @@ func (d *Daemon) loadExisting() error {
 			}
 		} else {
 			scopePath := filepath.Join(j.Dir, "scope.json")
-			if _, err := os.Lstat(scopePath); err == nil || !os.IsNotExist(err) {
+			if _, err := os.Lstat(scopePath); err == nil || !os.IsNotExist(err) || j.workspaceLeaseID != "" || j.workspaceLeaseErr != nil {
 				d.reconcileSettledCleanup(j)
 			}
 		}
@@ -434,8 +450,11 @@ func (d *Daemon) isolateUnreadableReceipt(j *Job, name string, decodeErr error) 
 // until the process scope is confirmed empty. The scope record is removed
 // only after both process and workspace cleanup succeed.
 func cleanupPersistedRuntime(j *Job, cacheDirs ...string) (killed []int, cleanupErrs []string) {
+	if j.workspaceLeaseErr != nil {
+		return nil, []string{"workspace lease is unreadable: " + j.workspaceLeaseErr.Error()}
+	}
 	scopePath := filepath.Join(j.Dir, "scope.json")
-	workspace := filepath.Join(j.Dir, "workspace")
+	workspace := j.workspacePath()
 	raw, err := os.ReadFile(scopePath)
 	scopePresent := err == nil
 	switch {
@@ -459,7 +478,7 @@ func cleanupPersistedRuntime(j *Job, cacheDirs ...string) (killed []int, cleanup
 		return nil, []string{err.Error()}
 	}
 
-	if err := removeOwnedTree(workspace); err != nil {
+	if err := j.cleanupWorkspace(); err != nil {
 		return killed, []string{"removing workspace: " + err.Error()}
 	}
 	if err := removeOwnedTree(filepath.Join(j.Dir, "change-base")); err != nil {
@@ -493,7 +512,7 @@ func persistedQueuedWithoutScope(dir string) bool {
 func (d *Daemon) reconcileQueued(j *Job) {
 	startError := "daemon restarted while job was queued; command never started"
 	var cleanupErrs []string
-	if err := removeOwnedTree(filepath.Join(j.Dir, "workspace")); err != nil {
+	if err := j.cleanupWorkspace(); err != nil {
 		cleanupErrs = append(cleanupErrs, "removing workspace: "+err.Error())
 	}
 	if err := removeOwnedTree(filepath.Join(j.Dir, "change-base")); err != nil {
@@ -640,6 +659,10 @@ func (d *Daemon) runQueue() {
 
 func (d *Daemon) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v0/workspaces/{id}", d.auth(proto.ActionSubmit, d.handleWorkspaceCreate))
+	mux.HandleFunc("GET /v0/workspaces", d.auth(proto.ActionReadOwn, d.handleWorkspaceList))
+	mux.HandleFunc("GET /v0/workspaces/{id}", d.auth(proto.ActionReadOwn, d.handleWorkspaceGet))
+	mux.HandleFunc("DELETE /v0/workspaces/{id}", d.auth(proto.ActionGCJobs, d.handleWorkspaceRemove))
 	mux.HandleFunc("GET /v0/info", d.auth("", d.handleInfo))
 	mux.HandleFunc("POST /v0/setup/quiesce", d.auth("", d.handleSetupQuiesce))
 	mux.HandleFunc("DELETE /v0/setup/quiesce", d.auth("", d.handleSetupQuiesceRelease))
@@ -949,11 +972,28 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		httpError(w, http.StatusServiceUnavailable, "runner is being reconfigured; retry on another peer")
 		return
 	}
+	// Workspace ownership and availability are checked atomically by
+	// acquireWorkspace during staging, after releasing the admission mutex.
 	if d.capacityFullLocked() {
 		o := d.occupancyLocked()
 		msg := fmt.Sprintf("busy: %d running, %d starting, %d staging, %d queued (capacity %d running + %d queued)",
 			o.running, o.starting, o.staging, o.queued, d.cfg.MaxJobs, d.cfg.MaxQueued)
 		d.mu.Unlock()
+		if spec.WorkspaceID != "" {
+			// Preserve the actionable busy-workspace diagnostic, but never
+			// wait for filesystem metadata while holding the admission lock.
+			d.workspaces.mu.Lock()
+			row, err := d.workspaces.lookup(d.workspaceOwner(id), spec.WorkspaceID)
+			d.workspaces.mu.Unlock()
+			if err != nil {
+				workspaceHTTPError(w, err)
+				return
+			}
+			if row.JobID != "" {
+				httpError(w, http.StatusConflict, fmt.Sprintf("%s: %s", errWorkspaceBusy, row.JobID))
+				return
+			}
+		}
 		httpError(w, http.StatusTooManyRequests, msg)
 		return
 	}
@@ -965,6 +1005,7 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		return
 	}
 	j := newJob(jobID, tmpDir)
+	j.returnWorkspace = func() error { return d.returnWorkspace(j) }
 	j.Spec = spec
 	j.RequestDigest = digest
 	j.baseline = manifest
@@ -1006,7 +1047,9 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		if cleanupErr := d.abortAdmission(j, err); cleanupErr != nil {
 			httpError(w, http.StatusInternalServerError, errors.Join(err, cleanupErr).Error())
 		} else {
-			if errors.Is(err, archive.ErrCacheMiss) {
+			if errors.Is(err, errWorkspaceBusy) {
+				httpError(w, http.StatusConflict, err.Error())
+			} else if errors.Is(err, archive.ErrCacheMiss) {
 				httpErrorCode(w, http.StatusConflict, proto.ErrorCodeSnapshotCacheMiss, err.Error())
 			} else {
 				httpError(w, http.StatusBadRequest, err.Error())
@@ -1205,7 +1248,10 @@ func (r *stagingUpload) Close() error { return r.body.Close() }
 
 func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 	defer d.drainQueue() // a rollback can free a running slot
-	cleanupErr := removeOwnedTree(j.Dir)
+	cleanupErr := j.cleanupWorkspace()
+	if cleanupErr == nil {
+		cleanupErr = removeOwnedTree(j.Dir)
+	}
 	var receiptWriteErr error
 	d.mu.Lock()
 	if cleanupErr == nil && d.jobs[j.ID] == j {
@@ -1263,6 +1309,9 @@ func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 }
 
 func validateSpec(s proto.Spec, maxLimits proto.Limits) error {
+	if s.WorkspaceID != "" && (!proto.ValidULID(s.WorkspaceID) || s.NoSnapshot) {
+		return fmt.Errorf("persistent workspace requires a valid workspace_id and cannot use no_snapshot")
+	}
 	if len(s.Argv) == 0 || s.Argv[0] == "" {
 		return fmt.Errorf("spec has empty argv")
 	}
@@ -1359,10 +1408,23 @@ func (d *Daemon) ownsJob(id Identity, j *Job) bool {
 // filters before the cap so terminal receipts cannot hide live work.
 func (d *Daemon) handleList(w http.ResponseWriter, r *http.Request, id Identity) {
 	activeOnly := r.URL.Query().Get("active") == "1"
+	workspaceID := r.URL.Query().Get("workspace_id")
+	if workspaceID != "" && !proto.ValidULID(workspaceID) {
+		httpError(w, http.StatusBadRequest, "workspace_id must be a ULID")
+		return
+	}
 	d.mu.Lock()
 	owned := make([]*Job, 0, len(d.jobs))
 	for _, j := range d.jobs {
 		if d.ownsJob(id, j) {
+			if workspaceID != "" {
+				j.mu.Lock()
+				matches := j.Spec.WorkspaceID == workspaceID
+				j.mu.Unlock()
+				if !matches {
+					continue
+				}
+			}
 			owned = append(owned, j)
 		}
 	}

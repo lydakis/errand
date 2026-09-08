@@ -34,17 +34,23 @@ func TestStorageRowsDeduplicateSocketAliases(t *testing.T) {
 		t.Fatal(err)
 	}
 	runner := proto.StorageStats{Jobs: proto.StorageCategory{Items: 1, Bytes: 20}, Cache: &proto.CacheStats{Bytes: 10, MaxBytes: 100}}
+	runner.Details = &proto.StorageDetails{Jobs: []proto.JobStorage{{ID: "job", Bytes: 20}}}
 	var results []peerQueryResult[proto.StorageStats]
 	for _, path := range []string{socket, alias, other} {
 		results = append(results, peerQueryResult[proto.StorageStats]{target: peerTarget{url: "unix://" + hex.EncodeToString([]byte(path))}, value: runner})
 	}
 	rows := storageRows(results[:2], nil)
-	if len(rows) != 1 || rows[0].Jobs.Items != 1 || rows[0].TotalBytes != 30 || rows[0].Cache.MaxBytes != 100 {
+	if len(rows) != 1 || rows[0].Jobs.Items != 1 || rows[0].TotalBytes != 30 || rows[0].Cache.MaxBytes != 100 || len(rows[0].Details.Jobs) != 1 {
 		t.Fatalf("counted socket alias twice: %+v", rows)
 	}
 	rows = storageRows(results, nil)
-	if len(rows) != 1 || rows[0].Jobs.Items != 2 || rows[0].TotalBytes != 60 || rows[0].Cache.MaxBytes != 200 {
+	if len(rows) != 1 || rows[0].Jobs.Items != 2 || rows[0].TotalBytes != 60 || rows[0].Cache.MaxBytes != 200 || len(rows[0].Details.Jobs) != 2 {
 		t.Fatalf("lost distinct local runner: %+v", rows)
+	}
+	results[2].value.Details = nil
+	rows = storageRows(results, nil)
+	if rows[0].Details == nil || !rows[0].Details.Incomplete || len(rows[0].Details.Jobs) != 1 || rows[0].TotalBytes != 60 {
+		t.Fatalf("older local runner's missing detail was hidden: %+v", rows)
 	}
 }
 

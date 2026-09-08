@@ -32,21 +32,25 @@ type RunOverrides struct {
 // EffectiveRun is shared by submission and config inspection. URL is the
 // configured endpoint, before the client installs its private SSH identity.
 type EffectiveRun struct {
-	Caches         []proto.CacheBinding  `json:"caches"`
-	Artifacts      []string              `json:"artifacts"`
-	Forwards       []string              `json:"forward"`
-	Environment    []EnvironmentVariable `json:"environment,omitempty"`
-	Profile        string                `json:"profile,omitempty"`
-	Peer           string                `json:"peer"`
-	URL            string                `json:"url"`
-	RemoteCommand  string                `json:"remote_command,omitempty"`
-	RemoteSocket   string                `json:"remote_socket,omitempty"`
-	Root           string                `json:"workspace_root"`
-	Workdir        string                `json:"workdir"`
-	Project        string                `json:"project"`
-	ApplyOnSuccess bool                  `json:"apply_on_success"`
-	NoSnapshot     bool                  `json:"no_snapshot"`
-	Sources        map[string]string     `json:"sources"`
+	// Explicit CLI or selected-profile choices may override a persistent
+	// workspace's creation defaults. Ambient configuration cannot rebind it.
+	CachesOverride    bool                  `json:"-"`
+	ArtifactsOverride bool                  `json:"-"`
+	Caches            []proto.CacheBinding  `json:"caches"`
+	Artifacts         []string              `json:"artifacts"`
+	Forwards          []string              `json:"forward"`
+	Environment       []EnvironmentVariable `json:"environment,omitempty"`
+	Profile           string                `json:"profile,omitempty"`
+	Peer              string                `json:"peer"`
+	URL               string                `json:"url"`
+	RemoteCommand     string                `json:"remote_command,omitempty"`
+	RemoteSocket      string                `json:"remote_socket,omitempty"`
+	Root              string                `json:"workspace_root"`
+	Workdir           string                `json:"workdir"`
+	Project           string                `json:"project"`
+	ApplyOnSuccess    bool                  `json:"apply_on_success"`
+	NoSnapshot        bool                  `json:"no_snapshot"`
+	Sources           map[string]string     `json:"sources"`
 }
 
 // ResolveRun reads personal configuration once and uses only the workspace
@@ -95,8 +99,10 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 		return result, err
 	}
 	result = EffectiveRun{
-		Profile: cli.Profile,
-		Root:    selected.Root, Workdir: selected.Workdir, Project: selected.Project,
+		CachesOverride:    cli.Caches != nil || profile.Caches.Bindings() != nil,
+		ArtifactsOverride: cli.Artifacts != nil || profile.Artifacts.Paths != nil,
+		Profile:           cli.Profile,
+		Root:              selected.Root, Workdir: selected.Workdir, Project: selected.Project,
 		NoSnapshot: cli.NoSnapshot,
 		Sources: map[string]string{
 			"workspace_root":   selected.Source,

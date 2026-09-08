@@ -114,6 +114,80 @@ different local port, such as `-L 8080:3000`, to avoid binding the server's port
 See [local-only setup](OPERATIONS.md#local-only-setup) and
 [local target configuration](CONFIGURATION.md#local-targets).
 
+## Persistent workspaces
+
+Ordinary runs use a fresh, ephemeral workspace. To keep files across jobs,
+create a persistent workspace explicitly, then select it on each run:
+
+```sh
+errand workspaces create --on mac-mini experiment
+errand --on mac-mini --workspace experiment -- make test
+errand --on mac-mini --workspace experiment -- make test
+errand workspaces --on mac-mini
+errand ps --on mac-mini --workspace experiment --last 5
+errand df --on mac-mini --verbose
+errand workspaces rm --on mac-mini experiment
+```
+
+Creation uploads your current working files using the usual snapshot selection
+and configuration rules. `create --no-snapshot` starts empty instead. A missing
+workspace name on a run is an error; it never creates a workspace implicitly.
+Names start with a letter and contain up to 64 letters, digits, hyphens, or
+underscores; names that look like workspace IDs are reserved. They are scoped
+to your authenticated identity on that runner.
+
+Subsequent runs use the files already there, at the same runner-side path. They
+do not upload your latest local edits. Each command gets its own job handle,
+logs, exit status, and retained results. Detaching and attaching work as usual.
+The workspace survives failed
+commands and daemon restarts; interrupted commands are not replayed. Only one
+job can hold a workspace at a time, including staging and queueing. A competing
+run or removal fails while that workspace is busy.
+
+Job handles still support `fetch`, `fetch --apply`, `fetch --apply --conflicts`,
+and `fetch --output`. Each job's retained result is an immutable comparison with
+the workspace's **creation snapshot**, including accumulated edits from earlier
+jobs. Applying it uses the local directory associated with that invocation and
+the existing conflict-safe merge rules. Fetching an old result neither updates
+nor deletes the live workspace. Use `--no-apply` when you want to keep iterating
+there without applying job results locally.
+
+Profiles and configuration still provide peer, environment, workdir, forwarding,
+and apply preferences. Persistent workspace selection itself requires the
+explicit `--workspace` flag. Creation freezes ignore rules and named-cache
+bindings; cache directories remain separate from the persistent tree. Ignored
+files generated inside the tree survive for later jobs, but returning them still
+requires artifact declarations. Per-run artifact flags can override retention.
+Creation-time artifacts are inherited during reuse. Explicit flags or a selected
+profile can override them; later ambient config changes do not replace the
+workspace's defaults. Explicit conflicting cache bindings are rejected.
+If a command replaces a cache symlink with a file or directory, Errand preserves
+that replacement under `.errand-cache-recovery-ID/` in the workspace, records its
+location in the job events, and restores the cache binding on the next run.
+
+`df` includes persistent workspace storage. Job and cache GC never collect the
+persistent tree. `workspaces rm` explicitly removes an idle workspace and its
+creation snapshot, leaving existing job receipts and retained results available
+under their normal retention rules. Listing, creation, and removal accept
+`--json`; all accept `--on` or `--url` and work with local, SSH, and tailnet peers.
+
+`df --verbose` (`-v`) breaks workspace storage into working files, the creation
+base, and metadata. Named caches and job storage are listed separately, so
+shared caches are never charged again to each workspace. Sizes are logical
+regular-file bytes, not unique disk allocation; filesystem clones can share
+physical blocks. Cache sizes reflect the last job release, not live growth.
+
+`ps --workspace NAME` filters jobs before the runner's listing limit. It keeps
+the usual active-only default; add `--all` (`-a`) or `--last N` (`-n N`) for
+history. The filter accepts an ID too, including after workspace removal while
+receipts remain. Names select the current workspace: recreating a name does
+not include jobs from the previous workspace. Across peers, missing names
+match no jobs. `--json` includes each job's `workspace_id`.
+
+Directional `push` and `fetch` operations on **workspace handles** are a later
+slice. The commands above provide persistence and repeated execution; job-result
+application does not advance a workspace synchronization checkpoint.
+
 ## Attached sessions and forwarding
 
 An attached terminal can detach at any time with Ctrl-D and later resume with
@@ -226,6 +300,9 @@ jobs cannot hide a long-running job. `--all` includes terminal receipts;
 `--on` and `--url` explicitly narrow either view to one runner. Bare
 `errand peers` and `errand df` follow the same all-configured-peers rule.
 `df` groups local runner storage and fetched changes into one `local` row.
+`df --verbose` (`-v`) adds individual workspace, named-cache, and job storage
+tables. `df --verbose --json` includes the corresponding `details` object;
+older runners that omit details still contribute their summary totals.
 Remote rows also include changes fetched by that runner's OS account when the
 runner supports this report. See [storage maintenance](OPERATIONS.md#storage-and-garbage-collection)
 for accounting and cleanup details.

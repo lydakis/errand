@@ -79,6 +79,18 @@ The following properties must hold:
   ownership principals.
 - Job status, logs, changes, signals, forwarding, and collection respect the
   authenticated ownership boundary.
+- Persistent workspaces are explicitly created and owner-scoped. Creation and
+  use require `submit`, reads require `read-own`, and removal requires `gc-own`.
+  A durable exclusive lease prevents concurrent jobs or deletion during use.
+  Recovery must confirm process cleanup before releasing that lease; an
+  unreadable receipt must not cause leased workspace files to be deleted.
+  Each job records a durable workspace reference before lease publication.
+  Corrupt lease metadata protects that job's runtime state without preventing
+  unrelated jobs from starting or cleaning up. Bulk workspace I/O must not hold
+  the admission mutex needed by status and cancellation.
+  Persistent files are not subject to ordinary job/cache GC and remain until
+  explicit workspace removal. They are not isolated from other processes
+  running as the same OS user.
 - Job identifiers, manifests, archives, cache addresses, and change bundles
   cannot escape their intended state, workspace, staging, or destination roots.
 - Archive extraction validates paths, types, symlink targets, declared hashes,

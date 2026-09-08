@@ -29,6 +29,10 @@ func TestArtifactPrecedenceAndPersistence(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(got.Artifacts, tc.want) || !strings.Contains(got.Sources["artifacts"], tc.source) {
 			t.Fatalf("artifacts: %+v, %v", got, err)
 		}
+		wantOverride := tc.cli != nil || tc.profile == "test" || tc.profile == "clear"
+		if got.ArtifactsOverride != wantOverride {
+			t.Fatalf("persistent artifact override for %+v: %v", tc, got.ArtifactsOverride)
+		}
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/lydakis/errand/internal/namedcache"
@@ -30,7 +29,7 @@ func (j *Job) bindNamedCaches(d *Daemon) error {
 	if d.cfg.NamedCacheDisabled {
 		return fmt.Errorf("named caches are disabled")
 	}
-	workspace := filepath.Join(j.Dir, "workspace")
+	workspace := j.workspacePath()
 	root, err := os.OpenRoot(workspace)
 	if err != nil {
 		return err

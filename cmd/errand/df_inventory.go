@@ -58,6 +58,29 @@ func storageRows(results []peerQueryResult[proto.StorageStats], changes *proto.C
 		}
 		row.hasRunner = true
 		stats := result.value
+		if stats.Details == nil {
+			row.detailsUnavailable = true
+		}
+		if stats.Details != nil {
+			if row.Details == nil {
+				row.Details = &proto.StorageDetails{Workspaces: []proto.WorkspaceStorage{}, NamedCaches: []proto.NamedCacheStorage{}, Jobs: []proto.JobStorage{}}
+			}
+			row.Details.Workspaces = append(row.Details.Workspaces, stats.Details.Workspaces...)
+			row.Details.NamedCaches = append(row.Details.NamedCaches, stats.Details.NamedCaches...)
+			row.Details.Jobs = append(row.Details.Jobs, stats.Details.Jobs...)
+			row.Details.Incomplete = row.Details.Incomplete || stats.Details.Incomplete
+		}
+		if row.Details != nil {
+			row.Details.Incomplete = row.Details.Incomplete || row.detailsUnavailable
+		}
+		if stats.Workspaces != nil {
+			if row.Workspaces == nil {
+				row.Workspaces = &proto.StorageCategory{}
+			}
+			row.Workspaces.Items += stats.Workspaces.Items
+			row.Workspaces.Bytes += stats.Workspaces.Bytes
+			row.TotalBytes += stats.Workspaces.Bytes
+		}
 		if stats.Cache != nil {
 			if row.Cache == nil {
 				copied := *stats.Cache

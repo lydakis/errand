@@ -88,6 +88,9 @@ func writeStatus(
 	writeStatusField(w, "Job", handle)
 	writeStatusField(w, "State", details.State)
 	writeStatusField(w, "Runner", peer)
+	if details.Spec.WorkspaceID != "" {
+		writeStatusField(w, "Workspace", details.Spec.WorkspaceID)
+	}
 	if details.Project != "" {
 		writeStatusField(w, "Project", details.Project)
 	}
