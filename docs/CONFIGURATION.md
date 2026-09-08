@@ -43,7 +43,7 @@ an error even when CLI flags override its settings.
 
 ### Local targets
 
-Available in the next release after v0.1.1. `--on local` is a built-in target
+Available since v0.1.2. `--on local` is a built-in target
 that uses the socket from the default `errandd.toml`, or its default socket
 path when that file is absent. Configure the daemon with
 [`errand setup --local`](OPERATIONS.md#local-only-setup). Setup does not change

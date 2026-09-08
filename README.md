@@ -139,6 +139,8 @@ for details.
 
 ## When you need more
 
+- **Try something in a separate local workspace:** run `errand --on local -- make test`
+  without disturbing your current checkout. [Local setup and usage](docs/USAGE.md#local-jobs).
 - **Collect a test report:** `errand --artifact reports -- make test` retains
   ignored output too. [Artifacts and exporting results](docs/USAGE.md#artifacts-and-caches).
 - **Speed up repeat builds:** `errand --cache compiler=target -- cargo test`

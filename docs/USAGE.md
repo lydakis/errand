@@ -80,7 +80,7 @@ result. See [configuration](CONFIGURATION.md) for syntax and precedence.
 
 ## Local jobs
 
-Available in the next release after v0.1.1. Run a command in a separate
+Available since v0.1.2. Run a command in a separate
 workspace on this machine:
 
 ```sh

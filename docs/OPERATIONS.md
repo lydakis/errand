@@ -101,7 +101,7 @@ and exit codes.
 
 ## Local-only setup
 
-Available in the next release after v0.1.1. To run jobs on your laptop in
+Available since v0.1.2. To run jobs on your laptop in
 separate workspaces without enabling remote access to its runner:
 
 ```sh
