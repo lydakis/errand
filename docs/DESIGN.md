@@ -709,10 +709,10 @@ errand attach <peer/ulid>       # replay logs and follow to completion
 errand fetch [--apply [--conflicts] | -o DIR | --output DIR] <peer/ulid> [path]
 errand kill [-f | --force] <peer/ulid>
 errand df [--on X] [--json]    # fleet storage; read-own
-errand gc cache [--dry-run]     # shared cache policy; manage-caches
-errand gc jobs --older-than 30d # caller-owned clean terminal receipts
+errand gc cache --on builder [--dry-run]     # shared cache policy; manage-caches
+errand gc jobs --on builder --older-than 30d # caller-owned clean terminal receipts
 errand gc changes --older-than 30d # local workspace identities and downloaded staging
-errand gc all --older-than 30d [--dry-run] # cache, jobs, and local change state
+errand gc all --on builder --older-than 30d [--dry-run] # selected runner cache/jobs plus local changes
 ```
 
 Every GC target accepts `--dry-run`. A dry run uses the same eligibility policy

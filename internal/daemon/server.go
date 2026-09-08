@@ -819,6 +819,13 @@ func (d *Daemon) handleCacheGC(w http.ResponseWriter, r *http.Request, _ Identit
 		result.ReclaimedTemps = named.ReclaimedTemps
 		result.FreedBytes += named.FreedBytes
 	}
+	result.Policies = &proto.CacheGCPolicies{}
+	if d.cache != nil {
+		result.Policies.Snapshot = &proto.CacheGCPolicy{MaxBytes: d.cfg.CacheMaxBytes, TTLSeconds: int64(d.cfg.CacheTTL / time.Second)}
+	}
+	if d.namedCaches != nil {
+		result.Policies.Named = &proto.CacheGCPolicy{MaxBytes: d.cfg.NamedCacheMaxBytes, TTLSeconds: int64(d.cfg.NamedCacheTTL / time.Second)}
+	}
 	if err != nil {
 		if r.Context().Err() != nil {
 			return

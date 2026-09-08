@@ -240,16 +240,26 @@ must grant `read-own` to use `errand df`; `manage-caches` remains required only
 for `errand gc cache`. Job receipt collection uses the separate `gc-own` action.
 The frozen design's ACL example includes the complete action set.
 
-GC always names its target. Bare `errand gc` only prints usage:
+GC always names its target. Bare `errand gc` shows targets, retention requirements,
+and runner selection rules without collecting anything. Cache and job GC select
+one runner: use `--on PEER` or `--url URL`. With multiple configured runners,
+selection is required even for `--dry-run`; the default runner is never assumed.
+An installed local runner or `default_peer = "local"` counts even without a
+`[peers.local]` entry, matching `errand peers` inventory.
+A sole configured runner is selected automatically. `gc changes` is local only.
+Unlike `df`, `gc all` means all categories on one selected runner plus local
+changes, not all runners.
+
+For example, to collect from `cabal`:
 
 ```text
-errand gc cache
-errand gc cache --dry-run
-errand gc jobs --older-than 30d --keep 500
-errand gc jobs --dry-run --older-than 30d
+errand gc cache --on cabal
+errand gc cache --on cabal --dry-run
+errand gc jobs --on cabal --older-than 30d --keep 500
+errand gc jobs --on cabal --dry-run --older-than 30d
 errand gc changes --older-than 30d
-errand gc all --older-than 30d --keep 500
-errand gc all --dry-run --older-than 30d --keep 500
+errand gc all --on cabal --older-than 30d --keep 500
+errand gc all --on cabal --dry-run --older-than 30d --keep 500
 ```
 
 Job GC only removes the caller's clean `exited` or `killed` receipts. Clean
@@ -265,6 +275,12 @@ pending apply transactions are always protected. Records whose submission never 
 the requested `--older-than` boundary. Unresolved submitted jobs remain
 protected for 30 days, after which an explicit local GC may retire abandoned
 state.
+Cache previews report the selected runner and separate snapshot/named-cache
+expiry and byte budgets supplied by that runner. Older runners without policy
+reporting are labeled explicitly; the client does not guess their settings.
+Cache collection can remove idle caches across owners; leased named caches
+remain protected.
+
 `--dry-run` is available for every GC target. It applies the same selection
 policy and reports the space it can inspect without changing cache, receipt,
 reconciliation, local-change, lock, permission, or admission-clock state.

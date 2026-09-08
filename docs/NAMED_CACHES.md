@@ -101,7 +101,10 @@ JSON output adds `named_caches` with `items`, `bytes`, and `protected`.
 `errand gc cache --on builder --dry-run` previews collection of both snapshot
 blobs and named caches. Omit `--dry-run` to collect them. This uses the existing
 `manage-caches` authorization and may collect idle caches across owners.
-`gc all` includes the same operation. Named cache TTL and budget are separate
+`gc all` includes the same operation on the selected runner, plus job GC and
+local change GC. With multiple configured runners, `--on` or `--url` is required,
+including for dry runs. Previews show separate snapshot and named-cache policies
+reported by the runner. Named cache TTL and budget are separate
 from the snapshot cache, configured in the runner's `errandd.toml`:
 
 ```toml

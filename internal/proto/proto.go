@@ -380,13 +380,25 @@ type CacheGCRequest struct {
 	DryRun bool `json:"dry_run,omitempty"`
 }
 
+type CacheGCPolicy struct {
+	MaxBytes   int64 `json:"max_bytes"`
+	TTLSeconds int64 `json:"ttl_seconds"`
+}
+
+// Nil category policies mean collection is disabled for that category.
+type CacheGCPolicies struct {
+	Snapshot *CacheGCPolicy `json:"snapshot,omitempty"`
+	Named    *CacheGCPolicy `json:"named,omitempty"`
+}
+
 type CacheGCResult struct {
-	RemovedCaches   int   `json:"removed_caches,omitempty"`
-	ProtectedCaches int   `json:"protected_caches,omitempty"`
-	ReclaimedTemps  int   `json:"reclaimed_temps,omitempty"`
-	RemovedBlobs    int   `json:"removed_blobs"`
-	FreedBytes      int64 `json:"freed_bytes"`
-	DryRun          bool  `json:"dry_run"`
+	Policies        *CacheGCPolicies `json:"policies,omitempty"` // absent on older runners
+	RemovedCaches   int              `json:"removed_caches,omitempty"`
+	ProtectedCaches int              `json:"protected_caches,omitempty"`
+	ReclaimedTemps  int              `json:"reclaimed_temps,omitempty"`
+	RemovedBlobs    int              `json:"removed_blobs"`
+	FreedBytes      int64            `json:"freed_bytes"`
+	DryRun          bool             `json:"dry_run"`
 }
 
 type JobGCRequest struct {
