@@ -98,7 +98,8 @@ func cmdSetupTo(args []string, stdout, stderr io.Writer, sys setup.System) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	report, err := setup.Run(ctx, setup.Options{
-		Transport: transport, ConfigPath: *cfgPath, MaxJobs: *maxJobs, AllowUsers: allow,
+		ExpectedVersion: version,
+		Transport:       transport, ConfigPath: *cfgPath, MaxJobs: *maxJobs, AllowUsers: allow,
 		Socket: *socket, CLI: *cli, Force: *force, DryRun: *dryRun,
 	}, sys)
 	printSetupReport(stdout, report, *dryRun)

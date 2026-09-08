@@ -44,7 +44,7 @@ func TestLocalSetupTransitionPreservesRemotePolicy(t *testing.T) {
 	}
 	f.probeInfo.RunningJobs = 1
 	r, err = Run(context.Background(), Options{Transport: "local"}, f)
-	if err != nil || !r.Failed() || f.files[path] != original || len(f.commands) != 0 || len(f.writes) != 0 {
+	if err != nil || !r.Failed() || f.files[path] != original || ranServiceMutation(f) || len(f.writes) != 0 {
 		t.Fatalf("busy transition: %v / %+v", err, r)
 	}
 	f.probeInfo.RunningJobs = 0

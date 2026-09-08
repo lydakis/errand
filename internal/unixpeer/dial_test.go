@@ -56,6 +56,10 @@ func TestDialAuthenticatesServerBeforeSendingData(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			pid, pidErr := ProcessID(conn.(*net.UnixConn))
+			if pidErr != nil || pid != os.Getpid() {
+				t.Fatalf("peer PID = %d, %v; want %d", pid, pidErr, os.Getpid())
+			}
 			want = "authorized"
 			if _, err := conn.Write([]byte(want)); err != nil {
 				t.Fatal(err)

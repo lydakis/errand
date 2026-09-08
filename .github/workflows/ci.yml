@@ -61,6 +61,16 @@ jobs:
         run: |
           go build -trimpath -o "$RUNNER_TEMP/errand" ./cmd/errand
           "$RUNNER_TEMP/errand" version
+      - name: Prepare Linux user service manager
+        if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$(id -un)"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+      - name: Test real service installation and upgrade
+        env:
+          ERRAND_TEST_SERVICE_MANAGER: "1"
+        run: go test -v -count=1 -run '^TestLiveServiceLifecycle$' -timeout=4m ./internal/setup
       - name: Rehearse release packaging
         if: runner.os == 'Linux' && !startsWith(inputs.ref || github.ref, 'refs/tags/')
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3

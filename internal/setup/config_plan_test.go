@@ -44,7 +44,7 @@ func TestSetupPreservesConfigEditedAfterPlanning(t *testing.T) {
 	if err != nil || !r.Failed() || !strings.Contains(stepErrorDetail(r, "config"), "config changed during setup") {
 		t.Fatalf("concurrent edit was not detected: %v / %+v", err, r)
 	}
-	if f.files[path] != sys.edited || len(f.writes) != 0 || len(f.commands) != 0 {
+	if f.files[path] != sys.edited || len(f.writes) != 0 || ranServiceMutation(f) {
 		t.Fatal("setup overwrote the operator's edit or changed the service")
 	}
 	if len(f.releasedLeases) != 1 {

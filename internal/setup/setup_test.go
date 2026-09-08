@@ -16,6 +16,9 @@ import (
 
 // fakeSystem records every decision setup makes without touching the host.
 type fakeSystem struct {
+	currentPID     int
+	socketPID      int
+	socketPIDErr   error
 	goos           string
 	home           string
 	cwd            string
@@ -45,7 +48,7 @@ type fakeSystem struct {
 func newFake(t *testing.T, goos string) *fakeSystem {
 	t.Helper()
 	return &fakeSystem{
-		goos: goos, home: "/home/george", cwd: "/work",
+		currentPID: 100, goos: goos, home: "/home/george", cwd: "/work",
 		env:   map[string]string{"PATH": "/home/george/.local/bin:relative:/usr/bin"},
 		files: map[string]string{}, symlinks: map[string]string{}, writable: map[string]bool{},
 		cmdOutput: map[string]string{}, cmdErr: map[string]error{}, readErr: map[string]error{},
@@ -102,7 +105,20 @@ func (f *fakeSystem) Run(_ context.Context, name string, args ...string) (string
 	if err, ok := f.cmdErr[line]; ok {
 		return "", err
 	}
-	return f.cmdOutput[line], nil
+	if strings.HasPrefix(line, "launchctl bootstrap ") || strings.HasPrefix(line, "systemctl --user restart ") {
+		f.currentPID++
+	}
+	if out, ok := f.cmdOutput[line]; ok {
+		return out, nil
+	}
+	if line == "launchctl print gui/501/dev.lydakis.errand" || line == "systemctl --user show errand.service --property=MainPID --value" {
+		pid := f.currentPID
+		if strings.HasPrefix(line, "launchctl") {
+			return fmt.Sprintf("state = running\npid = %d\n", pid), nil
+		}
+		return fmt.Sprint(pid), nil
+	}
+	return "", nil
 }
 func (f *fakeSystem) Discover(socket, cli string) (tailnet.Provider, error) {
 	f.discoverCalls++
@@ -113,6 +129,22 @@ func (f *fakeSystem) Discover(socket, cli string) (tailnet.Provider, error) {
 	f.discoverCLI = cli
 	return f.provider, nil
 }
+func (f *fakeSystem) SocketPID(_ context.Context, _ string) (int, error) {
+	if f.socketPIDErr != nil {
+		return 0, f.socketPIDErr
+	}
+	if f.socketPID != 0 {
+		return f.socketPID, nil
+	}
+	if ran(f, "launchctl bootstrap") || ran(f, "systemctl --user restart") {
+		return f.currentPID, nil
+	}
+	if f.quiesceErr != nil {
+		return 0, os.ErrNotExist
+	}
+	return f.currentPID, nil
+}
+
 func (f *fakeSystem) Probe(_ context.Context, socket string) (proto.Info, error) {
 	f.probeSockets = append(f.probeSockets, socket)
 	return f.probeInfo, f.probeErr
@@ -676,3 +708,86 @@ func TestServicePathKeepsAbsoluteEntriesAndAddsSystemDefaults(t *testing.T) {
 }
 
 func (fakeProvider) Peers(context.Context) ([]tailnet.Peer, error) { return nil, nil }
+
+func TestSetupRefusesForeignSocketOwnerBeforeMutation(t *testing.T) {
+	for _, goos := range []string{"darwin", "linux"} {
+		for _, force := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/force=%v", goos, force), func(t *testing.T) {
+				f := newFake(t, goos)
+				f.socketPID = 81683
+				r, err := Run(context.Background(), Options{Force: force}, f)
+				if err != nil || !r.Failed() || !strings.Contains(stepErrorDetail(r, "service"), "PID 81683") {
+					t.Fatalf("foreign runner accepted: %v / %+v", err, r.Steps)
+				}
+				if len(f.writes) != 0 || len(f.quiesceSockets) != 0 || ran(f, "launchctl bootout") || ran(f, "systemctl --user restart") {
+					t.Fatalf("foreign runner was changed: %+v", f)
+				}
+			})
+		}
+	}
+}
+
+func TestSetupRejectsUnmanagedSocketOwner(t *testing.T) {
+	f := newFake(t, "darwin")
+	f.cmdErr["launchctl print gui/501/dev.lydakis.errand"] = errors.New("Could not find service")
+	r, err := Run(context.Background(), Options{}, f)
+	if err != nil || !r.Failed() || len(f.writes) != 0 || len(f.quiesceSockets) != 0 {
+		t.Fatalf("unmanaged runner accepted: %v / %+v", err, r.Steps)
+	}
+}
+
+func TestSetupRejectsSurvivingOldDaemonAndReleasesLease(t *testing.T) {
+	f := newFake(t, "darwin")
+	f.socketPID = f.currentPID
+	r, err := Run(context.Background(), Options{}, f)
+	if err != nil || !r.Failed() || !strings.Contains(stepErrorDetail(r, "probe"), "old runner PID") {
+		t.Fatalf("old daemon confirmed restart: %v / %+v", err, r.Steps)
+	}
+	if len(f.releasedLeases) != 1 {
+		t.Fatalf("old runner left quiesced: %v", f.releasedLeases)
+	}
+}
+
+func TestSetupRejectsWrongVersionAfterRestart(t *testing.T) {
+	f := newFake(t, "linux")
+	f.probeInfo.Version = "0.1.0"
+	r, err := Run(context.Background(), Options{ExpectedVersion: "0.1.1"}, f)
+	if err != nil || !r.Failed() || !strings.Contains(stepErrorDetail(r, "probe"), "expected 0.1.1") {
+		t.Fatalf("stale binary accepted: %v / %+v", err, r.Steps)
+	}
+}
+
+func TestSetupDoesNotBootstrapAfterBootoutFailure(t *testing.T) {
+	f := newFake(t, "darwin")
+	f.cmdErr["launchctl bootout gui/501/dev.lydakis.errand"] = errors.New("operation not permitted")
+	r, err := Run(context.Background(), Options{}, f)
+	if err != nil || !r.Failed() || ran(f, "launchctl bootstrap") || len(f.releasedLeases) != 1 {
+		t.Fatalf("bootout failure ignored: %v / %+v", err, r.Steps)
+	}
+}
+
+func TestSetupEnablesAgentBeforeBootstrap(t *testing.T) {
+	f := newFake(t, "darwin")
+	f.quiesceErr = os.ErrNotExist
+	f.cmdErr["launchctl print gui/501/dev.lydakis.errand"] = errors.New("Could not find service")
+	// Exercise installation itself: an explicitly stopped agent can be enabled
+	// once ownership preflight has established that no other daemon is using it.
+	r := &Report{}
+	if !installLaunchAgent(context.Background(), Options{}, f, r, f.home, "/bin/errand", "/config", "/bin") || r.Failed() {
+		t.Fatalf("install failed: %+v", r.Steps)
+	}
+	commands := strings.Join(f.commands, "\n")
+	if strings.Index(commands, "launchctl enable") < 0 || strings.Index(commands, "launchctl enable") > strings.Index(commands, "launchctl bootstrap") {
+		t.Fatalf("agent was not enabled before bootstrap: %s", commands)
+	}
+}
+
+func ranServiceMutation(f *fakeSystem) bool {
+	for _, command := range f.commands {
+		if strings.HasPrefix(command, "launchctl print ") || strings.HasPrefix(command, "systemctl --user show ") {
+			continue
+		}
+		return true
+	}
+	return false
+}

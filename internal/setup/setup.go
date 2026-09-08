@@ -33,14 +33,15 @@ const (
 
 // Options are the operator's choices; everything else is discovered.
 type Options struct {
-	Transport  string // empty respects saved config; new runners default to both
-	ConfigPath string // empty uses the default runner path, honoring XDG_CONFIG_HOME
-	MaxJobs    int    // zero uses 1
-	AllowUsers []string
-	Socket     string // explicit tailscaled socket
-	CLI        string // explicit tailscale CLI path
-	Force      bool   // rewrite an existing config or service definition
-	DryRun     bool   // decide and report, change nothing
+	ExpectedVersion string // version of the CLI performing setup
+	Transport       string // empty respects saved config; new runners default to both
+	ConfigPath      string // empty uses the default runner path, honoring XDG_CONFIG_HOME
+	MaxJobs         int    // zero uses 1
+	AllowUsers      []string
+	Socket          string // explicit tailscaled socket
+	CLI             string // explicit tailscale CLI path
+	Force           bool   // rewrite an existing config or service definition
+	DryRun          bool   // decide and report, change nothing
 }
 
 // ConfigChoice is the runner config setup decided to write.
@@ -188,8 +189,23 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	}
 
 	var leaseToken string
-	restartCompleted := false
+	previousPID := 0
 	if !opts.DryRun && (sys.GOOS() == "linux" || sys.GOOS() == "darwin") {
+		pidCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		previousPID, err = sys.SocketPID(pidCtx, restartSocketPath)
+		cancel()
+		if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, syscall.ECONNREFUSED) {
+			r.fail("service", fmt.Errorf("cannot inspect runner process at %s: %w", restartSocketPath, err))
+			return r, nil
+		}
+		if err == nil {
+			if err := verifyServiceOwner(ctx, sys, restartSocketPath, previousPID); err != nil {
+				r.fail("service", err)
+				return r, nil
+			}
+		} else {
+			previousPID = 0
+		}
 		var ok bool
 		leaseToken, ok = acquireRestartLease(ctx, sys, r, restartSocketPath)
 		if !ok {
@@ -207,7 +223,7 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 			}
 		}
 		defer func() {
-			if leaseToken == "" || restartCompleted {
+			if leaseToken == "" {
 				return
 			}
 			releaseCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -246,9 +262,9 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	// 3. Service.
 	switch sys.GOOS() {
 	case "linux":
-		restartCompleted = installSystemd(ctx, opts, sys, r, home, exe, configPath, runnerPath)
+		installSystemd(ctx, opts, sys, r, home, exe, configPath, runnerPath)
 	case "darwin":
-		restartCompleted = installLaunchAgent(ctx, opts, sys, r, home, exe, configPath, runnerPath)
+		installLaunchAgent(ctx, opts, sys, r, home, exe, configPath, runnerPath)
 	default:
 		r.step("service", "no service manager integration for "+sys.GOOS()+"; run `"+exe+" serve` yourself", false)
 	}
@@ -266,7 +282,7 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 	if r.Failed() {
 		return r, nil
 	}
-	probe(ctx, sys, r)
+	probe(ctx, sys, r, previousPID, opts.ExpectedVersion)
 	return r, nil
 }
 
@@ -371,9 +387,18 @@ func installLaunchAgent(ctx context.Context, opts Options, sys System, r *Report
 			return false
 		}
 	}
-	// bootout is idempotent (ignored when not loaded); bootstrap loads and
-	// starts. Together they make re-running setup a restart.
-	_, _ = sys.Run(ctx, "launchctl", "bootout", domain+"/"+LaunchAgentLabel)
+	// Do not hide permission or service-manager failures as a successful restart.
+	if out, err := sys.Run(ctx, "launchctl", "bootout", domain+"/"+LaunchAgentLabel); err != nil {
+		detail := strings.ToLower(out + " " + err.Error())
+		if !strings.Contains(detail, "could not find service") && !strings.Contains(detail, "service not found") && !strings.Contains(detail, "no such process") {
+			r.fail("service", fmt.Errorf("cannot unload launch agent: %w (%s)", err, strings.TrimSpace(out)))
+			return false
+		}
+	}
+	if _, err := sys.Run(ctx, "launchctl", "enable", domain+"/"+LaunchAgentLabel); err != nil {
+		r.fail("service", err)
+		return false
+	}
 	if _, err := sys.Run(ctx, "launchctl", "bootstrap", domain, plistPath); err != nil {
 		r.fail("service", err)
 		return false
@@ -490,12 +515,25 @@ func symlinkTargetPath(link, target string) string {
 	return filepath.Clean(target)
 }
 
-func probe(ctx context.Context, sys System, r *Report) {
+func probe(ctx context.Context, sys System, r *Report, previousPID int, expectedVersion string) {
 	deadline := time.Now().Add(probeTimeout)
 	var lastErr error
 	for time.Now().Before(deadline) {
 		probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		info, err := sys.Probe(probeCtx, r.SocketPath)
+		if err == nil && (sys.GOOS() == "linux" || sys.GOOS() == "darwin") {
+			var pid int
+			pid, err = sys.SocketPID(probeCtx, r.SocketPath)
+			if err == nil && pid == previousPID {
+				err = fmt.Errorf("old runner PID %d is still answering after service restart", pid)
+			}
+			if err == nil {
+				err = verifyServiceOwner(probeCtx, sys, r.SocketPath, pid)
+			}
+		}
+		if err == nil && expectedVersion != "" && info.Version != expectedVersion {
+			err = fmt.Errorf("daemon reports version %s, expected %s; check the preserved service executable", info.Version, expectedVersion)
+		}
 		cancel()
 		if err == nil {
 			r.Info = &info

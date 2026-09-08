@@ -48,6 +48,7 @@ type System interface {
 	Run(ctx context.Context, name string, args ...string) (string, error)
 	Discover(socket, cli string) (tailnet.Provider, error)
 	Probe(ctx context.Context, socket string) (proto.Info, error)
+	SocketPID(ctx context.Context, socket string) (int, error)
 	Quiesce(ctx context.Context, socket string) (string, error)
 	ReleaseQuiesce(ctx context.Context, socket, token string) error
 }
@@ -61,6 +62,15 @@ func (e *QuiesceError) Error() string { return e.Message }
 
 // RealSystem performs setup on the local machine.
 type RealSystem struct{}
+
+func (RealSystem) SocketPID(ctx context.Context, socket string) (int, error) {
+	conn, err := unixpeer.Dial(ctx, socket, unixpeer.CurrentUID())
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	return unixpeer.ProcessID(conn.(*net.UnixConn))
+}
 
 func (RealSystem) GOOS() string { return runtime.GOOS }
 

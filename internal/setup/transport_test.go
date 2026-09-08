@@ -139,7 +139,7 @@ func TestSetupTransportUpgradePreviewAndBusyRunner(t *testing.T) {
 	}
 	f.probeInfo.RunningJobs = 1
 	r, err = Run(context.Background(), Options{}, f)
-	if err != nil || !r.Failed() || f.files[path] != original || len(f.writes) != 0 || len(f.commands) != 0 {
+	if err != nil || !r.Failed() || f.files[path] != original || len(f.writes) != 0 || ranServiceMutation(f) {
 		t.Fatal("upgraded busy runner")
 	}
 }

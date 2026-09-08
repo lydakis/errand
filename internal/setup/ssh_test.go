@@ -105,7 +105,7 @@ func TestSSHSetupPreservesBusyRunner(t *testing.T) {
 		if err != nil || !r.Failed() || !strings.Contains(stepErrorDetail(r, "service"), "active jobs") {
 			t.Fatalf("busy runner: %v / %+v", err, r)
 		}
-		if len(f.writes) != 0 || len(f.commands) != 0 || f.discoverCalls != 0 {
+		if len(f.writes) != 0 || ranServiceMutation(f) || f.discoverCalls != 0 {
 			t.Fatal("changed busy runner")
 		}
 	}

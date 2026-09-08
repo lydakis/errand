@@ -38,6 +38,15 @@ linger on Linux and a launch agent on macOS. Setup preserves unrelated config
 values and existing service definitions unless `--force` is given. Before
 writing anything, it reserves an idle runner and blocks new admissions until
 restart; it refuses while jobs are staging, starting, running, or queued.
+Setup also checks that the process owning the socket is the process owned by
+its platform service. A manually installed daemon or another service using
+that socket must be managed through its existing service manager, or explicitly
+migrated before running setup. `--force` does not override that ownership check.
+After an upgrade, setup verifies that a new service process answers and that
+its version matches the CLI. Updating a binary on disk does not update an
+already-running daemon. On macOS, setup re-enables its own LaunchAgent before
+loading it; it does not adopt or restart custom system LaunchDaemons.
+
 Generated services retain the absolute entries from the setup shell's `PATH`
 and add the standard system directories, so runner-installed developer tools
 remain available to jobs. When SSH is enabled, setup also links `/usr/local/bin/errand` when it can
@@ -303,3 +312,18 @@ execute again.
 See [runner upgrades](RELEASING.md#runner-upgrades) for Homebrew upgrades,
 service restarts, and preserving an existing installation. Setup owns the
 runner service; do not also start it through `brew services`.
+
+## Testing service installation and upgrades
+
+The opt-in integration test exercises real launchd/systemd installation,
+executable upgrades, disabled services, active jobs, and competing daemons:
+
+```sh
+ERRAND_TEST_SERVICE_MANAGER=1 go test -v -count=1 -run '^TestLiveServiceLifecycle$' -timeout=4m ./internal/setup
+```
+
+It builds two test binaries and uses a unique user-service name and temporary
+state, then removes its service and files. macOS requires a logged-in GUI
+launchd domain. Linux requires an accessible user systemd bus and linger
+already enabled; for an Errand job, pass `XDG_RUNTIME_DIR=/run/user/UID` for
+the runner account. The test does not change linger or the production runner.
