@@ -48,7 +48,7 @@ func readWorkspaceOrigin(dir string) (workspaceOrigin, error) {
 	return o, err
 }
 func (o workspaceOrigin) session(dir string) changeops.TransferSession {
-	return changeops.TransferSession{Directory: filepath.Join(dir, "fetch"), Root: o.Root, RootID: o.RootID, Owner: localChangeKey(o.PeerURL, o.WorkspaceID), SourceID: o.WorkspaceID, MaxBytes: proto.DefaultLimits().MaxChangeBytes}
+	return changeops.TransferSession{Directory: filepath.Join(dir, "fetch"), Root: o.Root, RootID: o.RootID, Owner: localChangeKey(o.PeerURL, o.WorkspaceID), SourceID: o.WorkspaceID, MaxSourceBytes: proto.DefaultLimits().MaxWorkspaceBytes, MaxChangeBytes: proto.DefaultLimits().MaxChangeBytes}
 }
 func recordWorkspaceOrigin(opts RunOptions, id string, m proto.Manifest) error {
 	dir, err := workspaceTransferDir(opts.PeerURL, id)

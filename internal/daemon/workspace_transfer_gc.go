@@ -23,17 +23,22 @@ func (d *Daemon) handleTransferGC(w http.ResponseWriter, r *http.Request, id Ide
 	d.workspaces.mu.Lock()
 	rows, err := d.workspaces.records()
 	d.workspaces.mu.Unlock()
-	if err != nil {
-		httpError(w, 500, err.Error())
-		return
-	}
 	var total changeops.TransferGCResult
+	if err != nil {
+		total.Failures = append(total.Failures, err.Error())
+	}
 	for _, row := range rows {
+		if r.Context().Err() != nil {
+			return
+		}
 		if row.Owner != d.workspaceOwner(id) {
 			continue
 		}
-		unlock := d.workspaces.lockWorkspace(row.ID)
-		err := func() error {
+		unlock, err := d.workspaces.lockWorkspaceContext(r.Context(), row.ID)
+		if err != nil {
+			return
+		}
+		err = func() error {
 			d.workspaces.mu.Lock()
 			current, err := d.workspaces.lookup(row.Owner, row.ID)
 			d.workspaces.mu.Unlock()
@@ -51,12 +56,16 @@ func (d *Daemon) handleTransferGC(w http.ResponseWriter, r *http.Request, id Ide
 				return err
 			}
 			for _, e := range entries {
+				if err := r.Context().Err(); err != nil {
+					return err
+				}
 				if !proto.ValidChangeClientID(e.Name()) {
-					return fmt.Errorf("invalid workspace transfer directory")
+					total.Failures = append(total.Failures, fmt.Sprintf("workspace %s: invalid transfer directory", row.ID))
+					continue
 				}
 				result, err := d.pushSession(current, e.Name()).GC(r.Context(), cutoff, request.DryRun, []proto.Manifest{current.Manifest})
 				if err != nil {
-					return err
+					total.Failures = append(total.Failures, fmt.Sprintf("workspace %s transfer %s: %v", row.ID, e.Name(), err))
 				}
 				total.Removed += result.Removed
 				total.Protected += result.Protected
@@ -65,9 +74,11 @@ func (d *Daemon) handleTransferGC(w http.ResponseWriter, r *http.Request, id Ide
 			return nil
 		}()
 		unlock()
-		if err != nil {
-			httpError(w, 500, err.Error())
+		if r.Context().Err() != nil {
 			return
+		}
+		if err != nil {
+			total.Failures = append(total.Failures, fmt.Sprintf("workspace %s: %v", row.ID, err))
 		}
 	}
 	writeJSON(w, 200, total)

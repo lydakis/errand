@@ -228,7 +228,19 @@ for retained job results. Transfer staging is bounded by the existing change
 byte limit and 4,096 attempts per relationship; collect old staging when full.
 Definitively rejected workspace creation removes its local origin snapshot.
 An uncertain creation outcome preserves that snapshot; check `workspaces` before
-retrying. GC preserves damaged transfer state and reports collection errors.
+retrying. GC preserves damaged transfer state, continues collecting healthy
+relationships, and reports partial progress with a nonzero exit status.
+`df` reports incomplete inventory instead of waiting for a busy local transfer;
+`gc changes --dry-run` counts such relationships as protected.
+Concurrent inventory and dry-run reads do not mark one another as active transfers.
+Uploads to the same workspace wait for the preceding upload to finish; commands
+remain independent. `df` includes temporary upload bytes in workspace transfer
+storage, including an upload whose target workspace has just been removed.
+
+Whole source snapshots and retained source bodies use the workspace byte limit;
+individual deltas and attempt staging use the change byte limit. An unchanged
+large source file therefore does not consume the delta allowance. Historical
+source bodies still consume storage, and pinned bodies cannot be reclaimed by GC.
 
 Profiles and configuration still provide peer, environment, workdir, forwarding,
 and apply preferences. Persistent workspace selection itself requires the

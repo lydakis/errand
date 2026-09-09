@@ -240,12 +240,15 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			fmt.Fprintf(stderr, "errand: local change gc: %v\n", err)
 			failed = true
-		} else if result.DryRun {
-			fmt.Fprintf(stdout, "local changes: would remove %d records and free %d bytes (%d protected, %d failed)\n",
-				result.Removed, result.FreedBytes, result.Protected, result.Failed)
-		} else {
-			fmt.Fprintf(stdout, "local changes: removed %d records, freed %d bytes (%d protected, %d failed)\n",
-				result.Removed, result.FreedBytes, result.Protected, result.Failed)
+		}
+		if err == nil || result.Removed > 0 || result.Protected > 0 || result.Failed > 0 {
+			if result.DryRun {
+				fmt.Fprintf(stdout, "local changes: would remove %d records and free %d bytes (%d protected, %d failed)\n",
+					result.Removed, result.FreedBytes, result.Protected, result.Failed)
+			} else {
+				fmt.Fprintf(stdout, "local changes: removed %d records, freed %d bytes (%d protected, %d failed)\n",
+					result.Removed, result.FreedBytes, result.Protected, result.Failed)
+			}
 		}
 		if err == nil && result.Failed != 0 {
 			failed = true
@@ -256,12 +259,13 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			fmt.Fprintln(stderr, "errand: workspace change gc:", err)
 			failed = true
-		} else {
+		}
+		if err == nil || len(result.Failures) > 0 {
 			verb := "removed"
 			if dryRun {
 				verb = "would remove"
 			}
-			fmt.Fprintf(stdout, "%s workspace changes: %s %d transfers, %d bytes (%d protected)\n", label, verb, result.Removed, result.FreedBytes, result.Protected)
+			fmt.Fprintf(stdout, "%s workspace changes: %s %d transfers, %d bytes (%d protected, %d failures)\n", label, verb, result.Removed, result.FreedBytes, result.Protected, len(result.Failures))
 		}
 	}
 	if failed {

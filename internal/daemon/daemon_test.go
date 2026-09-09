@@ -22,6 +22,14 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	// Auto-apply re-executes the embedding binary. Dispatch it before replacing
+	// XDG_STATE_HOME or the helper would rerun the entire daemon test suite.
+	if len(os.Args) == 4 && os.Args[1] == "_automatic-apply" {
+		if err := client.RunAutomaticApplyWorker(os.Args[2], os.Args[3]); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	stateHome, err := os.MkdirTemp("", "errand-daemon-test-state-")
 	if err != nil {
 		panic(err)

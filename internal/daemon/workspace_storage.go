@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/lydakis/errand/internal/proto"
@@ -55,4 +56,59 @@ func workspaceStorageBytes(ctx context.Context, root string, row workspaceRecord
 		return nil
 	})
 	return usage, err
+}
+
+// Uploads live outside workspace directories so removal cannot interrupt them.
+// Snapshot ownership under the metadata mutex, then inspect bytes without it.
+func (s *workspaceStore) addUploadStorage(ctx context.Context, owner string, stats *proto.StorageStats, present map[string]bool) error {
+	s.mu.Lock()
+	var uploads []*workspaceUpload
+	for _, upload := range s.uploads {
+		if upload.row.Owner == owner {
+			uploads = append(uploads, upload)
+		}
+	}
+	s.mu.Unlock()
+	indices := make(map[string]int)
+	if stats.Details != nil {
+		for i, usage := range stats.Details.Workspaces {
+			indices[usage.ID] = i
+		}
+	}
+	for _, upload := range uploads {
+		bytes, err := storageTreeBytes(ctx, upload.dir)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		stats.Workspaces.Bytes += bytes
+		if !present[upload.row.ID] {
+			stats.Workspaces.Items++
+			present[upload.row.ID] = true
+		}
+		if stats.Details == nil {
+			continue
+		}
+		index, found := indices[upload.row.ID]
+		if !found {
+			index = len(stats.Details.Workspaces)
+			indices[upload.row.ID] = index
+			stats.Details.Workspaces = append(stats.Details.Workspaces, proto.WorkspaceStorage{ID: upload.row.ID, Name: upload.row.Name})
+		}
+		usage := &stats.Details.Workspaces[index]
+		usage.Bytes += bytes
+		usage.TransferBytes += bytes
+	}
+	if stats.Details != nil {
+		sort.Slice(stats.Details.Workspaces, func(i, j int) bool {
+			a, b := stats.Details.Workspaces[i], stats.Details.Workspaces[j]
+			if a.Name != b.Name {
+				return a.Name < b.Name
+			}
+			return a.ID < b.ID
+		})
+	}
+	return nil
 }

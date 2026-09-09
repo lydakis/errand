@@ -21,10 +21,12 @@ import (
 // direction. Directory is private receiver storage outside Root. The caller
 // holds the destination's transfer lock across every operation (including GC).
 // This lock does not serialize commands executing in the working tree.
+// MaxSourceBytes bounds reconstructed source trees and retained source bodies.
+// MaxChangeBytes bounds deltas and aggregate attempt admission.
 type TransferSession struct {
 	Directory, Root, Owner, SourceID string
 	RootID                           fsidentity.Identity
-	MaxBytes                         int64
+	MaxSourceBytes, MaxChangeBytes   int64
 }
 
 type TransferAttempt struct {
@@ -43,7 +45,14 @@ func (s TransferSession) Checkpoint() TransferCheckpoint {
 	return TransferCheckpoint{Root: s.Root, RootID: s.RootID, Owner: s.Owner, SourceID: s.SourceID, StatePath: filepath.Join(s.Directory, "checkpoint.json")}
 }
 func (s TransferSession) Blobs() TransferBlobStore {
-	return TransferBlobStore{Directory: filepath.Join(s.Directory, "blobs"), MaxBytes: s.MaxBytes}
+	return TransferBlobStore{Directory: filepath.Join(s.Directory, "blobs"), MaxBytes: s.MaxSourceBytes}
+}
+
+func (s TransferSession) sourceError(err error) error {
+	if !errors.Is(err, ErrByteLimitExceeded) {
+		return err
+	}
+	return fmt.Errorf("retaining workspace source (limit %d bytes; gc changes can reclaim only unreferenced bodies; creation and checkpoint bodies remain pinned): %w", s.MaxSourceBytes, err)
 }
 func (s TransferSession) Initialize(ctx context.Context, source string, initial proto.Manifest) error {
 	if _, err := s.Checkpoint().Read(); err == nil {
@@ -58,7 +67,7 @@ func (s TransferSession) Initialize(ctx context.Context, source string, initial 
 		}
 	}
 	if err := s.Blobs().Retain(ctx, source, initial); err != nil {
-		return err
+		return s.sourceError(err)
 	}
 	_, err := s.Checkpoint().Initialize(initial)
 	return err
@@ -94,15 +103,18 @@ func (s TransferSession) Stage(ctx context.Context, id, source string, manifest 
 	if err != nil {
 		return "", proto.ChangeBundle{}, err
 	}
-	if stagedBytes > s.MaxBytes {
+	if stagedBytes > s.MaxChangeBytes {
 		return "", proto.ChangeBundle{}, fmt.Errorf("transfer staging budget exceeded; run gc changes")
 	}
 	v, err := s.Checkpoint().Read()
 	if err != nil {
 		return "", proto.ChangeBundle{}, err
 	}
-	b, err := workspaceDelta(ctx, v.Manifest, manifest, s.MaxBytes)
+	b, err := workspaceDelta(ctx, v.Manifest, manifest, s.MaxChangeBytes)
 	if err != nil {
+		if errors.Is(err, ErrByteLimitExceeded) {
+			err = fmt.Errorf("preparing transfer changes (limit %d bytes): %w", s.MaxChangeBytes, err)
+		}
 		return "", b, err
 	}
 	tmp, err := os.MkdirTemp(filepath.Join(s.Directory, "attempts"), ".stage-")
@@ -110,7 +122,9 @@ func (s TransferSession) Stage(ctx context.Context, id, source string, manifest 
 		return "", b, err
 	}
 	defer RemoveTree(tmp)
-	if err := s.Blobs().MaterializeBase(ctx, tmp, v.Manifest, s.MaxBytes); err != nil {
+	// Only changed roots need base files in this attempt; the full checkpoint
+	// remains pinned in the source store.
+	if err := s.Blobs().MaterializeBase(ctx, tmp, b.BaseManifest, s.MaxSourceBytes); err != nil {
 		return "", b, err
 	}
 	access, err := makeManifestAccessibleContext(ctx, source, b.RemoteManifest)
@@ -121,7 +135,7 @@ func (s TransferSession) Stage(ctx context.Context, id, source string, manifest 
 	if err := errors.Join(packErr, access.restore()); err != nil {
 		return "", b, err
 	}
-	if err := extractTransferBundle(tmp, b, s.MaxBytes); err != nil {
+	if err := extractTransferBundle(tmp, b, s.MaxChangeBytes); err != nil {
 		return "", b, err
 	}
 	if err := RemoveTree(filepath.Join(tmp, "change-base")); err != nil {
@@ -236,7 +250,7 @@ func (s TransferSession) Apply(id string, selected map[string]bool, materialize 
 		}
 		// Source bodies must be durable before any receiver mutation can be accepted.
 		if err := s.Blobs().Retain(context.Background(), filepath.Join(dir, "remote"), b.RemoteManifest); err != nil {
-			return ApplyResult{}, err
+			return ApplyResult{}, s.sourceError(err)
 		}
 		a.Applying, a.Selected, a.Materialize = true, selected, materialize
 		if err := writeTransferJSON(filepath.Join(dir, "attempt.json"), a); err != nil {

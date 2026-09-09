@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -27,11 +28,12 @@ type workspaceRecord struct {
 }
 
 type workspaceStore struct {
-	gateMu sync.Mutex
-	gates  map[string]*workspaceGate
-	mu     sync.Mutex
-	dir    string
-	root   *os.Root
+	gateMu  sync.Mutex
+	gates   map[string]*workspaceGate
+	mu      sync.Mutex
+	uploads map[string]*workspaceUpload // protected by mu; independent of command gates
+	dir     string
+	root    *os.Root
 }
 
 func openWorkspaces(dir string) (*workspaceStore, error) {
@@ -50,14 +52,14 @@ func openWorkspaces(dir string) (*workspaceStore, error) {
 		return nil, err
 	}
 	s := &workspaceStore{dir: dir, root: root}
-	// Creation and removal tombstones never contain running workspaces.
+	// Unpublished uploads and removal tombstones never contain running workspaces.
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		root.Close()
 		return nil, err
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".create-") || strings.HasPrefix(e.Name(), ".removed-") {
+		if strings.HasPrefix(e.Name(), ".create-") || strings.HasPrefix(e.Name(), ".removed-") || strings.HasPrefix(e.Name(), ".push-upload-") {
 			if err := removeOwnedTree(filepath.Join(dir, e.Name())); err != nil {
 				root.Close()
 				return nil, err
@@ -202,31 +204,44 @@ func workspaceDataIdentity(path string, want fsidentity.Identity) error {
 // Serialize binding changes and last-member settlement per workspace. The
 // global inventory mutex never covers cache I/O or process cleanup.
 type workspaceGate struct {
-	mu    sync.Mutex
+	token chan struct{}
 	users int
 }
 
 func (s *workspaceStore) lockWorkspace(id string) func() {
+	unlock, _ := s.lockWorkspaceContext(context.Background(), id)
+	return unlock
+}
+
+func (s *workspaceStore) lockWorkspaceContext(ctx context.Context, id string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	s.gateMu.Lock()
 	if s.gates == nil {
 		s.gates = make(map[string]*workspaceGate)
 	}
 	gate := s.gates[id]
 	if gate == nil {
-		gate = &workspaceGate{}
+		gate = &workspaceGate{token: make(chan struct{}, 1)}
 		s.gates[id] = gate
 	}
 	gate.users++
 	s.gateMu.Unlock()
-	gate.mu.Lock()
-	return func() {
-		gate.mu.Unlock()
+	release := func() {
 		s.gateMu.Lock()
 		gate.users--
 		if gate.users == 0 {
 			delete(s.gates, id)
 		}
 		s.gateMu.Unlock()
+	}
+	select {
+	case gate.token <- struct{}{}:
+		return func() { <-gate.token; release() }, nil
+	case <-ctx.Done():
+		release()
+		return nil, ctx.Err()
 	}
 }
 func (r workspaceRecord) holds(jobID string) bool { return slices.Contains(r.JobIDs, jobID) }

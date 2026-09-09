@@ -6,7 +6,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -74,4 +76,117 @@ func TestTransferGCReportsCorruptCheckpoint(t *testing.T) {
 	if err == nil || result.Failed != 1 || result.Protected != 0 {
 		t.Fatalf("GC hid missing checkpoint: %+v %v", result, err)
 	}
+}
+
+func TestTransferInventorySkipsBusyRelationship(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	prep := prepareSnapshot(root, true, false)
+	opts := RunOptions{PeerURL: "http://runner", Root: root}
+	const id = "01M2280R0T4152A3BSV4C2976R"
+	if err := recordWorkspaceOrigin(opts, id, prep.manifest); err != nil {
+		t.Fatal(err)
+	}
+	dir, err := workspaceTransferDir(opts.PeerURL, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := lockWorkspaceTransfer(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { _, err := workspaceTransferStats(context.Background()); done <- err }()
+	select {
+	case err := <-done:
+		unlock()
+		if err == nil || !strings.Contains(err.Error(), "busy") {
+			t.Fatalf("busy inventory: %v", err)
+		}
+	case <-time.After(time.Second):
+		unlock()
+		<-done
+		t.Fatal("inventory blocked on active transfer")
+	}
+	unlock, err = lockWorkspaceTransfer(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := workspaceTransferGC(time.Now().Add(time.Hour), true)
+	unlock()
+	if err != nil || result.Protected != 1 {
+		t.Fatalf("dry-run omitted active relationship: %+v %v", result, err)
+	}
+}
+
+func TestTransferGCContinuesPastCorruptOrigin(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	prep := prepareSnapshot(root, true, false)
+	opts := RunOptions{PeerURL: "http://runner", Root: root}
+	var dirs []string
+	for _, id := range []string{"01M2280R0T4152A3BSV4C2976R", "01M2280R0T4152A3BSV4C2976S"} {
+		if err := recordWorkspaceOrigin(opts, id, prep.manifest); err != nil {
+			t.Fatal(err)
+		}
+		dir, err := workspaceTransferDir(opts.PeerURL, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dirs = append(dirs, dir)
+	}
+	sort.Strings(dirs)
+	if err := os.WriteFile(filepath.Join(dirs[0], "origin.json"), []byte("{bad"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	garbage := filepath.Join(dirs[1], ".source-abandoned")
+	if err := os.Mkdir(garbage, 0700); err != nil {
+		t.Fatal(err)
+	}
+	result, err := workspaceTransferGC(time.Now().Add(time.Hour), false)
+	if err == nil || result.Failed != 1 || result.Removed != 1 {
+		t.Fatalf("partial GC: %+v %v", result, err)
+	}
+	if _, err := os.Stat(garbage); !os.IsNotExist(err) {
+		t.Fatal("healthy relationship was skipped", err)
+	}
+	stats, err := workspaceTransferStats(context.Background())
+	if err == nil || stats.Items != 1 || stats.Bytes == 0 {
+		t.Fatalf("partial inventory: %+v %v", stats, err)
+	}
+}
+
+func TestTransferObserversDoNotReportEachOtherBusy(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	prep := prepareSnapshot(root, true, false)
+	if err := recordWorkspaceOrigin(RunOptions{PeerURL: "http://runner", Root: root}, "01M2280R0T4152A3BSV4C2976R", prep.manifest); err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(gc bool) {
+			defer wg.Done()
+			<-start
+			for j := 0; j < 4; j++ {
+				if gc {
+					result, err := workspaceTransferGC(time.Now().Add(time.Hour), true)
+					if err != nil || result.Protected != 0 {
+						t.Errorf("read-only GC competed with observer: %+v %v", result, err)
+						return
+					}
+				} else {
+					result, err := workspaceTransferStats(t.Context())
+					if err != nil || result.Items != 1 {
+						t.Errorf("inventory competed with observer: %+v %v", result, err)
+						return
+					}
+				}
+			}
+		}(i%2 == 0)
+	}
+	close(start)
+	wg.Wait()
 }

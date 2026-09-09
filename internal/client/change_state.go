@@ -533,12 +533,17 @@ func acquireLocalChangeLockContext(ctx context.Context, name string) (func(), er
 	if err != nil {
 		return nil, err
 	}
+	return acquireChangeFileLockContext(ctx, f)
+}
+
+// Takes ownership of f, closing it on cancellation or when the lock is released.
+func acquireChangeFileLockContext(ctx context.Context, f *os.File) (func(), error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			f.Close()
 			return nil, err
 		}
-		err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		if err == nil {
 			return func() {
 				_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)

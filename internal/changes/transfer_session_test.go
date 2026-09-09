@@ -3,19 +3,62 @@ package changes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/lydakis/errand/internal/proto"
 )
 
+func TestSourceCapacityAdviceDoesNotMaskCorruption(t *testing.T) {
+	for _, corrupt := range []bool{false, true} {
+		t.Run(fmt.Sprint(corrupt), func(t *testing.T) {
+			root, b, staged := applyFixture(t, "original\n", "source\n")
+			target := transferTarget(t, root)
+			s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "source", MaxSourceBytes: 1 << 20, MaxChangeBytes: 1 << 20}
+			if err := s.Initialize(t.Context(), filepath.Join(staged, "base"), b.BaseManifest); err != nil {
+				t.Fatal(err)
+			}
+			id := proto.NewULID()
+			dir, delta, err := s.Stage(t.Context(), id, filepath.Join(staged, "remote"), b.RemoteManifest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if corrupt {
+				for _, entry := range delta.RemoteManifest.Entries {
+					if entry.Type == proto.EntryFile {
+						if err := os.WriteFile(filepath.Join(dir, "remote", entry.Path), []byte("broken\n"), 0600); err != nil {
+							t.Fatal(err)
+						}
+						break
+					}
+				}
+			} else {
+				s.MaxSourceBytes = 0
+			}
+			_, err = s.Apply(id, nil, false)
+			if err == nil {
+				t.Fatal("invalid source accepted")
+			}
+			if corrupt {
+				if strings.Contains(err.Error(), "gc changes") || strings.Contains(err.Error(), "limit") {
+					t.Fatalf("corruption mislabeled: %v", err)
+				}
+			} else if !errors.Is(err, ErrByteLimitExceeded) || !strings.Contains(err.Error(), "remain pinned") {
+				t.Fatalf("capacity error lost its cause or pinned-source explanation: %v", err)
+			}
+		})
+	}
+}
+
 func TestTransferSessionRecoveryAndCollection(t *testing.T) {
 	ctx := context.Background()
 	root, b, staged := applyFixture(t, "original\n", "source\n")
 	target := transferTarget(t, root)
-	s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "sender", MaxBytes: 1 << 20}
+	s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "sender", MaxSourceBytes: 1 << 20, MaxChangeBytes: 1 << 20}
 	if err := s.Initialize(ctx, filepath.Join(staged, "base"), b.BaseManifest); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +119,7 @@ func TestTransferGCFinishesInterruptedDeletion(t *testing.T) {
 	ctx := context.Background()
 	root, b, staged := applyFixture(t, "original\n", "source\n")
 	target := transferTarget(t, root)
-	s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "sender", MaxBytes: 1 << 20}
+	s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "sender", MaxSourceBytes: 1 << 20, MaxChangeBytes: 1 << 20}
 	if err := s.Initialize(ctx, filepath.Join(staged, "base"), b.BaseManifest); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +151,7 @@ func TestTransferSessionPartialConflictCheckpoint(t *testing.T) {
 	ctx := context.Background()
 	root, b, staged := mixedTransferFixture(t)
 	target := transferTarget(t, root)
-	s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "sender", MaxBytes: 1 << 20}
+	s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "sender", MaxSourceBytes: 1 << 20, MaxChangeBytes: 1 << 20}
 	if err := s.Initialize(ctx, filepath.Join(staged, "base"), b.BaseManifest); err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +186,7 @@ func TestTransferSessionStagePermissionAndIDBinding(t *testing.T) {
 	ctx := context.Background()
 	root, b, staged := applyFixture(t, "base\n", "remote\n")
 	target := transferTarget(t, root)
-	s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "sender", MaxBytes: 1 << 20}
+	s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "sender", MaxSourceBytes: 1 << 20, MaxChangeBytes: 1 << 20}
 	if err := s.Initialize(ctx, filepath.Join(staged, "base"), b.BaseManifest); err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +211,7 @@ func TestTransferSessionRejectsChangedBaseBeforeApply(t *testing.T) {
 	ctx := context.Background()
 	root, b, staged := applyFixture(t, "initial\n", "remote\n")
 	target := transferTarget(t, root)
-	s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "source", MaxBytes: 1 << 20}
+	s := TransferSession{Directory: t.TempDir(), Root: root, RootID: target.RootID, Owner: "owner", SourceID: "source", MaxSourceBytes: 1 << 20, MaxChangeBytes: 1 << 20}
 	if err := s.Initialize(ctx, filepath.Join(staged, "base"), b.BaseManifest); err != nil {
 		t.Fatal(err)
 	}

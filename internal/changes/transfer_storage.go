@@ -13,9 +13,10 @@ import (
 )
 
 type TransferGCResult struct {
-	Removed    int   `json:"removed"`
-	Protected  int   `json:"protected"`
-	FreedBytes int64 `json:"freed_bytes"`
+	Failures   []string `json:"failures,omitempty"`
+	Removed    int      `json:"removed"`
+	Protected  int      `json:"protected"`
+	FreedBytes int64    `json:"freed_bytes"`
 }
 
 // TransferStorageBytes counts private storage without following symlinks or

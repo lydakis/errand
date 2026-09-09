@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ import (
 
 func workspaceTransferStats(ctx context.Context) (proto.StorageCategory, error) {
 	var stats proto.StorageCategory
-	err := visitWorkspaceTransfers(ctx, false, func(dir string, o workspaceOrigin) error {
+	busy, _, err := visitWorkspaceTransfers(ctx, true, func(dir string, o workspaceOrigin) error {
 		bytes, err := changeops.TreeSizeContext(ctx, dir)
 		if err != nil {
 			return err
@@ -24,11 +25,14 @@ func workspaceTransferStats(ctx context.Context) (proto.StorageCategory, error) 
 		stats.Bytes += bytes
 		return nil
 	})
+	if busy > 0 {
+		err = errors.Join(err, fmt.Errorf("%d workspace transfer relationships busy; inventory incomplete", busy))
+	}
 	return stats, err
 }
 func workspaceTransferGC(cutoff time.Time, dryRun bool) (ChangeGCResult, error) {
 	var result ChangeGCResult
-	err := visitWorkspaceTransfers(context.Background(), dryRun, func(dir string, o workspaceOrigin) error {
+	busy, failed, err := visitWorkspaceTransfers(context.Background(), dryRun, func(dir string, o workspaceOrigin) error {
 		if o.Root == "" {
 			info, err := os.Stat(dir)
 			if err != nil {
@@ -57,7 +61,6 @@ func workspaceTransferGC(cutoff time.Time, dryRun bool) (ChangeGCResult, error) 
 		result.Protected += gc.Protected
 		result.FreedBytes += gc.FreedBytes
 		if err != nil {
-			result.Failed++
 			return fmt.Errorf("collecting workspace %s transfers: %w", o.WorkspaceID, err)
 		}
 		children, err := os.ReadDir(dir)
@@ -134,52 +137,82 @@ func workspaceTransferGC(cutoff time.Time, dryRun bool) (ChangeGCResult, error) 
 		}
 		return nil
 	})
+	result.Protected += busy
+	result.Selected += busy
+	result.Failed += failed
 	return result, err
 }
-func visitWorkspaceTransfers(ctx context.Context, dryRun bool, visit func(string, workspaceOrigin) error) error {
+
+// Inventory and dry-run skip held locks; collection may wait for a transfer.
+// Isolate errors per relationship so damaged state cannot hide healthy entries.
+func visitWorkspaceTransfers(ctx context.Context, nonBlocking bool, visit func(string, workspaceOrigin) error) (busy, failed int, resultErr error) {
 	root, err := localChangeRoot()
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	parent := filepath.Join(root, "workspace-transfers")
+	if nonBlocking {
+		// Serialize df and dry-run GC observers, including daemon/CLI aliases.
+		// Lock the existing directory so read-only inventory creates no files and
+		// changes no permissions. Transfers never lock this directory themselves.
+		observer, err := os.Open(parent)
+		if os.IsNotExist(err) {
+			return 0, 0, nil
+		}
+		if err != nil {
+			return 0, 0, err
+		}
+		unlock, err := acquireChangeFileLockContext(ctx, observer)
+		if err != nil {
+			return 0, 0, err
+		}
+		defer unlock()
+	}
 	entries, err := os.ReadDir(parent)
 	if os.IsNotExist(err) {
-		return nil
+		return 0, 0, nil
 	}
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	for _, e := range entries {
 		if err := ctx.Err(); err != nil {
-			return err
+			return busy, failed, errors.Join(resultErr, err)
 		}
 		dir := filepath.Join(parent, e.Name())
-		var unlock func()
-		if dryRun {
-			var acquired bool
-			unlock, acquired, err = tryAcquireExistingLocalChangeLock(localChangeTransferLockName("workspace-" + e.Name()))
-			if err != nil {
+		err := func() error {
+			var unlock func()
+			if nonBlocking {
+				var acquired bool
+				var err error
+				unlock, acquired, err = tryAcquireExistingLocalChangeLock(localChangeTransferLockName("workspace-" + e.Name()))
+				if err != nil {
+					return err
+				}
+				if !acquired {
+					busy++
+					return nil
+				}
+			} else {
+				var err error
+				unlock, err = lockWorkspaceTransfer(dir)
+				if err != nil {
+					return err
+				}
+			}
+			defer unlock()
+			o, err := readWorkspaceOrigin(dir)
+			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
-			if !acquired {
-				continue
-			}
-		} else {
-			unlock, err = lockWorkspaceTransfer(dir)
-			if err != nil {
-				return err
-			}
-		}
-		o, err := readWorkspaceOrigin(dir)
-		if err == nil || os.IsNotExist(err) {
-			err = visit(dir, o)
-		}
-		unlock()
+			return visit(dir, o)
+		}()
 		if err != nil {
-			return err
+			failed++
+			resultErr = errors.Join(resultErr, fmt.Errorf("workspace transfer %s: %w", e.Name(), err))
 		}
 	}
-	return nil
+	return busy, failed, resultErr
 }
 
 func RemoteTransferGC(peer string, olderThan time.Duration, dryRun bool) (changeops.TransferGCResult, error) {
@@ -192,5 +225,8 @@ func RemoteTransferGC(peer string, olderThan time.Duration, dryRun bool) (change
 		seconds++
 	}
 	err := postJSONResultContext(context.Background(), strings.TrimSuffix(peer, "/")+"/v0/gc/changes", proto.TransferGCRequest{OlderThanSeconds: seconds, DryRun: dryRun}, "workspace transfer GC", &result)
+	if err == nil && len(result.Failures) > 0 {
+		err = fmt.Errorf("transfer collection incomplete: %s", strings.Join(result.Failures, "; "))
+	}
 	return result, err
 }

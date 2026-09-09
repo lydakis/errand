@@ -1041,11 +1041,25 @@ Remote staging is owner-scoped beneath the workspace's private record, outside
 its working tree. Local staging and source bodies live under client change state.
 `df` counts both. `gc changes` collects old local transfer attempts, and
 `gc changes --on PEER` collects remote ones; checkpoints and pending applications
-remain protected. Source blob growth uses the existing change byte limit.
+remain protected. Full source reconstruction and retained source blobs use the
+workspace byte limit; deltas and attempt staging use the change byte limit.
+Staging reconstructs only the changed base paths. Distinct historical source
+bodies count toward the source limit, including pinned creation/checkpoint bodies.
 Staging admits at most 4,096 attempts and refuses further growth once retained
-attempt bytes exceed that limit; a single in-progress capture can temporarily
+attempt bytes exceed the change byte limit; a single in-progress capture can temporarily
 use additional bounded base/archive/extraction storage. No pinned source body is
-automatically evicted. Push retries retain the original immutable request after
+automatically evicted. Busy local transfer relationships are skipped with an
+incomplete-inventory diagnostic; dry-run GC counts them as protected. Collection
+continues past damaged relationships and reports both partial progress and errors.
+Network uploads use unpublished temporary directories outside the workspace gate.
+Only one upload per workspace occupies temporary storage; additional uploads
+wait cancelably without blocking commands. Inventory includes those temporary
+bytes under workspace transfers, even if the workspace is removed mid-upload.
+Before staging, the daemon reacquires the gate and rechecks owner and directory
+identity; removal and recreation cannot retarget an upload. Startup deletes
+unpublished upload directories. Failed upload cleanup stays inventoried and blocks
+new uploads to that workspace until startup retries it. GC stops on cancellation,
+including while waiting for a workspace gate. Push retries retain the original immutable request after
 an uncertain outcome, while completed receipts replay without reapplying files.
 The next feature slice is rootless container execution.
 

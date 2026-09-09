@@ -111,7 +111,7 @@ func applyWorkspaceJob(opts ChangeFetchOptions, details proto.JobDetails, origin
 				return err
 			}
 			defer changeops.RemoveTree(tmp)
-			if err := session.Blobs().MaterializeBase(context.Background(), tmp, current, session.MaxBytes); err != nil {
+			if err := session.Blobs().MaterializeBase(context.Background(), tmp, current, session.MaxSourceBytes); err != nil {
 				return err
 			}
 			index = workspaceFetchAttempt{ID: proto.NewULID(), Path: opts.Path, Conflicts: opts.MaterializeConflicts}

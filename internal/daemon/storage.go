@@ -22,6 +22,7 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 		d.workspaces.mu.Lock()
 		rows, err := d.workspaces.records()
 		d.workspaces.mu.Unlock()
+		present := make(map[string]bool)
 		if err == nil {
 			stats.Workspaces = &proto.StorageCategory{}
 			for _, row := range rows {
@@ -41,6 +42,7 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 				if err != nil {
 					break
 				}
+				present[row.ID] = true
 				stats.Workspaces.Items++
 				stats.Workspaces.Bytes += usage.Bytes
 				if stats.Details != nil {
@@ -49,6 +51,10 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 			}
 		}
 		if err != nil {
+			httpError(w, 500, err.Error())
+			return
+		}
+		if err := d.workspaces.addUploadStorage(r.Context(), d.workspaceOwner(id), &stats, present); err != nil {
 			httpError(w, 500, err.Error())
 			return
 		}

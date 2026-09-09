@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/lydakis/errand/internal/archive"
 	changeops "github.com/lydakis/errand/internal/changes"
@@ -19,7 +18,7 @@ import (
 )
 
 func (d *Daemon) pushSession(row workspaceRecord, clientID string) changeops.TransferSession {
-	return changeops.TransferSession{Directory: filepath.Join(d.workspaces.dir, row.ID, "push", clientID), Root: filepath.Join(d.workspaces.dir, row.ID, "data"), RootID: row.Identity, Owner: row.Owner, SourceID: clientID, MaxBytes: d.cfg.MaxLimits.MaxChangeBytes}
+	return changeops.TransferSession{Directory: filepath.Join(d.workspaces.dir, row.ID, "push", clientID), Root: filepath.Join(d.workspaces.dir, row.ID, "data"), RootID: row.Identity, Owner: row.Owner, SourceID: clientID, MaxSourceBytes: d.cfg.MaxLimits.MaxWorkspaceBytes, MaxChangeBytes: d.cfg.MaxLimits.MaxChangeBytes}
 }
 func (d *Daemon) pushWorkspace(r *http.Request, id Identity) (workspaceRecord, error) {
 	if !proto.ValidULID(r.PathValue("id")) {
@@ -34,13 +33,22 @@ func (d *Daemon) pushWorkspace(r *http.Request, id Identity) (workspaceRecord, e
 	return row, workspaceDataIdentity(filepath.Join(d.workspaces.dir, row.ID, "data"), row.Identity)
 }
 func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id Identity) {
-	unlock := d.workspaces.lockWorkspace(r.PathValue("id"))
-	defer unlock()
 	row, err := d.pushWorkspace(r, id)
 	if err != nil {
 		workspaceHTTPError(w, err)
 		return
 	}
+	upload, err := d.workspaces.beginUpload(r.Context(), row)
+	if err != nil {
+		httpError(w, 409, err.Error())
+		return
+	}
+	defer func() {
+		if err := d.workspaces.finishUpload(upload); err != nil {
+			log.Printf("workspace %s upload cleanup: %v", row.ID, err)
+		}
+	}()
+	source := upload.dir
 	r.Body = http.MaxBytesReader(w, r.Body, d.cfg.MaxUploadBytes)
 	mr, err := r.MultipartReader()
 	if err != nil {
@@ -66,21 +74,8 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 			return
 		}
 	}
-	if err := d.recoverWorkspacePushes(row); err != nil {
-		httpError(w, 409, err.Error())
-		return
-	}
-	session := d.pushSession(row, request.ClientID)
-	if err := session.Initialize(r.Context(), filepath.Join(d.workspaces.dir, row.ID, "change-base"), row.Manifest); err != nil {
-		httpError(w, 500, err.Error())
-		return
-	}
-	source, err := os.MkdirTemp(session.Directory, ".upload-")
-	if err != nil {
-		httpError(w, 500, err.Error())
-		return
-	}
-	defer changeops.RemoveTree(source)
+	// Upload outside the workspace gate and directory. Removal cannot delete
+	// the source mid-upload, and slow clients cannot block commands or cleanup.
 	part, err := nextPart(mr, "workspace")
 	if err != nil {
 		httpError(w, 400, err.Error())
@@ -95,6 +90,32 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	if err := changeops.SyncTransferSource(source, request.Manifest); err != nil {
+		httpError(w, 500, err.Error())
+		return
+	}
+	unlock, err := d.workspaces.lockWorkspaceContext(r.Context(), row.ID)
+	if err != nil {
+		return
+	}
+	defer unlock()
+	// Revalidate ownership and directory identity after network I/O. The name
+	// may have been removed and recreated; this upload still addresses its ID.
+	current, err := d.pushWorkspace(r, id)
+	if err != nil {
+		workspaceHTTPError(w, err)
+		return
+	}
+	if current.Identity != row.Identity {
+		httpError(w, http.StatusConflict, "workspace changed during upload")
+		return
+	}
+	row = current
+	if err := d.recoverWorkspacePushes(row); err != nil {
+		httpError(w, 409, err.Error())
+		return
+	}
+	session := d.pushSession(row, request.ClientID)
+	if err := session.Initialize(r.Context(), filepath.Join(d.workspaces.dir, row.ID, "change-base"), row.Manifest); err != nil {
 		httpError(w, 500, err.Error())
 		return
 	}
@@ -184,7 +205,7 @@ func (d *Daemon) recoverWorkspacePushes(row workspaceRecord) error {
 	return nil
 }
 
-// Startup cleans interrupted uploads; their contents are never published stages.
+// Startup recovers published transfers. openWorkspaces removes upload debris.
 func (d *Daemon) recoverAllWorkspacePushes(ctx context.Context) error {
 	rows, err := d.workspaces.records()
 	if err != nil {
@@ -197,27 +218,6 @@ func (d *Daemon) recoverAllWorkspacePushes(ctx context.Context) error {
 		if err := d.recoverWorkspacePushes(row); err != nil {
 			log.Printf("workspace %s transfer recovery protected: %v", row.ID, err)
 			continue
-		}
-		entries, err := os.ReadDir(filepath.Join(d.workspaces.dir, row.ID, "push"))
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		for _, e := range entries {
-			dir := d.pushSession(row, e.Name()).Directory
-			children, err := os.ReadDir(dir)
-			if err != nil {
-				return err
-			}
-			for _, c := range children {
-				if strings.HasPrefix(c.Name(), ".upload-") {
-					if err := changeops.RemoveTree(filepath.Join(dir, c.Name())); err != nil {
-						return err
-					}
-				}
-			}
 		}
 	}
 	return nil

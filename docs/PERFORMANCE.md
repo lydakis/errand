@@ -140,3 +140,24 @@ The local microbenchmarks also expose file-count sensitivity. Profile many-file
 workloads before changing snapshot preparation, and preserve validation of
 cached content when evaluating shortcuts. Measure representative builds and
 tests next to establish the actual break-even point for useful work.
+
+### Persistent-workspace transfer preparation
+
+To measure local source freezing and receiver staging separately:
+
+```sh
+go test ./internal/changes -run '^$' -bench '^BenchmarkTransferPreparation$' -benchtime=10x -count=3
+```
+
+The fixture has an unchanged 8 MiB file and a small edited file. The benchmark
+reports preparation time and retained bytes per attempt, without an artificial
+throughput figure for unchanged files that staging skips. Setup and cleanup are
+outside the timed section. Staging materializes only the changed base paths.
+It does not measure network time: a new push still uploads its selected source
+snapshot. Applying an acknowledged unchanged stage does not upload it again.
+
+Source blobs remain private to each transfer relationship. A shared blob store
+or incremental push protocol is not part of the current plan; revisit those only
+when representative workloads show storage duplication or network transfer is
+the limiting cost. Use this benchmark alongside the end-to-end harness before
+adding either mechanism.
