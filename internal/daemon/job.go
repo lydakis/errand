@@ -42,17 +42,16 @@ type queuedRecord struct {
 
 // Job is one admitted transaction. Its directory is the receipt.
 type Job struct {
-	returnWorkspace    func() error
-	workspaceRoot      string
-	workspaceLeaseID   string
-	workspaceLeaseErr  error
-	workspaceExclusive bool
-	ID                 string
-	Dir                string
-	Spec               proto.Spec
-	Admission          proto.Admission
-	RequestDigest      string
-	baseline           proto.Manifest
+	returnWorkspace   func() error
+	workspaceRoot     string
+	workspaceLeaseID  string
+	workspaceLeaseErr error
+	ID                string
+	Dir               string
+	Spec              proto.Spec
+	Admission         proto.Admission
+	RequestDigest     string
+	baseline          proto.Manifest
 
 	mu                  sync.Mutex
 	state               string

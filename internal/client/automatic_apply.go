@@ -323,7 +323,15 @@ func applyTerminalAutomaticallyOwned(peerURL, jobID string, final proto.JobStatu
 		outcome := automaticApplyOutcome{state: automaticApplySkipped}
 		return outcome, recordAutomaticApply(peerURL, jobID, outcome)
 	}
-	if final.Result == nil || final.Result.Changes == nil {
+	checkpointResult := false
+	if final.Result != nil && final.Result.Changes == nil {
+		state, err := loadLocalChangeState(peerURL, jobID)
+		if err != nil {
+			return automaticApplyOutcome{}, err
+		}
+		checkpointResult = state.WorkspaceID != ""
+	}
+	if final.Result == nil || final.Result.Changes == nil && !checkpointResult {
 		outcome := automaticApplyOutcome{state: automaticApplyNoChanges}
 		return outcome, recordAutomaticApply(peerURL, jobID, outcome)
 	}

@@ -39,7 +39,7 @@ func TestDoctorUsesResolvedProfileAndKeepsRawURLs(t *testing.T) {
 			if _, ok := ctx.Deadline(); !ok {
 				t.Fatal("probe has no deadline")
 			}
-			return proto.Info{Version: "test", Proto: proto.ProtoVersion}, nil
+			return proto.Info{Version: version, Proto: proto.ProtoVersion}, nil
 		}
 		code := cmdDoctorTo(append(tc.args, "--json"), &out, &errOut, probe)
 		var result doctorReport
@@ -80,14 +80,14 @@ func TestDoctorProbeDiagnostics(t *testing.T) {
 		{"", "warning", "", 0},
 		{client.ProbeForbidden, "error", "access list", 1},
 		{client.ProbeUnreachable, "error", "connectivity", 1},
-		{client.ProbeNotErrand, "error", "protocol", 1},
+		{client.ProbeNotErrand, "error", "same Errand version", 1},
 	} {
 		var out, errOut bytes.Buffer
 		code := cmdDoctorTo([]string{"--json"}, &out, &errOut, func(context.Context, string) (proto.Info, error) {
 			if tc.kind != "" {
 				return proto.Info{}, &client.ProbeError{Kind: tc.kind, Detail: "test diagnostic"}
 			}
-			return proto.Info{Version: "test", Busy: true}, nil
+			return proto.Info{Version: version, Busy: true}, nil
 		})
 		var result doctorReport
 		if err := json.Unmarshal(out.Bytes(), &result); err != nil {
@@ -110,7 +110,7 @@ func TestDoctorOnlyRequestsInfoAndDoesNotResumeApplies(t *testing.T) {
 	isolateDoctorHost(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests <- r.Method + " " + r.URL.Path
-		_ = json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: "test"})
+		_ = json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version})
 	}))
 	defer server.Close()
 	writeClientConfig(t, fmt.Sprintf("default_peer = 'test'\n[peers.test]\nurl = %q\n", server.URL))

@@ -50,7 +50,11 @@ func cmdDoctorTo(args []string, stdout, stderr io.Writer, probe doctorProbe) int
 }
 
 func localDoctor(ctx context.Context, path string) setup.Diagnosis {
-	return setup.Diagnose(ctx, path, setup.RealSystem{})
+	report := setup.Diagnose(ctx, path, setup.RealSystem{})
+	if report.Info != nil && report.Info.Version != version {
+		report.Checks = append(report.Checks, setup.DiagnosticCheck{Name: "version", Status: "warning", Detail: fmt.Sprintf("Local daemon %s; CLI %s.", report.Info.Version, version), Hint: "If behavior differs, update the installation and run errand setup to restart its daemon."})
+	}
+	return report
 }
 
 func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServices) int {
@@ -157,11 +161,16 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 				report.Checks = append(report.Checks, doctorProbeFailure(effective.URL, probeErr))
 			} else {
 				report.Info = &info
-				check := doctorCheck{Name: "runner", Status: "ok", Detail: fmt.Sprintf("Runner %s answered with compatible protocol %d; this caller can read runner info.", info.Version, info.Proto)}
+				check := doctorCheck{Name: "runner", Status: "ok", Detail: fmt.Sprintf("Runner %s answered with protocol %d; this caller can read runner info.", info.Version, info.Proto)}
 				if info.Busy {
 					check.Status = "warning"
 					check.Detail += " Runner is currently busy."
 					check.Hint = "A later submission may queue or be refused; check capacity with errand peers."
+				}
+				if info.Version != version {
+					check.Status = "warning"
+					check.Detail = fmt.Sprintf("Runner %s; CLI %s.", info.Version, version)
+					check.Hint = "If behavior differs, update the installations and run errand setup on the runner."
 				}
 				report.Checks = append(report.Checks, check)
 			}
@@ -194,7 +203,7 @@ func doctorProbeFailure(target string, err error) doctorCheck {
 	case client.ProbeForbidden:
 		check.Hint = "On the runner, inspect errand access list using its service's --config path. Check deny_users first, then the intended allowlist or capability grant, and restart after saved policy edits. SSH access is managed separately."
 	case client.ProbeNotErrand:
-		check.Hint = "Verify the selected endpoint serves Errand and that the client and runner use a compatible protocol version."
+		check.Hint = "Verify the selected endpoint serves Errand and that the client and runner run the same Errand version."
 	default:
 		if client.IsSSHPeer(target) {
 			check.Hint = "Check the peer's remote_command and remote_socket settings, then run errand doctor on the runner as its service user (with the service's --config path if customized)."

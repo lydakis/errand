@@ -47,11 +47,7 @@ func TestStorageRowsDeduplicateSocketAliases(t *testing.T) {
 	if len(rows) != 1 || rows[0].Jobs.Items != 2 || rows[0].TotalBytes != 60 || rows[0].Cache.MaxBytes != 200 || len(rows[0].Details.Jobs) != 2 {
 		t.Fatalf("lost distinct local runner: %+v", rows)
 	}
-	results[2].value.Details = nil
-	rows = storageRows(results, nil)
-	if rows[0].Details == nil || !rows[0].Details.Incomplete || len(rows[0].Details.Jobs) != 1 || rows[0].TotalBytes != 60 {
-		t.Fatalf("older local runner's missing detail was hidden: %+v", rows)
-	}
+
 }
 
 func TestStorageRowsCombineLocalRolesWithoutDoubleCounting(t *testing.T) {
@@ -79,12 +75,7 @@ func TestStorageRowsCombineLocalRolesWithoutDoubleCounting(t *testing.T) {
 	if len(rows) != 1 || rows[0].Changes.Bytes != 70 || rows[0].TotalBytes != 100 {
 		t.Fatalf("lost distinct local store: %+v", rows)
 	}
-	// An older runner omits changes. Unknown is not treated as a reported zero.
-	runner.Changes = nil
-	rows = storageRows([]peerQueryResult[proto.StorageStats]{{target: peerTarget{name: "old", url: "http://old"}, value: runner}}, &changes)
-	if len(rows) != 2 || rows[0].Changes != nil || rows[0].TotalBytes != 30 || rows[1].Changes.Bytes != 30 {
-		t.Fatalf("legacy inventory: %+v", rows)
-	}
+
 }
 
 func TestDfShowsClientStorageWithoutConfiguredRunners(t *testing.T) {

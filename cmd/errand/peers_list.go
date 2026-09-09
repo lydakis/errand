@@ -68,6 +68,9 @@ func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 			}
 			rows[i].Info = &info
 			rows[i].Status = "ready"
+			if info.Version != version {
+				rows[i].Detail = fmt.Sprintf("CLI %s; runner uses a different version", version)
+			}
 			if info.Busy {
 				rows[i].Status = "busy"
 			}

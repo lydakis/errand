@@ -113,14 +113,7 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 			return r, err
 		}
 		configPath = filepath.Join(configDir, "errandd.toml")
-		// Released setup versions ignored XDG_CONFIG_HOME. Do not mistake an
-		// existing installation for a fresh one and change its transport policy.
-		legacyPath := filepath.Join(home, ".config", "errand", "errandd.toml")
-		if configPath != legacyPath && !sys.Exists(configPath) && sys.Exists(legacyPath) {
-			r.ConfigPath = configPath
-			r.fail("config", fmt.Errorf("existing runner config found at %s, but the XDG config %s is missing; rerun errand setup --config %q to keep using the existing configuration", legacyPath, configPath, legacyPath))
-			return r, nil
-		}
+
 	} else {
 		configPath, err = sys.Abs(configPath)
 		if err != nil {
@@ -531,12 +524,12 @@ func probe(ctx context.Context, sys System, r *Report, previousPID int, expected
 				err = verifyServiceOwner(probeCtx, sys, r.SocketPath, pid)
 			}
 		}
-		if err == nil && expectedVersion != "" && info.Version != expectedVersion {
-			err = fmt.Errorf("daemon reports version %s, expected %s; check the preserved service executable", info.Version, expectedVersion)
-		}
 		cancel()
 		if err == nil {
 			r.Info = &info
+			if expectedVersion != "" && info.Version != expectedVersion {
+				r.step("version", fmt.Sprintf("daemon %s; CLI %s. If behavior differs, check the service executable and update the runner.", info.Version, expectedVersion), false)
+			}
 			if r.Config.Transport == config.TransportLocal && (!info.LocalOnly || !info.SSHDisabled) {
 				r.fail("probe", fmt.Errorf("daemon at %s did not confirm local-only mode; check the service command, overrides, and binary version", r.SocketPath))
 				return

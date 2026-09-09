@@ -221,7 +221,7 @@ func (RealSystem) Probe(ctx context.Context, socket string) (proto.Info, error) 
 		return proto.Info{}, fmt.Errorf("invalid runner info: %w", err)
 	}
 	if err := json.Unmarshal(body, &wire); err != nil || wire.Proto == nil || *wire.Proto != proto.ProtoVersion || info.Version == "" {
-		return proto.Info{}, fmt.Errorf("socket did not return compatible Errand info")
+		return proto.Info{}, fmt.Errorf("socket did not return valid Errand info")
 	}
 	return info, nil
 }

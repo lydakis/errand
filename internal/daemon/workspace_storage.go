@@ -44,6 +44,8 @@ func workspaceStorageBytes(ctx context.Context, root string, row workspaceRecord
 		switch category {
 		case "data":
 			usage.WorkingBytes += info.Size()
+		case "push":
+			usage.TransferBytes += info.Size()
 		case "change-base":
 			usage.BaseBytes += info.Size()
 		default:

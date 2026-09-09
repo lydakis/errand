@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -22,23 +21,17 @@ var errWorkspaceExists = errors.New("workspace already exists")
 
 type workspaceRecord struct {
 	proto.Workspace
-	// JobID decodes the original exclusive-lease format; new writes use JobIDs.
-	JobID           string              `json:"job_id,omitempty"`
-	LegacyExclusive bool                `json:"legacy_exclusive,omitempty"`
-	CacheLeaseID    string              `json:"cache_lease_id,omitempty"`
-	Owner           string              `json:"owner"`
-	Identity        fsidentity.Identity `json:"identity"`
+	CacheLeaseID string              `json:"cache_lease_id,omitempty"`
+	Owner        string              `json:"owner"`
+	Identity     fsidentity.Identity `json:"identity"`
 }
 
 type workspaceStore struct {
-	// Startup fallback for older or interrupted receipts without a reverse
-	// reference. Built once, never used for normal job settlement.
-	recoveryLeases map[string]string
-	gateMu         sync.Mutex
-	gates          map[string]*workspaceGate
-	mu             sync.Mutex
-	dir            string
-	root           *os.Root
+	gateMu sync.Mutex
+	gates  map[string]*workspaceGate
+	mu     sync.Mutex
+	dir    string
+	root   *os.Root
 }
 
 func openWorkspaces(dir string) (*workspaceStore, error) {
@@ -71,16 +64,6 @@ func openWorkspaces(dir string) (*workspaceStore, error) {
 			}
 		}
 	}
-	s.recoveryLeases = make(map[string]string)
-	rows, readErr := s.records()
-	if readErr != nil {
-		log.Printf("workspace inventory incomplete: %v", readErr)
-	}
-	for _, row := range rows {
-		for _, jobID := range row.JobIDs {
-			s.recoveryLeases[jobID] = row.ID
-		}
-	}
 	return s, nil
 }
 
@@ -111,15 +94,8 @@ func (s *workspaceStore) read(id string) (workspaceRecord, error) {
 	if err := decodeStrictJSON(raw, &r); err != nil {
 		return r, err
 	}
-	if r.ID != id || r.Owner == "" || r.Identity.IsZero() || proto.ValidateWorkspaceName(r.Name) != nil || (r.JobID != "" && !proto.ValidULID(r.JobID)) {
+	if r.ID != id || r.Owner == "" || r.Identity.IsZero() || proto.ValidateWorkspaceName(r.Name) != nil {
 		return r, fmt.Errorf("invalid workspace identity")
-	}
-	if r.JobID != "" {
-		if len(r.JobIDs) != 0 {
-			return r, fmt.Errorf("mixed workspace lease formats")
-		}
-		r.JobIDs, r.CacheLeaseID, r.JobID = []string{r.JobID}, r.JobID, ""
-		r.LegacyExclusive = true
 	}
 	seen := make(map[string]bool)
 	for _, jobID := range r.JobIDs {

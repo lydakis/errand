@@ -25,14 +25,16 @@ func (d *Daemon) acquireWorkspace(ctx context.Context, j *Job) error {
 		unlock := s.lockWorkspace(j.Spec.WorkspaceID)
 		defer unlock()
 		s.mu.Lock()
-		defer s.mu.Unlock()
 		r, err := s.lookup(d.cacheOwner(j), j.Spec.WorkspaceID)
+		s.mu.Unlock()
 		if err != nil {
 			return fmt.Errorf("workspace does not exist: %w", err)
 		}
-		if r.LegacyExclusive && len(r.JobIDs) != 0 {
-			return fmt.Errorf("%w: previous-version job requires cleanup", errWorkspaceBusy)
+		if err := d.recoverWorkspacePushes(r); err != nil {
+			return err
 		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
 		if r.holds(j.ID) {
 			return fmt.Errorf("job already holds workspace")
 		}
@@ -137,7 +139,7 @@ func (d *Daemon) returnWorkspace(j *Job) error {
 	}
 	r.JobIDs = slices.DeleteFunc(r.JobIDs, func(id string) bool { return id == j.ID })
 	if len(r.JobIDs) == 0 {
-		r.CacheLeaseID, r.LegacyExclusive = "", false
+		r.CacheLeaseID = ""
 	}
 	return s.write(r)
 }
@@ -147,15 +149,7 @@ func (d *Daemon) returnWorkspace(j *Job) error {
 func (d *Daemon) restoreWorkspaceLease(j *Job) error {
 	f, err := os.Open(filepath.Join(j.Dir, workspaceLeaseFile))
 	if os.IsNotExist(err) {
-		id := d.workspaces.recoveryLeases[j.ID]
-		if id == "" {
-			return nil
-		}
-		// Upgrade the legacy receipt before it is eligible for cleanup.
-		if err := replaceJSONDurable(filepath.Join(j.Dir, workspaceLeaseFile), workspaceLeaseRef{id}); err != nil {
-			return err
-		}
-		return d.restoreWorkspaceLease(j)
+		return nil
 	}
 	if err != nil {
 		return err
@@ -192,7 +186,7 @@ func (d *Daemon) restoreWorkspaceLease(j *Job) error {
 	if err := workspaceDataIdentity(data, r.Identity); err != nil {
 		return err
 	}
-	j.workspaceRoot, j.workspaceExclusive = data, r.LegacyExclusive
+	j.workspaceRoot = data
 	return nil
 }
 

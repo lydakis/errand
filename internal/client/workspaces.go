@@ -102,6 +102,9 @@ func CreateWorkspace(opts RunOptions, name string) (proto.Workspace, error) {
 	if err := prep.guard.Verify(); err != nil {
 		return result, err
 	}
+	if err := recordWorkspaceOrigin(opts, request.ID, prep.manifest); err != nil {
+		return result, fmt.Errorf("recording workspace origin: %w", err)
+	}
 	pr, pw := io.Pipe()
 	defer pr.Close()
 	mw := multipart.NewWriter(pw)
@@ -149,7 +152,15 @@ func CreateWorkspace(opts RunOptions, name string) (proto.Workspace, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return result, fmt.Errorf("creating workspace: %s: %s", resp.Status, apiError(raw))
+		err := fmt.Errorf("creating workspace: %s: %s", resp.Status, apiError(raw))
+		// These rejections precede publication. Transport failures, timeouts and
+		// server errors remain uncertain and must preserve the frozen origin.
+		switch resp.StatusCode {
+		case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden,
+			http.StatusConflict, http.StatusRequestEntityTooLarge:
+			err = errors.Join(err, discardWorkspaceOrigin(opts.PeerURL, request.ID))
+		}
+		return result, err
 	}
 	err = json.NewDecoder(io.LimitReader(resp.Body, maxWorkspaceResponseBytes)).Decode(&result)
 	return result, err

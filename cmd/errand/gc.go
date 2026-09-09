@@ -18,8 +18,8 @@ const gcUsage = `usage: errand gc cache|jobs|changes|all [options]
 Targets:
   cache    Collect snapshot blobs and named caches using runner expiry and budgets.
   jobs     Remove eligible completed job receipts; requires --older-than DURATION or --keep N.
-  changes  Remove local change records and downloads; requires --older-than DURATION.
-  all      Collect cache and jobs on one runner, plus local changes; requires --older-than DURATION.
+  changes  Remove local changes, or remote transfer staging with --on PEER; requires --older-than DURATION.
+  all      Collect cache, jobs, and transfers on one runner, plus local changes; requires --older-than DURATION.
            This means all categories, not all runners.
 
 Runner selection (cache, jobs, all):
@@ -60,10 +60,6 @@ func cmdGC(args []string) int {
 }
 
 func writeGCCachePolicies(w io.Writer, label string, policies *proto.CacheGCPolicies) {
-	if policies == nil {
-		fmt.Fprintf(w, "%s cache policy: not reported by this runner\n", label)
-		return
-	}
 	for _, category := range []struct {
 		name   string
 		policy *proto.CacheGCPolicy
@@ -104,10 +100,8 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 	var on, rawURL, olderThan string
 	keep := -1
 	dryRun := false
-	if target != "changes" {
-		fs.StringVar(&on, "on", "", "peer name")
-		fs.StringVar(&rawURL, "url", "", "peer base URL")
-	}
+	fs.StringVar(&on, "on", "", "peer name")
+	fs.StringVar(&rawURL, "url", "", "peer base URL")
 	if target == "jobs" || target == "changes" || target == "all" {
 		fs.StringVar(&olderThan, "older-than", "", "remove eligible data older than this duration")
 	}
@@ -131,9 +125,9 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		case "jobs":
 			fmt.Fprintln(stderr, "Requires --older-than DURATION or --keep N. With both, only jobs outside both retention bounds are removed. Active and incomplete jobs are protected.")
 		case "changes":
-			fmt.Fprintln(stderr, "Collects local change records and downloads. Pending apply transactions are protected.")
+			fmt.Fprintln(stderr, "Collects local changes by default, or remote transfer staging with --on PEER. Checkpoints and pending applies are protected.")
 		case "all":
-			fmt.Fprintln(stderr, "Collects cache and jobs on one runner, plus local changes: all categories, not all runners.")
+			fmt.Fprintln(stderr, "Collects cache, jobs, and transfer staging on one runner, plus local changes.")
 		}
 		if target != "changes" {
 			fmt.Fprintln(stderr, "With multiple configured runners, --on PEER or --url URL is required, including for --dry-run. A sole configured runner is selected automatically.")
@@ -195,7 +189,7 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	peerURL, label := "", "local"
-	if target != "changes" {
+	if target != "changes" || on != "" || rawURL != "" {
 		var err error
 		peerURL, label, err = resolveGCPeerTarget(rawURL, on)
 		if err != nil {
@@ -241,7 +235,7 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 			}
 		}
 	}
-	if target == "changes" || target == "all" {
+	if target == "all" || target == "changes" && peerURL == "" {
 		result, err := client.ChangeGC(retentionDuration, dryRun)
 		if err != nil {
 			fmt.Fprintf(stderr, "errand: local change gc: %v\n", err)
@@ -255,6 +249,19 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		}
 		if err == nil && result.Failed != 0 {
 			failed = true
+		}
+	}
+	if target == "all" || target == "changes" && peerURL != "" {
+		result, err := client.RemoteTransferGC(peerURL, retentionDuration, dryRun)
+		if err != nil {
+			fmt.Fprintln(stderr, "errand: workspace change gc:", err)
+			failed = true
+		} else {
+			verb := "removed"
+			if dryRun {
+				verb = "would remove"
+			}
+			fmt.Fprintf(stdout, "%s workspace changes: %s %d transfers, %d bytes (%d protected)\n", label, verb, result.Removed, result.FreedBytes, result.Protected)
 		}
 	}
 	if failed {

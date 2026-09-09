@@ -62,7 +62,7 @@ func TestSSHSetupHonorsSavedModeAndSettings(t *testing.T) {
 		f := newFake(t, "linux")
 		f.discoverErr = errors.New("Tailscale is unavailable")
 		path := f.home + "/.config/errand/errandd.toml"
-		original := "listen = \" NONE \"\nsocket = \"/tmp/custom.sock\"\nmax_jobs = 3\nmax_queued = 5\n# operator settings\n"
+		original := "transport = 'ssh'\nlisten = \" NONE \"\nsocket = \"/tmp/custom.sock\"\nmax_jobs = 3\nmax_queued = 5\n# operator settings\n"
 		f.files[path] = original
 		f.files[f.home+"/.config/systemd/user/errand.service"] = "# operator service\n"
 		r, err := Run(context.Background(), Options{Force: force}, f)
@@ -84,7 +84,7 @@ func TestSSHSetupHonorsSavedModeAndSettings(t *testing.T) {
 func TestSSHSetupRejectsTailnetOptionsBeforeChanges(t *testing.T) {
 	for _, opts := range []Options{{Socket: "/run/tailscale.sock"}, {CLI: "/bin/tailscale"}, {AllowUsers: []string{"other@example.com"}}} {
 		f := newFake(t, "linux")
-		f.files[f.home+"/.config/errand/errandd.toml"] = "listen = \"none\"\n"
+		f.files[f.home+"/.config/errand/errandd.toml"] = "transport = 'ssh'\nlisten = \"none\"\n"
 		_, err := Run(context.Background(), opts, f)
 		if err == nil || !strings.Contains(err.Error(), "SSH-only") {
 			t.Fatalf("expected conflict: %v", err)
@@ -100,7 +100,7 @@ func TestSSHSetupPreservesBusyRunner(t *testing.T) {
 		f := newFake(t, goos)
 		f.discoverErr = errors.New("Tailscale is unavailable")
 		f.probeInfo.RunningJobs = 1
-		f.files[f.home+"/.config/errand/errandd.toml"] = "listen = \"none\"\n"
+		f.files[f.home+"/.config/errand/errandd.toml"] = "transport = 'ssh'\nlisten = \"none\"\n"
 		r, err := Run(context.Background(), Options{Force: true}, f)
 		if err != nil || !r.Failed() || !strings.Contains(stepErrorDetail(r, "service"), "active jobs") {
 			t.Fatalf("busy runner: %v / %+v", err, r)

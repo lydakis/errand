@@ -194,6 +194,10 @@ func New(cfg Config) (*Daemon, error) {
 		_ = d.Close()
 		return nil, err
 	}
+	if err := d.recoverAllWorkspacePushes(context.Background()); err != nil {
+		_ = d.Close()
+		return nil, fmt.Errorf("recovering workspace pushes: %w", err)
+	}
 	if err := d.recoverNamedCaches(); err != nil {
 		_ = d.Close()
 		return nil, err
@@ -466,16 +470,15 @@ func cleanupPersistedRuntime(j *Job, cacheDirs ...string) (killed []int, cleanup
 			return nil, []string{"scope record is unreadable; surviving processes cannot be found"}
 		}
 		// Shared jobs use group identity and markers, never directory membership.
-		// An unrecovered legacy job keeps its original exclusive cwd scope.
 		persistent := j.workspaceLeaseID != "" || j.Spec.WorkspaceID != ""
-		if rec.SharedWorkspace || persistent && !j.workspaceExclusive {
+		if rec.SharedWorkspace || persistent {
 			workspace, cacheDirs = "", nil
 		}
 		scope, err := resumeProcessScope(rec.Token, workspace, cacheDirs...)
 		if err != nil {
 			return nil, []string{err.Error()}
 		}
-		if rec.SharedWorkspace || persistent && !j.workspaceExclusive && j.workspaceRoot != "" {
+		if rec.SharedWorkspace || persistent && j.workspaceRoot != "" {
 			if rec.Group == nil {
 				return nil, []string{"process group was not durably recorded; cleanup requires inspection"}
 			}
@@ -676,6 +679,9 @@ func (d *Daemon) runQueue() {
 
 func (d *Daemon) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v0/gc/changes", d.auth(proto.ActionGCJobs, d.handleTransferGC))
+	mux.HandleFunc("POST /v0/workspaces/{id}/push", d.auth(proto.ActionSubmit, d.handleWorkspacePush))
+	mux.HandleFunc("POST /v0/workspaces/{id}/push/{transfer}/apply", d.auth(proto.ActionSubmit, d.handleWorkspacePushApply))
 	mux.HandleFunc("POST /v0/workspaces/{id}", d.auth(proto.ActionSubmit, d.handleWorkspaceCreate))
 	mux.HandleFunc("GET /v0/workspaces", d.auth(proto.ActionReadOwn, d.handleWorkspaceList))
 	mux.HandleFunc("GET /v0/workspaces/{id}", d.auth(proto.ActionReadOwn, d.handleWorkspaceGet))

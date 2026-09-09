@@ -17,16 +17,15 @@ import (
 )
 
 type dfRow struct {
-	detailsUnavailable bool
-	Details            *proto.StorageDetails  `json:"details,omitempty"`
-	Workspaces         *proto.StorageCategory `json:"workspaces,omitempty"`
-	hasRunner          bool
-	NamedCaches        *proto.NamedCacheStats `json:"named_caches,omitempty"`
-	Location           string                 `json:"location"`
-	Cache              *proto.CacheStats      `json:"cache,omitempty"`
-	Jobs               proto.StorageCategory  `json:"jobs"`
-	Changes            *proto.StorageCategory `json:"changes,omitempty"`
-	TotalBytes         int64                  `json:"total_bytes"`
+	Details     *proto.StorageDetails  `json:"details,omitempty"`
+	Workspaces  *proto.StorageCategory `json:"workspaces,omitempty"`
+	hasRunner   bool
+	NamedCaches *proto.NamedCacheStats `json:"named_caches,omitempty"`
+	Location    string                 `json:"location"`
+	Cache       *proto.CacheStats      `json:"cache,omitempty"`
+	Jobs        proto.StorageCategory  `json:"jobs"`
+	Changes     *proto.StorageCategory `json:"changes,omitempty"`
+	TotalBytes  int64                  `json:"total_bytes"`
 }
 
 func cmdDf(args []string) int {

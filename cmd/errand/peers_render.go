@@ -9,27 +9,19 @@ import (
 )
 
 func writePeers(w io.Writer, rows []peerRow) {
-	hasDetails := false
-	for _, row := range rows {
-		hasDetails = hasDetails || row.Detail != ""
-	}
-	tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-	fmt.Fprint(tw, "NAME\tDEFAULT\tSTATUS\tSLOTS\tQUEUE\tSTAGING\tSYSTEM\tCAPABILITIES")
-	if hasDetails {
-		fmt.Fprint(tw, "\tDETAIL")
-	}
-	fmt.Fprintln(tw)
+	var values [][]string
 	for _, row := range rows {
 		isDefault := ""
 		if row.Default {
 			isDefault = "yes"
 		}
-		slots, queue, staging, system, capabilities := "-", "-", "-", "-", "-"
+		var slots, queue, staging, system, capabilities, runnerVersion string
 		if info := row.Info; info != nil {
+			runnerVersion = info.Version
 			slots = fmt.Sprintf("%d/%d", info.StartingJobs+info.RunningJobs, info.MaxJobs)
 			queue = fmt.Sprintf("%d/%d", info.QueuedJobs, info.MaxQueued)
 			staging = fmt.Sprint(info.StagingJobs)
-			system = info.Facts.OS + "/" + info.Facts.Arch
+			system = strings.Trim(info.Facts.OS+"/"+info.Facts.Arch, "/")
 			names := make(map[string]bool, len(info.Facts.Tools)+1)
 			for name := range info.Facts.Tools {
 				names[name] = true
@@ -46,13 +38,27 @@ func writePeers(w io.Writer, rows []peerRow) {
 				capabilities = strings.Join(tools, ",")
 			}
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s",
-			terminalSafeField(row.Name), isDefault, terminalSafeField(row.Status),
-			slots, queue, staging, terminalSafeField(system), terminalSafeField(capabilities))
-		if hasDetails {
-			fmt.Fprintf(tw, "\t%s", terminalSafeField(row.Detail))
+		values = append(values, []string{row.Name, isDefault, row.Status, runnerVersion, slots, queue, staging, system, capabilities, row.Detail})
+	}
+	writeNonemptyColumns(w, []string{"NAME", "DEFAULT", "STATUS", "VERSION", "SLOTS", "QUEUE", "STAGING", "SYSTEM", "CAPABILITIES", "DETAIL"}, values)
+}
+
+func writeNonemptyColumns(w io.Writer, headers []string, rows [][]string) {
+	visible := make([]bool, len(headers))
+	for _, row := range rows {
+		for i, value := range row {
+			visible[i] = visible[i] || value != ""
 		}
-		fmt.Fprintln(tw)
+	}
+	tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
+	for _, row := range append([][]string{headers}, rows...) {
+		var cells []string
+		for i, value := range row {
+			if visible[i] {
+				cells = append(cells, terminalSafeField(value))
+			}
+		}
+		fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}
 	_ = tw.Flush()
 }

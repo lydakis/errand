@@ -157,8 +157,8 @@ func TestSetupTailscaleOnlyRequiresTailscale(t *testing.T) {
 // policy, not an invitation for setup to initialize an owner allowlist.
 func TestSetupTransportChangesPreserveImplicitCapabilityPolicy(t *testing.T) {
 	configs := []struct{ name, body string }{
-		{"legacy default listener", ""},
-		{"legacy explicit listener", "listen = 'tailnet:9443'\n"},
+		{"default transport and listener", ""},
+		{"default transport with explicit listener", "listen = 'tailnet:9443'\n"},
 		{"both default listener", "transport = 'both'\n"},
 		{"both explicit listener", "transport = 'both'\nlisten = 'tailnet:9443'\n"},
 		{"tailscale normalized listener", "transport = 'tailscale'\nlisten = ' NONE '\n"},

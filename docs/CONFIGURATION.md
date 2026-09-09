@@ -227,8 +227,6 @@ They select outputs from the job's workspace after execution, including failed
 commands, subject to the existing byte, entry, and cleanup limits. Missing
 outputs are allowed, and symlinks follow the existing safe-link retention rules.
 `--no-snapshot` accepts declarations too, using the current directory's config.
-Both client and runner must support artifact declarations; older runners refuse
-the request rather than executing with a different admission digest.
 
 Retrieve artifacts with ordinary `fetch`, `fetch --output DIR`, or `fetch --apply`.
 Workspace-relative paths and the existing clean-or-refuse merge rules are
@@ -405,9 +403,8 @@ listener and Errand SSH bridge. Like SSH mode, it preserves a saved listener
 address without activating it. Plain setup preserves the saved local mode.
 SSH access also requires an OS SSH server and login access to the runner account.
 
-Without a `transport` setting, legacy configs keep their existing behavior:
-`listen = "none"` selects SSH-only; other listeners permit both. Add
-`transport = "both"` to let setup enable Tailscale on a legacy SSH-only runner.
+Omitting `transport` selects `both`, independently of `listen`. Use
+`transport = "ssh"` to keep setup from enabling Tailscale access.
 See [runner setup](OPERATIONS.md#runner-setup) for preservation and restart behavior.
 
 ## Runner access
@@ -517,8 +514,10 @@ defaults as `serve`, then checks:
   service that is stopped or cannot be queried is an error. Manually managed
   runners can still pass without a setup-managed service definition.
 - The configured Unix socket, its private `0600` permissions, and a bounded
-  info request that verifies protocol compatibility and caller access. A
+  info request that checks caller access and reports the daemon version. A
   configured socket that disappeared or no longer answers is an error.
+- A different CLI and daemon version produces an advisory warning. It does not
+  fail doctor or block jobs and transfers.
 - Tailscale identity-provider readiness and listener resolution, skipped when
   `listen = "none"`. The backend must be `Running`; cached identity and IP
   information from a stopped or logged-out backend does not establish readiness.

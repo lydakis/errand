@@ -107,7 +107,7 @@ func TestGCPeerSelection(t *testing.T) {
 					if req.DryRun != dryRun {
 						t.Errorf("dry run = %v, want %v", req.DryRun, dryRun)
 					}
-					json.NewEncoder(w).Encode(proto.CacheGCResult{DryRun: req.DryRun})
+					json.NewEncoder(w).Encode(proto.CacheGCResult{Policies: &proto.CacheGCPolicies{}, DryRun: req.DryRun})
 				}))
 				defer server.Close()
 				writeClientConfig(t, fmt.Sprintf(test.config, server.URL))
@@ -146,7 +146,6 @@ func TestGCCachePreviewReportsRunnerPolicies(t *testing.T) {
 	}{
 		{"separate policies", `{"dry_run":true,"policies":{"snapshot":{"max_bytes":1073741824,"ttl_seconds":604800},"named":{"max_bytes":2147483648,"ttl_seconds":1209600}}}`, []string{"snapshot cache policy: expire after 7d unused; budget 1.0 GiB", "named cache policy: expire after 14d unused; budget 2.0 GiB", "leased named caches are protected"}},
 		{"snapshot disabled", `{"dry_run":true,"policies":{"named":{"max_bytes":2147483648,"ttl_seconds":1209600}}}`, []string{"snapshot cache policy: collection disabled", "named cache policy: expire after 14d"}},
-		{"older runner", `{"dry_run":true}`, []string{"cache policy: not reported by this runner"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, test.response) }))

@@ -678,6 +678,9 @@ func storageStats(peerURL string, detailed bool) (proto.StorageStats, error) {
 		target += "?verbose=1"
 	}
 	err := getJSONWithClientContext(ctx, maintenanceHTTP, target, 16<<20, "storage stats", &stats)
+	if err == nil && (stats.Changes == nil || detailed && stats.Details == nil) {
+		err = fmt.Errorf("runner returned incomplete storage response")
+	}
 	return stats, err
 }
 
@@ -687,6 +690,9 @@ func CacheGC(peerURL string, dryRun bool) (proto.CacheGCResult, error) {
 		context.Background(), maintenanceHTTP, maintenanceTimeout,
 		peerURL+"/v0/cache/gc", proto.CacheGCRequest{DryRun: dryRun}, "cache gc", &result,
 	)
+	if err == nil && result.Policies == nil {
+		err = fmt.Errorf("runner returned cache collection without policy metadata")
+	}
 	return result, err
 }
 
@@ -830,7 +836,7 @@ func negotiateSnapshot(ctx context.Context, opts RunOptions, manifest proto.Mani
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	switch resp.StatusCode {
 	case http.StatusOK:
-	case http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusNotImplemented:
+	case http.StatusNotFound: // Snapshot caching is disabled on this runner.
 		return shipPlan{}, nil
 	default:
 		return shipPlan{}, fmt.Errorf("snapshot negotiation: %s: %s", resp.Status, apiError(raw))

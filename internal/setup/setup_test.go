@@ -530,7 +530,7 @@ func TestExistingConfigDrivesTheEffectiveReport(t *testing.T) {
 	f := newFake(t, "linux")
 	f.cmdOutput["loginctl show-user george -p Linger"] = "Linger=yes"
 	path := "/home/george/.config/errand/errandd.toml"
-	f.files[path] = "listen = \"none\"\nsocket = \"/tmp/custom.sock\"\nmax_jobs = 3\nallow_users = [\"other@example.com\"]\ndeny_users = [\"other@example.com\"]\n"
+	f.files[path] = "transport = 'ssh'\nlisten = \"none\"\nsocket = \"/tmp/custom.sock\"\nmax_jobs = 3\nallow_users = [\"other@example.com\"]\ndeny_users = [\"other@example.com\"]\n"
 
 	r, err := Run(context.Background(), Options{}, f)
 	if err != nil || r.Failed() {
@@ -567,7 +567,7 @@ func TestRelativeConfigPathIsMadeAbsoluteForTheService(t *testing.T) {
 func TestUnreadableExistingConfigStopsSetup(t *testing.T) {
 	f := newFake(t, "linux")
 	path := "/home/george/.config/errand/errandd.toml"
-	f.files[path] = "listen = \"none\"\n"
+	f.files[path] = "transport = 'ssh'\nlisten = \"none\"\n"
 	f.readErr[path] = errors.New("permission denied")
 
 	r, err := Run(context.Background(), Options{}, f)
@@ -748,13 +748,19 @@ func TestSetupRejectsSurvivingOldDaemonAndReleasesLease(t *testing.T) {
 	}
 }
 
-func TestSetupRejectsWrongVersionAfterRestart(t *testing.T) {
+func TestSetupReportsDifferentVersionAfterRestart(t *testing.T) {
 	f := newFake(t, "linux")
 	f.probeInfo.Version = "0.1.0"
 	r, err := Run(context.Background(), Options{ExpectedVersion: "0.1.1"}, f)
-	if err != nil || !r.Failed() || !strings.Contains(stepErrorDetail(r, "probe"), "expected 0.1.1") {
-		t.Fatalf("stale binary accepted: %v / %+v", err, r.Steps)
+	if err != nil || r.Failed() || r.Info == nil || r.Info.Version != "0.1.0" {
+		t.Fatalf("version difference blocked setup: %v / %+v", err, r.Steps)
 	}
+	for _, step := range r.Steps {
+		if step.Name == "version" && strings.Contains(step.Detail, "0.1.0") && strings.Contains(step.Detail, "0.1.1") {
+			return
+		}
+	}
+	t.Fatal("version difference was not reported")
 }
 
 func TestSetupDoesNotBootstrapAfterBootoutFailure(t *testing.T) {

@@ -377,7 +377,7 @@ type ChangeStorageStats struct {
 type StorageStats struct {
 	Details     *StorageDetails     `json:"details,omitempty"`
 	Workspaces  *StorageCategory    `json:"workspaces,omitempty"`
-	Changes     *ChangeStorageStats `json:"changes,omitempty"` // absent on older runners
+	Changes     *ChangeStorageStats `json:"changes"`
 	NamedCaches *NamedCacheStats    `json:"named_caches,omitempty"`
 	Cache       *CacheStats         `json:"cache,omitempty"`
 	Jobs        StorageCategory     `json:"jobs"`
@@ -399,7 +399,7 @@ type CacheGCPolicies struct {
 }
 
 type CacheGCResult struct {
-	Policies        *CacheGCPolicies `json:"policies,omitempty"` // absent on older runners
+	Policies        *CacheGCPolicies `json:"policies"`
 	RemovedCaches   int              `json:"removed_caches,omitempty"`
 	ProtectedCaches int              `json:"protected_caches,omitempty"`
 	ReclaimedTemps  int              `json:"reclaimed_temps,omitempty"`
@@ -459,8 +459,8 @@ type Facts struct {
 }
 
 type Info struct {
-	LocalOnly   bool   `json:"local_only,omitempty"`   // confirms network requests and SSH bridging are disabled
-	SSHDisabled bool   `json:"ssh_disabled,omitempty"` // absent on older runners, which support SSH
+	LocalOnly   bool   `json:"local_only,omitempty"` // confirms network requests and SSH bridging are disabled
+	SSHDisabled bool   `json:"ssh_disabled"`
 	Proto       int    `json:"proto"`
 	Version     string `json:"version"`
 	// Busy means a submission right now would be refused because capacity is

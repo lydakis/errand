@@ -99,6 +99,15 @@ The following properties must hold:
   Persistent files are not subject to ordinary job/cache GC and remain until
   explicit workspace removal. They are not isolated from other processes
   running as the same OS user.
+- Push staging and application require `submit` and the authenticated workspace
+  owner. Mutation endpoints accept immutable workspace IDs, not names. Uploads
+  are bounded and validated outside the live tree, and cache paths are excluded.
+  Transfer state lives outside working trees and binds application receipts to
+  destination directory identity. Local push and checkpoint-aware fetch require
+  the recorded originating checkout. New conflicts leave selected files untouched
+  unless the caller explicitly requests conflict materialization. Transfers do
+  not isolate concurrent user commands. Transfer collection requires `gc-own`,
+  respects ownership, and protects accepted source checkpoints and pending applies.
 - Job identifiers, manifests, archives, cache addresses, and change bundles
   cannot escape their intended state, workspace, staging, or destination roots.
 - Archive extraction validates paths, types, symlink targets, declared hashes,

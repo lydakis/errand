@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"text/tabwriter"
 	"time"
 
 	"github.com/lydakis/errand/internal/client"
@@ -384,6 +383,9 @@ func cmdPeersDiscover(args []string, stdout, stderr io.Writer, deps peersDeps) i
 			rows[i].Status = "runner"
 			rows[i].Version = info.Version
 			rows[i].Detail = fmt.Sprintf("%s/%s, %d cpu, kvm=%v, %d slot(s)", info.Facts.OS, info.Facts.Arch, info.Facts.NumCPU, info.Facts.KVM, info.MaxJobs)
+			if info.Version != version {
+				rows[i].Detail += fmt.Sprintf("; CLI %s (different version)", version)
+			}
 		}(i, target)
 	}
 	wg.Wait()
@@ -401,17 +403,15 @@ func cmdPeersDiscover(args []string, stdout, stderr io.Writer, deps peersDeps) i
 		fmt.Fprintf(stdout, "no errand runners answered among %d online tailnet node(s); run `errand setup` on a machine to make it one (--all lists every node)\n", countOnline(nodes))
 		return 0
 	}
-	w := tabwriter.NewWriter(stdout, 2, 8, 2, ' ', 0)
-	fmt.Fprintln(w, "NODE\tOS\tSTATUS\tVERSION\tDETAIL")
+	var values [][]string
 	for _, r := range shown {
 		name := terminalSafeField(r.Name)
 		if r.Configured != "" {
 			name += " (configured as " + terminalSafeField(r.Configured) + ")"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", name, terminalSafeField(r.OS),
-			terminalSafeField(r.Status), terminalSafeField(r.Version), terminalSafeField(r.Detail))
+		values = append(values, []string{name, r.OS, r.Status, r.Version, r.Detail})
 	}
-	w.Flush()
+	writeNonemptyColumns(stdout, []string{"NODE", "OS", "STATUS", "VERSION", "DETAIL"}, values)
 	fmt.Fprintln(stdout)
 	for _, r := range shown {
 		switch r.Status {

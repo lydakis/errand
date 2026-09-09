@@ -143,7 +143,7 @@ func Diagnose(ctx context.Context, configPath string, sys DiagnosticSystem) Diag
 		if err != nil {
 			r.add("runner", "error", err.Error(), "Check service logs, socket ownership, and the service's --config path. A stale socket file does not establish that a runner is alive.")
 		} else if remote.Version == "" || remote.Proto != proto.ProtoVersion {
-			r.add("runner", "error", "The socket did not return compatible Errand info.", "Use compatible client and runner versions and verify the socket belongs to Errand.")
+			r.add("runner", "error", "The socket did not return valid Errand info.", "Use the same client and runner version and verify the socket belongs to Errand.")
 		} else {
 			r.Info = &remote
 			status, hint := "ok", ""

@@ -60,9 +60,9 @@ func TestControlEndpointsReturnDecodedResponses(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs/job-1":
 			json.NewEncoder(w).Encode(proto.JobStatus{ID: "job-1", State: proto.StateRunning})
 		case r.Method == http.MethodGet && r.URL.Path == "/v0/storage":
-			json.NewEncoder(w).Encode(proto.StorageStats{Jobs: proto.StorageCategory{Items: 2, Bytes: 58}})
+			json.NewEncoder(w).Encode(proto.StorageStats{Changes: &proto.ChangeStorageStats{}, Jobs: proto.StorageCategory{Items: 2, Bytes: 58}})
 		case r.Method == http.MethodPost && r.URL.Path == "/v0/cache/gc":
-			json.NewEncoder(w).Encode(proto.CacheGCResult{RemovedBlobs: 2, FreedBytes: 17})
+			json.NewEncoder(w).Encode(proto.CacheGCResult{Policies: &proto.CacheGCPolicies{}, RemovedBlobs: 2, FreedBytes: 17})
 		case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs":
 			json.NewEncoder(w).Encode([]proto.JobListEntry{{ID: "job-1", State: proto.StateRunning}})
 		case r.Method == http.MethodGet && r.URL.Path == "/v0/info":
@@ -291,7 +291,7 @@ func TestCacheGCUsesMaintenanceDeadline(t *testing.T) {
 			StatusCode: http.StatusOK,
 			Status:     "200 OK",
 			Header:     make(http.Header),
-			Body:       io.NopCloser(strings.NewReader(`{"removed_blobs":1,"freed_bytes":2}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"policies":{},"removed_blobs":1,"freed_bytes":2}`)),
 			Request:    req,
 		}, nil
 	})}
@@ -326,7 +326,7 @@ func TestStorageStatsUsesStorageDeadline(t *testing.T) {
 			StatusCode: http.StatusOK,
 			Status:     "200 OK",
 			Header:     make(http.Header),
-			Body:       io.NopCloser(strings.NewReader(`{"jobs":{"items":2,"bytes":58}}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"changes":{},"jobs":{"items":2,"bytes":58}}`)),
 			Request:    req,
 		}, nil
 	})}

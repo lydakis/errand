@@ -154,14 +154,81 @@ job currently holding the workspace.
 Job handles still support `fetch`, `fetch --apply`, `fetch --apply --conflicts`,
 and `fetch --output`. Each job's retained result is an immutable comparison with
 the workspace's **creation snapshot**, including accumulated edits from earlier
-jobs. Applying it uses the local directory associated with that invocation and
-the existing conflict-safe merge rules. Fetching an old result neither updates
+jobs. Applying it uses the originating directory and the conflict-safe merge rules
+described below. Fetching an old result neither updates
 nor deletes the live workspace. Use `--no-apply` when you want to keep iterating
 there without applying job results locally. With concurrent writers, a retained
 result may include a sibling's edits. Collection checks the files it reads and
 can fail if they change during capture; it is not an atomic workspace snapshot.
 For a stable final result, wait for writers to finish, then run a final command
 such as `errand --workspace experiment -- true` and fetch that job.
+
+### Send local edits into a persistent workspace
+
+Fetch addresses a job's fixed result. Push addresses the continuing workspace:
+
+```sh
+errand fetch --apply mac-mini/JOB_ID
+# Edit locally, then inspect the staged transfer or apply it remotely.
+errand push --on mac-mini --workspace experiment
+errand push --on mac-mini --workspace experiment --apply
+errand --on mac-mini --workspace experiment -- make test
+```
+
+Plain push freezes and stages the selected local snapshot without changing the
+runner's working files. `--apply` merges it into the workspace. Both directions
+use clean-or-refuse three-way merging; `--apply --conflicts` explicitly permits
+conflict markers and clean sibling changes. Existing markers are ordinary file
+contents. There is no transfer `--force`, background synchronization, or implicit
+fetch before push. Concurrent commands remain caller-managed writers.
+
+Push requires `--workspace NAME` and the originating checkout on the machine that
+created it. Job handles are fetch targets, not push targets. Workspace names are
+resolved to immutable IDs before transfer; deletion and recreation cannot redirect
+an in-flight push.
+
+Push supports `--on`, `--url`, `--profile`, `--workspace-root`, `--include-all`,
+`--json`, and an optional complete changed `PATH` to limit application. Staging
+uploads the selected snapshot, as fetching downloads the retained bundle. Push
+uses the normal snapshot
+selection rules and the workspace's fixed cache bindings. Artifact declarations
+retain remote outputs; they do not opt ignored local files into an upload.
+Changing snapshot policy requires a new workspace. Apply is explicit even when
+run configuration specifies `changes.apply_on_success = true`.
+
+For persistent workspaces, fetch/apply tracks the last accepted
+remote source, and push/apply tracks the last accepted local source independently.
+Destination-only edits never become the merge base. A partially conflicted apply
+advances clean paths while keeping the old base for conflicted paths. A later
+job returning to the creation state can therefore undo previously accepted remote
+changes, even when its creation-relative result is empty. Omitting an artifact
+from a later job's retention policy does not delete an earlier fetched artifact.
+Plain fetch and `--output` continue to expose that job's immutable retained result.
+There is no direct live-workspace fetch command.
+
+Repeating push after an uncertain apply response completes that exact request
+before accepting another snapshot, including when repeated without `--apply`.
+The CLI identifies the recovered push; run push again to send newer local edits.
+Completed retries do not overwrite later job edits. If the runner collected a
+stage before receiving its apply request, the client uploads the frozen source
+again. After an ordinary staged push, `push --apply` uses the acknowledged stage
+without another upload, or prepares a new transfer if local files changed. Repeating a successful
+fetch/apply with the same job and selection replays its recorded outcome; use a
+new job result to fetch subsequent remote work.
+
+`df` includes local transfer storage under changes and remote transfer storage
+under its workspace (`df --verbose` shows a transfers column). Use
+`gc changes --older-than 7d` locally or
+`gc changes --on mac-mini --older-than 7d` on a runner to collect old staging and
+unreferenced source bodies. `--dry-run` previews collection. Accepted checkpoints,
+creation source bodies, pending applications, and the latest apply receipt stay
+protected so an uncertain response remains retryable. Removing a remote
+workspace removes its remote transfer state, while local state remains available
+for retained job results. Transfer staging is bounded by the existing change
+byte limit and 4,096 attempts per relationship; collect old staging when full.
+Definitively rejected workspace creation removes its local origin snapshot.
+An uncertain creation outcome preserves that snapshot; check `workspaces` before
+retrying. GC preserves damaged transfer state and reports collection errors.
 
 Profiles and configuration still provide peer, environment, workdir, forwarding,
 and apply preferences. Persistent workspace selection itself requires the
@@ -186,7 +253,7 @@ under their normal retention rules. Listing, creation, and removal accept
 `--json`; all accept `--on` or `--url` and work with local, SSH, and tailnet peers.
 
 `df --verbose` (`-v`) breaks workspace storage into working files, the creation
-base, and metadata. Named caches and job storage are listed separately, so
+base, transfer data, and metadata. Named caches and job storage are listed separately, so
 shared caches are never charged again to each workspace. Sizes are logical
 regular-file bytes, not unique disk allocation; filesystem clones can share
 physical blocks. Cache sizes reflect the last lease release, not live growth.
@@ -197,10 +264,6 @@ history. The filter accepts an ID too, including after workspace removal while
 receipts remain. Names select the current workspace: recreating a name does
 not include jobs from the previous workspace. Across peers, missing names
 match no jobs. `--json` includes each job's `workspace_id`.
-
-Directional `push` and `fetch` operations on **workspace handles** are a later
-slice. The commands above provide persistence and repeated execution; job-result
-application does not advance a workspace synchronization checkpoint.
 
 ## Attached sessions and forwarding
 
@@ -316,9 +379,8 @@ jobs cannot hide a long-running job. `--all` includes terminal receipts;
 `df` groups local runner storage and fetched changes into one `local` row.
 `df --verbose` (`-v`) adds individual workspace, named-cache, and job storage
 tables. `df --verbose --json` includes the corresponding `details` object;
-older runners that omit details still contribute their summary totals.
-Remote rows also include changes fetched by that runner's OS account when the
-runner supports this report. See [storage maintenance](OPERATIONS.md#storage-and-garbage-collection)
+runners must return the requested inventory details.
+Remote rows also include changes fetched by that runner's OS account. See [storage maintenance](OPERATIONS.md#storage-and-garbage-collection)
 for accounting and cleanup details.
 These read-only fleet commands share target selection, concurrent querying,
 partial-failure reporting, and exit semantics. Commands that mutate runner

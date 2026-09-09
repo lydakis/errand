@@ -49,6 +49,10 @@ func newRetentionSelector(baseline proto.Manifest, policy proto.SelectionPolicy)
 // Declared artifact subtrees override ignores. Ignored ancestors are traversed
 // only when needed to reach a baseline path or an artifact declaration.
 func (s *retentionSelector) selectPath(rel string, info fs.FileInfo) (bool, bool) {
+	return s.selectKind(rel, info.IsDir())
+}
+
+func (s *retentionSelector) selectKind(rel string, directory bool) (bool, bool) {
 	if rel == "." {
 		return true, true
 	}
@@ -56,16 +60,16 @@ func (s *retentionSelector) selectPath(rel string, info fs.FileInfo) (bool, bool
 		return false, false
 	}
 	if _, ok := s.baseline[rel]; ok {
-		return true, info.IsDir()
+		return true, directory
 	}
 	for current := rel; current != "."; current = path.Dir(current) {
 		if s.artifacts[current] {
-			return true, info.IsDir()
+			return true, directory
 		}
 	}
 	_, requiredAncestor := s.ancestors[rel]
-	if s.matcher.Ignored(strings.TrimPrefix(rel, "./"), info.IsDir()) {
-		return false, info.IsDir() && requiredAncestor
+	if s.matcher.Ignored(strings.TrimPrefix(rel, "./"), directory) {
+		return false, directory && requiredAncestor
 	}
-	return true, info.IsDir()
+	return true, directory
 }

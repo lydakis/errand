@@ -32,7 +32,8 @@ func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifes
 	opts.changeClientID = clientID
 	ssh := sshEndpointForPeer(opts.PeerURL)
 	state := localChangeState{
-		JobID: jobID, PeerURL: strings.TrimSuffix(opts.PeerURL, "/"), Root: opts.Root,
+		WorkspaceID: opts.workspaceID,
+		JobID:       jobID, PeerURL: strings.TrimSuffix(opts.PeerURL, "/"), Root: opts.Root,
 		SSHTarget: ssh.target, SSHRemoteCommand: ssh.command, SSHRemoteSocket: ssh.socket,
 		ManifestRoot: manifestRoot, ApplyOnSuccess: opts.ApplyOnSuccess,
 	}
@@ -86,6 +87,17 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 	}
 	if err := markLocalChangeTerminal(opts.PeerURL, opts.JobID); err != nil {
 		return "", fmt.Errorf("recording terminal change state: %w", err)
+	}
+	if opts.Apply && details.Spec.WorkspaceID != "" {
+		dir, pathErr := workspaceTransferDir(opts.PeerURL, details.Spec.WorkspaceID)
+		if pathErr != nil {
+			return "", pathErr
+		}
+		origin, originErr := readWorkspaceOrigin(dir)
+		if originErr != nil {
+			return "", originErr
+		}
+		return applyWorkspaceJob(opts, details, origin, dir)
 	}
 	if status.Result.Changes == nil {
 		if !status.Result.ChangesOK {

@@ -78,7 +78,7 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 	isolateDoctorHost(t)
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	stateDir := t.TempDir()
-	d, err := daemon.New(daemon.Config{StateDir: stateDir, Version: "test"})
+	d, err := daemon.New(daemon.Config{StateDir: stateDir, Version: version})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("info over ssh transport: %v", err)
 	}
-	if info.Version != "test" {
+	if info.Version != version {
 		t.Fatalf("info over ssh = %+v", info)
 	}
 
@@ -168,7 +168,7 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 			}
 			out, _ := runCLI("doctor", "--json", target.flag, target.value)
 			var diagnosis doctorReport
-			if err := json.Unmarshal([]byte(out), &diagnosis); err != nil || !diagnosis.OK || diagnosis.Info == nil || diagnosis.Info.Version != "test" {
+			if err := json.Unmarshal([]byte(out), &diagnosis); err != nil || !diagnosis.OK || diagnosis.Info == nil || diagnosis.Info.Version != version {
 				t.Fatalf("doctor over SSH: %s, %v", out, err)
 			}
 			if diagnosis.Effective.URL != "ssh://george@fake-runner" {
@@ -249,7 +249,7 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 
 func TestSSHBridgeHonorsRunningDaemonTransportConfig(t *testing.T) {
 	bin := buildErrand(t)
-	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), Version: "test", DisableSSH: true})
+	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), Version: version, DisableSSH: true})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -125,7 +125,7 @@ func TestCmdGCHelpOnlyShowsFlagsForTarget(t *testing.T) {
 	}{
 		{target: "cache", want: []string{"usage: errand gc cache [options]", "-dry-run", "-on", "-url"}, reject: []string{"-keep", "-older-than"}},
 		{target: "jobs", want: []string{"usage: errand gc jobs [options]", "-dry-run", "-keep", "-older-than", "-on", "-url"}},
-		{target: "changes", want: []string{"usage: errand gc changes --older-than DURATION [options]", "-dry-run", "-older-than"}, reject: []string{"-keep", "-on", "-url"}},
+		{target: "changes", want: []string{"usage: errand gc changes --older-than DURATION [options]", "-dry-run", "-older-than", "-on", "-url"}, reject: []string{"-keep"}},
 		{target: "all", want: []string{"usage: errand gc all --older-than DURATION [options]", "-dry-run", "-keep", "-older-than", "-on", "-url"}},
 	} {
 		t.Run(test.target, func(t *testing.T) {
@@ -206,9 +206,18 @@ func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
 	var cacheCalls, jobCalls, collectedCalls, acknowledgementCalls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/v0/gc/changes":
+			var request proto.TransferGCRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+			}
+			if request.OlderThanSeconds != 86400 {
+				t.Errorf("transfer retention: %+v", request)
+			}
+			json.NewEncoder(w).Encode(map[string]int{"removed": 1})
 		case "/v0/cache/gc":
 			cacheCalls++
-			json.NewEncoder(w).Encode(proto.CacheGCResult{RemovedBlobs: 2, FreedBytes: 10})
+			json.NewEncoder(w).Encode(proto.CacheGCResult{Policies: &proto.CacheGCPolicies{}, RemovedBlobs: 2, FreedBytes: 10})
 		case "/v0/jobs/gc":
 			jobCalls++
 			var request proto.JobGCRequest
@@ -240,7 +249,8 @@ func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
 	code := cmdGCTo([]string{"all", "--url", server.URL, "--older-than", "1d", "--keep", "5"}, &stdout, &stderr)
 	if code != 0 || cacheCalls != 1 || jobCalls != 1 || collectedCalls != 1 || acknowledgementCalls != 1 ||
 		!strings.Contains(stdout.String(), "cache: removed 2") ||
-		!strings.Contains(stdout.String(), "jobs: removed 3") {
+		!strings.Contains(stdout.String(), "jobs: removed 3") ||
+		!strings.Contains(stdout.String(), "workspace changes: removed 1") {
 		t.Fatalf("gc all = %d, calls=(%d,%d,%d,%d), stdout=%q stderr=%q",
 			code, cacheCalls, jobCalls, collectedCalls, acknowledgementCalls, stdout.String(), stderr.String())
 	}
@@ -254,11 +264,20 @@ func TestCmdGCAllDryRunIsObservationalAcrossEveryTarget(t *testing.T) {
 	var reconciliationCalls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/v0/gc/changes":
+			var request proto.TransferGCRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+			}
+			if !request.DryRun || request.OlderThanSeconds != 86400 {
+				t.Errorf("transfer retention: %+v", request)
+			}
+			json.NewEncoder(w).Encode(map[string]int{"removed": 1})
 		case "/v0/cache/gc":
 			if err := json.NewDecoder(r.Body).Decode(&cacheRequest); err != nil {
 				t.Error(err)
 			}
-			json.NewEncoder(w).Encode(proto.CacheGCResult{RemovedBlobs: 2, FreedBytes: 10, DryRun: true})
+			json.NewEncoder(w).Encode(proto.CacheGCResult{Policies: &proto.CacheGCPolicies{}, RemovedBlobs: 2, FreedBytes: 10, DryRun: true})
 		case "/v0/jobs/gc":
 			if err := json.NewDecoder(r.Body).Decode(&jobRequest); err != nil {
 				t.Error(err)
@@ -280,7 +299,8 @@ func TestCmdGCAllDryRunIsObservationalAcrossEveryTarget(t *testing.T) {
 	if code != 0 || !cacheRequest.DryRun || !jobRequest.DryRun || reconciliationCalls != 0 ||
 		!strings.Contains(stdout.String(), "cache: would remove 2") ||
 		!strings.Contains(stdout.String(), "jobs: would remove 3") ||
-		!strings.Contains(stdout.String(), "local changes: would remove 0") {
+		!strings.Contains(stdout.String(), "local changes: would remove 0") ||
+		!strings.Contains(stdout.String(), "workspace changes: would remove 1") {
 		t.Fatalf("gc all --dry-run = %d, cache=%+v jobs=%+v reconciliation=%d stdout=%q stderr=%q",
 			code, cacheRequest, jobRequest, reconciliationCalls, stdout.String(), stderr.String())
 	}
@@ -698,12 +718,12 @@ func TestCmdDfAggregatesConfiguredPeersConcurrently(t *testing.T) {
 			json.NewEncoder(w).Encode(stats)
 		}))
 	}
-	cabal := serveStorage(proto.StorageStats{
+	cabal := serveStorage(proto.StorageStats{Changes: &proto.ChangeStorageStats{},
 		Cache: &proto.CacheStats{Blobs: 3, Bytes: 6 << 20, MaxBytes: 5 << 30, TTLHours: 336},
 		Jobs:  proto.StorageCategory{Items: 7, Bytes: 1 << 30},
 	})
 	defer cabal.Close()
-	macMini := serveStorage(proto.StorageStats{
+	macMini := serveStorage(proto.StorageStats{Changes: &proto.ChangeStorageStats{},
 		Cache: &proto.CacheStats{Blobs: 9, Bytes: 56 << 20, MaxBytes: 5 << 30, TTLHours: 336},
 		Jobs:  proto.StorageCategory{Items: 2, Bytes: 84 << 20},
 	})

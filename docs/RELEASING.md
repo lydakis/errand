@@ -145,7 +145,9 @@ formula over the stable tap entry.
 
 ## Runner upgrades
 
-Install first, then run `errand setup` on machines that should accept jobs.
+Upgrade clients and runners together when practical, then run `errand setup`
+on machines that should accept jobs. Version differences are advisory and do
+not block commands; check `errand peers` or `errand doctor` when troubleshooting.
 Setup owns the service; do not also run it through `brew services`.
 
 When invoked through the stable Homebrew path, setup records that path rather

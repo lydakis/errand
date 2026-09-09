@@ -6,7 +6,8 @@ diagnostics, and storage maintenance.
 
 ## Peers and discovery
 
-`errand peers` shows runner status, capacity, platform, and capabilities. `errand peers
+`errand peers` shows runner status, version, capacity, platform, and capabilities.
+Peer tables omit columns with no values; zero counts remain visible. `errand peers
 add NAME HOST` probes the runner with an authenticated `/v0/info` *before*
 writing anything: a 403 prints your tailnet login and tells you to add it to
 the runner's `allow_users`, then restart through `errand setup`; an unreachable
@@ -42,8 +43,8 @@ Setup also checks that the process owning the socket is the process owned by
 its platform service. A manually installed daemon or another service using
 that socket must be managed through its existing service manager, or explicitly
 migrated before running setup. `--force` does not override that ownership check.
-After an upgrade, setup verifies that a new service process answers and that
-its version matches the CLI. Updating a binary on disk does not update an
+After an upgrade, setup verifies that a new service process answers and reports
+any version difference from the CLI. Updating a binary on disk does not update an
 already-running daemon. On macOS, setup re-enables its own LaunchAgent before
 loading it; it does not adopt or restart custom system LaunchDaemons.
 
@@ -144,11 +145,8 @@ socket = "/absolute/path/to/errand.sock"
 errand --on sandbox -- make test
 ```
 
-Earlier setup versions always used `~/.config/errand/errandd.toml`. If that
-file exists but the XDG location is empty, setup stops before changing anything,
-including with `--force`. Use `errand setup --config ~/.config/errand/errandd.toml`
-to keep the existing configuration and transport settings; use a personal socket
-alias as above when the config is outside the current default location.
+Setup uses `XDG_CONFIG_HOME` when set, otherwise `~/.config`. Use
+`errand setup --config PATH` to select another configuration explicitly.
 
 For job lifecycle and apply behavior, see [local jobs](USAGE.md#local-jobs).
 
@@ -178,10 +176,8 @@ the private socket for health checks and setup.
 
 Edit `transport` in `~/.config/errand/errandd.toml` anytime, then rerun setup:
 `"both"`, `"ssh"`, `"tailscale"`, and `"local"` are the supported values. A custom config
-uses `errand setup --config PATH`. Existing configs without `transport` keep
-their legacy behavior: `listen = "none"` means SSH-only; any other listener
-permits both. Set `transport = "both"` to opt a legacy SSH-only runner into
-later tailnet discovery.
+uses `errand setup --config PATH`. Omitting `transport` selects `both`; select `"ssh"` explicitly
+to keep the runner SSH-only.
 
 An explicit `--ssh`, `--tailscale`, or `--local` also repairs an invalid saved transport.
 Use `--force` (`-f`) only if you want to regenerate the rest of the config
@@ -241,9 +237,7 @@ totals are exposed, never filenames or contents. This uses the service's
 
 The `local` row combines Unix-connected runner storage and the invoking
 client's fetched changes, counting shared change storage only once. Without a
-local runner it shows fetched changes alone. Older runners that do not report
-fetched-change usage show `-` for that column; upgrade the runner to include it
-in its total. Human output uses readable binary units; `--json` preserves
+local runner it shows fetched changes alone. Human output uses readable binary units; `--json` preserves
 raw byte and item counts and cache limits. Capability-based runners
 must grant `read-own` to use `errand df`; `manage-caches` remains required only
 for `errand gc cache`. Job receipt collection uses the separate `gc-own` action.
@@ -308,6 +302,13 @@ markers are small and non-secret, and they never permit a collected ID to
 execute again.
 
 ## Upgrades
+
+Keeping client and daemon versions aligned makes troubleshooting easier. Install the update on each
+client and runner, then run `errand setup` on each runner when it is idle.
+This restarts the daemon; replacing the executable on disk is not enough.
+Version differences do not block jobs or transfers. `errand peers` shows runner
+versions, and `errand doctor` reports differences as warnings. If a command
+behaves unexpectedly, check those versions and update the installations.
 
 See [runner upgrades](RELEASING.md#runner-upgrades) for Homebrew upgrades,
 service restarts, and preserving an existing installation. Setup owns the

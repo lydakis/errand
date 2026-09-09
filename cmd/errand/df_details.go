@@ -18,24 +18,18 @@ func writeDfDetails(w io.Writer, rows []dfRow) {
 			fmt.Fprintf(w, "  Fetched changes: %d entries, %s\n", row.Changes.Items, formatByteSize(row.Changes.Bytes))
 		}
 		if row.Details == nil {
-			if row.hasRunner {
-				fmt.Fprintln(w, "  Detailed runner storage is unavailable; upgrade the runner.")
-			}
 			continue
 		}
 		details := row.Details
-		if details.Incomplete {
-			fmt.Fprintln(w, "  Details are incomplete: a local runner needs an upgrade; its totals are included above.")
-		}
 		fmt.Fprintf(w, "\n  Workspaces (%d):\n", len(details.Workspaces))
 		tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-		fmt.Fprintln(tw, "  NAME\tID\tJOBS\tWORKING FILES\tCREATION BASE\tMETADATA\tTOTAL")
+		fmt.Fprintln(tw, "  NAME\tID\tJOBS\tWORKING FILES\tCREATION BASE\tTRANSFERS\tMETADATA\tTOTAL")
 		for _, item := range details.Workspaces {
 			job := strings.Join(item.JobIDs, ",")
 			if job == "" {
 				job = "-"
 			}
-			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\n", terminalSafeField(item.Name), terminalSafeField(item.ID), terminalSafeField(job), formatByteSize(item.WorkingBytes), formatByteSize(item.BaseBytes), formatByteSize(item.MetadataBytes), formatByteSize(item.Bytes))
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", terminalSafeField(item.Name), terminalSafeField(item.ID), terminalSafeField(job), formatByteSize(item.WorkingBytes), formatByteSize(item.BaseBytes), formatByteSize(item.TransferBytes), formatByteSize(item.MetadataBytes), formatByteSize(item.Bytes))
 		}
 		_ = tw.Flush()
 		fmt.Fprintf(w, "\n  Named caches (%d; sizes from last job release):\n", len(details.NamedCaches))

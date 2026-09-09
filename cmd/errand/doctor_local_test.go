@@ -46,7 +46,7 @@ func TestDoctorLocalChecksSurviveBrokenClientConfiguration(t *testing.T) {
 			if path != "/custom/runner.toml" {
 				t.Fatal(path)
 			}
-			return setup.Diagnosis{Checks: []setup.DiagnosticCheck{{Name: "runner", Status: "ok", Detail: "ready"}}, Info: &proto.Info{Version: "test"}, SocketPath: "/custom/socket"}
+			return setup.Diagnosis{Checks: []setup.DiagnosticCheck{{Name: "runner", Status: "ok", Detail: "ready"}}, Info: &proto.Info{Version: version}, SocketPath: "/custom/socket"}
 		},
 	})
 	var report doctorReport
@@ -125,14 +125,14 @@ func TestDoctorCombinesLocalRunnerWithSelectedPeer(t *testing.T) {
 					if target != wantURL {
 						t.Fatal(target)
 					}
-					return proto.Info{Version: "peer-version"}, nil
+					return proto.Info{Version: version}, nil
 				},
 			})
 			var report doctorReport
 			if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 				t.Fatal(err)
 			}
-			if probes != 1 || report.OK == localFailure || (code == 0) == localFailure || report.Info.Version != "peer-version" {
+			if probes != 1 || report.OK == localFailure || (code == 0) == localFailure || report.Info.Version != version {
 				t.Fatalf("%d %s", code, &out)
 			}
 			if !localFailure && report.LocalInfo.Version != "local-version" {
@@ -165,7 +165,7 @@ func TestDoctorSSHFailureSkipsInfoAndKeepsConfiguredURL(t *testing.T) {
 				if target != selected {
 					t.Fatal("SSH check and probe used different transports")
 				}
-				return proto.Info{Version: "test", Proto: proto.ProtoVersion}, nil
+				return proto.Info{Version: version, Proto: proto.ProtoVersion}, nil
 			},
 		})
 		var report doctorReport

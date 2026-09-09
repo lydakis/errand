@@ -491,6 +491,36 @@ func TestFetchChangesExplainsMissingAndFailedWorkspaceChanges(t *testing.T) {
 	}
 }
 
+func TestPersistentApplyRequiresWorkspaceOrigin(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	jobID, workspaceID := proto.NewULID(), proto.NewULID()
+	code := 0
+	final := proto.JobStatus{ID: jobID, State: proto.StateExited, Result: &proto.Result{
+		ExitCode: &code, CleanupOK: true, ChangesOK: true, LogsComplete: true,
+	}}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(proto.JobDetails{
+			JobStatus: final, Spec: proto.ReceiptSpec{WorkspaceID: workspaceID},
+		})
+	}))
+	defer server.Close()
+	if err := saveLocalChangeState(localChangeState{
+		JobID: jobID, WorkspaceID: workspaceID, PeerURL: server.URL,
+		Root: root, ManifestRoot: testManifestRoot, ApplyOnSuccess: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := FetchChanges(ChangeFetchOptions{PeerURL: server.URL, JobID: jobID, Apply: true, CallerDir: root})
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("apply without workspace origin = %v, want missing origin error", err)
+	}
+	outcome, err := applyTerminalAutomaticallyOwned(server.URL, jobID, final)
+	if !errors.Is(err, os.ErrNotExist) || outcome.state != automaticApplyPending {
+		t.Fatalf("automatic apply without workspace origin = %+v, %v", outcome, err)
+	}
+}
+
 func TestFetchedChangePathReturnsDeletionMetadata(t *testing.T) {
 	staged := t.TempDir()
 	bundle := proto.ChangeBundle{

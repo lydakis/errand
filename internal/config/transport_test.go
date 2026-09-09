@@ -12,7 +12,7 @@ func TestDaemonTransportConfig(t *testing.T) {
 		bad                bool
 	}{
 		{"", "both", "tailnet:7443", false},
-		{"listen = 'none'", "ssh", "none", false},
+		{"listen = 'none'", "both", "none", false},
 		{"transport = 'both'\nlisten = 'none'", "both", "none", false},
 		{"transport = 'ssh'\nlisten = 'tailnet:7443'", "ssh", "none", false},
 		{"transport = 'tailscale'\nlisten = 'none'", "tailscale", "tailnet:7443", false},

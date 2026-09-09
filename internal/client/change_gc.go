@@ -31,9 +31,16 @@ func ChangeStats() (proto.StorageCategory, error) {
 }
 
 func changeStatsContext(ctx context.Context) (proto.StorageCategory, error) {
-	return changeStatsWithCollector(func(jobs, downloads string, candidates map[string]*localChangeCandidate) error {
+	stats, err := changeStatsWithCollector(func(jobs, downloads string, candidates map[string]*localChangeCandidate) error {
 		return collectChangeGCCandidatesContext(ctx, jobs, downloads, candidates, false)
 	})
+	if err != nil {
+		return stats, err
+	}
+	transfers, err := workspaceTransferStats(ctx)
+	stats.Items += transfers.Items
+	stats.Bytes += transfers.Bytes
+	return stats, err
 }
 
 func changeStatsWithCollector(
@@ -167,7 +174,13 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 			return result, err
 		}
 	}
-	return result, nil
+	transfers, err := workspaceTransferGC(cutoff, dryRun)
+	result.Selected += transfers.Selected
+	result.Removed += transfers.Removed
+	result.Protected += transfers.Protected
+	result.Failed += transfers.Failed
+	result.FreedBytes += transfers.FreedBytes
+	return result, err
 }
 
 func syncExistingLocalDirectory(path string) error {

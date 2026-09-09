@@ -39,7 +39,7 @@ func TestEnvironmentInspectionAndDoctorHideValues(t *testing.T) {
 		}
 	}
 	var out, errOut bytes.Buffer
-	code := cmdDoctorTo([]string{"--json", "--env", "CI=dummy-literal-value"}, &out, &errOut, func(context.Context, string) (proto.Info, error) { return proto.Info{Version: "test"}, nil })
+	code := cmdDoctorTo([]string{"--json", "--env", "CI=dummy-literal-value"}, &out, &errOut, func(context.Context, string) (proto.Info, error) { return proto.Info{Version: version}, nil })
 	if code != 0 || strings.Contains(out.String()+errOut.String(), "dummy-") {
 		t.Fatal("doctor failed or leaked values")
 	}

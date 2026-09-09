@@ -652,9 +652,10 @@ Metadata reads, listing, and unrelated jobs remain independent of that lock.
 
 Each job retains an immutable result relative to the workspace creation base.
 The wire request names that initial manifest; its workspace archive carries no
-new local files. Existing job fetch/apply behavior remains separate from future
-workspace synchronization checkpoints. Removing the live workspace does not
-remove prior job results, and collecting a job does not remove the live tree.
+new local files. Job fetch still addresses that immutable result. Application
+reconstructs the observed source and uses a directional checkpoint. Removing the
+live workspace does not remove prior job results, and collecting a job does not
+remove the live tree.
 This cumulative result supports fetching only the final iteration. It is not a
 per-job delta. Previously applied identical content merges without conflict;
 subsequent overlapping edits can still require conflict resolution. Changing to
@@ -797,6 +798,7 @@ errand peers discover [-a | --all] # runners on the caller's own tailnet; read-o
 errand ps [-a | --all] [-n N | --last N] [--on X] [--json] # N <= 200
 errand attach <peer/ulid>       # replay logs and follow to completion
 errand fetch [--apply [--conflicts] | -o DIR | --output DIR] <peer/ulid> [path]
+errand push --workspace NAME [--on PEER | --url URL] [--apply [--conflicts]] [path]
 errand kill [-f | --force] <peer/ulid>
 errand df [--on X] [--json]    # fleet storage; read-own
 errand gc cache --on builder [--dry-run]     # shared cache policy; manage-caches
@@ -862,8 +864,13 @@ reconciliation while preserving the replay-prevention lifetime; and
 submission returns the machine-readable `snapshot_cache_miss` error code so
 the client can retry the same job ID with a complete snapshot. Curl-debuggable;
 the route prefix is the request-protocol version; receipt and change-bundle
-versions apply only to their persisted formats. During pre-release v0 development, mixed daemon and CLI
-versions are not a compatibility contract.
+versions apply only to their persisted formats. Executable versions are
+diagnostic information. Peers, doctor, and setup report version differences
+without blocking commands. Matching versions are recommended when diagnosing
+unexpected behavior. There is no version negotiation or alternate behavior for
+older formats. Updating the executable requires restarting the daemon.
+Development builds can use an explicit version label to identify them
+(`go build -ldflags "-X main.version=LABEL" ./cmd/errand`).
 
 ## Non-goals
 
@@ -919,10 +926,10 @@ versions are not a compatibility contract.
 ### Next slices (2026-09-07)
 
 The core, SSH, forwarding, retention, named caches, local execution, local-only
-setup, and persistent workspaces with concurrent jobs are implemented. The next
-slice is directional transfer between an originating checkout and a persistent
-workspace, followed by the rootless container backend. Attaching to a job
-remains observation.
+setup, and persistent workspaces with concurrent jobs are implemented.
+Directional transfer now connects an originating checkout and a persistent
+workspace. The next feature slice is the rootless container backend. Attaching
+to a job remains observation.
 
 The agreed transfer interface mirrors fetch: plain `push` stages remotely,
 `push --apply` merges remotely, and `push --apply --conflicts` permits conflict
@@ -1012,11 +1019,35 @@ automatic size eviction. Retain bodies before publishing the checkpoint that
 references them. The store must live in dedicated private owner-scoped storage
 outside working trees; it does not discover relationships or pins on its own.
 
-These primitives do not yet expose workspace push/fetch commands. Wiring the
-store into relationship lifecycle, staging, transport, operation coordination,
-and the public df/gc commands remains integration work.
-Ordinary job fetch/apply does not use directional checkpoints. Its materialized
-directory mode conflicts also preserve the affected content subtree.
+The integrated transfer session now stages immutable source deltas, retains
+source bodies before mutation, persists apply intent, and advances the directional
+checkpoint only from a completed receipt. Recovery completes that sequence before
+another transfer or job admission on the affected workspace. A workspace control
+gate coordinates transfers, admission, cache settlement, and removal; it never
+serializes already-running user commands. Recovery I/O does not hold the global
+workspace metadata mutex, and a damaged workspace does not prevent unrelated
+workspaces or ephemeral jobs from starting.
+
+The public interface is `fetch JOB_HANDLE` and `push --workspace NAME`, each with
+explicit `--apply` and `--conflicts`. There is no live-workspace fetch or push by
+job handle. Creation records the original checkout identity and shared snapshot
+in private client state. Immutable job results can be reconstructed after remote
+workspace removal. A changing retention selection preserves previously accepted
+but now unobserved source paths, rather than treating exclusion as deletion.
+Ephemeral job fetch/apply retains its existing per-job lifecycle and uses the same
+underlying merge engine.
+
+Remote staging is owner-scoped beneath the workspace's private record, outside
+its working tree. Local staging and source bodies live under client change state.
+`df` counts both. `gc changes` collects old local transfer attempts, and
+`gc changes --on PEER` collects remote ones; checkpoints and pending applications
+remain protected. Source blob growth uses the existing change byte limit.
+Staging admits at most 4,096 attempts and refuses further growth once retained
+attempt bytes exceed that limit; a single in-progress capture can temporarily
+use additional bounded base/archive/extraction storage. No pinned source body is
+automatically evicted. Push retries retain the original immutable request after
+an uncertain outcome, while completed receipts replay without reapplying files.
+The next feature slice is rootless container execution.
 
 Nix and facts-based selection remain later work. A harness wrapper can build
 on job execution and workspace continuity while owning its own agent-thread

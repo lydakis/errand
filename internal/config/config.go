@@ -177,7 +177,7 @@ func ValidatePeer(name string, peer Peer) error {
 }
 
 type Daemon struct {
-	Transport        string      `toml:"transport"` // both, ssh, tailscale, or local; empty preserves legacy listener semantics
+	Transport        string      `toml:"transport"` // both, ssh, tailscale, or local; defaults to both
 	Listen           string      `toml:"listen"`
 	StateDir         string      `toml:"state_dir"`
 	AllowUsers       []string    `toml:"allow_users"`
@@ -201,14 +201,10 @@ const (
 	TransportLocal     = "local"
 )
 
-// TransportMode preserves explicit legacy SSH-only configurations. New setup
-// writes "both" so an unavailable tailnet can be enabled by a later setup.
+// TransportMode returns the explicit transport or the default, both.
 func (d Daemon) TransportMode() (string, error) {
 	mode := strings.ToLower(strings.TrimSpace(d.Transport))
 	if mode == "" {
-		if strings.EqualFold(strings.TrimSpace(d.Listen), DisabledListener) {
-			return TransportSSH, nil
-		}
 		return TransportBoth, nil
 	}
 	switch mode {

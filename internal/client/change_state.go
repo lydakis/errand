@@ -105,6 +105,7 @@ func localChangeClientID() (string, error) {
 }
 
 type localChangeState struct {
+	WorkspaceID        string              `json:"workspace_id,omitempty"`
 	JobID              string              `json:"job_id"`
 	PeerURL            string              `json:"peer_url"`
 	SSHTarget          string              `json:"ssh_target,omitempty"`
@@ -357,6 +358,9 @@ func recoverWorkspaceApplications(root string) error {
 }
 
 func recoverWorkspaceApplicationsContext(ctx context.Context, root string) error {
+	if err := recoverWorkspaceTransfers(ctx, root); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}

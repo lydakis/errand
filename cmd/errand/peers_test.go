@@ -45,7 +45,7 @@ func fakeRunner(t *testing.T, forbid bool) *httptest.Server {
 			json.NewEncoder(w).Encode(proto.APIError{Error: "caller nobody@example.com (laptop) holds no errand authorization"})
 			return
 		}
-		json.NewEncoder(w).Encode(proto.Info{Version: "test", MaxJobs: 2, Facts: proto.Facts{OS: "linux", Arch: "amd64", NumCPU: 4}})
+		json.NewEncoder(w).Encode(proto.Info{Version: version, MaxJobs: 2, Facts: proto.Facts{OS: "linux", Arch: "amd64", NumCPU: 4}})
 	}))
 	t.Cleanup(ts.Close)
 	return ts
@@ -312,6 +312,7 @@ func TestPeersURLBypassesConfigAndRejectsConflictingSelectors(t *testing.T) {
 }
 
 func TestPeersListIncludesCapacityAndRejectsHiddenSubcommands(t *testing.T) {
+	isolateDoctorHost(t)
 	runner := fakeRunner(t, false)
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	deps := testDeps(t, cfgPath, stubProvider{})
@@ -325,7 +326,7 @@ func TestPeersListIncludesCapacityAndRejectsHiddenSubcommands(t *testing.T) {
 		t.Fatalf("list exit %d: %s", code, errb.String())
 	}
 	text := out.String()
-	for _, want := range []string{"NAME", "DEFAULT", "STATUS", "ready", "SLOTS", "0/2", "QUEUE", "STAGING", "SYSTEM", "linux/amd64", "CAPABILITIES"} {
+	for _, want := range []string{"NAME", "DEFAULT", "STATUS", "ready", "VERSION", version, "SLOTS", "0/2", "QUEUE", "STAGING", "SYSTEM", "linux/amd64"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("compact peers output missing %q:\n%s", want, text)
 		}

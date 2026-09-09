@@ -13,7 +13,7 @@ import (
 )
 
 func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id Identity) {
-	var stats proto.StorageStats
+	stats := proto.StorageStats{Changes: &proto.ChangeStorageStats{}}
 	workspaceCacheLeases := make(map[string]workspaceRecord)
 	if r.URL.Query().Get("verbose") == "1" {
 		stats.Details = &proto.StorageDetails{Workspaces: []proto.WorkspaceStorage{}, NamedCaches: []proto.NamedCacheStorage{}, Jobs: []proto.JobStorage{}}
