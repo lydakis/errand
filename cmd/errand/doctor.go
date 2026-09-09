@@ -259,11 +259,7 @@ func writeDoctorReport(w io.Writer, report doctorReport, asJSON bool) error {
 		}
 	}
 	if report.Effective != nil {
-		workdir := report.Effective.Workdir
-		if workdir == "" {
-			workdir = "."
-		}
-		if _, err := fmt.Fprintf(w, "Workspace: %s\nWorkdir: %s\n", terminalSafeField(report.Effective.Root), terminalSafeField(workdir)); err != nil {
+		if _, err := fmt.Fprintf(w, "Workspace: %s\nWorkdir: %s\n", terminalSafeField(report.Effective.Root), terminalSafeField(displaySourceWorkdir(*report.Effective))); err != nil {
 			return err
 		}
 	}

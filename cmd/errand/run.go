@@ -112,12 +112,8 @@ func cmdRun(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: retaining artifact %q\n", artifact)
 	}
 	if !effective.NoSnapshot && *workspace == "" {
-		shownWorkdir := effective.Workdir
-		if shownWorkdir == "" {
-			shownWorkdir = "."
-		}
-		fmt.Fprintf(os.Stderr, "errand: workspace root %s (from %s)\n", effective.Root, effective.Sources["workspace_root"])
-		fmt.Fprintf(os.Stderr, "errand: command workdir %s\n", shownWorkdir)
+		fmt.Fprintf(os.Stderr, "errand: workspace root %s (from %s)\n", terminalSafeField(effective.Root), terminalSafeField(effective.Sources["workspace_root"]))
+		fmt.Fprintf(os.Stderr, "errand: command workdir %s\n", terminalSafeField(displaySourceWorkdir(effective)))
 	}
 	peerURL := effective.URL
 	// Raw URLs must remain the same identity used by handle resolution and

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
@@ -138,6 +139,14 @@ func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error)
 
 func cmdConfig(args []string) int { return cmdConfigTo(args, os.Stdout, os.Stderr) }
 
+// Describe the local source directory without implying it is the runner's path.
+func displaySourceWorkdir(effective config.EffectiveRun) string {
+	if effective.NoSnapshot {
+		return "empty workspace root"
+	}
+	return filepath.Join(effective.Root, effective.Workdir)
+}
+
 func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("errand config", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -184,7 +193,7 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 			{"profile", effective.Profile},
 			{"peer", effective.Peer}, {"url", effective.URL},
 			{"remote_command", effective.RemoteCommand}, {"remote_socket", effective.RemoteSocket},
-			{"workspace_root", effective.Root}, {"workdir", effective.Workdir},
+			{"workspace_root", effective.Root}, {"workdir", displaySourceWorkdir(effective)},
 			{"project", effective.Project}, {"apply_on_success", effective.ApplyOnSuccess},
 			{"no_snapshot", effective.NoSnapshot},
 			{"forward", effective.Forwards},

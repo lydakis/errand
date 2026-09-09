@@ -96,8 +96,10 @@ func writeStatus(
 	}
 	writeStatusField(w, "Command", quoteArgv(details.Spec.Argv))
 	workdir := details.Spec.Workdir
-	if workdir == "" {
-		workdir = "."
+	if workdir == "" || workdir == "." {
+		workdir = "workspace root"
+	} else {
+		workdir += " (relative to workspace root)"
 	}
 	writeStatusField(w, "Workdir", workdir)
 	writeStatusField(w, "Source", detailSource(details.Spec))

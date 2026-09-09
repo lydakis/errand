@@ -313,7 +313,10 @@ errand config --no-snapshot --json
 
 The table and JSON show the selected profile (when active), effective peer, endpoint, configured SSH options,
 workspace root, workdir, project label, apply policy, and snapshot mode, with
-sources. An empty workdir means the workspace root. SSH URLs are the configured
+sources. Human-readable config, run, and detailed doctor output show the full
+local source path for the workdir. With `--no-snapshot`, the workdir is labeled
+`empty workspace root`. JSON keeps the workspace-relative workdir, where an
+empty value means the workspace root. SSH URLs are the configured
 endpoints, before the client assigns internal transport identities.
 
 Inspection uses the same run defaults and override flags as submission. It

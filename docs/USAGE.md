@@ -33,6 +33,10 @@ remote workspace. Errand still records the invocation directory's identity so
 retained changes can be applied there safely. Because the remote workspace is
 empty, `--workdir` may only name its root.
 
+Before submission, Errand shows the full local workspace and command-directory
+paths. Job status describes the workdir relative to the runner's workspace,
+using `workspace root` for its root; local paths are not remote execution paths.
+
 For a workspace containing several repositories, place this marker and an
 explicit `.errandignore` at the shared root:
 
