@@ -40,6 +40,9 @@ type applyDestination struct {
 	path     string
 	root     *os.Root
 	identity fsidentity.Identity
+	// Private transfer storage may be reached through symlinks. Keep the caller's
+	// path as well as the resolved path so retargeting an alias is detected.
+	requestedPath string
 }
 
 func openApplyDestination(destinationRoot string) (*applyDestination, error) {
@@ -97,6 +100,16 @@ func (d *applyDestination) verifyPath() error {
 	identity, info, err := fsidentity.Lstat(d.path)
 	if err != nil || !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 || identity != d.identity {
 		return fmt.Errorf("local change workspace root changed during application")
+	}
+	if d.requestedPath != "" {
+		info, err := os.Stat(d.requestedPath)
+		if err != nil || !info.IsDir() {
+			return fmt.Errorf("transfer storage path changed during operation")
+		}
+		identity, err := fsidentity.FromInfo(info)
+		if err != nil || identity != d.identity {
+			return fmt.Errorf("transfer storage path changed during operation")
+		}
 	}
 	return nil
 }

@@ -31,15 +31,16 @@ type TransferTarget struct {
 }
 
 type transferApplyState struct {
-	Version     int                  `json:"version"`
-	Owner       string               `json:"owner"`
-	RootID      fsidentity.Identity  `json:"root_identity"`
-	BundleRoot  string               `json:"bundle_root"`
-	Paths       []string             `json:"paths"`
-	Materialize bool                 `json:"materialize_conflicts"`
-	Pending     string               `json:"pending,omitempty"`
-	CleanupID   *fsidentity.Identity `json:"cleanup_identity,omitempty"`
-	Outcome     *transferOutcome     `json:"outcome,omitempty"`
+	Version     int                       `json:"version"`
+	Owner       string                    `json:"owner"`
+	RootID      fsidentity.Identity       `json:"root_identity"`
+	BundleRoot  string                    `json:"bundle_root"`
+	Paths       []string                  `json:"paths"`
+	Materialize bool                      `json:"materialize_conflicts"`
+	Pending     string                    `json:"pending,omitempty"`
+	CleanupID   *fsidentity.Identity      `json:"cleanup_identity,omitempty"`
+	Outcome     *transferOutcome          `json:"outcome,omitempty"`
+	Checkpoint  *checkpointReceiptBinding `json:"checkpoint,omitempty"`
 }
 
 type transferOutcome struct {
@@ -364,31 +365,58 @@ func (s transferApplyState) validateOutcome(bundle proto.ChangeBundle) error {
 
 func readTransferState(root *os.Root, name string) (transferApplyState, error) {
 	var state transferApplyState
+	err := readTransferRecord(root, name, &state)
+	return state, err
+}
+
+func readTransferRecord(root *os.Root, name string, record any) error {
 	info, err := root.Lstat(name)
 	if err != nil {
-		return state, err
+		return err
 	}
 	if !info.Mode().IsRegular() {
-		return state, fmt.Errorf("transfer state is not a regular file")
+		return fmt.Errorf("transfer state is not a regular file")
 	}
 	f, err := root.Open(name)
 	if err != nil {
-		return state, err
+		return err
 	}
 	defer f.Close()
 	raw, err := io.ReadAll(io.LimitReader(f, MaxBundleMetadataBytes+1))
 	if err != nil {
-		return state, err
+		return err
 	}
 	if len(raw) > MaxBundleMetadataBytes {
-		return state, fmt.Errorf("transfer state exceeds size limit")
+		return fmt.Errorf("transfer state exceeds size limit")
 	}
-	err = json.Unmarshal(raw, &state)
-	return state, err
+	return json.Unmarshal(raw, record)
 }
 
 func writeTransferState(root *os.Root, name string, state transferApplyState) error {
-	raw, err := json.Marshal(state)
+	return writeTransferRecord(root, name, state)
+}
+
+func verifyTransferPaths(paths ...*applyDestination) error {
+	for _, p := range paths {
+		if err := p.verifyPath(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeVerifiedTransferRecord(destination, storage *applyDestination, name string, record any) error {
+	if err := verifyTransferPaths(destination, storage); err != nil {
+		return err
+	}
+	if err := writeTransferRecord(storage.root, name, record); err != nil {
+		return err
+	}
+	return verifyTransferPaths(destination, storage)
+}
+
+func writeTransferRecord(root *os.Root, name string, record any) error {
+	raw, err := json.Marshal(record)
 	if err != nil {
 		return err
 	}

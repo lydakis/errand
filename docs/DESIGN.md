@@ -954,9 +954,40 @@ directory ancestry identities, including on case-insensitive filesystems.
 Installed states can include markers or preserved destination values and must not
 be mistaken for complete acceptance of the incoming source tree.
 
-This receipt does not yet advance transfer baselines or expose workspace push/fetch
-commands. Directional checkpoint storage, partial-source acceptance, staging and
-transport remain the next integration work. Ordinary job fetch/apply is unchanged.
+An internal directional checkpoint now records the accepted source manifest for
+one stable source identity and receiving directory identity, scoped to its owner.
+Each direction has independent progress. A completed apply receipt advances
+installed paths outside conflicts to their source values, preserving the previous
+base for unselected paths and conflicted subtrees. A conflict in one child does
+not discard acceptance of clean siblings: otherwise a later source deletion of
+an installed sibling could be mistaken for a destination-only file. Merged
+destination values never become the source checkpoint. A content-root directory
+mode conflict preserves that entire destination subtree instead of installing
+children beneath an unresolved directory. Separately selected directory metadata
+updates affect only that entry; independently installed child roots still advance.
+Accepted removals and type changes replace the corresponding subtree.
+
+Checkpoint updates consume a revision even when a refusal leaves the manifest
+unchanged. Retrying the latest update returns the recorded checkpoint; an older
+revision cannot rewind subsequent progress, including when the manifest digest
+is unchanged. Before publishing progress, the receipt is durably bound to that
+checkpoint relationship and expected revision. It cannot be consumed again at a
+new revision, even after intervening updates. Recovery can complete publication
+after that binding without reapplying destination files. Retrying creation never
+resets an advanced checkpoint. Publication uses the same bounded atomic state
+writer as apply receipts and verifies both destination and storage identities
+before reporting success. Storage checks retain the requested path as well as
+the resolved directory, so retargeting a parent or ancestor symlink is detected
+during publication, reads, and retries. The caller must serialize the directional
+operation, verify its revision before applying, and bind the receipt to that
+relationship. Source identity and expected revision are
+integration inputs, not values inferred from job handles or live file contents.
+
+These primitives do not yet expose workspace push/fetch commands. Checkpoints
+store manifests, not file bodies. Retaining and pinning the referenced source
+blobs, staging, transport, and operation coordination remain integration work.
+Ordinary job fetch/apply does not use directional checkpoints. Its materialized
+directory mode conflicts also preserve the affected content subtree.
 
 Nix and facts-based selection remain later work. A harness wrapper can build
 on job execution and workspace continuity while owning its own agent-thread

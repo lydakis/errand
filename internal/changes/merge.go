@@ -205,10 +205,12 @@ func mergeTreePath(
 		mode, ok := mergeMode(baseEntry.Mode, baseOK, oursEntry.Mode, remoteEntry.Mode)
 		if !ok {
 			conflicts[name] = true
-			if !materializeConflicts {
-				return nil
+			if materializeConflicts {
+				// A directory conflict covers this subtree. Do not install children
+				// that a later transfer would mistake for destination-only files.
+				return copyMergeSubtree(ours, name, mergedRoot)
 			}
-			mode = oursEntry.Mode
+			return nil
 		}
 		dest := filepath.Join(mergedRoot, filepath.FromSlash(name))
 		if err := os.MkdirAll(dest, os.FileMode(mode)|0o700); err != nil {
