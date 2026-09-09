@@ -983,9 +983,38 @@ operation, verify its revision before applying, and bind the receipt to that
 relationship. Source identity and expected revision are
 integration inputs, not values inferred from job handles or live file contents.
 
-These primitives do not yet expose workspace push/fetch commands. Checkpoints
-store manifests, not file bodies. Retaining and pinning the referenced source
-blobs, staging, transport, and operation coordination remain integration work.
+A dedicated internal transfer blob store now retains source file bodies by hash,
+independently of the evictable upload cache. Retention verifies size and content
+before atomically publishing durable private copies, deduplicates identical
+bodies, and refuses additional data when its configured capacity is exhausted.
+Retries reuse verified stored bodies even after capacity is lowered or their
+original source disappears. Only missing bodies need source access. That source
+must be a caller-owned, stable staging tree, not an actively edited workspace:
+retention may temporarily widen permissions and restores them on return, but a
+process crash can leave staging permissions widened. Callers keep staging
+unchanged throughout retention. This does not serialize ordinary workspace jobs.
+Directories, file modes, and symlinks remain manifest metadata. Reconstruction
+verifies retained bodies again and atomically creates a new private change-base;
+it never replaces an existing baseline or shares writable hardlinks with storage.
+A separate logical-byte limit bounds reconstruction even when many paths refer
+to the same body. Missing or corrupt bodies fail without publishing a partial tree.
+
+The store exposes byte/blob accounting and explicit pruning with a dry run. The
+caller supplies all checkpoint, staged, and in-flight manifests whose bodies must
+stay, under the same serialization as retention and reconstruction. Malformed
+manifests, missing bodies, and size mismatches stop pruning before any deletion.
+Pruning does not hash pinned content; retention and reconstruction verify hashes
+when reusing bodies. Accounting includes abandoned insertion bytes, which count
+against capacity until explicitly pruned, but excludes them from blob counts.
+Unreferenced bodies and interrupted insertion files can be reclaimed; referenced
+bodies have no TTL or
+automatic size eviction. Retain bodies before publishing the checkpoint that
+references them. The store must live in dedicated private owner-scoped storage
+outside working trees; it does not discover relationships or pins on its own.
+
+These primitives do not yet expose workspace push/fetch commands. Wiring the
+store into relationship lifecycle, staging, transport, operation coordination,
+and the public df/gc commands remains integration work.
 Ordinary job fetch/apply does not use directional checkpoints. Its materialized
 directory mode conflicts also preserve the affected content subtree.
 
