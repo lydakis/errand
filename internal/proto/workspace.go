@@ -25,7 +25,7 @@ type Workspace struct {
 	Name           string          `json:"name"`
 	CreatedAt      time.Time       `json:"created_at"`
 	Project        string          `json:"project,omitempty"`
-	JobID          string          `json:"job_id,omitempty"`
+	JobIDs         []string        `json:"job_ids,omitempty"`
 	Manifest       Manifest        `json:"manifest"`
 	Selection      SelectionPolicy `json:"selection_policy,omitempty"`
 	CacheProjectID string          `json:"cache_project_id,omitempty"`
@@ -36,5 +36,5 @@ type WorkspaceSummary struct {
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
 	Project   string    `json:"project,omitempty"`
-	JobID     string    `json:"job_id,omitempty"`
+	JobIDs    []string  `json:"job_ids,omitempty"`
 }

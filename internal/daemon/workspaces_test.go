@@ -79,8 +79,8 @@ func TestPersistentWorkspaceRunsKeepFilesAndJobResults(t *testing.T) {
 	}
 }
 
-func TestPersistentWorkspaceExclusiveJobLeaseAndMissingName(t *testing.T) {
-	_, ts := testDaemon(t)
+func TestPersistentWorkspaceQueuedLeaseAndMissingName(t *testing.T) {
+	_, ts := concurrencyDaemon(t, 1, 1)
 	root := workspaceWith(t, nil)
 	ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: ts.URL, Root: root}, "experiment")
 	if err != nil {
@@ -98,15 +98,26 @@ func TestPersistentWorkspaceExclusiveJobLeaseAndMissingName(t *testing.T) {
 	if err := client.RemoveWorkspace(ts.URL, "experiment"); err == nil {
 		t.Fatal("removed busy workspace")
 	}
-	resp = rawSubmitSpec(t, ts.URL, proto.NewULID(), root, spec, ws.Manifest)
-	if resp.StatusCode != http.StatusConflict {
+	second := proto.NewULID()
+	resp = rawSubmitSpec(t, ts.URL, second, root, spec, ws.Manifest)
+	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("second job: %s", resp.Status)
 	}
 	resp.Body.Close()
+	defer client.Kill(ts.URL, second, true)
+	waitState(t, ts.URL, second, proto.StateQueued)
 	if err := client.Kill(ts.URL, id, true); err != nil {
 		t.Fatal(err)
 	}
 	waitTerminal(t, ts.URL, id)
+	waitState(t, ts.URL, second, proto.StateRunning)
+	if err := client.RemoveWorkspace(ts.URL, "experiment"); err == nil {
+		t.Fatal("removed workspace with remaining job")
+	}
+	if err := client.Kill(ts.URL, second, true); err != nil {
+		t.Fatal(err)
+	}
+	waitTerminal(t, ts.URL, second)
 	if err := client.RemoveWorkspace(ts.URL, "experiment"); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +165,7 @@ func TestPersistentWorkspaceRecoveryReturnsInterruptedJobFiles(t *testing.T) {
 	server := httptest.NewServer(restarted.Handler())
 	defer server.Close()
 	got, err := client.GetWorkspace(server.URL, "experiment")
-	if err != nil || got.JobID != "" {
+	if err != nil || len(got.JobIDs) != 0 {
 		t.Fatalf("recovered workspace: %+v %v", got, err)
 	}
 	var output, stderr bytes.Buffer
@@ -247,7 +258,7 @@ func TestPersistentWorkspaceOldReceiptCannotReleaseNewLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := client.GetWorkspace(ts.URL, ws.Name)
-	if err != nil || got.JobID != current.ID {
+	if err != nil || (len(got.JobIDs) != 1 || got.JobIDs[0] != current.ID) {
 		t.Fatalf("new lease was changed: %+v %v", got, err)
 	}
 	if data, err := os.ReadFile(filepath.Join(current.workspacePath(), "value")); err != nil || string(data) != "keep" {

@@ -29,6 +29,22 @@ func (j *Job) bindNamedCaches(d *Daemon) error {
 	if d.cfg.NamedCacheDisabled {
 		return fmt.Errorf("named caches are disabled")
 	}
+	leaseID := j.ID
+	shared := j.Spec.WorkspaceID != ""
+	if shared {
+		unlock := d.workspaces.lockWorkspace(j.workspaceLeaseID)
+		defer unlock()
+		d.workspaces.mu.Lock()
+		r, err := d.workspaces.read(j.workspaceLeaseID)
+		d.workspaces.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		if !r.holds(j.ID) {
+			return fmt.Errorf("job no longer holds workspace")
+		}
+		leaseID = r.CacheLeaseID
+	}
 	workspace := j.workspacePath()
 	root, err := os.OpenRoot(workspace)
 	if err != nil {
@@ -58,14 +74,27 @@ func (j *Job) bindNamedCaches(d *Daemon) error {
 				}
 			}
 		}
-		if _, err := root.Lstat(cache.Path); !os.IsNotExist(err) {
+		info, pathErr := root.Lstat(cache.Path)
+		if !os.IsNotExist(pathErr) && (!shared || pathErr != nil || info.Mode()&os.ModeSymlink == 0) {
 			return fmt.Errorf("cache destination %q already exists or is inaccessible", cache.Path)
 		}
 		key := namedcache.Key{Owner: d.cacheOwner(j), Project: j.Spec.CacheProjectID, Name: cache.Name}
-		data, err := d.namedCaches.Acquire(context.Background(), key, j.ID)
+		acquire := d.namedCaches.Acquire
+		if shared {
+			acquire = d.namedCaches.AcquireShared
+		}
+		data, err := acquire(context.Background(), key, leaseID)
 		if err != nil {
 			return fmt.Errorf("cache %q: %w", cache.Name, err)
 		}
+		if pathErr == nil {
+			target, err := root.Readlink(cache.Path)
+			if err != nil || target != data {
+				return fmt.Errorf("cache binding %q changed while workspace is active", cache.Path)
+			}
+			continue
+		}
+
 		if err := root.Symlink(data, cache.Path); err != nil {
 			return err
 		}
@@ -76,7 +105,14 @@ func (j *Job) bindNamedCaches(d *Daemon) error {
 // Inventory finds leases even when acquisition failed after publishing its
 // record. A failed release is discarded only after confirmed process cleanup.
 func (d *Daemon) settleNamedCaches(j *Job) error {
-	if d.namedCaches == nil || len(j.Spec.Selection.Caches) == 0 {
+	if j.Spec.WorkspaceID != "" || j.workspaceLeaseID != "" || len(j.Spec.Selection.Caches) == 0 {
+		return nil
+	}
+	return d.settleNamedCacheLease(j, d.cacheOwner(j), j.ID)
+}
+
+func (d *Daemon) settleNamedCacheLease(j *Job, owner, leaseID string) error {
+	if d.namedCaches == nil {
 		return nil
 	}
 	entries, err := d.namedCaches.Inventory(context.Background())
@@ -85,10 +121,10 @@ func (d *Daemon) settleNamedCaches(j *Job) error {
 	}
 	var joined error
 	for _, entry := range entries {
-		if entry.LeaseID != j.ID || entry.Key.Owner != d.cacheOwner(j) {
+		if entry.LeaseID != leaseID || entry.Key.Owner != owner {
 			continue
 		}
-		if err := d.namedCaches.Release(context.Background(), entry.Key, j.ID); err != nil {
+		if err := d.namedCaches.Release(context.Background(), entry.Key, leaseID); err != nil {
 			// A post-rename sync failure may already have cleared the lease. Read
 			// back before choosing the destructive fallback or reporting failure.
 			current, readErr := d.namedCaches.Inventory(context.Background())
@@ -97,8 +133,8 @@ func (d *Daemon) settleNamedCaches(j *Job) error {
 				continue
 			}
 			for _, state := range current {
-				if state.Key == entry.Key && state.LeaseID == j.ID {
-					if discardErr := d.namedCaches.Discard(context.Background(), entry.Key, j.ID); discardErr != nil {
+				if state.Key == entry.Key && state.LeaseID == leaseID {
+					if discardErr := d.namedCaches.Discard(context.Background(), entry.Key, leaseID); discardErr != nil {
 						joined = errors.Join(joined, err, discardErr)
 					}
 					j.event("named-cache-discarded", entry.Key.Name)
@@ -120,7 +156,7 @@ func (d *Daemon) recoverNamedCaches() error {
 			continue
 		}
 		j := d.jobs[entry.LeaseID]
-		if j == nil || d.cacheOwner(j) != entry.Key.Owner {
+		if j == nil || d.cacheOwner(j) != entry.Key.Owner || j.Spec.WorkspaceID != "" || j.workspaceLeaseID != "" {
 			continue
 		}
 		seen[j.ID] = true

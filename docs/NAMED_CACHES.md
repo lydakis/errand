@@ -69,6 +69,13 @@ leased cache fails the job before its command starts; Errand does not wait for
 that cache. Partially acquired leases are settled on setup failure. Independent
 owners, checkouts, and names do not contend for the same cache.
 
+Jobs in the same persistent workspace share its cache leases and bindings.
+These remain held until the last job, including any queued or failed-cleanup
+job, releases the workspace. The cache tool must tolerate concurrent access
+when you run commands concurrently. A separate workspace or ordinary job still
+cannot acquire the same leased cache. `df --verbose` identifies the workspace
+and its current member jobs.
+
 After the entire process scope is confirmed stopped, `Release` measures regular
 file bytes without following symlinks and clears the lease. Failed commands keep
 usable cache contents too. If the contents cannot be measured, the daemon
@@ -78,13 +85,15 @@ cleanup failure. The store's byte budget is not a runtime quota.
 Closing or restarting the daemon does not clear leases. Restart recovery uses
 persisted receipts and process-scope cleanup before settling leases. Missing
 receipt identity or unconfirmed process cleanup leaves the cache protected from
-reuse and eviction. Process tracking includes the workspace and the canonical
+reuse and eviction. For ephemeral jobs, process tracking includes the workspace and the canonical
 data directories currently leased by the job. Recovery derives these directories
 from durable leases, so an old receipt cannot claim a cache another job has since
 acquired. Linux recognizes working directories anywhere beneath these roots;
 macOS recognizes exact root working directories in addition to the inherited
 process marker. Existing limitations of process-scope tracking still apply;
-named caches do not add process isolation.
+named caches do not add process isolation. Persistent jobs use per-job process
+groups and markers instead, because their workspace and cache directories are
+shared and cannot identify which job owns a process.
 
 Metadata uses synchronized temporary files and atomic rename. An error after
 rename can leave the update visible, so the lifecycle reads back lease state

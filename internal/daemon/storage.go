@@ -14,6 +14,7 @@ import (
 
 func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id Identity) {
 	var stats proto.StorageStats
+	workspaceCacheLeases := make(map[string]workspaceRecord)
 	if r.URL.Query().Get("verbose") == "1" {
 		stats.Details = &proto.StorageDetails{Workspaces: []proto.WorkspaceStorage{}, NamedCaches: []proto.NamedCacheStorage{}, Jobs: []proto.JobStorage{}}
 	}
@@ -26,6 +27,9 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 			for _, row := range rows {
 				if row.Owner != d.workspaceOwner(id) {
 					continue
+				}
+				if row.CacheLeaseID != "" {
+					workspaceCacheLeases[row.CacheLeaseID] = row
 				}
 				var usage proto.WorkspaceStorage
 				usage, err = workspaceStorageBytes(r.Context(), filepath.Join(d.workspaces.dir, row.ID), row)
@@ -61,7 +65,11 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 				if !d.cfg.InsecureNoAuth && entry.Key.Owner != id.Owner() {
 					continue
 				}
-				stats.Details.NamedCaches = append(stats.Details.NamedCaches, proto.NamedCacheStorage{Name: entry.Key.Name, ProjectID: entry.Key.Project, JobID: entry.LeaseID, Bytes: entry.Bytes})
+				detail := proto.NamedCacheStorage{Name: entry.Key.Name, ProjectID: entry.Key.Project, JobID: entry.LeaseID, Bytes: entry.Bytes}
+				if workspace, ok := workspaceCacheLeases[entry.LeaseID]; ok && workspace.Owner == entry.Key.Owner {
+					detail.JobID, detail.WorkspaceID, detail.JobIDs = "", workspace.ID, workspace.JobIDs
+				}
+				stats.Details.NamedCaches = append(stats.Details.NamedCaches, detail)
 			}
 			sort.Slice(stats.Details.NamedCaches, func(i, j int) bool {
 				a, b := stats.Details.NamedCaches[i], stats.Details.NamedCaches[j]

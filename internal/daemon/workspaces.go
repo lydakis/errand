@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -21,14 +22,20 @@ var errWorkspaceExists = errors.New("workspace already exists")
 
 type workspaceRecord struct {
 	proto.Workspace
-	Owner    string              `json:"owner"`
-	Identity fsidentity.Identity `json:"identity"`
+	// JobID decodes the original exclusive-lease format; new writes use JobIDs.
+	JobID           string              `json:"job_id,omitempty"`
+	LegacyExclusive bool                `json:"legacy_exclusive,omitempty"`
+	CacheLeaseID    string              `json:"cache_lease_id,omitempty"`
+	Owner           string              `json:"owner"`
+	Identity        fsidentity.Identity `json:"identity"`
 }
 
 type workspaceStore struct {
 	// Startup fallback for older or interrupted receipts without a reverse
 	// reference. Built once, never used for normal job settlement.
 	recoveryLeases map[string]string
+	gateMu         sync.Mutex
+	gates          map[string]*workspaceGate
 	mu             sync.Mutex
 	dir            string
 	root           *os.Root
@@ -70,8 +77,8 @@ func openWorkspaces(dir string) (*workspaceStore, error) {
 		log.Printf("workspace inventory incomplete: %v", readErr)
 	}
 	for _, row := range rows {
-		if row.JobID != "" {
-			s.recoveryLeases[row.JobID] = row.ID
+		for _, jobID := range row.JobIDs {
+			s.recoveryLeases[jobID] = row.ID
 		}
 	}
 	return s, nil
@@ -106,6 +113,23 @@ func (s *workspaceStore) read(id string) (workspaceRecord, error) {
 	}
 	if r.ID != id || r.Owner == "" || r.Identity.IsZero() || proto.ValidateWorkspaceName(r.Name) != nil || (r.JobID != "" && !proto.ValidULID(r.JobID)) {
 		return r, fmt.Errorf("invalid workspace identity")
+	}
+	if r.JobID != "" {
+		if len(r.JobIDs) != 0 {
+			return r, fmt.Errorf("mixed workspace lease formats")
+		}
+		r.JobIDs, r.CacheLeaseID, r.JobID = []string{r.JobID}, r.JobID, ""
+		r.LegacyExclusive = true
+	}
+	seen := make(map[string]bool)
+	for _, jobID := range r.JobIDs {
+		if !proto.ValidULID(jobID) || seen[jobID] {
+			return r, fmt.Errorf("invalid workspace job leases")
+		}
+		seen[jobID] = true
+	}
+	if len(r.JobIDs) > 0 && !proto.ValidULID(r.CacheLeaseID) || len(r.JobIDs) == 0 && r.CacheLeaseID != "" {
+		return r, fmt.Errorf("invalid workspace cache lease")
 	}
 	if err := archive.Validate(r.Manifest); err != nil {
 		return r, err
@@ -198,3 +222,35 @@ func workspaceDataIdentity(path string, want fsidentity.Identity) error {
 	}
 	return nil
 }
+
+// Serialize binding changes and last-member settlement per workspace. The
+// global inventory mutex never covers cache I/O or process cleanup.
+type workspaceGate struct {
+	mu    sync.Mutex
+	users int
+}
+
+func (s *workspaceStore) lockWorkspace(id string) func() {
+	s.gateMu.Lock()
+	if s.gates == nil {
+		s.gates = make(map[string]*workspaceGate)
+	}
+	gate := s.gates[id]
+	if gate == nil {
+		gate = &workspaceGate{}
+		s.gates[id] = gate
+	}
+	gate.users++
+	s.gateMu.Unlock()
+	gate.mu.Lock()
+	return func() {
+		gate.mu.Unlock()
+		s.gateMu.Lock()
+		gate.users--
+		if gate.users == 0 {
+			delete(s.gates, id)
+		}
+		s.gateMu.Unlock()
+	}
+}
+func (r workspaceRecord) holds(jobID string) bool { return slices.Contains(r.JobIDs, jobID) }

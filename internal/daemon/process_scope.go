@@ -24,19 +24,23 @@ const processScopeEnv = "ERRAND_PROCESS_SCOPE"
 // not a security boundary against a process that deliberately scrubs its
 // environment.
 type processScope struct {
-	token     string
-	psPath    string
-	workdir   string
-	lsofPath  string
-	procRoot  string
-	cacheDirs []string
+	group      *processGroupRecord
+	groupOwned bool
+	token      string
+	psPath     string
+	workdir    string
+	lsofPath   string
+	procRoot   string
+	cacheDirs  []string
 }
 
 // scopeRecord is the persisted form of a job's scope, written to the job
 // directory before the process starts so a restarted daemon can find and
 // settle survivors during reconciliation.
 type scopeRecord struct {
-	Token string `json:"token"`
+	Token           string              `json:"token"`
+	SharedWorkspace bool                `json:"shared_workspace,omitempty"`
+	Group           *processGroupRecord `json:"group,omitempty"`
 }
 
 func newProcessScope(workdir string, cacheDirs ...string) (*processScope, error) {
@@ -76,7 +80,7 @@ func newProcessScopeWithToken(token, workdir string, cacheDirs ...string) (*proc
 		}
 		s.psPath = psPath
 	}
-	if runtime.GOOS == "darwin" {
+	if runtime.GOOS == "darwin" && (workdir != "" || len(cacheDirs) != 0) {
 		lsofPath, err := exec.LookPath("lsof")
 		if err != nil {
 			return nil, fmt.Errorf("process scope requires lsof on macOS: %w", err)
@@ -94,6 +98,30 @@ func (s *processScope) env() string {
 }
 
 func (s *processScope) pids() ([]int, error) {
+	pids, err := s.markedPIDs()
+	if err != nil {
+		return nil, err
+	}
+	if s.group != nil {
+		members, err := s.group.members(s.groupOwned)
+		if err != nil {
+			return nil, err
+		}
+		seen := make(map[int]bool, len(pids))
+		for _, pid := range pids {
+			seen[pid] = true
+		}
+		for _, pid := range members {
+			if !seen[pid] {
+				pids = append(pids, pid)
+				seen[pid] = true
+			}
+		}
+	}
+	return pids, nil
+}
+
+func (s *processScope) markedPIDs() ([]int, error) {
 	if runtime.GOOS == "linux" {
 		return s.linuxPIDs()
 	}
@@ -196,6 +224,9 @@ func (s *processScope) cwdPIDs() ([]int, error) {
 	}
 	var pids []int
 	for _, dir := range append([]string{s.workdir}, s.cacheDirs...) {
+		if dir == "" {
+			continue
+		}
 		out, err := exec.Command(s.lsofPath, "-a", "-d", "cwd", "-Fp", "--", dir).Output()
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
@@ -216,6 +247,9 @@ func (s *processScope) cwdPIDs() ([]int, error) {
 }
 
 func withinDir(root, candidate string) bool {
+	if root == "" {
+		return false
+	}
 	rel, err := filepath.Rel(root, candidate)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

@@ -42,16 +42,17 @@ type queuedRecord struct {
 
 // Job is one admitted transaction. Its directory is the receipt.
 type Job struct {
-	returnWorkspace   func() error
-	workspaceRoot     string
-	workspaceLeaseID  string
-	workspaceLeaseErr error
-	ID                string
-	Dir               string
-	Spec              proto.Spec
-	Admission         proto.Admission
-	RequestDigest     string
-	baseline          proto.Manifest
+	returnWorkspace    func() error
+	workspaceRoot      string
+	workspaceLeaseID   string
+	workspaceLeaseErr  error
+	workspaceExclusive bool
+	ID                 string
+	Dir                string
+	Spec               proto.Spec
+	Admission          proto.Admission
+	RequestDigest      string
+	baseline           proto.Manifest
 
 	mu                  sync.Mutex
 	state               string
@@ -200,15 +201,32 @@ func boundedCommand(argv []string, limit int) (string, bool) {
 	if limit <= 0 {
 		return "", len(argv) > 0
 	}
-	quoted := make([]string, len(argv))
+	var command strings.Builder
 	for i, arg := range argv {
-		quoted[i] = strconv.Quote(arg)
+		if i > 0 {
+			command.WriteByte(' ')
+		}
+		remaining := limit + 1 - command.Len()
+		if remaining <= 0 {
+			return markCommandTruncated(command.String(), limit), true
+		}
+		// Quoting never shortens input. One extra byte establishes truncation
+		// without quoting megabytes that cannot appear in the preview. Include
+		// the entire last rune so a split UTF-8 sequence cannot change its prefix.
+		if len(arg) > remaining {
+			end := 0
+			for end < remaining {
+				_, size := utf8.DecodeRuneInString(arg[end:])
+				end += size
+			}
+			arg = arg[:end]
+		}
+		command.WriteString(strconv.Quote(arg))
+		if command.Len() > limit {
+			return markCommandTruncated(command.String(), limit), true
+		}
 	}
-	command := strings.Join(quoted, " ")
-	if len(command) > limit {
-		return markCommandTruncated(command, limit), true
-	}
-	return command, false
+	return command.String(), false
 }
 
 func markCommandTruncated(s string, limit int) string {
@@ -451,21 +469,27 @@ func (j *Job) launch(d *Daemon) error {
 	}
 	jobEnv := j.buildEnv()
 	var cacheDirs []string
-	if len(j.Spec.Selection.Caches) != 0 {
+	if len(j.Spec.Selection.Caches) != 0 && j.Spec.WorkspaceID == "" {
 		cacheDirs, err = d.namedCaches.LeasePaths(context.Background(), j.ID)
 		if err != nil {
 			logw.Close()
 			return fmt.Errorf("reading cache process scope: %w", err)
 		}
 	}
-	scope, err := newProcessScope(workspace, cacheDirs...)
+	scopeRoot := workspace
+	sharedWorkspace := j.Spec.WorkspaceID != ""
+	// A shared cwd cannot establish process ownership.
+	if sharedWorkspace {
+		scopeRoot = ""
+	}
+	scope, err := newProcessScope(scopeRoot, cacheDirs...)
 	if err != nil {
 		logw.Close()
 		return err
 	}
-	// Persisted before the process can exist, so a restarted daemon never
-	// faces a started job it cannot find during reconciliation.
-	if err := j.writeJSON("scope.json", scopeRecord{Token: scope.token}); err != nil {
+	// Persist the marker before launch. Shared jobs add the group identity
+	// immediately after Start; a crash in between leaves recovery protected.
+	if err := j.writeJSON("scope.json", scopeRecord{Token: scope.token, SharedWorkspace: sharedWorkspace}); err != nil {
 		logw.Close()
 		return fmt.Errorf("persisting process scope: %w", err)
 	}
@@ -522,9 +546,18 @@ func (j *Job) launch(d *Daemon) error {
 		return nil
 	}
 	var startedAt time.Time
+	var scopeCaptureErr error
+	var scopePersistenceErr error
 	err = cmd.Start()
 	if err == nil {
 		startedAt = time.Now()
+		if sharedWorkspace {
+			scope.group, scopeCaptureErr = captureProcessGroup(cmd.Process.Pid)
+			scope.groupOwned = scopeCaptureErr == nil
+			if scopeCaptureErr == nil {
+				scopePersistenceErr = d.writeProcessScope(filepath.Join(j.Dir, "scope.json"), scopeRecord{Token: scope.token, SharedWorkspace: true, Group: scope.group})
+			}
+		}
 		j.cmd = cmd
 		j.started = true
 		j.startedAt = startedAt
@@ -536,6 +569,12 @@ func (j *Job) launch(d *Daemon) error {
 		closePipes()
 		logw.Close()
 		return sanitizeProcessStartError(err)
+	}
+	if scopeSetupErr := errors.Join(scopeCaptureErr, scopePersistenceErr); scopeSetupErr != nil {
+		// The command started, but cannot safely outlive this daemon without a
+		// durable process identity. Stop it and still follow the normal wait path.
+		j.event("process-scope-setup-failed", scopeSetupErr.Error())
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
 	stdoutW.Close()
 	stderrW.Close()
@@ -563,6 +602,9 @@ func (j *Job) launch(d *Daemon) error {
 		j.transitionAfterProcessExit(changeCancel)
 
 		scopeKilled, scopeErr := scope.cleanup(2 * time.Second)
+		// A failed write does not invalidate successful cleanup with the captured
+		// live identity. Failed capture still leaves ownership uncertain.
+		scopeErr = errors.Join(scopeErr, scopeCaptureErr)
 		processCleanupOK := scopeErr == nil
 		if len(scopeKilled) > 0 {
 			j.event("scope-killed", fmt.Sprintf("pids=%v", scopeKilled))
@@ -582,6 +624,9 @@ func (j *Job) launch(d *Daemon) error {
 		}
 		res.LogsComplete = logw.Complete() && pipeErr == nil
 		res.LimitExceeded = j.limitExceeded(logw)
+		if scopePersistenceErr != nil {
+			res.TransactionError = appendTransactionError(res.TransactionError, "persisting process scope: "+scopePersistenceErr.Error())
+		}
 		if scopeErr != nil {
 			res.TransactionError = appendTransactionError(res.TransactionError, "process scope cleanup: "+scopeErr.Error())
 		}

@@ -143,11 +143,11 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 			return 0
 		}
 		tw := tabwriter.NewWriter(out, 2, 8, 2, ' ', 0)
-		fmt.Fprintln(tw, "NAME\tSTATE\tJOB\tPROJECT")
+		fmt.Fprintln(tw, "NAME\tSTATE\tJOBS\tPROJECT")
 		for _, r := range rows {
 			state, job := "idle", "-"
-			if r.JobID != "" {
-				state, job = "busy", r.JobID
+			if len(r.JobIDs) != 0 {
+				state, job = "busy", strings.Join(r.JobIDs, ",")
 			}
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", terminalSafeField(r.Name), state, job, terminalSafeField(r.Project))
 		}

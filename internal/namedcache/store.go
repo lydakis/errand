@@ -179,6 +179,16 @@ func (s *Store) Close() error {
 // Acquire persists the lease before exposing a writable path. A busy cache is
 // refused immediately, including one leased by the same job ID.
 func (s *Store) Acquire(ctx context.Context, key Key, jobID string) (string, error) {
+	return s.acquire(ctx, key, jobID, false)
+}
+
+// AcquireShared joins an existing lease with the same identity. The caller
+// owns membership and may release it only after every member has stopped.
+func (s *Store) AcquireShared(ctx context.Context, key Key, leaseID string) (string, error) {
+	return s.acquire(ctx, key, leaseID, true)
+}
+
+func (s *Store) acquire(ctx context.Context, key Key, jobID string, shared bool) (string, error) {
 	if err := key.validate(); err != nil {
 		return "", err
 	}
@@ -206,7 +216,13 @@ func (s *Store) Acquire(ctx context.Context, key Key, jobID string) (string, err
 			return "", err
 		}
 		if r.LeaseID != "" {
-			return "", ErrBusy
+			if !shared || r.LeaseID != jobID {
+				return "", ErrBusy
+			}
+			if err := s.validateData(name); err != nil {
+				return "", err
+			}
+			return filepath.Join(s.dir, name, "data"), nil
 		}
 		if err := s.validateData(name); err != nil {
 			return "", err

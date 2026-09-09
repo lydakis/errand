@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/proto"
@@ -21,14 +22,19 @@ func (d *Daemon) acquireWorkspace(ctx context.Context, j *Job) error {
 	s := d.workspaces
 	var record workspaceRecord
 	err := func() error {
+		unlock := s.lockWorkspace(j.Spec.WorkspaceID)
+		defer unlock()
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		r, err := s.lookup(d.cacheOwner(j), j.Spec.WorkspaceID)
 		if err != nil {
 			return fmt.Errorf("workspace does not exist: %w", err)
 		}
-		if r.JobID != "" {
-			return fmt.Errorf("%w: %s", errWorkspaceBusy, r.JobID)
+		if r.LegacyExclusive && len(r.JobIDs) != 0 {
+			return fmt.Errorf("%w: previous-version job requires cleanup", errWorkspaceBusy)
+		}
+		if r.holds(j.ID) {
+			return fmt.Errorf("job already holds workspace")
 		}
 		if r.Manifest.RootHash() != j.Spec.ManifestRoot || r.CacheProjectID != j.Spec.CacheProjectID {
 			return fmt.Errorf("workspace creation snapshot does not match request")
@@ -51,7 +57,10 @@ func (d *Daemon) acquireWorkspace(ctx context.Context, j *Job) error {
 		if err := replaceJSONDurable(filepath.Join(j.Dir, workspaceLeaseFile), workspaceLeaseRef{r.ID}); err != nil {
 			return err
 		}
-		r.JobID = j.ID
+		if len(r.JobIDs) == 0 {
+			r.CacheLeaseID = j.ID
+		}
+		r.JobIDs = append(r.JobIDs, j.ID)
 		if err := s.write(r); err != nil {
 			return err
 		}
@@ -78,6 +87,8 @@ func (d *Daemon) returnWorkspace(j *Job) error {
 	if s == nil || j.workspaceLeaseID == "" {
 		return removeOwnedTree(filepath.Join(j.Dir, "workspace"))
 	}
+	unlock := s.lockWorkspace(j.workspaceLeaseID)
+	defer unlock()
 	s.mu.Lock()
 	r, err := s.read(j.workspaceLeaseID)
 	s.mu.Unlock()
@@ -91,7 +102,7 @@ func (d *Daemon) returnWorkspace(j *Job) error {
 	if err != nil {
 		return err
 	}
-	if r.JobID != j.ID {
+	if !r.holds(j.ID) {
 		// Never clean a newer job's tree.
 		return nil
 	}
@@ -99,22 +110,35 @@ func (d *Daemon) returnWorkspace(j *Job) error {
 	if err := workspaceDataIdentity(data, r.Identity); err != nil {
 		return err
 	}
-	if err := settlePersistentCachePaths(j, data, r.Selection.Caches); err != nil {
-		return err
+	// Shared bindings survive until every process scope has been cleaned and
+	// the final member returns. Failed settlement retains the last lease.
+	if len(r.JobIDs) == 1 {
+		if err := settlePersistentCachePaths(j, data, r.Selection.Caches); err != nil {
+			return err
+		}
+		if len(r.Selection.Caches) != 0 {
+			if err := d.settleNamedCacheLease(j, r.Owner, r.CacheLeaseID); err != nil {
+				return err
+			}
+		}
+		if err := syncDirectory(data); err != nil {
+			return err
+		}
 	}
-	if err := syncDirectory(data); err != nil {
-		return err
-	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, err = s.read(r.ID)
 	if err != nil {
 		return err
 	}
-	if r.JobID != j.ID {
+	if !r.holds(j.ID) {
 		return nil
 	}
-	r.JobID = ""
+	r.JobIDs = slices.DeleteFunc(r.JobIDs, func(id string) bool { return id == j.ID })
+	if len(r.JobIDs) == 0 {
+		r.CacheLeaseID, r.LegacyExclusive = "", false
+	}
 	return s.write(r)
 }
 
@@ -161,14 +185,14 @@ func (d *Daemon) restoreWorkspaceLease(j *Job) error {
 	if err != nil {
 		return err
 	}
-	if r.JobID != j.ID {
+	if !r.holds(j.ID) {
 		return nil
 	}
 	data := filepath.Join(d.workspaces.dir, r.ID, "data")
 	if err := workspaceDataIdentity(data, r.Identity); err != nil {
 		return err
 	}
-	j.workspaceRoot = data
+	j.workspaceRoot, j.workspaceExclusive = data, r.LegacyExclusive
 	return nil
 }
 

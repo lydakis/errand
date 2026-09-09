@@ -139,10 +139,17 @@ to your authenticated identity on that runner.
 Subsequent runs use the files already there, at the same runner-side path. They
 do not upload your latest local edits. Each command gets its own job handle,
 logs, exit status, and retained results. Detaching and attaching work as usual.
-The workspace survives failed
-commands and daemon restarts; interrupted commands are not replayed. Only one
-job can hold a workspace at a time, including staging and queueing. A competing
-run or removal fails while that workspace is busy.
+The workspace survives failed commands and daemon restarts; interrupted commands
+are not replayed. Multiple jobs can use the same workspace, within the runner's
+normal concurrency and queue limits. For example, keep a development server
+running while another job runs tests. Killing or finishing one job leaves the
+others running. Removal is refused until every job has finished cleanup,
+including queued jobs.
+
+Jobs share the actual files and cache directories. Errand does not serialize
+file writes or determine whether commands are read-only; use separate workspaces
+when commands need independent files. `workspaces` and `df --verbose` show every
+job currently holding the workspace.
 
 Job handles still support `fetch`, `fetch --apply`, `fetch --apply --conflicts`,
 and `fetch --output`. Each job's retained result is an immutable comparison with
@@ -150,7 +157,11 @@ the workspace's **creation snapshot**, including accumulated edits from earlier
 jobs. Applying it uses the local directory associated with that invocation and
 the existing conflict-safe merge rules. Fetching an old result neither updates
 nor deletes the live workspace. Use `--no-apply` when you want to keep iterating
-there without applying job results locally.
+there without applying job results locally. With concurrent writers, a retained
+result may include a sibling's edits. Collection checks the files it reads and
+can fail if they change during capture; it is not an atomic workspace snapshot.
+For a stable final result, wait for writers to finish, then run a final command
+such as `errand --workspace experiment -- true` and fetch that job.
 
 Profiles and configuration still provide peer, environment, workdir, forwarding,
 and apply preferences. Persistent workspace selection itself requires the
@@ -163,7 +174,10 @@ profile can override them; later ambient config changes do not replace the
 workspace's defaults. Explicit conflicting cache bindings are rejected.
 If a command replaces a cache symlink with a file or directory, Errand preserves
 that replacement under `.errand-cache-recovery-ID/` in the workspace, records its
-location in the job events, and restores the cache binding on the next run.
+location in the last job's events, and restores the cache binding on the next
+run. Recovery of replacement files happens only when the last job releases the
+workspace. Cache leases and symlinks remain available while any job holds it;
+other workspaces and ordinary jobs still cannot acquire those leased caches.
 
 `df` includes persistent workspace storage. Job and cache GC never collect the
 persistent tree. `workspaces rm` explicitly removes an idle workspace and its
@@ -175,7 +189,7 @@ under their normal retention rules. Listing, creation, and removal accept
 base, and metadata. Named caches and job storage are listed separately, so
 shared caches are never charged again to each workspace. Sizes are logical
 regular-file bytes, not unique disk allocation; filesystem clones can share
-physical blocks. Cache sizes reflect the last job release, not live growth.
+physical blocks. Cache sizes reflect the last lease release, not live growth.
 
 `ps --workspace NAME` filters jobs before the runner's listing limit. It keeps
 the usual active-only default; add `--all` (`-a`) or `--last N` (`-n N`) for

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/lydakis/errand/internal/archive"
@@ -47,7 +48,7 @@ func (d *Daemon) handleWorkspaceCreate(w http.ResponseWriter, r *http.Request, i
 		httpError(w, 500, existingErr.Error())
 		return
 	}
-	if request.ID != key || request.JobID != "" || !request.CreatedAt.IsZero() {
+	if request.ID != key || len(request.JobIDs) != 0 || !request.CreatedAt.IsZero() {
 		httpError(w, 400, "invalid workspace creation metadata")
 		return
 	}
@@ -136,7 +137,7 @@ func (d *Daemon) handleWorkspaceList(w http.ResponseWriter, r *http.Request, id 
 		if row.Owner != d.workspaceOwner(id) {
 			continue
 		}
-		result = append(result, proto.WorkspaceSummary{ID: row.ID, Name: row.Name, CreatedAt: row.CreatedAt, Project: row.Project, JobID: row.JobID})
+		result = append(result, proto.WorkspaceSummary{ID: row.ID, Name: row.Name, CreatedAt: row.CreatedAt, Project: row.Project, JobIDs: row.JobIDs})
 	}
 	writeJSON(w, 200, result)
 }
@@ -155,6 +156,8 @@ func (d *Daemon) handleWorkspaceGet(w http.ResponseWriter, r *http.Request, id I
 
 func (d *Daemon) handleWorkspaceRemove(w http.ResponseWriter, r *http.Request, id Identity) {
 	s := d.workspaces
+	unlock := s.lockWorkspace(r.PathValue("id"))
+	defer unlock()
 	s.mu.Lock()
 	locked := true
 	defer func() {
@@ -171,8 +174,8 @@ func (d *Daemon) handleWorkspaceRemove(w http.ResponseWriter, r *http.Request, i
 		workspaceHTTPError(w, err)
 		return
 	}
-	if row.JobID != "" {
-		httpError(w, 409, fmt.Sprintf("%s: %s", errWorkspaceBusy, row.JobID))
+	if len(row.JobIDs) != 0 {
+		httpError(w, 409, fmt.Sprintf("%s: %s", errWorkspaceBusy, strings.Join(row.JobIDs, ", ")))
 		return
 	}
 	if err := workspaceDataIdentity(filepath.Join(s.dir, row.ID, "data"), row.Identity); err != nil {

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
 )
 
@@ -28,9 +29,9 @@ func writeDfDetails(w io.Writer, rows []dfRow) {
 		}
 		fmt.Fprintf(w, "\n  Workspaces (%d):\n", len(details.Workspaces))
 		tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-		fmt.Fprintln(tw, "  NAME\tID\tJOB\tWORKING FILES\tCREATION BASE\tMETADATA\tTOTAL")
+		fmt.Fprintln(tw, "  NAME\tID\tJOBS\tWORKING FILES\tCREATION BASE\tMETADATA\tTOTAL")
 		for _, item := range details.Workspaces {
-			job := item.JobID
+			job := strings.Join(item.JobIDs, ",")
 			if job == "" {
 				job = "-"
 			}
@@ -39,13 +40,20 @@ func writeDfDetails(w io.Writer, rows []dfRow) {
 		_ = tw.Flush()
 		fmt.Fprintf(w, "\n  Named caches (%d; sizes from last job release):\n", len(details.NamedCaches))
 		tw = tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-		fmt.Fprintln(tw, "  NAME\tPROJECT ID\tJOB\tSIZE")
+		fmt.Fprintln(tw, "  NAME\tPROJECT ID\tWORKSPACE ID\tJOBS\tSIZE")
 		for _, item := range details.NamedCaches {
 			job := item.JobID
+			workspace := item.WorkspaceID
+			if workspace == "" {
+				workspace = "-"
+			}
+			if len(item.JobIDs) > 0 {
+				job = strings.Join(item.JobIDs, ",")
+			}
 			if job == "" {
 				job = "-"
 			}
-			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", terminalSafeField(item.Name), terminalSafeField(item.ProjectID), terminalSafeField(job), formatByteSize(item.Bytes))
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\n", terminalSafeField(item.Name), terminalSafeField(item.ProjectID), terminalSafeField(workspace), terminalSafeField(job), formatByteSize(item.Bytes))
 		}
 		_ = tw.Flush()
 		fmt.Fprintf(w, "\n  Job storage (%d):\n", len(details.Jobs))

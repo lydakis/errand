@@ -61,7 +61,7 @@ func TestWorkspaceCommandsCreateReuseAndRemove(t *testing.T) {
 		t.Fatalf("list: %d %s", code, &stderr)
 	}
 	var rows []proto.WorkspaceSummary
-	if err := json.Unmarshal(out.Bytes(), &rows); err != nil || len(rows) != 1 || rows[0].JobID != "" {
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil || len(rows) != 1 || len(rows[0].JobIDs) != 0 {
 		t.Fatalf("list: %s %v", out.String(), err)
 	}
 	out.Reset()

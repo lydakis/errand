@@ -15,7 +15,7 @@ import (
 // storage categories these are logical regular-file bytes; symlinks are never
 // followed, so named caches are not charged to the workspace as well.
 func workspaceStorageBytes(ctx context.Context, root string, row workspaceRecord) (proto.WorkspaceStorage, error) {
-	usage := proto.WorkspaceStorage{ID: row.ID, Name: row.Name, JobID: row.JobID}
+	usage := proto.WorkspaceStorage{ID: row.ID, Name: row.Name, JobIDs: row.JobIDs}
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if err := ctx.Err(); err != nil {
 			return err

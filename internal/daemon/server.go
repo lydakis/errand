@@ -88,8 +88,9 @@ type Daemon struct {
 	identity    tailnet.Provider
 	selfUID     uint32
 	cache       *blobCache // nil when the cache is disabled
-	// Kept per daemon so admission storage failures can be tested independently.
+	// Kept per daemon so receipt and scope storage failures can be tested independently.
 	writeAdmissionReceipt func(*Job, string, any) error
+	writeProcessScope     func(string, any) error
 
 	mu        sync.Mutex
 	jobs      map[string]*Job
@@ -165,6 +166,7 @@ func New(cfg Config) (*Daemon, error) {
 		cfg: cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{},
 		identity: identity, selfUID: currentUID(),
 		writeAdmissionReceipt: (*Job).writeJSON,
+		writeProcessScope:     replaceJSONDurable,
 	}
 	if err := d.lockStateDir(); err != nil {
 		return nil, err
@@ -463,9 +465,24 @@ func cleanupPersistedRuntime(j *Job, cacheDirs ...string) (killed []int, cleanup
 		if err := json.Unmarshal(raw, &rec); err != nil {
 			return nil, []string{"scope record is unreadable; surviving processes cannot be found"}
 		}
+		// Shared jobs use group identity and markers, never directory membership.
+		// An unrecovered legacy job keeps its original exclusive cwd scope.
+		persistent := j.workspaceLeaseID != "" || j.Spec.WorkspaceID != ""
+		if rec.SharedWorkspace || persistent && !j.workspaceExclusive {
+			workspace, cacheDirs = "", nil
+		}
 		scope, err := resumeProcessScope(rec.Token, workspace, cacheDirs...)
 		if err != nil {
 			return nil, []string{err.Error()}
+		}
+		if rec.SharedWorkspace || persistent && !j.workspaceExclusive && j.workspaceRoot != "" {
+			if rec.Group == nil {
+				return nil, []string{"process group was not durably recorded; cleanup requires inspection"}
+			}
+			if _, err := rec.Group.members(false); err != nil {
+				return nil, []string{err.Error()}
+			}
+			scope.group, scope.groupOwned = rec.Group, true
 		}
 		killed, err = scope.cleanup(2 * time.Second)
 		if err != nil {
@@ -979,21 +996,6 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		msg := fmt.Sprintf("busy: %d running, %d starting, %d staging, %d queued (capacity %d running + %d queued)",
 			o.running, o.starting, o.staging, o.queued, d.cfg.MaxJobs, d.cfg.MaxQueued)
 		d.mu.Unlock()
-		if spec.WorkspaceID != "" {
-			// Preserve the actionable busy-workspace diagnostic, but never
-			// wait for filesystem metadata while holding the admission lock.
-			d.workspaces.mu.Lock()
-			row, err := d.workspaces.lookup(d.workspaceOwner(id), spec.WorkspaceID)
-			d.workspaces.mu.Unlock()
-			if err != nil {
-				workspaceHTTPError(w, err)
-				return
-			}
-			if row.JobID != "" {
-				httpError(w, http.StatusConflict, fmt.Sprintf("%s: %s", errWorkspaceBusy, row.JobID))
-				return
-			}
-		}
 		httpError(w, http.StatusTooManyRequests, msg)
 		return
 	}

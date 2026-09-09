@@ -72,8 +72,8 @@ func TestTerminalPreScopeLeaseRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.JobID != "" {
-		t.Fatalf("restart left never-started job lease busy: %s", got.JobID)
+	if len(got.JobIDs) != 0 {
+		t.Fatalf("restart left never-started job lease busy: %v", got.JobIDs)
 	}
 }
 

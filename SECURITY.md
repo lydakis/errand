@@ -81,8 +81,16 @@ The following properties must hold:
   authenticated ownership boundary.
 - Persistent workspaces are explicitly created and owner-scoped. Creation and
   use require `submit`, reads require `read-own`, and removal requires `gc-own`.
-  A durable exclusive lease prevents concurrent jobs or deletion during use.
-  Recovery must confirm process cleanup before releasing that lease; an
+  Durable membership tracks each job and prevents deletion during use.
+  Cleanup and signals must target the individual job's process group and marker,
+  never processes selected by shared workspace or cache directory alone.
+  Restart verifies the boot and group leader's birth identity before signalling.
+  A recorded group from a previous boot is gone; missing or ambiguous identity
+  within the same boot must leave cleanup unresolved. Escaped descendants
+  require a visible inherited marker. Concurrent jobs share mutable files and
+  cache contents; they do not provide isolation from each other.
+  The last member alone releases shared cache leases and removes their bindings.
+  Recovery must confirm process cleanup before releasing each job's lease; an
   unreadable receipt must not cause leased workspace files to be deleted.
   Each job records a durable workspace reference before lease publication.
   Corrupt lease metadata protects that job's runtime state without preventing

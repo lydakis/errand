@@ -343,7 +343,7 @@ receipt. Only names and provenance are retained.
 ### Cleanup, honestly
 
 When a job ends (success, failure, kill), errand removes everything it
-owns: workspace, the inherited per-job process scope, and temporary state.
+owns for that job: its ephemeral workspace, process scope, and temporary state.
 The host scope finds ordinary descendants even when they call `setsid`; it is
 lifecycle containment, not a security boundary against hostile code that
 deliberately scrubs the inherited marker. `result.json` records `cleanup_ok`
@@ -607,8 +607,12 @@ lease rather than deleting or moving the directory. Restart recovery locates
 current leases by job ID, cleans surviving processes before releasing them, and
 never replays a command. Old receipts without a current lease cannot target a
 workspace now used by another job. Uncertain process cleanup or mismatched
-directory identity leaves the lease protected. Named-cache links are removed
-when the lease is released; cache storage remains independently managed.
+directory identity leaves the affected job's lease protected. Membership is a
+set of job IDs, including staged and queued jobs. The last member settles named
+caches and removes their links before releasing the workspace. A shared cache
+lease identity outlives its first job when other members remain; individual job
+GC and restart recovery cannot release it early. Cache storage remains
+independently managed.
 The job receipt durably records its workspace reference before lease publication.
 Recovery validates that reference against the current lease, so a broken sibling
 record cannot prevent unrelated job cleanup. Terminal pre-launch failures also
@@ -620,11 +624,31 @@ global metadata lock. A cache binding replaced by a command is moved into a
 unique `.errand-cache-recovery-ID/` directory in the live tree, preserving its files
 without preventing subsequent cache binding.
 
-The exclusive job limit is a current runtime constraint, not an attempt to infer
-whether commands are read-only. Process cleanup uses the workspace directory to
-find escaped descendants, and cache leases assume exclusive execution. Concurrent
-jobs require independent process ownership and cache lifetime management first;
-merely removing the busy check could let one job's cleanup kill another job.
+Jobs can execute concurrently in one persistent workspace. Short lifecycle
+operations serialize per workspace, while user commands and retained-change
+collection may overlap. No read-only classification or file-write locking is
+attempted. The runner's ordinary concurrency and queue limits still apply.
+
+Persistent jobs use their process group plus an inherited unique scope marker.
+Shared workspace and cache directories cannot establish process ownership and
+are never used to select processes for cleanup. The machine boot identity and
+group leader's kernel birth identity are persisted after launch, supplementing
+markers for macOS platform binaries whose environment is not visible. Restart
+discards groups recorded under an earlier boot and otherwise validates the
+leader's identity before signalling. A crash before group publication, a reused
+leader PID within the same boot, or a leaderless group whose ownership cannot
+be verified leaves cleanup unresolved and the job's lease protected. If group
+capture succeeds but its durable write fails, the live daemon stops the command
+and releases membership only after verifying process cleanup with the captured
+identity; the receipt retains the persistence error. Escaped descendants must retain a visible marker;
+this remains cooperative lifecycle containment, not a sandbox.
+
+Workspace metadata accepts the earlier single-job format during recovery and
+writes `job_ids` for current membership. A surviving job from the earlier format
+retains exclusive access and its directory-based cleanup until recovery completes.
+Cache binding changes and final release share a per-workspace lock, so admission
+cannot join midway through settlement.
+Metadata reads, listing, and unrelated jobs remain independent of that lock.
 
 Each job retains an immutable result relative to the workspace creation base.
 The wire request names that initial manifest; its workspace archive carries no
@@ -635,7 +659,10 @@ This cumulative result supports fetching only the final iteration. It is not a
 per-job delta. Previously applied identical content merges without conflict;
 subsequent overlapping edits can still require conflict resolution. Changing to
 a job-start baseline would require a separate cumulative workspace transfer path
-to preserve the final-iteration workflow.
+to preserve the final-iteration workflow. Concurrent results describe observed
+workspace state, not attribution to a particular job; sibling writes can cause
+collection to fail its verification. A final job after writers stop gives a
+stable cumulative result.
 
 Persistent workspaces appear in `df` and are removed only by explicit
 `workspaces rm`. There is no automatic workspace TTL in this slice. Workspaces
@@ -892,7 +919,7 @@ versions are not a compatibility contract.
 ### Next slices (2026-09-07)
 
 The core, SSH, forwarding, retention, named caches, local execution, local-only
-setup, and explicit persistent workspace lifecycle are implemented. The next
+setup, and persistent workspaces with concurrent jobs are implemented. The next
 slice is directional transfer between an originating checkout and a persistent
 workspace, followed by the rootless container backend. Attaching to a job
 remains observation.
