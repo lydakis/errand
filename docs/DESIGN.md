@@ -932,6 +932,32 @@ Existing conflict markers are ordinary file contents and may travel in either
 direction. No conflict index, resolution lifecycle, or transfer `--force` is
 planned. Transfer checkpoint and retry handling, including partial conflict
 materialization, must be implemented before these workspace operations ship.
+
+The first transfer prerequisite is an internal receiver-side apply receipt.
+It binds one application to its owner, destination directory identity, immutable
+bundle, selected roots, and conflict option. The existing apply journal records
+conflict outcomes alongside installed states, so recovery can persist the receipt
+before discarding backups. Retrying that application returns its original result
+without reapplying it over later edits; deliberately applying again uses a new
+application identity. This also applies to a clean-or-refuse rejection. A conflict
+report describes that application, not whether the files still contain conflicts.
+Once the outcome is durable, finalization checks the journal and backups without
+requiring the installed files to remain unchanged. It then persists a cleanup
+checkpoint bound to the transaction directory identity before deleting recovery
+data. Retries can finish interrupted deletion even if the journal or some backups
+are already gone, while refusing a replacement transaction directory.
+Before the outcome is durable, recovery
+still verifies installed content before reconstructing a result. A conflict error
+escaping materialization is a failed attempt, not a completed refusal; every
+outcome is validated before publication. Private receipt storage is checked by
+directory ancestry identities, including on case-insensitive filesystems.
+Installed states can include markers or preserved destination values and must not
+be mistaken for complete acceptance of the incoming source tree.
+
+This receipt does not yet advance transfer baselines or expose workspace push/fetch
+commands. Directional checkpoint storage, partial-source acceptance, staging and
+transport remain the next integration work. Ordinary job fetch/apply is unchanged.
+
 Nix and facts-based selection remain later work. A harness wrapper can build
 on job execution and workspace continuity while owning its own agent-thread
 resumption; Errand need not own harness-specific conversation state.

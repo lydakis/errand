@@ -39,6 +39,7 @@ type applyJournal struct {
 	TransactionIdentity fsidentity.Identity  `json:"transaction_identity"`
 	Owner               string               `json:"owner"`
 	BundleRoot          string               `json:"bundle_root"`
+	Conflicts           []string             `json:"conflicts,omitempty"`
 	Phase               string               `json:"phase"`
 	Items               []applyJournalItem   `json:"items"`
 	CreatedParents      []applyJournalParent `json:"created_parents,omitempty"`
@@ -68,6 +69,7 @@ type PendingApply struct {
 	BundleRoot  string
 	Paths       []string
 	States      map[string]string
+	Conflicts   []string
 }
 
 func NewApplyTransaction() string {
@@ -187,7 +189,7 @@ func recoverApplicationAtRootContext(ctx context.Context, root *os.Root, transac
 		}
 		return &PendingApply{
 			Transaction: journal.Transaction, Owner: journal.Owner,
-			BundleRoot: journal.BundleRoot, Paths: paths, States: states,
+			BundleRoot: journal.BundleRoot, Paths: paths, States: states, Conflicts: journal.Conflicts,
 		}, nil
 	}
 	if err := rollbackApplyJournalAtRootContext(ctx, root, journal); err != nil {
@@ -503,6 +505,14 @@ func validateApplyJournal(journal applyJournal) error {
 	}
 	if journal.Phase != applyPhasePrepared && journal.Phase != applyPhaseCommitted {
 		return fmt.Errorf("invalid change apply phase %q", journal.Phase)
+	}
+	for i, conflict := range journal.Conflicts {
+		if err := validatePath(conflict); err != nil {
+			return err
+		}
+		if i > 0 && journal.Conflicts[i-1] >= conflict {
+			return fmt.Errorf("change apply conflicts are not sorted and unique")
+		}
 	}
 	seen := map[string]bool{}
 	for i, item := range journal.Items {

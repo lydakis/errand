@@ -282,7 +282,7 @@ func ApplyToWorkspace(
 	}
 	journal := applyJournal{
 		Version: applyJournalVersion, Transaction: transaction, TransactionIdentity: transactionIdentity, Owner: owner,
-		BundleRoot: bundle.RootHash(), Phase: applyPhasePrepared,
+		BundleRoot: bundle.RootHash(), Phase: applyPhasePrepared, Conflicts: conflicts,
 		Items: make([]applyJournalItem, len(paths)),
 	}
 	for i, changePath := range paths {
