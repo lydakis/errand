@@ -88,8 +88,8 @@ errand -- make test
 Output streams here, and the exit code comes back. Your local files stay
 unchanged by default. Choose another runner with `errand --on NAME -- COMMAND`.
 
-Each job gets a fresh workspace with your files, including uncommitted edits.
-Install the required tools on the runner. Git-ignored dependencies such as
+By default, each job gets a fresh workspace with your files, including
+uncommitted edits. Install the required tools on the runner. Git-ignored dependencies such as
 `node_modules` don't travel with your files; install them within the job
 when needed.
 
@@ -141,6 +141,8 @@ for details.
 
 - **Try something in a separate local workspace:** run `errand --on local -- make test`
   without disturbing your current checkout. [Local setup and usage](docs/USAGE.md#local-jobs).
+- **Keep working in the same workspace:** create one explicitly and reuse it across
+  jobs. [Persistent workspaces](docs/USAGE.md#persistent-workspaces).
 - **Collect a test report:** `errand --artifact reports -- make test` retains
   ignored output too. [Artifacts and exporting results](docs/USAGE.md#artifacts-and-caches).
 - **Speed up repeat builds:** `errand --cache compiler=target -- cargo test`
