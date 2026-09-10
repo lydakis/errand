@@ -70,19 +70,19 @@ func TestResolveHandlePreservesRawURL(t *testing.T) {
 }
 
 func TestCmdRunRejectsWorkspaceRootWithoutSnapshot(t *testing.T) {
-	if code := cmdRun([]string{"--no-snapshot", "--workspace-root", ".", "--", "/bin/true"}); code != 2 {
+	if code := cmdRun([]string{"--no-snapshot", "--workspace-root", ".", "--", "/bin/true"}, nil); code != 2 {
 		t.Fatalf("no-snapshot workspace-root exit = %d, want 2", code)
 	}
 }
 
 func TestCmdRunShortWorkdirFlag(t *testing.T) {
-	if code := cmdRun([]string{"--no-snapshot", "-w", "build", "--", "/bin/true"}); code != 2 {
+	if code := cmdRun([]string{"--no-snapshot", "-w", "build", "--", "/bin/true"}, nil); code != 2 {
 		t.Fatalf("no-snapshot short workdir exit = %d, want 2", code)
 	}
 }
 
 func TestCmdRunShortEnvFlag(t *testing.T) {
-	if code := cmdRun([]string{"--url", "http://runner.invalid", "-e", "INVALID", "--", "/bin/true"}); code != 2 {
+	if code := cmdRun([]string{"--url", "http://runner.invalid", "-e", "INVALID", "--", "/bin/true"}, nil); code != 2 {
 		t.Fatalf("invalid short env exit = %d, want 2", code)
 	}
 }
@@ -879,13 +879,13 @@ func TestCmdPsJSONIncludesPeerAndReceiptMetadata(t *testing.T) {
 }
 
 func TestCmdRunRejectsConflictingSnapshotFlags(t *testing.T) {
-	if code := cmdRun([]string{"--no-snapshot", "--include-all", "--", "/bin/true"}); code != 2 {
+	if code := cmdRun([]string{"--no-snapshot", "--include-all", "--", "/bin/true"}, nil); code != 2 {
 		t.Fatalf("conflicting snapshot flags exit = %d, want 2", code)
 	}
 }
 
 func TestCmdRunRejectsWorkdirWithoutSnapshot(t *testing.T) {
-	if code := cmdRun([]string{"--no-snapshot", "--workdir", "build", "--", "/bin/true"}); code != 2 {
+	if code := cmdRun([]string{"--no-snapshot", "--workdir", "build", "--", "/bin/true"}, nil); code != 2 {
 		t.Fatalf("no-snapshot workdir exit = %d, want 2", code)
 	}
 }

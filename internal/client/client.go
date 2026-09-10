@@ -66,8 +66,15 @@ var maintenanceHTTP = &http.Client{
 	},
 }
 
+// Admission describes resolved feature use without exposing job contents.
+type Admission struct {
+	Workspace, Caches, Artifacts, Forwarding, Apply, Detached bool
+}
+
 type RunOptions struct {
-	BeforeContact  func() // optional CLI advisory, after local validation and before network work
+	BeforeContact func() // optional CLI advisory, after local validation and before network work
+	// OnAdmitted observes one confirmed admission after retries and policy resolution.
+	OnAdmitted     func(Admission)
 	Workspace      string // explicitly selected existing persistent workspace
 	workspaceID    string
 	Caches         []proto.CacheBinding
@@ -330,6 +337,13 @@ func runWithDetachNotifications(
 		}
 		errf("the job may have been admitted; handle %s", handle)
 		return ExitTransaction
+	}
+	if opts.OnAdmitted != nil {
+		opts.OnAdmitted(Admission{
+			Workspace: opts.Workspace != "", Caches: len(opts.Caches) > 0,
+			Artifacts: len(opts.Artifacts) > 0, Forwarding: len(opts.Forwards) > 0,
+			Apply: opts.ApplyOnSuccess, Detached: opts.Detach,
+		})
 	}
 	if opts.ApplyOnSuccess {
 		if err := confirmAutomaticApplyAdmission(opts.PeerURL, jobID); err != nil {

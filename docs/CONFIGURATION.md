@@ -72,6 +72,22 @@ jobs submitted to that same socket as the same account, but not with jobs
 submitted through tailnet identity. Existing SSH-enabled daemons accept local
 clients too; Tailscale-only daemons permit only socket health and setup calls.
 
+### Personal telemetry preference
+
+Stable releases enable telemetry after a first-invocation notice; that
+invocation sends no events. Disable it in personal configuration:
+
+```toml
+[telemetry]
+enabled = false
+```
+
+`ERRAND_TELEMETRY=0` overrides this setting; `DO_NOT_TRACK=1` prevents sending.
+`ERRAND_TELEMETRY_DEBUG=1` previews event payloads without sending them.
+See [usage telemetry](TELEMETRY.md) for fields, delivery, and exclusions.
+This preference is separate from effective job configuration and is not part
+of `errand config`'s run-settings output.
+
 ## Workspace configuration
 
 ```toml

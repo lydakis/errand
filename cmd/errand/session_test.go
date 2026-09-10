@@ -45,14 +45,14 @@ func TestSessionInspectionAndDetach(t *testing.T) {
 		t.Fatal(code, &errOut)
 	}
 	t.Setenv("XDG_STATE_HOME", "invalid-state-root")
-	if code := cmdRun([]string{"--detach", "--", "true"}); code != 2 {
+	if code := cmdRun([]string{"--detach", "--", "true"}, nil); code != 2 {
 		t.Fatalf("configured detached forward: %d", code)
 	}
 	for _, args := range [][]string{
 		{"--forward", "3000", "--no-forward", "--", "true"},
 		{"--forward", "3000", "-L", "3000:8080", "--", "true"},
 	} {
-		if code := cmdRun(args); code != 2 {
+		if code := cmdRun(args, nil); code != 2 {
 			t.Fatalf("conflicting mappings accepted: %d", code)
 		}
 	}
@@ -86,7 +86,7 @@ func TestConfiguredForwardBindsBeforeRunAndAttach(t *testing.T) {
 	writeClientConfig(t, fmt.Sprintf("default_peer = 'test'\n[peers.test]\nurl = %q\n[profiles.dev.run]\npeer = 'absent'\n[profiles.dev.session]\nforward = ['%d:3000']\n", server.URL, port))
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Chdir(t.TempDir())
-	if code := cmdRun([]string{"--on", "test", "--profile", "dev", "--no-snapshot", "--", "true"}); code != 120 {
+	if code := cmdRun([]string{"--on", "test", "--profile", "dev", "--no-snapshot", "--", "true"}, nil); code != 120 {
 		t.Fatalf("occupied run forward: %d", code)
 	}
 	if code := cmdAttach([]string{"--profile", "dev", "test/" + proto.NewULID()}); code != 120 {
@@ -95,7 +95,7 @@ func TestConfiguredForwardBindsBeforeRunAndAttach(t *testing.T) {
 	if requests.Load() != 0 {
 		t.Fatalf("occupied port contacted runner: %d requests", requests.Load())
 	}
-	if code := cmdRun([]string{"--on", "test", "--profile", "dev", "--no-forward", "--no-snapshot", "--", "/bin/sh", "-c", "true"}); code != 0 {
+	if code := cmdRun([]string{"--on", "test", "--profile", "dev", "--no-forward", "--no-snapshot", "--", "/bin/sh", "-c", "true"}, nil); code != 0 {
 		t.Fatalf("cleared forward run: %d", code)
 	}
 }

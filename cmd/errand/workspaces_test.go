@@ -47,12 +47,12 @@ func TestWorkspaceCommandsCreateReuseAndRemove(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, script := range []string{"test \"$(cat file)\" = initial && test ! -e target/local && echo reused > target/remote && echo changed > file", "test \"$(cat file)\" = changed && test \"$(cat target/remote)\" = reused"} {
-		if code := cmdRun([]string{"--workspace", "experiment", "--no-apply", "--", "/bin/sh", "-c", script}); code != 0 {
+		if code := cmdRun([]string{"--workspace", "experiment", "--no-apply", "--", "/bin/sh", "-c", script}, nil); code != 0 {
 			t.Fatalf("persistent run: %d", code)
 		}
 	}
 	// Normal invocations still start from a fresh snapshot of current local files.
-	if code := cmdRun([]string{"--no-apply", "--", "/bin/sh", "-c", "test \"$(cat file)\" = local; echo ephemeral > file"}); code != 0 {
+	if code := cmdRun([]string{"--no-apply", "--", "/bin/sh", "-c", "test \"$(cat file)\" = local; echo ephemeral > file"}, nil); code != 0 {
 		t.Fatalf("ephemeral run: %d", code)
 	}
 	out.Reset()
@@ -158,7 +158,7 @@ func TestWorkspaceCommandValidation(t *testing.T) {
 		}
 	}
 	for _, args := range [][]string{{"--workspace", ""}, {"--workspace", "missing", "--no-snapshot"}, {"--workspace", "missing", "--include-all"}} {
-		if code := cmdRun(append(args, "--", "true")); code != 2 {
+		if code := cmdRun(append(args, "--", "true"), nil); code != 2 {
 			t.Fatalf("accepted %v: %d", args, code)
 		}
 	}

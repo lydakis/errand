@@ -157,6 +157,9 @@ work without an interactive terminal; for coding agents, use their
 noninteractive mode. Use `errand --help` or `errand COMMAND --help` for flags
 and examples, or read the [usage guide](docs/USAGE.md).
 
+[Usage telemetry](docs/TELEMETRY.md) is enabled after a first-run notice.
+Disable it with `ERRAND_TELEMETRY=0` or `DO_NOT_TRACK=1`.
+
 ## License
 
 MIT

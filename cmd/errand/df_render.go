@@ -33,7 +33,7 @@ func cmdDf(args []string) int {
 }
 
 func cmdDfTo(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("errand df", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand df", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	on := fs.String("on", "", "restrict to one peer name")
 	rawURL := fs.String("url", "", "restrict to one peer base URL")
@@ -42,7 +42,12 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&verbose, "verbose", false, "show individual workspace, named-cache, and job storage")
 	fs.BoolVar(&verbose, "v", false, "show individual workspace, named-cache, and job storage")
 	setFlagUsage(fs, "errand df [options]")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		return 2
+	}
 	if fs.NArg() != 0 {
 		fmt.Fprintf(stderr, "errand: unexpected df arguments: %s\n", strings.Join(fs.Args(), " "))
 		return 2

@@ -87,12 +87,18 @@ A HANDLE is peer/ULID, printed when a job is submitted.
 While attached: Ctrl-D detaches; Ctrl-C interrupts the command.
 Full command options: errand COMMAND --help`
 
-func main() {
-	args := os.Args[1:]
+func main() { os.Exit(runCLI(os.Args[1:])) }
+
+func runCLI(args []string) (code int) {
+	// A panic still unwinds the telemetry defer. Only a normal return may
+	// replace this conservative outcome with success.
+	code = client.ExitTransaction
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, usage)
-		os.Exit(2)
+		return 2
 	}
+	reporter := startTelemetry(args, os.Stderr)
+	defer func() { reporter.Finish(telemetryOperation(args), code) }()
 	skipResume := cliHelpRequested(args)
 	switch args[0] {
 	case "serve", "setup", "_automatic-apply", "_stdio", "version", "config", "access", "doctor":
@@ -105,46 +111,46 @@ func main() {
 	}
 	switch args[0] {
 	case "serve":
-		os.Exit(cmdServe(args[1:]))
+		return cmdServe(args[1:])
 	case "setup":
-		os.Exit(cmdSetup(args[1:]))
+		return cmdSetup(args[1:])
 	case "peers":
-		os.Exit(cmdPeers(args[1:]))
+		return cmdPeers(args[1:])
 	case "workspaces":
-		os.Exit(cmdWorkspaces(args[1:]))
+		return cmdWorkspaces(args[1:])
 	case "config":
-		os.Exit(cmdConfig(args[1:]))
+		return cmdConfig(args[1:])
 	case "access":
-		os.Exit(cmdAccess(args[1:]))
+		return cmdAccess(args[1:])
 	case "doctor":
-		os.Exit(cmdDoctor(args[1:]))
+		return cmdDoctor(args[1:])
 	case "attach":
-		os.Exit(cmdAttach(args[1:]))
+		return cmdAttach(args[1:])
 	case "push":
-		os.Exit(cmdPush(args[1:]))
+		return cmdPush(args[1:])
 	case "fetch":
-		os.Exit(cmdFetch(args[1:]))
+		return cmdFetch(args[1:])
 	case "ps":
-		os.Exit(cmdPs(args[1:]))
+		return cmdPs(args[1:])
 	case "status":
-		os.Exit(cmdStatus(args[1:]))
+		return cmdStatus(args[1:])
 	case "kill":
-		os.Exit(cmdKill(args[1:]))
+		return cmdKill(args[1:])
 	case "df":
-		os.Exit(cmdDf(args[1:]))
+		return cmdDf(args[1:])
 	case "gc":
-		os.Exit(cmdGC(args[1:]))
+		return cmdGC(args[1:])
 	case "version":
-		os.Exit(cmdVersion(args[1:]))
+		return cmdVersion(args[1:])
 	case "_automatic-apply":
-		os.Exit(cmdAutomaticApply(args[1:]))
+		return cmdAutomaticApply(args[1:])
 	case "_stdio":
-		os.Exit(cmdStdio(args[1:]))
+		return cmdStdio(args[1:])
 	case "-h", "--help":
 		fmt.Println(usage)
-		os.Exit(0)
+		return 0
 	default:
-		os.Exit(cmdRun(args))
+		return cmdRun(args, reporter)
 	}
 }
 
@@ -335,7 +341,7 @@ func cmdAttach(args []string) int {
 }
 
 func cmdFetch(args []string) int {
-	fs := flag.NewFlagSet("errand fetch", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand fetch", flag.ContinueOnError)
 	apply := fs.Bool("apply", false, "apply retained workspace changes with a clean-or-refuse three-way merge")
 	conflicts := fs.Bool("conflicts", false, "materialize text conflicts and apply clean changes")
 	output := fs.String("output", "", "export retained remote files into a new directory")
@@ -343,7 +349,12 @@ func cmdFetch(args []string) int {
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	setFlagUsage(fs, "errand fetch [options] HANDLE [PATH]")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		return 2
+	}
 	invalidOutput := false
 	fs.Visit(func(f *flag.Flag) {
 		if (f.Name == "output" || f.Name == "o") && *output == "" {
@@ -400,13 +411,18 @@ func cmdFetch(args []string) int {
 }
 
 func cmdKill(args []string) int {
-	fs := flag.NewFlagSet("errand kill", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand kill", flag.ContinueOnError)
 	force := fs.Bool("force", false, "SIGKILL instead of SIGTERM")
 	fs.BoolVar(force, "f", false, "SIGKILL instead of SIGTERM")
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	setFlagUsage(fs, "errand kill [options] HANDLE")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		return 2
+	}
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "errand kill: exactly one HANDLE (peer/ULID) is required")
 		return 2
@@ -552,7 +568,7 @@ func cmdPs(args []string) int {
 }
 
 func cmdPsTo(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("errand ps", flag.ExitOnError)
+	fs := flag.NewFlagSet("errand ps", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	on := fs.String("on", "", "restrict to one peer name")
 	rawURL := fs.String("url", "", "restrict to one peer base URL")
@@ -565,7 +581,12 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	fs.IntVar(&last, "last", 0, "show only the latest N jobs across all states")
 	fs.IntVar(&last, "n", 0, "show only the latest N jobs across all states")
 	setFlagUsage(fs, "errand ps [options]")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		return 2
+	}
 	if fs.NArg() != 0 {
 		fmt.Fprintf(stderr, "errand: unexpected ps arguments: %s\n", strings.Join(fs.Args(), " "))
 		return 2

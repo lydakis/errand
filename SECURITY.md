@@ -50,6 +50,15 @@ and [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 The following properties must hold:
 
+- Usage telemetry in stable releases defaults on after a first-invocation
+  notice that sends no events. Explicit personal opt-in can bypass the notice;
+  personal opt-out and `DO_NOT_TRACK=1` prevent sending.
+  Workspace files, profiles, and runner configuration cannot enable or redirect
+  it. Its fixed event schema excludes commands, arguments, paths, file contents,
+  environment data, logs, peer addresses, and raw errors. Preview never sends
+  telemetry; delivery failures never change job behavior or CLI exit status.
+  See [usage telemetry](docs/TELEMETRY.md) for the complete data contract.
+
 - Requests fail closed unless the caller has the required Errand action.
 - The runner's saved `transport` preference selects `both`, `ssh`,
   `tailscale`, or `local`. SSH-only mode disables the network listener. Tailscale-only

@@ -9,9 +9,10 @@ import (
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/telemetry"
 )
 
-func cmdRun(args []string) int {
+func cmdRun(args []string, reporter *telemetry.Reporter) int {
 	fs := flag.NewFlagSet("errand", flag.ContinueOnError)
 	var settings runConfigFlags
 	settings.bind(fs)
@@ -123,8 +124,11 @@ func cmdRun(args []string) int {
 	}
 	return client.Run(client.RunOptions{
 		BeforeContact: func() { warnRunnerVersion(peerURL, effective.Peer) },
-		Workspace:     *workspace,
-		Artifacts:     effective.Artifacts, Caches: effective.Caches,
+		OnAdmitted: func(admission client.Admission) {
+			reporter.Admitted(telemetry.Run{Transport: telemetryTransport(effective.URL), Workspace: admission.Workspace, Caches: admission.Caches, Artifacts: admission.Artifacts, Forwarding: admission.Forwarding, Apply: admission.Apply, Detached: admission.Detached})
+		},
+		Workspace: *workspace,
+		Artifacts: effective.Artifacts, Caches: effective.Caches,
 		PeerURL: peerURL, PeerName: effective.Peer, Root: effective.Root,
 		Argv: argv, Env: env, PassEnv: passenvs, Workdir: effective.Workdir,
 		Project: effective.Project, IncludeAll: *includeAll, NoSnapshot: effective.NoSnapshot,

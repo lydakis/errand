@@ -732,7 +732,8 @@ func TestDefiniteSubmitRejectionRemovesChangeState(t *testing.T) {
 	defer server.Close()
 
 	code := runWithDetachNotifications(RunOptions{
-		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+		OnAdmitted: func(Admission) { t.Error("rejected submission reported admission") },
+		PeerURL:    server.URL, Root: root, Argv: []string{"/bin/true"},
 		Stdout: io.Discard, Stderr: io.Discard,
 	}, make(chan os.Signal), testInterruptNotifications(), nil)
 	if code != ExitTransaction {
@@ -833,7 +834,8 @@ func TestSubmitRetryConflictRetainsChangeStateAndHandle(t *testing.T) {
 
 	var stderr bytes.Buffer
 	code := runWithDetachNotifications(RunOptions{
-		PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+		OnAdmitted: func(Admission) { t.Error("uncertain submission reported admission") },
+		PeerURL:    server.URL, Root: root, Argv: []string{"/bin/true"},
 		Stdout: io.Discard, Stderr: &stderr,
 	}, make(chan os.Signal), testInterruptNotifications(), nil)
 	if code != ExitTransaction {
