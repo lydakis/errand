@@ -331,3 +331,10 @@ state, then removes its service and files. macOS requires a logged-in GUI
 launchd domain. Linux requires an accessible user systemd bus and linger
 already enabled; for an Errand job, pass `XDG_RUNTIME_DIR=/run/user/UID` for
 the runner account. The test does not change linger or the production runner.
+
+For real cross-machine TCP, active-job completion, and retained-output retrieval,
+set `ERRAND_TEST_NETWORK_PEER` to a trusted configured peer in that command.
+The peer must have two available slots; macOS requires its existing Application
+Firewall enabled. The fixture keeps authentication enabled and does not change
+firewall settings. Both versions are builds of the candidate source, not a
+released-version migration. See [service upgrade acceptance](SERVICE_UPGRADES.md).

@@ -26,6 +26,7 @@ import (
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/serviceruntime"
 	"github.com/lydakis/errand/internal/setup"
 	"github.com/lydakis/errand/internal/tailnet"
 	"github.com/lydakis/errand/internal/workspace"
@@ -330,7 +331,7 @@ func cmdAttach(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
-	return client.Attach(client.AttachOptions{PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards})
+	return client.Attach(client.AttachOptions{BeforeContact: func() { warnRunnerVersion(peerURL, label) }, PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards})
 }
 
 func cmdFetch(args []string) int {
@@ -361,7 +362,7 @@ func cmdFetch(args []string) int {
 		fmt.Fprintln(os.Stderr, "errand fetch: --conflicts requires --apply")
 		return 2
 	}
-	peerURL, _, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
+	peerURL, label, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
@@ -378,6 +379,7 @@ func cmdFetch(args []string) int {
 			return client.ExitTransaction
 		}
 	}
+	warnRunnerVersion(peerURL, label)
 	staged, err := client.FetchChanges(client.ChangeFetchOptions{
 		PeerURL: peerURL, JobID: jobID, Apply: *apply, MaterializeConflicts: *conflicts,
 		Path: changePath, CallerDir: callerDir, OutputDir: *output,
@@ -694,6 +696,12 @@ func cmdServe(args []string) int {
 		fileCfg.StateDir = *stateDir
 	}
 	fileCfg.AllowUsers = append(fileCfg.AllowUsers, allowUsers...)
+
+	// The service manager still launches the installed CLI. Before listening,
+	// move execution to immutable bytes that package cleanup cannot unlink.
+	if err := serviceruntime.Reexec(fileCfg.StateDir); err != nil {
+		log.Fatalf("errand serve: prepare runtime: %v", err)
+	}
 
 	tcpEnabled := !strings.EqualFold(strings.TrimSpace(fileCfg.Listen), config.DisabledListener)
 	var identity tailnet.Provider

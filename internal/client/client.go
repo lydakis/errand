@@ -67,6 +67,7 @@ var maintenanceHTTP = &http.Client{
 }
 
 type RunOptions struct {
+	BeforeContact  func() // optional CLI advisory, after local validation and before network work
 	Workspace      string // explicitly selected existing persistent workspace
 	workspaceID    string
 	Caches         []proto.CacheBinding
@@ -165,6 +166,9 @@ func runWithDetachNotifications(
 		return ExitTransaction
 	}
 	defer forwarding.Close()
+	if opts.BeforeContact != nil {
+		opts.BeforeContact()
+	}
 
 	jobID := proto.NewULID()
 	handle := peerLabel(opts.PeerName, opts.PeerURL) + "/" + jobID
@@ -486,12 +490,13 @@ func peerLabel(alias, url string) string {
 
 // AttachOptions identifies an existing job to reattach to.
 type AttachOptions struct {
-	PeerURL  string
-	PeerName string
-	JobID    string
-	Stdout   io.Writer
-	Stderr   io.Writer
-	Forwards []PortForward
+	BeforeContact func() // optional CLI advisory, after binding requested local forwards
+	PeerURL       string
+	PeerName      string
+	JobID         string
+	Stdout        io.Writer
+	Stderr        io.Writer
+	Forwards      []PortForward
 }
 
 // Attach resumes following an existing job: it streams the log from the
@@ -535,6 +540,9 @@ func attachWithDetachNotifications(
 		return ExitTransaction
 	}
 	defer forwarding.Close()
+	if opts.BeforeContact != nil {
+		opts.BeforeContact()
+	}
 
 	status, err := getStatus(opts.PeerURL, opts.JobID)
 	if err != nil {

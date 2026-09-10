@@ -145,28 +145,37 @@ formula over the stable tap entry.
 
 ## Runner upgrades
 
+The candidate runtime-copy change is not yet release-ready for an existing
+0.2.1 service. See [service upgrade design and acceptance](SERVICE_UPGRADES.md)
+for the first-migration blocker. A stable Homebrew path alone does not protect
+an already-running Cellar executable from cleanup and macOS firewall drops.
+
 Upgrade clients and runners together when practical, then run `errand setup`
 on machines that should accept jobs. Version differences are advisory and do
 not block commands; check `errand peers` or `errand doctor` when troubleshooting.
 Setup owns the service; do not also run it through `brew services`.
 
-When invoked through the stable Homebrew path, setup records that path rather
-than the versioned Cellar executable. After `brew upgrade`, run `errand setup`
-when the runner is idle to restart it on the new version. Setup preserves the
-existing runner config and refuses to restart while jobs are active. Callers
-need no service restart.
+When invoked through the stable Homebrew path, setup records that path. A daemon
+started with the candidate runtime-copy implementation re-executes private,
+immutable bytes before listening. Package upgrades leave that daemon and its
+jobs running; plain `errand setup` adopts the installed version when idle.
+Setup preserves the runner config and refuses to restart active jobs.
 
-On each machine, run:
+Client-only machines need only the binary upgrade:
 
 ```sh
 brew upgrade lydakis/errand/errand
 ```
 
-On runners, then run `errand setup` from a terminal or independent SSH
-connection when idle. Do not run setup through an Errand job on that runner:
-the job itself prevents the restart. Setup reports the daemon version after
-restart and whether it matches the CLI. A difference remains advisory; inspect
-the reported service definition and any overrides if the old version remains.
+An already-running 0.2.1 daemon still executes from the Cellar. Do not assume
+the command above preserves its network reachability. The first-migration
+retention mechanism and actual released-version acceptance remain unfinished.
+
+An Errand job cannot run setup on its own runner because that job keeps it
+busy. Setup reports the daemon version after restart and whether it matches
+the invoking CLI. If it differs, inspect the service definition and overrides
+before changing anything. A remote client/daemon mismatch alone does not show
+which binary is installed on the runner or whether setup would change it.
 
 If a service was previously installed from a versioned or temporary executable
 path, inspect its definition and update that executable path while preserving

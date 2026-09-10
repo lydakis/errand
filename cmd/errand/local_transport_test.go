@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -33,7 +35,7 @@ func TestLocalRunnerEndToEnd(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0700); err != nil {
 		t.Fatal(err)
 	}
-	body := fmt.Sprintf("transport = 'local'\nlisten = 'tailnet:7443'\nsocket = %q\nstate_dir = %q\ntailscale_cli = '/not-installed'\n", socket, filepath.Join(dir, "state"))
+	body := fmt.Sprintf("transport = 'local'\nlisten = 'tailnet:7443'\nsocket = %q\nstate_dir = 'state'\ntailscale_cli = '/not-installed'\n", socket)
 	if err := os.WriteFile(cfgPath, []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -43,6 +45,7 @@ func TestLocalRunnerEndToEnd(t *testing.T) {
 		t.Fatalf("network override: %v %s", err, out)
 	}
 	server := exec.Command(bin, "serve", "--config", cfgPath)
+	server.Dir = dir
 	if err := server.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -62,6 +65,30 @@ func TestLocalRunnerEndToEnd(t *testing.T) {
 			t.Fatalf("local runner never became ready: %v", err)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+	// Unix-socket health alone cannot prove the upgrade fix: it remains
+	// healthy even when a daemon is still executing a deleted installation.
+	var executable string
+	if runtime.GOOS == "linux" {
+		executable, err = os.Readlink(fmt.Sprintf("/proc/%d/exe", server.Process.Pid))
+	} else {
+		var output []byte
+		output, err = exec.Command("ps", "-ww", "-p", strconv.Itoa(server.Process.Pid), "-o", "comm=").Output()
+		executable = strings.TrimSpace(string(output))
+	}
+	if err != nil {
+		t.Fatalf("read running executable: %v", err)
+	}
+	runtimeRoot, err := filepath.EvalSymlinks(filepath.Join(dir, "state", "runtime"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel, err := filepath.Rel(runtimeRoot, executable)
+	if err != nil || !filepath.IsLocal(rel) || filepath.Base(rel) != "errand" {
+		t.Fatalf("daemon must execute retained runtime, got %q under %q: %v", executable, runtimeRoot, err)
+	}
+	if _, err := os.Stat(executable); err != nil {
+		t.Fatalf("running executable must remain linked: %v", err)
 	}
 	out, err = exec.Command(bin, "_stdio", "--socket", socket).CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "SSH transport is disabled") {

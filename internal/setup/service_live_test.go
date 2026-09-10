@@ -150,7 +150,13 @@ func TestLiveServiceLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(home, "daemon.toml")
+	networkPeer := os.Getenv("ERRAND_TEST_NETWORK_PEER")
+	networkURL := ""
 	initial := fmt.Sprintf("transport = 'local'\nstate_dir = %q\nmax_jobs = 2\nmax_queued = 3\n", filepath.Join(home, "state"))
+	if networkPeer != "" {
+		requireLiveFirewall(t, ctx)
+		initial, networkURL = liveNetworkConfig(t, ctx, home)
+	}
 	if err := os.WriteFile(configPath, []byte(initial), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +171,7 @@ func TestLiveServiceLifecycle(t *testing.T) {
 		}
 		t.Fatal("test service socket remained live after stop")
 	}
-	options := Options{Transport: "local", ConfigPath: configPath, ExpectedVersion: "live-v1"}
+	options := Options{ConfigPath: configPath, ExpectedVersion: "live-v1"}
 	checkSetup := func() int {
 		t.Helper()
 		report, err := Run(ctx, options, s)
@@ -176,13 +182,16 @@ func TestLiveServiceLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if report.Info.Version != options.ExpectedVersion || report.Info.MaxJobs != 2 || report.Info.MaxQueued != 3 || !report.Info.LocalOnly || !report.Info.SSHDisabled || !strings.Contains(stepDetail(report, "probe"), "matches CLI") {
+		if report.Info.Version != options.ExpectedVersion || report.Info.MaxJobs != 2 || report.Info.MaxQueued != 3 || report.Info.LocalOnly != (networkPeer == "") || report.Info.SSHDisabled != (networkPeer == "") || !strings.Contains(stepDetail(report, "probe"), "matches CLI") {
 			t.Fatalf("unexpected live info: %+v", report.Info)
 		}
 		t.Logf("verified %s in service PID %d", report.Info.Version, pid)
 		return pid
 	}
 	firstPID := checkSetup()
+	if networkPeer != "" {
+		liveRemoteProbe(t, ctx, networkPeer, networkURL, "live-v1")
+	}
 	servicePath := filepath.Join(home, linuxUnitSubdir, DefaultServiceName+".service")
 	if runtime.GOOS == "darwin" {
 		servicePath = filepath.Join(home, darwinAgentSubdir, LaunchAgentLabel+".plist")
@@ -211,6 +220,11 @@ func TestLiveServiceLifecycle(t *testing.T) {
 	releasePath := filepath.Join(home, "release-busy-job")
 	// The job exits only when the test releases it, not after a scheduling-dependent delay.
 	busy := job("/bin/sh", "-c", `while [ -d "$2" ] && [ ! -e "$1" ]; do sleep 0.05; done`, "wait-for-release", releasePath, home)
+	var busyOutput bytes.Buffer
+	if networkPeer != "" {
+		busy = liveRemoteBusyJob(ctx, networkPeer, networkURL, releasePath, home)
+		busy.Stdout, busy.Stderr = &busyOutput, &busyOutput
+	}
 	if err := busy.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +246,7 @@ func TestLiveServiceLifecycle(t *testing.T) {
 		}
 	}()
 	active := false
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); {
 		info, err := s.Probe(ctx, socket)
 		if err == nil && info.RunningJobs > 0 {
 			active = true
@@ -242,6 +256,24 @@ func TestLiveServiceLifecycle(t *testing.T) {
 	}
 	if !active {
 		t.Fatal("test job did not become active")
+	}
+	// Simulate Homebrew retargeting its opt directory while the daemon runs.
+	if err := os.Symlink("../Cellar/errand/live-v2", stablePackage+".new"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(stablePackage+".new", stablePackage); err != nil {
+		t.Fatal(err)
+	}
+	// Actual cleanup while the gated job is active. Both generations are
+	// candidate builds; this does not claim a released 0.2.1 migration.
+	if err := os.RemoveAll(filepath.Join(home, "Cellar", "errand", "live-v1")); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := s.Probe(ctx, socket); err != nil || info.Version != "live-v1" || info.RunningJobs != 1 {
+		t.Fatalf("cleanup interrupted active daemon: %+v / %v", info, err)
+	}
+	if networkPeer != "" {
+		liveRemoteProbe(t, ctx, networkPeer, networkURL, "live-v1")
 	}
 	// Exercise a delay longer than the old two-second job lifetime. The gate
 	// must keep the job running until setup has actually refused the restart.
@@ -258,22 +290,18 @@ func TestLiveServiceLifecycle(t *testing.T) {
 	case err := <-busyDone:
 		waited = true
 		if err != nil {
-			t.Fatalf("active job was interrupted: %v", err)
+			t.Fatalf("active job was interrupted: %v / %s", err, &busyOutput)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("busy job did not finish after release")
 	}
 	if pid, err := s.SocketPID(ctx, socket); err != nil || pid != firstPID {
 		t.Fatalf("busy setup changed process: %d / %v", pid, err)
 	}
+	if networkPeer != "" && !bytes.Contains(busyOutput.Bytes(), []byte("remote-result-ok")) {
+		t.Fatalf("remote result retrieval missing: %s", &busyOutput)
+	}
 	t.Log("real job completed; busy setup refused without interruption")
-	// Simulate Homebrew retargeting its opt directory while the daemon runs.
-	if err := os.Symlink("../Cellar/errand/live-v2", stablePackage+".new"); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Rename(stablePackage+".new", stablePackage); err != nil {
-		t.Fatal(err)
-	}
 	info, err := s.Probe(ctx, socket)
 	if err != nil || info.Version != "live-v1" {
 		t.Fatalf("disk upgrade unexpectedly changed live process: %+v / %v", info, err)
@@ -281,6 +309,9 @@ func TestLiveServiceLifecycle(t *testing.T) {
 	options.ExpectedVersion = "live-v2"
 	if pid := checkSetup(); pid == firstPID {
 		t.Fatal("upgrade kept the old PID")
+	}
+	if networkPeer != "" {
+		liveRemoteProbe(t, ctx, networkPeer, networkURL, "live-v2")
 	}
 	if upgradedService, err := s.ReadFile(servicePath); err != nil || !bytes.Equal(originalService, upgradedService) {
 		t.Fatalf("upgrade changed the service definition: %s / %v", upgradedService, err)

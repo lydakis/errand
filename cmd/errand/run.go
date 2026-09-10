@@ -122,8 +122,9 @@ func cmdRun(args []string) int {
 		peerURL = client.ConfigureSSHPeer(peerURL, effective.Peer, effective.RemoteCommand, effective.RemoteSocket)
 	}
 	return client.Run(client.RunOptions{
-		Workspace: *workspace,
-		Artifacts: effective.Artifacts, Caches: effective.Caches,
+		BeforeContact: func() { warnRunnerVersion(peerURL, effective.Peer) },
+		Workspace:     *workspace,
+		Artifacts:     effective.Artifacts, Caches: effective.Caches,
 		PeerURL: peerURL, PeerName: effective.Peer, Root: effective.Root,
 		Argv: argv, Env: env, PassEnv: passenvs, Workdir: effective.Workdir,
 		Project: effective.Project, IncludeAll: *includeAll, NoSnapshot: effective.NoSnapshot,
