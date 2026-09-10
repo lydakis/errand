@@ -75,6 +75,7 @@ type Report struct {
 	Config        ConfigChoice
 	Existing      bool // config existed and was kept
 	Service       string
+	ServicePath   string
 	SocketPath    string
 	Info          *proto.Info
 }
@@ -319,6 +320,7 @@ func serviceActive(ctx context.Context, sys serviceSystem) (bool, error) {
 func installSystemd(ctx context.Context, opts Options, sys System, r *Report, home, exe, configPath, runnerPath string) bool {
 	r.Service = DefaultServiceName + ".service"
 	unitPath := filepath.Join(home, linuxUnitSubdir, r.Service)
+	r.ServicePath = unitPath
 	desired := renderSystemdUnit(exe, configPath, runnerPath)
 	changed, ok := writeDefinition(sys, r, "service", unitPath, desired, opts)
 	if !ok {
@@ -363,6 +365,7 @@ func installSystemd(ctx context.Context, opts Options, sys System, r *Report, ho
 func installLaunchAgent(ctx context.Context, opts Options, sys System, r *Report, home, exe, configPath, runnerPath string) bool {
 	r.Service = LaunchAgentLabel
 	plistPath := filepath.Join(home, darwinAgentSubdir, LaunchAgentLabel+".plist")
+	r.ServicePath = plistPath
 	logPath := filepath.Join(home, darwinLogSubdir, "errand.log")
 	desired := renderLaunchAgent(LaunchAgentLabel, exe, configPath, logPath, runnerPath)
 	changed, ok := writeDefinition(sys, r, "service", plistPath, desired, opts)
@@ -414,7 +417,7 @@ func acquireRestartLease(ctx context.Context, sys System, r *Report, socketPath 
 	}
 	var quiesceErr *QuiesceError
 	if errors.As(err, &quiesceErr) && quiesceErr.Status == 409 {
-		r.fail("service", errors.New(quiesceErr.Message))
+		r.fail("service", fmt.Errorf("%s; wait for jobs to finish, then run errand setup from a terminal or independent SSH connection, outside any Errand job on this runner", quiesceErr.Message))
 		return "", false
 	}
 	r.fail("service", fmt.Errorf("cannot reserve the idle runner through %s: %w", socketPath, err))
@@ -460,8 +463,7 @@ func ensureOnPath(sys System, r *Report, exe string, force, dryRun bool) {
 	}
 	if sys.Exists(link) {
 		if sys.IsSymlink(link) {
-			target, err := sys.Readlink(link)
-			if err == nil && symlinkTargetPath(link, target) == filepath.Clean(exe) {
+			if sys.SameFile(link, exe) {
 				r.RemoteCommand = ""
 				r.step("path", link+" points to "+exe, false)
 				return
@@ -501,13 +503,6 @@ func ensureOnPath(sys System, r *Report, exe string, force, dryRun bool) {
 	r.step("path", "linked "+link+" to "+exe+" (SSH callers find errand on PATH)", true)
 }
 
-func symlinkTargetPath(link, target string) string {
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(filepath.Dir(link), target)
-	}
-	return filepath.Clean(target)
-}
-
 func probe(ctx context.Context, sys System, r *Report, previousPID int, expectedVersion string) {
 	deadline := time.Now().Add(probeTimeout)
 	var lastErr error
@@ -528,14 +523,18 @@ func probe(ctx context.Context, sys System, r *Report, previousPID int, expected
 		if err == nil {
 			r.Info = &info
 			if expectedVersion != "" && info.Version != expectedVersion {
-				r.step("version", fmt.Sprintf("daemon %s; CLI %s. If behavior differs, check the service executable and update the runner.", info.Version, expectedVersion), false)
+				r.step("version", fmt.Sprintf("daemon %s after restart; CLI %s at %s. Check the executable in %s and any service overrides; preserve the runner config when updating its path, then rerun errand setup when idle.", info.Version, expectedVersion, r.Executable, r.ServicePath), false)
 			}
 			if r.Config.Transport == config.TransportLocal && (!info.LocalOnly || !info.SSHDisabled) {
 				r.fail("probe", fmt.Errorf("daemon at %s did not confirm local-only mode; check the service command, overrides, and binary version", r.SocketPath))
 				return
 			}
+			versionDetail := info.Version
+			if expectedVersion != "" && info.Version == expectedVersion {
+				versionDetail += " (matches CLI)"
+			}
 			r.step("probe", fmt.Sprintf("daemon %s answers on %s (%s/%s, %d cpu, kvm=%v, %d slots)",
-				info.Version, r.SocketPath, info.Facts.OS, info.Facts.Arch, info.Facts.NumCPU, info.Facts.KVM, info.MaxJobs), false)
+				versionDetail, r.SocketPath, info.Facts.OS, info.Facts.Arch, info.Facts.NumCPU, info.Facts.KVM, info.MaxJobs), false)
 			return
 		}
 		lastErr = err

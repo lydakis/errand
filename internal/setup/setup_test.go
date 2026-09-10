@@ -91,8 +91,17 @@ func (f *fakeSystem) Exists(p string) bool {
 	_, link := f.symlinks[p]
 	return file || link
 }
-func (f *fakeSystem) IsSymlink(p string) bool           { _, ok := f.symlinks[p]; return ok }
-func (f *fakeSystem) Readlink(p string) (string, error) { return f.symlinks[p], nil }
+func (f *fakeSystem) IsSymlink(p string) bool { _, ok := f.symlinks[p]; return ok }
+func (f *fakeSystem) SameFile(a, b string) bool {
+	// The fake models only direct links; real chains are tested on disk.
+	if target, ok := f.symlinks[a]; ok {
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(a), target)
+		}
+		a = target
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
+}
 func (f *fakeSystem) Symlink(target, link string) error { f.symlinks[link] = target; return nil }
 func (f *fakeSystem) Remove(p string) error             { delete(f.symlinks, p); delete(f.files, p); return nil }
 func (f *fakeSystem) Writable(dir string) bool {
@@ -318,7 +327,7 @@ func TestSetupRefusesToRestartRunnerWithActiveJobs(t *testing.T) {
 				t.Fatal(err)
 			}
 			refusal := stepErrorDetail(r, "service")
-			if !r.Failed() || !strings.Contains(refusal, tt.wantDetail) {
+			if !r.Failed() || !strings.Contains(refusal, tt.wantDetail) || !strings.Contains(refusal, "independent SSH") || !strings.Contains(refusal, "job on this runner") {
 				t.Fatalf("active runner was not refused: %+v", r.Steps)
 			}
 			if ran(f, tt.forbidden) {
@@ -749,18 +758,30 @@ func TestSetupRejectsSurvivingOldDaemonAndReleasesLease(t *testing.T) {
 }
 
 func TestSetupReportsDifferentVersionAfterRestart(t *testing.T) {
-	f := newFake(t, "linux")
-	f.probeInfo.Version = "0.1.0"
-	r, err := Run(context.Background(), Options{ExpectedVersion: "0.1.1"}, f)
-	if err != nil || r.Failed() || r.Info == nil || r.Info.Version != "0.1.0" {
-		t.Fatalf("version difference blocked setup: %v / %+v", err, r.Steps)
+	for _, platform := range []string{"linux", "darwin"} {
+		t.Run(platform, func(t *testing.T) {
+			f := newFake(t, platform)
+			servicePath := filepath.Join(f.home, linuxUnitSubdir, DefaultServiceName+".service")
+			if platform == "darwin" {
+				servicePath = filepath.Join(f.home, darwinAgentSubdir, LaunchAgentLabel+".plist")
+			}
+			f.files[servicePath] = "operator's custom service definition"
+			f.probeInfo.Version = "0.2.0"
+			r, err := Run(context.Background(), Options{ExpectedVersion: "0.2.1"}, f)
+			if err != nil || r.Failed() || r.Info == nil || r.Info.Version != "0.2.0" {
+				t.Fatalf("version difference blocked setup: %v / %+v", err, r.Steps)
+			}
+			detail := stepDetail(r, "version")
+			for _, want := range []string{"0.2.0", "0.2.1", r.Executable, servicePath, "executable"} {
+				if !strings.Contains(detail, want) {
+					t.Fatalf("version report missing %q: %s", want, detail)
+				}
+			}
+			if f.files[servicePath] != "operator's custom service definition" {
+				t.Fatal("version difference rewrote the service definition")
+			}
+		})
 	}
-	for _, step := range r.Steps {
-		if step.Name == "version" && strings.Contains(step.Detail, "0.1.0") && strings.Contains(step.Detail, "0.1.1") {
-			return
-		}
-	}
-	t.Fatal("version difference was not reported")
 }
 
 func TestSetupDoesNotBootstrapAfterBootoutFailure(t *testing.T) {

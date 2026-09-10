@@ -132,13 +132,21 @@ func TestLiveServiceLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, version := range []string{"live-v1", "live-v2"} {
-		cmd := exec.CommandContext(ctx, "go", "build", "-ldflags=-X main.version="+version, "-o", filepath.Join(home, version), "./cmd/errand")
+		cmd := exec.CommandContext(ctx, "go", "build", "-ldflags=-X main.version="+version, "-o", filepath.Join(home, "Cellar", "errand", version, "bin", "errand"), "./cmd/errand")
 		cmd.Dir = root
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("build %s: %v\n%s", version, err, out)
 		}
 	}
-	if err := os.Symlink(filepath.Join(home, "live-v1"), s.executable); err != nil {
+	opt := filepath.Join(home, "opt")
+	if err := os.MkdirAll(opt, 0755); err != nil {
+		t.Fatal(err)
+	}
+	stablePackage := filepath.Join(opt, "errand")
+	if err := os.Symlink("../Cellar/errand/live-v1", stablePackage); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(stablePackage, "bin", "errand"), s.executable); err != nil {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(home, "daemon.toml")
@@ -168,13 +176,21 @@ func TestLiveServiceLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if report.Info.Version != options.ExpectedVersion || report.Info.MaxJobs != 2 || report.Info.MaxQueued != 3 {
+		if report.Info.Version != options.ExpectedVersion || report.Info.MaxJobs != 2 || report.Info.MaxQueued != 3 || !report.Info.LocalOnly || !report.Info.SSHDisabled || !strings.Contains(stepDetail(report, "probe"), "matches CLI") {
 			t.Fatalf("unexpected live info: %+v", report.Info)
 		}
 		t.Logf("verified %s in service PID %d", report.Info.Version, pid)
 		return pid
 	}
 	firstPID := checkSetup()
+	servicePath := filepath.Join(home, linuxUnitSubdir, DefaultServiceName+".service")
+	if runtime.GOOS == "darwin" {
+		servicePath = filepath.Join(home, darwinAgentSubdir, LaunchAgentLabel+".plist")
+	}
+	originalService, err := s.ReadFile(servicePath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientDir := filepath.Join(home, ".config", "errand")
 	if err := os.MkdirAll(clientDir, 0700); err != nil {
 		t.Fatal(err)
@@ -251,11 +267,11 @@ func TestLiveServiceLifecycle(t *testing.T) {
 		t.Fatalf("busy setup changed process: %d / %v", pid, err)
 	}
 	t.Log("real job completed; busy setup refused without interruption")
-	// Simulate a package manager replacing its stable executable symlink.
-	if err := os.Symlink(filepath.Join(home, "live-v2"), s.executable+".new"); err != nil {
+	// Simulate Homebrew retargeting its opt directory while the daemon runs.
+	if err := os.Symlink("../Cellar/errand/live-v2", stablePackage+".new"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(s.executable+".new", s.executable); err != nil {
+	if err := os.Rename(stablePackage+".new", stablePackage); err != nil {
 		t.Fatal(err)
 	}
 	info, err := s.Probe(ctx, socket)
@@ -265,6 +281,9 @@ func TestLiveServiceLifecycle(t *testing.T) {
 	options.ExpectedVersion = "live-v2"
 	if pid := checkSetup(); pid == firstPID {
 		t.Fatal("upgrade kept the old PID")
+	}
+	if upgradedService, err := s.ReadFile(servicePath); err != nil || !bytes.Equal(originalService, upgradedService) {
+		t.Fatalf("upgrade changed the service definition: %s / %v", upgradedService, err)
 	}
 	// Exercise re-enabling an explicitly disabled setup-managed service.
 	if runtime.GOOS == "darwin" {

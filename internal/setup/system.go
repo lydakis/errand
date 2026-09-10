@@ -41,7 +41,7 @@ type System interface {
 	WriteFile(path string, data []byte, mode os.FileMode) error
 	Exists(path string) bool
 	IsSymlink(path string) bool
-	Readlink(path string) (string, error)
+	SameFile(a, b string) bool
 	Symlink(target, link string) error
 	Remove(path string) error
 	Writable(dir string) bool
@@ -158,9 +158,15 @@ func (RealSystem) IsSymlink(path string) bool {
 	return err == nil && fi.Mode()&os.ModeSymlink != 0
 }
 
-func (RealSystem) Readlink(path string) (string, error) { return os.Readlink(path) }
-func (RealSystem) Symlink(target, link string) error    { return os.Symlink(target, link) }
-func (RealSystem) Remove(path string) error             { return os.Remove(path) }
+// SameFile follows the full symlink chain, including symlinked directories.
+// Resolve only for comparison; service definitions keep their stable paths.
+func (RealSystem) SameFile(a, b string) bool {
+	left, leftErr := os.Stat(a)
+	right, rightErr := os.Stat(b)
+	return leftErr == nil && rightErr == nil && os.SameFile(left, right)
+}
+func (RealSystem) Symlink(target, link string) error { return os.Symlink(target, link) }
+func (RealSystem) Remove(path string) error          { return os.Remove(path) }
 
 func (RealSystem) Writable(dir string) bool {
 	probe, err := os.CreateTemp(dir, ".errand-writable-*")

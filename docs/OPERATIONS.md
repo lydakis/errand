@@ -306,6 +306,9 @@ execute again.
 Keeping client and daemon versions aligned makes troubleshooting easier. Install the update on each
 client and runner, then run `errand setup` on each runner when it is idle.
 This restarts the daemon; replacing the executable on disk is not enough.
+Run setup from a terminal on the runner or an independent SSH connection.
+An Errand job cannot restart its own runner because that job keeps it busy.
+Client-only machines need the binary upgrade but no setup.
 Version differences do not block jobs or transfers. `errand peers` shows runner
 versions, and `errand doctor` reports differences as warnings. If a command
 behaves unexpectedly, check those versions and update the installations.

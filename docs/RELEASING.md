@@ -156,6 +156,18 @@ when the runner is idle to restart it on the new version. Setup preserves the
 existing runner config and refuses to restart while jobs are active. Callers
 need no service restart.
 
+On each machine, run:
+
+```sh
+brew upgrade lydakis/errand/errand
+```
+
+On runners, then run `errand setup` from a terminal or independent SSH
+connection when idle. Do not run setup through an Errand job on that runner:
+the job itself prevents the restart. Setup reports the daemon version after
+restart and whether it matches the CLI. A difference remains advisory; inspect
+the reported service definition and any overrides if the old version remains.
+
 If a service was previously installed from a versioned or temporary executable
 path, inspect its definition and update that executable path while preserving
 the config path. Do not use `setup --force` solely for an upgrade: it can also

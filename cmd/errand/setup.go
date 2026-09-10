@@ -26,7 +26,9 @@ Plain setup respects the saved transport setting, which you can edit anytime.
 Install and start the platform service (systemd user unit + linger on Linux,
 a launch agent on macOS), and prove the daemon answers. Setup preserves
 unrelated configuration and service definitions unless --force is given.
-It restarts the service only after the runner has no active jobs.`
+It refuses to restart while jobs are active. After upgrading, run setup when
+idle from a terminal or independent SSH connection, outside an Errand job
+on this runner.`
 
 func cmdSetup(args []string) int {
 	return cmdSetupTo(args, os.Stdout, os.Stderr, setup.RealSystem{})
