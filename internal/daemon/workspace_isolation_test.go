@@ -96,6 +96,11 @@ func TestWorkspaceMetadataWaitDoesNotHoldAdmissionLock(t *testing.T) {
 		select {
 		case resp := <-done:
 			resp.Body.Close()
+			if resp.StatusCode == http.StatusCreated {
+				// Admission finishes before execution. Do not remove the
+				// daemon's temporary state while the job is still writing it.
+				waitTerminal(t, ts.URL, id)
+			}
 		case <-time.After(5 * time.Second):
 			t.Error("submission failed to finish")
 		}

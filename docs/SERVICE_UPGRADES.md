@@ -1,8 +1,8 @@
 # Service upgrades
 
-Status: runtime and advisory-warning slice for review. This is not yet a safe
-Homebrew migration from a running released 0.2.1 daemon. Do not release this
-slice as a complete upgrade fix until the first-migration test below passes.
+The daemon retains its executable independently of Homebrew. Adopting new
+daemon code remains an explicit, idle `errand setup` operation. Existing
+installations without a private runtime require a manual stop before upgrading.
 
 ## Incident and existing lifecycle
 
@@ -39,10 +39,9 @@ replacing bytes that another daemon may be using.
 The service manager still launches the installed CLI with the same arguments,
 configuration, and environment. Re-execution preserves its PID. Existing
 launchd/systemd definitions need no rewrite. An ordinary package upgrade can
-remove a candidate daemon's original installation while its runtime executable
-remains present. Jobs continue on that daemon. George selected explicit idle
-`errand setup` to adopt the installed version; there is no automatic replacement
-or drain mode.
+remove the daemon's original installation while its runtime executable
+remains present. Jobs continue on that daemon. Run `errand setup` while idle
+to adopt the installed version. There is no automatic replacement or drain mode.
 
 Runtime generations are retained. They are not snapshot or job caches and
 are not removed by `errand gc`. This costs one binary per distinct build per
@@ -74,28 +73,44 @@ the operator to check `errand version` on the runner before choosing setup.
 The runner's installed binary version is unknown to the remote client: a
 client/server mismatch alone is not evidence that setup will change anything.
 
-## First migration remains a release blocker
+## Upgrading an older installation
 
-A running 0.2.1 process has no runtime-copy startup step. Installing this code
-cannot relocate its existing execution. Restarting it during an active job
-would violate the job contract. Waiting for an upgrade job to finish inside a
-synchronous post-install restart can deadlock on that very job. A background
-restart does not protect the executable from immediate Homebrew cleanup.
+Daemons running 0.2.1 or earlier execute from their installation directory.
+Installing a new version cannot move an already-running process into a private
+runtime. There is no automatic migration or Homebrew package retention.
 
-The inspected Homebrew source at commit
-`c1016b595ee8ffc5624a8e63071fe235abbbba5c` selects old kegs in
-`Formula#eligible_kegs_for_cleanup` and removes them in `Cleanup#cleanup_keg`.
-`FormulaInstaller#post_install` catches failures; failing that hook is not a
-reliable cleanup veto. Homebrew also honors `.keepme` references to existing
-paths through `Keg#keepme_refs`. This may provide a migration retention
-mechanism, but this slice does not write markers into package-managed kegs.
+On each runner, let running and queued jobs finish and pause new submissions.
+Then use a local terminal or SSH session to stop the old daemon before upgrading.
+Do not perform this upgrade through an Errand job on that runner.
 
-Before adopting retention, prove it runs before automatic cleanup, works in
-Homebrew's install sandbox and with custom service paths, survives a failed
-migration, and releases only its own reference after every protected process
-has stopped. Do not turn stale marker cleanup into another way to unlink a
-live executable. Do not require cleanup environment variables or a rescue
-terminal as the normal upgrade procedure.
+For the default macOS user service:
+
+```sh
+launchctl bootout "gui/$(id -u)/dev.lydakis.errand"
+```
+
+For the default Linux user service:
+
+```sh
+systemctl --user stop errand.service
+```
+
+For a custom service or foreground daemon, stop it through its own service
+manager or terminal. Confirm every old daemon has stopped before continuing.
+Then upgrade and start the installed version:
+
+```sh
+brew upgrade lydakis/errand/errand
+errand setup
+errand doctor
+```
+
+Use the same config path with `setup --config PATH` if the service uses a custom
+configuration. Keep existing config and state; no data conversion is required.
+Once the daemon uses a private runtime, subsequent package upgrades can leave
+it running until the next idle setup.
+
+Client-only machines have no daemon to stop. They only need the binary upgrade.
 
 ## Acceptance
 
@@ -118,13 +133,6 @@ after the new daemon starts. macOS network acceptance requires the existing
 Application Firewall to be enabled; the test never changes it. Use a peer
 with two available job slots so a waiting job cannot starve its own probe.
 
-Before release, add a disposable Homebrew migration from the actual released
-0.2.1 binary/service layout with automatic cleanup enabled. Require an active
-job to finish and results to remain remotely retrievable, then complete idle
-setup and cleanup of the old installation without configuration drift. Repeat
-with an idle service and migration failure. Keep Linux/systemd coverage and
-macOS/launchd coverage, including the real macOS firewall path.
-
 ## Validation recorded for this slice
 
 - Review fixes passed runtime regressions for relative paths, reuse with
@@ -143,8 +151,8 @@ macOS/launchd coverage, including the real macOS firewall path.
 - The first broad race runs caught advisory probes occurring before local
   forward binding. The fix moved probes after local checks; the existing
   forwarding regression and changed-package suites then passed.
-- No production service, firewall setting, package installation, or published
-  release was changed. No actual released-0.2.1 Homebrew migration was tested.
+- Service acceptance uses isolated services and temporary state. Production
+  service definitions, installed packages, and firewall settings are untouched.
 
 ## Herdr comparison
 

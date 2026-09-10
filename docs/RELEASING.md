@@ -150,10 +150,11 @@ formula over the stable tap entry.
 
 ## Runner upgrades
 
-The candidate runtime-copy change is not yet release-ready for an existing
-0.2.1 service. See [service upgrade design and acceptance](SERVICE_UPGRADES.md)
-for the first-migration blocker. A stable Homebrew path alone does not protect
-an already-running Cellar executable from cleanup and macOS firewall drops.
+For runners on 0.2.1 or earlier, follow the
+[manual upgrade procedure](SERVICE_UPGRADES.md#upgrading-an-older-installation):
+let jobs finish, stop the old daemon, upgrade the package, then run `errand setup`.
+Use a local terminal or SSH, not an Errand job on the runner being upgraded.
+The formula does not migrate running daemons or retain old packages.
 
 Upgrade clients and runners together when practical, then run `errand setup`
 on machines that should accept jobs. Version differences are advisory and do
@@ -161,7 +162,7 @@ not block commands; check `errand peers` or `errand doctor` when troubleshooting
 Setup owns the service; do not also run it through `brew services`.
 
 When invoked through the stable Homebrew path, setup records that path. A daemon
-started with the candidate runtime-copy implementation re-executes private,
+started with the runtime-copy implementation re-executes private,
 immutable bytes before listening. Package upgrades leave that daemon and its
 jobs running; plain `errand setup` adopts the installed version when idle.
 Setup preserves the runner config and refuses to restart active jobs.
@@ -171,10 +172,6 @@ Client-only machines need only the binary upgrade:
 ```sh
 brew upgrade lydakis/errand/errand
 ```
-
-An already-running 0.2.1 daemon still executes from the Cellar. Do not assume
-the command above preserves its network reachability. The first-migration
-retention mechanism and actual released-version acceptance remain unfinished.
 
 An Errand job cannot run setup on its own runner because that job keeps it
 busy. Setup reports the daemon version after restart and whether it matches
