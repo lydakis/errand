@@ -5,11 +5,60 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/lydakis/errand/internal/proto"
 )
+
+// Include ignored dependencies: enumerating policy files inside them used to
+// dominate Git selection even though none of their contents were shipped.
+func BenchmarkGitSelection(b *testing.B) {
+	b.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	b.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
+	b.Setenv("XDG_CONFIG_HOME", b.TempDir())
+	root := b.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "--quiet").CombinedOutput(); err != nil {
+		b.Fatalf("git init: %v: %s", err, out)
+	}
+	write := func(name string, content []byte) {
+		b.Helper()
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			b.Fatal(err)
+		}
+		if err := os.WriteFile(path, content, 0o600); err != nil {
+			b.Fatal(err)
+		}
+	}
+	write(".gitignore", []byte("dependencies/\n"))
+	wantPaths := []string{".gitignore"}
+	for i := range 128 {
+		name := fmt.Sprintf("src/file-%03d", i)
+		write(name, []byte("source"))
+		wantPaths = append(wantPaths, name)
+		write(fmt.Sprintf("dependencies/pkg-%03d/.gitignore", i), []byte("build/\n"))
+		for j := range 16 {
+			write(fmt.Sprintf("dependencies/pkg-%03d/file-%02d", i, j), []byte("dependency"))
+		}
+	}
+	paths, _, _, err := SelectFiles(root)
+	if err != nil {
+		b.Fatal(err)
+	}
+	if !slices.Equal(paths, wantPaths) {
+		b.Fatalf("selected paths = %v, want %v", paths, wantPaths)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		if _, _, _, err := SelectFiles(root); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
 
 // Equal payload sizes distinguish per-file overhead from byte throughput.
 // Fixture creation is untimed; these measure a warm local filesystem.

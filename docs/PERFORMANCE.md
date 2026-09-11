@@ -78,6 +78,46 @@ rules. Archive output goes to `io.Discard`; these are preparation costs, not
 network or runner measurements. Cached packing still reads and hashes each
 file to enforce snapshot consistency.
 
+For Git selection with an ignored dependency tree:
+
+```sh
+go test ./internal/snapshot -run '^$' -bench '^BenchmarkGitSelection$' -benchtime=5x -count=3
+```
+
+This fixture selects 128 source files and excludes 128 dependency directories
+containing 2,176 files, including nested ignore files. It measures repository
+metadata, file selection, and the two observations of the frozen ignore policy.
+Fixture construction and validation of the selected paths are outside the
+timer. Global and system Git configuration files and default ignore files are
+isolated.
+
+## Runner baseline capture
+
+Before a command starts, the runner preserves an independent, durable copy of
+the submitted files for later change merging. To measure this step separately:
+
+```sh
+go test ./internal/changes -run '^$' -bench '^BenchmarkCaptureWorkspaceBase$' -benchtime=1x -count=5
+```
+
+The two shapes each contain 8 MiB, split across one file or 512 files. Timing
+includes cloning or copying, content verification, syncing, and publication;
+fixture construction and cleanup are excluded. Set `TMPDIR` to a writable
+directory on the runner's job-storage filesystem. A RAM-backed `/tmp` hides
+disk flush costs and is not representative of jobs stored on disk.
+Record the filesystem type, mount options, and storage hardware with the
+results. Clone, copy, and sync costs can differ between filesystems on the
+same operating system; a result on Btrfs is not a Linux-wide guarantee.
+Each capture uses at most 16 file workers. Check concurrent submissions and
+filesystems without cloning before generalizing the measured gains or tuning
+that limit.
+
+Measure CLI invocation to first command output as well as CLI exit when
+evaluating startup improvements. Successful completion includes result capture
+and cleanup after the command has already produced output. Report first-run
+and cached runs separately; cached content still requires validation and a
+fresh baseline before execution.
+
 ## First measurement
 
 Results and interpretation below use the September 4, 2026 local run.

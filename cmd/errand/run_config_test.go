@@ -123,15 +123,15 @@ func TestConfigExplicitFalseAndUsageErrors(t *testing.T) {
 
 func TestConfigEntryPointDoesNotResumeAutomaticApplies(t *testing.T) {
 	if os.Getenv("ERRAND_CONFIG_ENTRYPOINT_TEST") == "1" {
+		// Override TestMain's isolated state after it runs. Resuming applies
+		// must reject this relative path and make the test fail.
+		t.Setenv("XDG_STATE_HOME", "relative-state-root")
 		os.Args = []string{"errand", "config", "--profile", "inspect", "--json"}
 		main()
 		return
 	}
 	writeClientConfig(t, "default_peer = 'test'\n[peers.test]\nurl = 'http://runner.invalid'\n[profiles.inspect.changes]\napply_on_success = true\n")
 	t.Chdir(t.TempDir())
-	// Resuming applications would reject this invalid state root and emit a
-	// diagnostic. Inspection must never enter that path.
-	t.Setenv("XDG_STATE_HOME", "relative-state-root")
 	command := exec.Command(os.Args[0], "-test.run=^TestConfigEntryPointDoesNotResumeAutomaticApplies$")
 	command.Env = append(os.Environ(), "ERRAND_CONFIG_ENTRYPOINT_TEST=1")
 	var stdout, stderr bytes.Buffer

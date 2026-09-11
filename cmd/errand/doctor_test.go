@@ -102,6 +102,9 @@ func TestDoctorProbeDiagnostics(t *testing.T) {
 
 func TestDoctorOnlyRequestsInfoAndDoesNotResumeApplies(t *testing.T) {
 	if os.Getenv("ERRAND_DOCTOR_ENTRYPOINT_TEST") == "1" {
+		// Override TestMain's isolated state after it runs, so accidental
+		// automatic-apply resumption still emits a diagnostic.
+		t.Setenv("XDG_STATE_HOME", "invalid-relative-state")
 		os.Args = []string{"errand", "doctor", "--json"}
 		main()
 		return
@@ -115,7 +118,6 @@ func TestDoctorOnlyRequestsInfoAndDoesNotResumeApplies(t *testing.T) {
 	defer server.Close()
 	writeClientConfig(t, fmt.Sprintf("default_peer = 'test'\n[peers.test]\nurl = %q\n", server.URL))
 	t.Chdir(t.TempDir())
-	t.Setenv("XDG_STATE_HOME", "invalid-relative-state")
 	command := exec.Command(os.Args[0], "-test.run=^TestDoctorOnlyRequestsInfoAndDoesNotResumeApplies$")
 	command.Env = append(os.Environ(), "ERRAND_DOCTOR_ENTRYPOINT_TEST=1")
 	var out, errOut bytes.Buffer

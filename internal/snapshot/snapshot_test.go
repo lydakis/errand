@@ -671,6 +671,36 @@ func TestSelectionGuardRejectsChangedIgnoredGitPolicy(t *testing.T) {
 	}
 }
 
+func TestSelectionGuardIgnoresPolicyInsideExcludedDirectory(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "--quiet").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	writeFile(t, root, ".gitignore", "dependencies/\n")
+	writeFile(t, root, "dependencies/.gitignore", "!secret\n")
+	writeFile(t, root, "dependencies/secret", "excluded")
+	writeFile(t, root, "keep", "kept")
+	paths, _, policy, guard, err := SelectFilesGuarded(root, SelectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(paths, "keep") || slices.Contains(paths, "dependencies/secret") {
+		t.Fatalf("selected paths = %v", paths)
+	}
+	matcher, err := pathpolicy.Compile(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !matcher.Ignored("dependencies/secret", false) {
+		t.Fatal("nested rule reopened an excluded directory")
+	}
+	writeFile(t, root, "dependencies/.gitignore", "!different-secret\n")
+	if err := guard.Verify(); err != nil {
+		t.Fatalf("irrelevant policy change invalidated selection: %v", err)
+	}
+}
+
 func TestPolicyLinesDropsInertLines(t *testing.T) {
 	got := policyLines([]byte("\n# comment\nvalue\r\n\\#literal\n"))
 	if want := []string{"value", `\#literal`}; !slices.Equal(got, want) {

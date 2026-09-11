@@ -158,6 +158,9 @@ func TestAccessDenyCLI(t *testing.T) {
 
 func TestAccessEntryPointDoesNotResumeAutomaticApplies(t *testing.T) {
 	if os.Getenv("ERRAND_ACCESS_ENTRYPOINT_TEST") == "1" {
+		// Override TestMain's isolated state after it runs, so accidental
+		// automatic-apply resumption still emits a diagnostic.
+		t.Setenv("XDG_STATE_HOME", "relative-state-root")
 		os.Args = []string{"errand", "access", "--json"}
 		main()
 		return
@@ -173,7 +176,6 @@ func TestAccessEntryPointDoesNotResumeAutomaticApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(t.TempDir())
-	t.Setenv("XDG_STATE_HOME", "relative-state-root")
 	command := exec.Command(os.Args[0], "-test.run=^TestAccessEntryPointDoesNotResumeAutomaticApplies$")
 	command.Env = append(os.Environ(), "ERRAND_ACCESS_ENTRYPOINT_TEST=1")
 	var stdout, stderr bytes.Buffer

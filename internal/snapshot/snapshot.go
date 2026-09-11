@@ -20,6 +20,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
@@ -196,29 +197,29 @@ func validateSnapshotRoot(root string, opts SelectOptions) error {
 }
 
 func gitInfo(root string) (GitInfo, error) {
-	inside, err := exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree").Output()
+	// One machine-readable status reports both HEAD and dirty state.
+	out, err := exec.Command("git", "-C", root, "status", "--porcelain=v2", "--branch", "--no-ahead-behind", "-z").Output()
 	if err != nil {
-		if hasGitMarker(root) {
-			return GitInfo{}, fmt.Errorf("snapshot: detecting git repository: %w", err)
+		// A failed status can mean a broken repository, including one whose
+		// metadata lives outside the workspace through GIT_DIR. Distinguish
+		// that from a non-Git directory before allowing recursive selection.
+		inside, _ := exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree").Output()
+		if strings.TrimSpace(string(inside)) == "true" || hasGitMarker(root) {
+			return GitInfo{}, fmt.Errorf("snapshot: reading git status: %w", err)
 		}
 		return GitInfo{}, nil
 	}
-	if strings.TrimSpace(string(inside)) != "true" {
-		return GitInfo{}, nil
-	}
 	gi := GitInfo{Repository: true}
-	out, err := exec.Command("git", "-C", root, "rev-parse", "--verify", "--quiet", "HEAD").Output()
-	if err == nil {
-		gi.Commit = strings.TrimSpace(string(out))
-	} else if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
-		return gi, fmt.Errorf("snapshot: resolving git HEAD: %w", err)
-	}
-	st, err := exec.Command("git", "-C", root, "status", "--porcelain").Output()
-	if err != nil {
-		return gi, fmt.Errorf("snapshot: reading git status: %w", err)
-	}
-	if len(strings.TrimSpace(string(st))) > 0 {
-		gi.Dirty = true
+	for record := range strings.SplitSeq(string(out), "\x00") {
+		if commit, ok := strings.CutPrefix(record, "# branch.oid "); ok {
+			if commit != "(initial)" {
+				gi.Commit = commit
+			}
+		} else if record != "" && !strings.HasPrefix(record, "# ") {
+			gi.Dirty = true
+			// Headers precede changes; rename source paths can resemble headers.
+			break
+		}
 	}
 	return gi, nil
 }
@@ -276,33 +277,35 @@ func gitListFiles(root string) ([]string, error) {
 }
 
 func stableGitSelection(root string, listGitFiles func(string) ([]string, error), caches ...proto.CacheBinding) ([]string, proto.SelectionPolicy, error) {
-	paths, err := listGitFiles(root)
+	// Each round finishes both independent reads before the next round starts.
+	// Preserve the two observations that reject changes during selection.
+	read := func() ([]string, proto.SelectionPolicy, error) {
+		var paths []string
+		var pathsErr error
+		var reads sync.WaitGroup
+		reads.Go(func() {
+			paths, pathsErr = listGitFiles(root)
+			if pathsErr == nil {
+				paths, pathsErr = withoutCachePaths(root, paths, caches)
+			}
+		})
+		policy, policyErr := gitSelectionPolicy(root, caches)
+		reads.Wait()
+		if err := errors.Join(pathsErr, policyErr); err != nil {
+			return nil, proto.SelectionPolicy{}, err
+		}
+		return paths, policy, nil
+	}
+	paths, policy, err := read()
 	if err != nil {
 		return nil, proto.SelectionPolicy{}, err
 	}
-	paths, err = withoutCachePaths(root, paths, caches)
-	if err != nil {
-		return nil, proto.SelectionPolicy{}, err
-	}
-	policy, err := gitSelectionPolicy(root, caches)
-	if err != nil {
-		return nil, proto.SelectionPolicy{}, err
-	}
-	afterPaths, err := listGitFiles(root)
-	if err != nil {
-		return nil, proto.SelectionPolicy{}, err
-	}
-	afterPaths, err = withoutCachePaths(root, afterPaths, caches)
-	if err != nil {
-		return nil, proto.SelectionPolicy{}, err
-	}
-	afterPolicy, err := gitSelectionPolicy(root, caches)
+	afterPaths, afterPolicy, err := read()
 	if err != nil {
 		return nil, proto.SelectionPolicy{}, err
 	}
 	if !slices.Equal(paths, afterPaths) || policy.Prefix != afterPolicy.Prefix ||
-		policy.CaseFold != afterPolicy.CaseFold ||
-		!slices.Equal(policy.Ignore, afterPolicy.Ignore) {
+		policy.CaseFold != afterPolicy.CaseFold || !slices.Equal(policy.Ignore, afterPolicy.Ignore) {
 		return nil, proto.SelectionPolicy{}, fmt.Errorf("Git selection policy changed while selecting files")
 	}
 	return paths, policy, nil
@@ -313,43 +316,43 @@ func gitSelectionPolicy(root string, caches []proto.CacheBinding) (proto.Selecti
 	if err != nil {
 		return proto.SelectionPolicy{}, err
 	}
-	var patterns []string
-	if global, ok, err := gitConfigPath(root, "core.excludesFile"); err != nil {
-		return proto.SelectionPolicy{}, err
-	} else if ok {
-		if !filepath.IsAbs(global) {
+	var globalLines, infoLines, ignoreFiles []string
+	var globalErr, infoErr, ignoreErr, caseErr error
+	var caseFold bool
+	var reads sync.WaitGroup
+	// Read independent policy sources together, then combine them in Git's
+	// precedence order. Every reader finishes before the next observation.
+	reads.Go(func() {
+		global, ok, err := gitConfigPath(root, "core.excludesFile")
+		if err != nil {
+			globalErr = err
+			return
+		}
+		if !ok {
+			global, globalErr = defaultGitExcludesPath()
+			if globalErr != nil {
+				return
+			}
+		} else if !filepath.IsAbs(global) {
 			global = filepath.Join(worktreeRoot, global)
 		}
-		lines, err := optionalPolicyFileFollowingSymlinks(global, "")
+		globalLines, globalErr = optionalPolicyFileFollowingSymlinks(global, "")
+	})
+	reads.Go(func() {
+		infoPath, err := gitPath(root, "info/exclude")
 		if err != nil {
-			return proto.SelectionPolicy{}, err
+			infoErr = err
+			return
 		}
-		patterns = append(patterns, lines...)
-	} else {
-		global, err := defaultGitExcludesPath()
-		if err != nil {
-			return proto.SelectionPolicy{}, err
-		}
-		lines, err := optionalPolicyFileFollowingSymlinks(global, "")
-		if err != nil {
-			return proto.SelectionPolicy{}, err
-		}
-		patterns = append(patterns, lines...)
-	}
-	infoPath, err := gitPath(root, "info/exclude")
-	if err != nil {
+		infoLines, infoErr = optionalPolicyFileFollowingSymlinks(infoPath, "")
+	})
+	reads.Go(func() { ignoreFiles, ignoreErr = gitIgnorePolicyFiles(root, worktreeRoot, prefix, caches) })
+	reads.Go(func() { caseFold, caseErr = gitConfigBool(root, "core.ignoreCase") })
+	reads.Wait()
+	if err := errors.Join(globalErr, infoErr, ignoreErr, caseErr); err != nil {
 		return proto.SelectionPolicy{}, err
 	}
-	lines, err := optionalPolicyFileFollowingSymlinks(infoPath, "")
-	if err != nil {
-		return proto.SelectionPolicy{}, err
-	}
-	patterns = append(patterns, lines...)
-
-	ignoreFiles, err := gitIgnorePolicyFiles(root, worktreeRoot, prefix, caches)
-	if err != nil {
-		return proto.SelectionPolicy{}, err
-	}
+	patterns := append(globalLines, infoLines...)
 	sort.Slice(ignoreFiles, func(i, j int) bool {
 		leftDepth := strings.Count(ignoreFiles[i], "/")
 		rightDepth := strings.Count(ignoreFiles[j], "/")
@@ -368,10 +371,6 @@ func gitSelectionPolicy(root string, caches []proto.CacheBinding) (proto.Selecti
 			return proto.SelectionPolicy{}, err
 		}
 		patterns = append(patterns, lines...)
-	}
-	caseFold, err := gitConfigBool(root, "core.ignoreCase")
-	if err != nil {
-		return proto.SelectionPolicy{}, err
 	}
 	policy := proto.SelectionPolicy{Prefix: prefix, Ignore: patterns, CaseFold: caseFold}
 	if _, err := pathpolicy.Compile(policy); err != nil {
@@ -405,15 +404,26 @@ func gitIgnorePolicyFiles(root, worktreeRoot, prefix string, caches []proto.Cach
 	}
 	commands := [][]string{
 		{"ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ".gitignore", ":(glob)**/.gitignore"},
-		{"ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", ".gitignore", ":(glob)**/.gitignore"},
+		// A policy file may itself be ignored while still affecting siblings.
+		// Keep those files, but let Git prune fully excluded directories: their
+		// nested rules cannot reopen the excluded parent.
+		{"ls-files", "-z", "--others", "--ignored", "--directory", "--exclude-standard", "--", ".gitignore", ":(glob)**/.gitignore"},
 	}
-	for _, args := range commands {
-		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).Output()
-		if err != nil {
-			return nil, err
-		}
+	outputs := make([][]byte, len(commands))
+	errs := make([]error, len(commands))
+	var reads sync.WaitGroup
+	for i, args := range commands {
+		reads.Go(func() {
+			outputs[i], errs[i] = exec.Command("git", append([]string{"-C", root}, args...)...).Output()
+		})
+	}
+	reads.Wait()
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	for _, out := range outputs {
 		for _, name := range strings.Split(string(out), "\x00") {
-			if name != "" {
+			if name != "" && !strings.HasSuffix(name, "/") {
 				if prefix != "" {
 					name = path.Join(prefix, name)
 				}
