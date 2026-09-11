@@ -358,9 +358,10 @@ type StorageCategory struct {
 }
 
 type NamedCacheStats struct {
-	Items     int   `json:"items"`
-	Bytes     int64 `json:"bytes"`
-	Protected int   `json:"protected"`
+	Unmeasured int   `json:"unmeasured,omitempty"`
+	Items      int   `json:"items"`
+	Bytes      int64 `json:"bytes"`
+	Protected  int   `json:"protected"`
 }
 
 // ChangeStorageStats describes fetched-change storage for the runner OS account.

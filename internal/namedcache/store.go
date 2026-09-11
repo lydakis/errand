@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -54,32 +55,44 @@ func (k Key) hash() string {
 	return hex.EncodeToString(digest[:])
 }
 
-// Entry reports durable state. Bytes is measured at the last release, so an
-// active cache's current size is unknown. LeaseID remains set across restart.
+// Entry reports durable state. Bytes is measured at directory-cache release or
+// tree-cache GC; current active sizes are unknown. Leases survive restart.
 type Entry struct {
-	Key      Key       `json:"key"`
-	LeaseID  string    `json:"lease_id,omitempty"`
-	LastUsed time.Time `json:"last_used"`
-	Bytes    int64     `json:"bytes"`
+	Key          Key       `json:"key"`
+	LeaseID      string    `json:"lease_id,omitempty"`
+	LastUsed     time.Time `json:"last_used"`
+	Bytes        int64     `json:"bytes"`
+	BytesUnknown bool      `json:"bytes_unknown,omitempty"`
+	Tree         bool      `json:"tree,omitempty"`
+	Holders      []string  `json:"-"` // read from durable per-job holder files
 }
+
+func (e Entry) Protected() bool { return e.LeaseID != "" || len(e.Holders) != 0 }
 
 type record struct {
 	Version int `json:"version"`
 	Entry
 }
 
+const maxRecordBytes = 16 << 10
+
 // Store exclusively owns a directory for its lifetime. Its size budget is an
 // eviction target for GC, not a disk quota on running jobs.
 type Store struct {
-	root     *os.Root
-	dir      string
-	identity os.FileInfo
-	lockFile *os.File
-	mu       chan struct{}
-	closed   bool
-	maxBytes int64
-	ttl      time.Duration
-	now      func() time.Time
+	treeGateMu sync.Mutex
+	treeGates  map[string]*treeGate
+	retireWG   sync.WaitGroup
+	operations sync.RWMutex // Close waits for GC filesystem work outside mu.
+	retiring   map[string]bool
+	root       *os.Root
+	dir        string
+	identity   os.FileInfo
+	lockFile   *os.File
+	mu         chan struct{}
+	closed     bool
+	maxBytes   int64
+	ttl        time.Duration
+	now        func() time.Time
 }
 
 func Open(dir string, maxBytes int64, ttl time.Duration) (*Store, error) {
@@ -167,6 +180,11 @@ func (s *Store) verifyRoot() error {
 // Close does not release job leases. Recovery must first settle the associated
 // process scopes, then explicitly release their leases.
 func (s *Store) Close() error {
+	s.operations.Lock()
+	defer s.operations.Unlock()
+	// Publication schedules retirements while holding operations.RLock.
+	// No new retirement can be added once Close owns the write lock.
+	s.retireWG.Wait()
 	<-s.mu
 	defer s.unlock()
 	if s.closed {
@@ -215,6 +233,9 @@ func (s *Store) acquire(ctx context.Context, key Key, jobID string, shared bool)
 		if err != nil {
 			return "", err
 		}
+		if len(r.Holders) != 0 {
+			return "", ErrBusy
+		}
 		if r.LeaseID != "" {
 			if !shared || r.LeaseID != jobID {
 				return "", ErrBusy
@@ -245,26 +266,53 @@ func (s *Store) Release(ctx context.Context, key Key, jobID string) error {
 	if !proto.ValidULID(jobID) {
 		return ErrLeaseMismatch
 	}
+	s.operations.RLock()
+	defer s.operations.RUnlock()
+	if err := s.lock(ctx); err != nil {
+		return err
+	}
+	name := key.hash()
+	r, err := s.read(name)
+	if err != nil {
+		s.unlock()
+		return err
+	}
+	if r.LeaseID != jobID {
+		s.unlock()
+		return ErrLeaseMismatch
+	}
+	if err := s.validateData(name); err != nil {
+		s.unlock()
+		return err
+	}
+	identity, err := s.root.Lstat(name + "/data")
+	s.unlock()
+	if err != nil {
+		return err
+	}
+	// The durable exclusive lease protects this cache while unrelated metadata
+	// operations proceed. Revalidate its identity before publishing accounting.
+	size, err := s.measure(ctx, name+"/data")
+	if err != nil {
+		return err
+	}
 	if err := s.lock(ctx); err != nil {
 		return err
 	}
 	defer s.unlock()
-	name := key.hash()
-	r, err := s.read(name)
+	r, err = s.read(name)
 	if err != nil {
 		return err
 	}
-	if r.LeaseID != jobID {
+	current, err := s.root.Lstat(name + "/data")
+	if err != nil {
+		return err
+	}
+	if r.LeaseID != jobID || !os.SameFile(identity, current) {
 		return ErrLeaseMismatch
 	}
-	if err := s.validateData(name); err != nil {
-		return err
-	}
-	bytes, err := s.measure(ctx, name+"/data")
-	if err != nil {
-		return err
-	}
-	r.Bytes, r.LeaseID, r.LastUsed = bytes, "", s.now()
+	r.Bytes, r.LeaseID, r.LastUsed = size, "", s.now()
+	r.BytesUnknown = false
 	return s.write(name, r)
 }
 
@@ -277,22 +325,41 @@ func (s *Store) Discard(ctx context.Context, key Key, jobID string) error {
 	if !proto.ValidULID(jobID) {
 		return ErrLeaseMismatch
 	}
+	s.operations.RLock()
+	defer s.operations.RUnlock()
 	if err := s.lock(ctx); err != nil {
 		return err
 	}
-	defer s.unlock()
 	name := key.hash()
 	r, err := s.read(name)
 	if err != nil {
+		s.unlock()
 		return err
 	}
 	if r.LeaseID != jobID {
+		s.unlock()
 		return ErrLeaseMismatch
 	}
-	return s.retire(name)
+	tomb, err := s.detach(name)
+	s.unlock()
+	if err != nil {
+		return err
+	}
+	return s.removeRetired(tomb)
 }
 
 func (s *Store) read(name string) (record, error) {
+	r, err := s.readRecord(name)
+	if err == nil && r.Version == 2 {
+		r.Holders, err = s.readHolders(name)
+		if err == nil && (r.LeaseID != "" && len(r.Holders) != 0) {
+			err = fmt.Errorf("named cache has both exclusive and shared holders")
+		}
+	}
+	return r, err
+}
+
+func (s *Store) readRecord(name string) (record, error) {
 	var r record
 	info, err := s.root.Lstat(name)
 	if err != nil {
@@ -310,10 +377,10 @@ func (s *Store) read(name string) (record, error) {
 	if err != nil {
 		return r, err
 	}
-	if !metadata.Mode().IsRegular() || metadata.Size() > 16<<10 {
+	if !metadata.Mode().IsRegular() || metadata.Size() > maxRecordBytes {
 		return r, fmt.Errorf("invalid named cache metadata file")
 	}
-	decoder := json.NewDecoder(io.LimitReader(f, 16<<10))
+	decoder := json.NewDecoder(io.LimitReader(f, maxRecordBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&r); err != nil {
 		return r, err
@@ -321,8 +388,17 @@ func (s *Store) read(name string) (record, error) {
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return r, fmt.Errorf("invalid named cache metadata")
 	}
-	if r.Version != 1 || r.Key.validate() != nil || r.Key.hash() != name || r.LastUsed.IsZero() || r.Bytes < 0 || r.LeaseID != "" && !proto.ValidULID(r.LeaseID) {
+	if (r.Version != 1 && r.Version != 2) || r.Key.validate() != nil || r.Key.hash() != name || r.LastUsed.IsZero() || r.Bytes < 0 || r.LeaseID != "" && !proto.ValidULID(r.LeaseID) || r.Version == 1 && r.Tree || r.Version == 2 && !r.Tree {
 		return r, fmt.Errorf("invalid named cache metadata: %s", name)
+	}
+	if r.Version == 2 {
+		info, err := s.root.Lstat(name + "/holders")
+		if err != nil {
+			return r, err
+		}
+		if !info.IsDir() {
+			return r, fmt.Errorf("invalid tree cache holder directory")
+		}
 	}
 	return r, nil
 }
@@ -347,6 +423,11 @@ func (s *Store) create(name string, r record) error {
 	if err := s.root.Mkdir(tmp+"/data", 0o700); err != nil {
 		return err
 	}
+	if r.Version == 2 {
+		if err := s.root.Mkdir(tmp+"/holders", 0700); err != nil {
+			return err
+		}
+	}
 	if err := s.write(tmp, r); err != nil {
 		return err
 	}
@@ -360,6 +441,9 @@ func (s *Store) write(name string, r record) error {
 	raw, err := json.Marshal(r)
 	if err != nil {
 		return err
+	}
+	if len(raw) > maxRecordBytes {
+		return fmt.Errorf("named cache metadata exceeds size limit")
 	}
 	tmp := name + "/.record-" + proto.NewULID()
 	f, err := s.root.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)

@@ -1,9 +1,9 @@
 # Named caches
 
-Named caches keep disposable build data on a runner for later jobs. They are
-separate from retained results: snapshots never upload cache paths, and fetch
-never downloads them, even when an artifact declaration selects their parent.
-Losing a cache should only make the next build slower.
+Named caches preserve explicitly declared directories on a runner for later
+jobs. Cache paths are excluded from uploaded snapshots and retained results,
+even when an artifact declaration selects their parent. Caches are disposable:
+a cold or evicted cache may require an explicit install or rebuild.
 
 ## Using a cache
 
@@ -11,128 +11,181 @@ Declare a name and an exact directory relative to the workspace root:
 
 ```toml
 [caches]
-compiler = "target"
+dependencies = "node_modules"
 ```
 
-Then run normally:
+Then run native commands separately on the same runner:
 
 ```sh
-errand --on builder -- cargo build
-errand --on builder -- cargo test
+errand -- pnpm install
+errand -- pnpm test
 ```
 
-Both jobs use the same runner-side `target` directory. A new checkout or a
-different runner starts cold. Existing local `target` contents stay local.
-To keep a final binary, copy it outside the cache into a declared artifact path
-as part of the command, then retrieve it through `fetch` as usual.
+Each ephemeral job gets a real `node_modules` directory populated from the last
+saved tree. Directories and symlinks are recreated. macOS uses private native
+copy-on-write clones, falling back to byte copies. Linux first tries a complete
+hardlinked tree. If any link fails, the entire restore retries with private
+reflinks or byte copies. The engine tests filesystem capabilities through the
+operations themselves, without detecting filesystem names or tools. Cross-mount
+restores use private copies. File contents and symlink targets are preserved
+without interpretation.
 
-For an individual run, use `--cache compiler=target`. The repeatable `--cache`
-flag replaces the configured list; `--no-caches` clears it. These flags also work
-with `errand config` and `errand doctor`, using the shared run resolver.
-Personal config, workspace config, explicitly selected profiles, and CLI flags
-have that precedence. A `[profiles.clean.caches]` table with no entries clears
-inherited caches. Inspection reports bindings and their source without creating
-project identities or contacting a runner.
+Trees with no regular files use private-file comparison, since no inodes were
+shared and no hardlink capability was exercised. If publication later cannot
+create hardlinks, it retries with private copies. This changes the saved copy,
+not the comparison mode of an already-linked workspace, whose files may still
+share inodes with other jobs.
 
-Bindings use directory symlinks on Linux and macOS. Commands can create and
-modify files through the declared path; they should leave the binding itself
-in place. Removing or replacing that symlink does not replace the stored cache.
-A cache destination cannot overlap another cache, name reserved metadata, or
-replace an existing submitted entry. Paths are exact, without globs, and names
-are limited to 64 ASCII letters, digits, dots, underscores, or hyphens.
-At most 64 caches may be bound by a job.
+The same mechanism applies to any declared directory, such as `target`, `.venv`,
+`build`, or a package download cache. Errand does not detect tools, inspect their
+configuration, set their environment variables, rewrite their metadata, or insert
+commands. If a tool needs configuration to use a particular cache location,
+configure it yourself using its native options or Errand's existing environment
+settings. Errand does not change runner-wide tool configuration or `HOME`.
+Commands themselves retain their normal native access to the runner.
 
-Bindings that share a parent must use the same casing for that parent. For
-example, `Build/one` and `build/two` are rejected on both platforms because the
-created parent directories must also fit the portable retained-result format.
+Only directories, regular files, and symlinks are supported; sockets, pipes,
+and device nodes cannot be saved. Paths are exact and do not expand globs. Monorepos need an entry for each
+installed directory they want to preserve, for example:
 
-Exclusion matches path casing exactly. On a case-sensitive filesystem, a `build`
-cache leaves a separate `Build` directory in source snapshots and retained
-results. On a case-insensitive filesystem, existing entries whose casing differs
-from a declared cache path are rejected during selection, binding, or collection.
+```toml
+[caches]
+root-dependencies = "node_modules"
+protocol-dependencies = "protocol/node_modules"
+```
 
-## Storage identity and leases
+A new checkout or a different runner starts cold. Existing local cache contents
+stay local. To retain an output, put it outside the cache in a declared artifact
+path and retrieve it through `fetch`.
 
-Each cache belongs to an authenticated owner, a stable checkout identity, and
-a name. The client persists a random checkout identity in its private local
-state, keyed by filesystem directory identity. It survives ordinary source
-edits and directory renames. Separate checkouts and separate clients get
-independent identities; project labels and snapshot hashes do not select caches.
-Deleting that local identity state starts a fresh set of caches.
+For an individual run, use `--cache dependencies=node_modules`. The repeatable
+`--cache` flag replaces the configured list; `--no-caches` clears it. These flags
+also work with `errand config` and `errand doctor`. Personal config, workspace
+config, explicitly selected profiles, and CLI flags have that precedence. An
+empty `[profiles.clean.caches]` table clears inherited caches. Inspection reports
+bindings without creating checkout identities or contacting a runner.
 
-The store hashes this structured identity into a directory name. Metadata sits
-beside the writable data. The private store root is held by an exclusive
-filesystem lock for the daemon's lifetime.
+A destination cannot overlap another cache, name reserved metadata, or replace
+an existing submitted entry. Names are limited to 64 ASCII letters, digits,
+dots, underscores, or hyphens; a job can declare at most 64 caches. Bindings
+sharing a parent must use identical casing for that parent. Exclusion matches
+path casing exactly. Case-insensitive filesystems reject existing entries whose
+casing differs from the declared path.
 
-A job acquires durable exclusive leases just before execution. A concurrently
-leased cache fails the job before its command starts; Errand does not wait for
-that cache. Partially acquired leases are settled on setup failure. Independent
-owners, checkouts, and names do not contend for the same cache.
+## Concurrent jobs and saved trees
 
-Jobs in the same persistent workspace share its cache leases and bindings.
-These remain held until the last job, including any queued or failed-cleanup
-job, releases the workspace. The cache tool must tolerate concurrent access
-when you run commands concurrently. A separate workspace or ordinary job still
-cannot acquire the same leased cache. `df --verbose` identifies the workspace
-and its current member jobs.
+Every job has a durable holder protecting its caches from Errand GC. Independent
+ephemeral and persistent workspaces can use the same named cache concurrently.
+Per-cache gates coordinate restoration and publication; they never cover command
+execution. Unrelated caches do not share those gates. Restoration is cancellable
+staging work, outside the command launch queue.
 
-After the entire process scope is confirmed stopped, `Release` measures regular
-file bytes without following symlinks and clears the lease. Failed commands keep
-usable cache contents too. If the contents cannot be measured, the daemon
-attempts to discard that cache. An unresolved storage failure remains a receipt
-cleanup failure. The store's byte budget is not a runtime quota.
+After a successful command and confirmed process cleanup, Errand saves changed
+cache layouts. An ephemeral job can transfer its completed directory directly
+into cache storage on the same filesystem, avoiding a second copy. Superseded trees are detached and deleted in tracked
+background work; daemon shutdown waits for that work. Unchanged
+readers do not publish and cannot replace a newer saved layout. Concurrent
+changed workspaces use last-completed-publication wins; their changes are not
+merged. Separate named caches are published independently.
 
-Closing or restarting the daemon does not clear leases. Restart recovery uses
-persisted receipts and process-scope cleanup before settling leases. Missing
-receipt identity or unconfirmed process cleanup leaves the cache protected from
-reuse and eviction. For ephemeral jobs, process tracking includes the workspace and the canonical
-data directories currently leased by the job. Recovery derives these directories
-from durable leases, so an old receipt cannot claim a cache another job has since
-acquired. Linux recognizes working directories anywhere beneath these roots;
-macOS recognizes exact root working directories in addition to the inherited
-process marker. Existing limitations of process-scope tracking still apply;
-named caches do not add process isolation. Persistent jobs use per-job process
-groups and markers instead, because their workspace and cache directories are
-shared and cannot identify which job owns a process.
+A linked tree detects changes to directory entries through names, directory
+modes, symlink targets, and regular-file identities. Shared file bytes and
+permissions already propagate through the inode; those changes alone do not
+publish a directory layout, even if other names for that inode later disappear.
+This prevents a reader from republishing an older installation because another
+workspace changed a shared file. Use atomic replacement to publish private
+file changes. Private clones and copies instead compare file modes, sizes, and
+modification times. Neither mode hashes contents; preserving private-file size
+and modification time can bypass change detection.
 
-Metadata uses synchronized temporary files and atomic rename. An error after
-rename can leave the update visible, so the lifecycle reads back lease state
-before retrying or discarding. Mutable cache contents are disposable and are
-not transactionally durable.
+Jobs sharing one persistent workspace use its live directories. Publication
+waits until the final member returns, so it never snapshots a directory while a
+sibling command is still using it. A successful final member saves accumulated
+changes, including changes made by earlier members. Removing or replacing a
+cache directory behaves like doing so locally; a replacement must be a real
+directory to be saved. A publication error is reported separately from runtime
+cleanup: stopped jobs release their cache holders and workspace membership, so
+a later job can repair the directory. Unresolved process cleanup or holder
+release still retains recovery evidence.
 
-## Usage and cleanup
+Commands must cooperate with native shared-file behavior. Hardlinked files can
+share in-place writes and permission changes across workspaces and saved trees.
+Prefer atomic file replacement for private changes, and coordinate operations
+that the tools themselves do not make safe together. A failed command does not
+publish a new layout, but Errand cannot roll back writes to shared inodes.
+Named caches do not provide isolation from uncooperative commands.
 
-`errand df` shows named-cache bytes separately from the shared snapshot cache,
-plus the number of protected leases. Named-cache inventory is scoped to the
-caller. Active-cache byte counts reflect the last release, not ongoing writes.
-JSON output adds `named_caches` with `items`, `bytes`, and `protected`.
+Preservation also does not guarantee relocation. Relative links work when their
+relative layout is preserved; absolute links, interpreter shebangs, and embedded
+workspace paths retain their original values. Tools must support that layout, or
+the user must recreate it or use a persistent workspace at its original path.
+Python console scripts and configured CMake trees are examples requiring this
+care. A package download cache alone does not create an installed environment.
 
-`errand gc cache --on builder --dry-run` previews collection of both snapshot
-blobs and named caches. Omit `--dry-run` to collect them. This uses the existing
-`manage-caches` authorization and may collect idle caches across owners.
-`gc all` includes the same operation on the selected runner, plus job GC and
-local change GC. With multiple configured runners, `--on` or `--url` is required,
-including for dry runs. Previews show separate snapshot and named-cache policies
-reported by the runner. Named cache TTL and budget are separate
-from the snapshot cache, configured in the runner's `errandd.toml`:
+## Identity, recovery, and cleanup
+
+A cache belongs to an authenticated owner, a stable checkout identity, and a
+name. The client stores a random checkout identity in private local state keyed
+by directory identity. Source edits and directory renames preserve it; separate
+checkouts and clients have independent identities. Deleting that identity state
+starts a fresh set of caches.
+
+The runner hashes this structured identity into a private storage directory and
+holds an exclusive filesystem lock on the store for its lifetime. Metadata and
+holder files use atomic replacement and synchronized directory updates. Mutable
+cache bytes are disposable, not transactionally durable. Missing published
+generations recover as cold caches. Persistent restore records its comparison
+mode before exposing the completed directory; a missing directory can be restored
+again. Concurrent admissions share a pending preparation state until the first
+member finishes preparing caches; later members preserve its live changes.
+Recovery removes only the interrupted job's identified staging directory. A
+missing or non-directory parent cannot contain that stage and does not prevent
+holder release; a symlink parent is never followed for cleanup.
+
+Job startup and settlement inspect only that job's cache keys. Releasing a
+holder does not scan its files or release another job's holder. Closing or
+restarting the daemon preserves holders. Recovery confirms process cleanup from
+durable receipts before releasing them; unresolved identity or processes keep
+storage protected. Shared backing storage never identifies process ownership.
+The existing process-group, marker, and workspace cleanup rules still apply.
+
+Idle legacy directory caches are adopted without discarding their payload.
+Active legacy exclusive leases must settle before adoption. Old-format job and
+workspace receipts retain their recovery path. New shared metadata uses v2;
+older daemons cannot read it. Stop jobs and preserve or retire these caches before
+downgrading a runner.
+
+`errand df` reports named-cache usage separately from snapshot blobs. Sizes
+reflect the last completed GC measurement and omit workspace copies. They count
+logical regular-file bytes rather than physical disk usage or unique hardlinked
+inodes. Never-measured caches appear as `unmeasured`; JSON reports the count and
+verbose entries include `bytes_unknown`. Totals mark unmeasured contributions
+explicitly. Active writes are not a live disk quota.
+
+`errand gc cache --on builder --dry-run` previews snapshot and named-cache
+collection. Omit `--dry-run` to collect. This uses `manage-caches` authorization
+and may collect idle caches across owners. `gc all` includes the same operation.
+With multiple configured runners, select `--on` or `--url`, including for dry runs.
+Named-cache policy is configured independently in the runner's `errandd.toml`:
 
 ```toml
 [named_cache]
 max_bytes = 5368709120
 ttl_hours = 336
-# disabled = true  # refuse new jobs with cache bindings; preserve existing data
+# disabled = true
 ```
 
-Zero or omitted size and TTL use the defaults shown above. Collection removes
-expired idle caches first, then least recently used idle caches until recorded
-bytes meet the budget. Leases remain protected, even over budget. Collection
-runs when explicitly requested through `gc`, not on every cache acquisition.
-Disabling snapshot caching does not disable named caches, or vice versa.
+Zero or omitted limits use the defaults above. Disabling named caches refuses
+new bindings while preserving existing data. GC measures idle trees outside the
+global metadata lock, rechecks holders, then evicts expired caches followed by
+least-recently-used caches until the budget is met. Held caches stay protected
+even over budget. Budget enforcement requires an explicit GC command. GC also
+reclaims interrupted creations, retirements, and unreferenced generations of idle
+caches. Temporary file-descriptor or memory exhaustion does not classify a cache
+as damaged. Unreadable or replaced idle data does not prevent collection of healthy entries,
+and symlinks are not followed. Deletion runs outside the metadata lock.
 
-Dry runs leave data, permissions, modification times, and metadata unchanged.
-Actual collection renames entries before deleting them, so interruption cannot
-affect a newly created cache with the same identity. Later GC also reclaims
-interrupted creations and retirements. The GC response counts removed blobs,
-removed named caches, protected caches, and interrupted cleanups separately;
-freed bytes sum newly selected snapshot blobs and named cache contents, using
-recorded cache sizes. Interrupted cleanup bytes are not included in that total.
+Dry runs do not change data, permissions, modification times, or metadata.
+Actual collection detaches entries before deleting them so interruption cannot
+affect a newly created cache with the same identity. Removing backing storage
+does not unlink files already restored into a persistent workspace.

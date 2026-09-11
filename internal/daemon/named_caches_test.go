@@ -28,21 +28,17 @@ func TestCacheBindingFailureSettlesPartialLeases(t *testing.T) {
 	id := proto.NewULID()
 	spec := proto.Spec{Argv: []string{"true"}, ManifestRoot: (proto.Manifest{}).RootHash(), NoSnapshot: true, Limits: proto.DefaultLimits(), CacheProjectID: project, Selection: proto.SelectionPolicy{Caches: []proto.CacheBinding{{Name: "free", Path: "out"}, {Name: "busy", Path: "busy"}}}}
 	resp := rawSubmitSpec(t, server.URL, id, t.TempDir(), spec, proto.Manifest{})
-	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "leased") {
 		t.Fatalf("submit: %s %s", resp.Status, body)
 	}
 	resp.Body.Close()
-	result := waitTerminal(t, server.URL, id).Result
-	if result.Started || !strings.Contains(result.StartError, "leased") || !result.CleanupOK {
-		t.Fatalf("result: %+v", result)
-	}
 	entries, err := d.namedCaches.Inventory(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if entry.Key.Name == "free" && entry.LeaseID != "" {
+		if entry.Key.Name == "free" && entry.Protected() {
 			t.Fatal("partial lease leaked")
 		}
 		if entry.Key.Name == "busy" && entry.LeaseID != heldJob {

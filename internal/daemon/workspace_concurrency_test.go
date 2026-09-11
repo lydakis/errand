@@ -71,11 +71,11 @@ func TestConcurrentWorkspaceJobsKeepSiblingAndCachesAlive(t *testing.T) {
 			}
 			if cached {
 				path := filepath.Join(d.workspaces.dir, ws.ID, "data", "target")
-				if info, err := os.Lstat(path); err != nil || info.Mode()&os.ModeSymlink == 0 {
+				if info, err := os.Lstat(path); err != nil || !info.IsDir() {
 					t.Fatalf("cache unbound while sibling running: %v", err)
 				}
 				inventory, err := d.namedCaches.Inventory(t.Context())
-				if err != nil || len(inventory) != 1 || inventory[0].LeaseID == "" {
+				if err != nil || len(inventory) != 1 || !slices.Equal(inventory[0].Holders, []string{second}) {
 					t.Fatalf("cache released early: %+v %v", inventory, err)
 				}
 			}
@@ -91,7 +91,7 @@ func TestConcurrentWorkspaceJobsKeepSiblingAndCachesAlive(t *testing.T) {
 			waitTerminal(t, ts.URL, second)
 			if cached {
 				inventory, err := d.namedCaches.Inventory(t.Context())
-				if err != nil || len(inventory) != 1 || inventory[0].LeaseID != "" {
+				if err != nil || len(inventory) != 1 || inventory[0].Protected() {
 					t.Fatalf("last job left cache leased: %+v %v", inventory, err)
 				}
 			}

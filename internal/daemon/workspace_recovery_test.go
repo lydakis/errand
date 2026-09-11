@@ -20,7 +20,7 @@ func TestPersistentCacheReplacement(t *testing.T) {
 	if _, err := client.CreateWorkspace(client.RunOptions{PeerURL: ts.URL, Root: root, Caches: []proto.CacheBinding{{Name: "compiler", Path: "target"}}}, "experiment"); err != nil {
 		t.Fatal(err)
 	}
-	for _, script := range []string{"rm -rf target && mkdir target && echo preserved > target/output", "test -L target && test ! -e target/output && test \"$(cat .errand-cache-recovery-*/compiler/output)\" = preserved"} {
+	for _, script := range []string{"rm -rf target && mkdir target && echo preserved > target/output", "test -d target && test ! -L target && test \"$(cat target/output)\" = preserved"} {
 		var out bytes.Buffer
 		if code := client.Run(client.RunOptions{PeerURL: ts.URL, Root: root, Workspace: "experiment", Argv: []string{"/bin/sh", "-c", script}, Stdout: &out, Stderr: &out}); code != 0 {
 			t.Fatalf("run %q failed: %d %s", script, code, &out)

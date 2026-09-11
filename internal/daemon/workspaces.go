@@ -14,6 +14,7 @@ import (
 
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/namedcache"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -22,9 +23,15 @@ var errWorkspaceExists = errors.New("workspace already exists")
 
 type workspaceRecord struct {
 	proto.Workspace
-	CacheLeaseID string              `json:"cache_lease_id,omitempty"`
-	Owner        string              `json:"owner"`
-	Identity     fsidentity.Identity `json:"identity"`
+	CacheLeaseID  string            `json:"cache_lease_id,omitempty"`
+	TreeCaches    []string          `json:"tree_caches,omitempty"`
+	TreeBaselines map[string]string `json:"tree_baselines,omitempty"`
+	// Set on admission into an idle workspace, cleared before any member
+	// finishes cache preparation. Absent in old receipts means do not repair
+	// directories while those members may still own running processes.
+	CacheRestorePending bool                `json:"cache_restore_pending,omitempty"`
+	Owner               string              `json:"owner"`
+	Identity            fsidentity.Identity `json:"identity"`
 }
 
 type workspaceStore struct {
@@ -108,6 +115,16 @@ func (s *workspaceStore) read(id string) (workspaceRecord, error) {
 	}
 	if len(r.JobIDs) > 0 && !proto.ValidULID(r.CacheLeaseID) || len(r.JobIDs) == 0 && r.CacheLeaseID != "" {
 		return r, fmt.Errorf("invalid workspace cache lease")
+	}
+	for i, name := range r.TreeCaches {
+		if slices.Contains(r.TreeCaches[:i], name) || !slices.ContainsFunc(r.Selection.Caches, func(c proto.CacheBinding) bool { return c.Name == name }) {
+			return r, fmt.Errorf("invalid workspace tree cache binding")
+		}
+	}
+	for name, base := range r.TreeBaselines {
+		if !slices.Contains(r.TreeCaches, name) || !namedcache.ValidTreeBaseline(base) {
+			return r, fmt.Errorf("invalid workspace cache tree baseline")
+		}
 	}
 	if err := archive.Validate(r.Manifest); err != nil {
 		return r, err

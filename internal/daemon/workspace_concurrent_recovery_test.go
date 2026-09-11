@@ -42,7 +42,7 @@ func TestConcurrentWorkspaceRecoveryProtectsOnlyUncertainJob(t *testing.T) {
 		if err := d.acquireWorkspace(t.Context(), j); err != nil {
 			t.Fatal(err)
 		}
-		if err := j.bindNamedCaches(d); err != nil {
+		if err := j.prepareNamedCacheTrees(t.Context(), d); err != nil {
 			t.Fatal(err)
 		}
 		scope, err := newProcessScope("")
@@ -110,7 +110,7 @@ func TestConcurrentWorkspaceRecoveryProtectsOnlyUncertainJob(t *testing.T) {
 		t.Fatalf("protected leases: %+v %v", got, err)
 	}
 	entries, err := restarted.namedCaches.Inventory(t.Context())
-	if err != nil || len(entries) != 1 || entries[0].LeaseID == "" {
+	if err != nil || len(entries) != 1 || !slices.Equal(entries[0].Holders, []string{jobs[0].ID}) {
 		t.Fatalf("protected cache released: %+v %v", entries, err)
 	}
 	if err := client.RemoveWorkspace(server.URL, ws.Name); err == nil {
@@ -140,7 +140,7 @@ func TestConcurrentWorkspaceRecoveryProtectsOnlyUncertainJob(t *testing.T) {
 		t.Fatalf("final leases: %+v %v", row, err)
 	}
 	entries, err = final.namedCaches.Inventory(t.Context())
-	if err != nil || len(entries) != 1 || entries[0].LeaseID != "" {
+	if err != nil || len(entries) != 1 || entries[0].Protected() {
 		t.Fatalf("final cache still leased: %+v %v", entries, err)
 	}
 }

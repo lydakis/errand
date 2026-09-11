@@ -425,7 +425,7 @@ func TestLeasePathsSurviveRestartAndStopAtRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	s = openTestStore(t, root, 1024)
-	paths, err := s.LeasePaths(ctx, job)
+	paths, err := s.LeasePaths(ctx, job, []Key{key})
 	if err != nil || len(paths) != 1 || paths[0] != canonical {
 		t.Fatalf("restart paths: %v %v", paths, err)
 	}
@@ -435,7 +435,7 @@ func TestLeasePathsSurviveRestartAndStopAtRelease(t *testing.T) {
 	if _, err := s.Acquire(ctx, key, proto.NewULID()); err != nil {
 		t.Fatal(err)
 	}
-	paths, err = s.LeasePaths(ctx, job)
+	paths, err = s.LeasePaths(ctx, job, []Key{key})
 	if err != nil || len(paths) != 0 {
 		t.Fatalf("old job retained reused cache scope: %v %v", paths, err)
 	}

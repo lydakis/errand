@@ -42,16 +42,19 @@ type queuedRecord struct {
 
 // Job is one admitted transaction. Its directory is the receipt.
 type Job struct {
-	returnWorkspace   func() error
-	workspaceRoot     string
-	workspaceLeaseID  string
-	workspaceLeaseErr error
-	ID                string
-	Dir               string
-	Spec              proto.Spec
-	Admission         proto.Admission
-	RequestDigest     string
-	baseline          proto.Manifest
+	returnWorkspace     func() error
+	workspaceRoot       string
+	workspaceLeaseID    string
+	workspaceLeaseErr   error
+	treeBaselines       map[string]string
+	cachePublicationErr error
+	publishTrees        bool
+	ID                  string
+	Dir                 string
+	Spec                proto.Spec
+	Admission           proto.Admission
+	RequestDigest       string
+	baseline            proto.Manifest
 
 	mu                  sync.Mutex
 	state               string
@@ -364,6 +367,9 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 			return false, err
 		}
 		j.event("persistent-workspace", j.Spec.WorkspaceID)
+		if err := j.prepareNamedCacheTrees(stagingCtx, d); err != nil {
+			return false, err
+		}
 		j.markStagingDone()
 		if res := j.cancelledBeforeStart(); res != nil {
 			j.finalize(d, res, true)
@@ -421,6 +427,9 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 			}
 		}
 	}
+	if err := j.prepareNamedCacheTrees(stagingCtx, d); err != nil {
+		return false, err
+	}
 	j.markStagingDone()
 	if res := j.cancelledBeforeStart(); res != nil {
 		j.finalize(d, res, true)
@@ -467,21 +476,13 @@ func (j *Job) launch(d *Daemon) error {
 		return fmt.Errorf("binding named caches: %w", err)
 	}
 	jobEnv := j.buildEnv()
-	var cacheDirs []string
-	if len(j.Spec.Selection.Caches) != 0 && j.Spec.WorkspaceID == "" {
-		cacheDirs, err = d.namedCaches.LeasePaths(context.Background(), j.ID)
-		if err != nil {
-			logw.Close()
-			return fmt.Errorf("reading cache process scope: %w", err)
-		}
-	}
 	scopeRoot := workspace
 	sharedWorkspace := j.Spec.WorkspaceID != ""
 	// A shared cwd cannot establish process ownership.
 	if sharedWorkspace {
 		scopeRoot = ""
 	}
-	scope, err := newProcessScope(scopeRoot, cacheDirs...)
+	scope, err := newProcessScope(scopeRoot)
 	if err != nil {
 		logw.Close()
 		return err
@@ -1027,6 +1028,7 @@ func (j *Job) finalize(d *Daemon, res *proto.Result, neverRan bool) {
 
 func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, scopeCleanupOK bool) {
 	j.markExecutionDone()
+	j.publishTrees = !neverRan && scopeCleanupOK && res.ExitCode != nil && *res.ExitCode == 0 && res.LimitExceeded == ""
 	// Runtime values are no longer needed once settlement begins. The request
 	// digest and redacted receipt retain idempotency without retaining secrets.
 	j.mu.Lock()
@@ -1034,32 +1036,35 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	j.baseline = proto.Manifest{}
 	j.mu.Unlock()
 
-	var cacheErr error
-	if scopeCleanupOK {
-		cacheErr = d.settleNamedCaches(j)
-	}
-	if cacheErr != nil {
-		res.TransactionError = appendTransactionError(res.TransactionError, "settling named caches: "+cacheErr.Error())
-	}
 	var workspaceErr error
 	if scopeCleanupOK {
 		workspaceErr = j.cleanupWorkspace()
 	} else {
 		res.TransactionError = appendTransactionError(res.TransactionError, "workspace retained for process recovery")
 	}
+	if j.cachePublicationErr != nil {
+		j.event("named-cache-publication-failed", j.cachePublicationErr.Error())
+		res.TransactionError = appendTransactionError(res.TransactionError, j.cachePublicationErr.Error())
+	}
 	baseErr := removeOwnedTree(filepath.Join(j.Dir, "change-base"))
 	// The scope record is runtime state, not receipt: once the job is
 	// settled there is nothing left for reconciliation to find. Retain it
 	// after failed scope cleanup so a restart can still locate survivors.
 	var scopeRecordErr error
-	if scopeCleanupOK && workspaceErr == nil && cacheErr == nil {
+	if scopeCleanupOK && workspaceErr == nil {
 		scopeRecordErr = removeScopeRecord(filepath.Join(j.Dir, "scope.json"))
 	} else {
 		res.TransactionError = appendTransactionError(res.TransactionError, "process scope cleanup incomplete; recovery record retained")
 	}
 	if workspaceErr != nil {
-		j.event("workspace-remove-failed", workspaceErr.Error())
-		res.TransactionError = appendTransactionError(res.TransactionError, "removing workspace: "+workspaceErr.Error())
+		var cacheErr *cacheSettlementError
+		if errors.As(workspaceErr, &cacheErr) {
+			j.event("named-cache-settlement-failed", cacheErr.Error())
+			res.TransactionError = appendTransactionError(res.TransactionError, cacheErr.Error())
+		} else {
+			j.event("workspace-remove-failed", workspaceErr.Error())
+			res.TransactionError = appendTransactionError(res.TransactionError, "removing workspace: "+workspaceErr.Error())
+		}
 	}
 	if baseErr != nil {
 		j.event("change-base-remove-failed", baseErr.Error())
@@ -1071,7 +1076,7 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	}
 	// A queued marker on a never-started job is receipt evidence. Retaining it
 	// closes the crash gap between cleanup and the durable terminal result.
-	cleanupOK := cacheErr == nil && workspaceErr == nil && baseErr == nil && scopeCleanupOK && scopeRecordErr == nil
+	cleanupOK := workspaceErr == nil && baseErr == nil && scopeCleanupOK && scopeRecordErr == nil
 	if neverRan {
 		res.CleanupOK = cleanupOK
 	} else {

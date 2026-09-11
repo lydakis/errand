@@ -32,7 +32,7 @@ func writeDfDetails(w io.Writer, rows []dfRow) {
 			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", terminalSafeField(item.Name), terminalSafeField(item.ID), terminalSafeField(job), formatByteSize(item.WorkingBytes), formatByteSize(item.BaseBytes), formatByteSize(item.TransferBytes), formatByteSize(item.MetadataBytes), formatByteSize(item.Bytes))
 		}
 		_ = tw.Flush()
-		fmt.Fprintf(w, "\n  Named caches (%d; sizes from last job release):\n", len(details.NamedCaches))
+		fmt.Fprintf(w, "\n  Named caches (%d; sizes from last release or GC measurement):\n", len(details.NamedCaches))
 		tw = tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
 		fmt.Fprintln(tw, "  NAME\tPROJECT ID\tWORKSPACE ID\tJOBS\tSIZE")
 		for _, item := range details.NamedCaches {
@@ -47,7 +47,11 @@ func writeDfDetails(w io.Writer, rows []dfRow) {
 			if job == "" {
 				job = "-"
 			}
-			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\n", terminalSafeField(item.Name), terminalSafeField(item.ProjectID), terminalSafeField(workspace), terminalSafeField(job), formatByteSize(item.Bytes))
+			size := formatByteSize(item.Bytes)
+			if item.BytesUnknown {
+				size = "unmeasured"
+			}
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\n", terminalSafeField(item.Name), terminalSafeField(item.ProjectID), terminalSafeField(workspace), terminalSafeField(job), size)
 		}
 		_ = tw.Flush()
 		fmt.Fprintf(w, "\n  Job storage (%d):\n", len(details.Jobs))

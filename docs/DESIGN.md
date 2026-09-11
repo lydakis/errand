@@ -112,11 +112,15 @@ Fetch supports exporting retained remote values to a new directory with
 `--output` (`-o`), using the same retained bundles as staging and application.
 Artifact declarations retain selected generated paths even when input
 selection ignores them, while keeping the existing fetch/apply lifecycle.
-[Named caches](NAMED_CACHES.md) keep explicitly declared, disposable build data
-on the runner across jobs. They use owner and checkout identities, durable
-exclusive leases, and confirmed process cleanup before reuse. Cache paths are
-excluded from snapshots and retained results, including artifact declarations.
-`df` reports their usage and `gc cache` collects idle entries by TTL and budget.
+[Named caches](NAMED_CACHES.md) preserve explicitly declared directories across
+jobs using real workspace directories and hardlinked files, with clone/copy
+fallbacks. All tools use the same mechanism; no tool detection or configuration
+injection occurs. Durable per-job holders permit concurrent workspaces and protect
+backing storage from GC. Commands must cooperate with shared inode writes and
+handle their own path portability. Successful settled jobs publish changed trees;
+unchanged readers do not replace newer snapshots. Cache paths remain excluded
+from input snapshots and retained results. `df` reports the last GC measurement;
+`gc cache` measures and collects idle entries by TTL and budget.
 
 **Platforms:** Linux and macOS are the v0 targets for both roles; Windows
 is a design constraint, not a v0 deliverable — the protocol and job model

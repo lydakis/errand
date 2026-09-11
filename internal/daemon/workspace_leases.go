@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -61,6 +62,7 @@ func (d *Daemon) acquireWorkspace(ctx context.Context, j *Job) error {
 		}
 		if len(r.JobIDs) == 0 {
 			r.CacheLeaseID = j.ID
+			r.CacheRestorePending = len(r.Selection.Caches) != 0
 		}
 		r.JobIDs = append(r.JobIDs, j.ID)
 		if err := s.write(r); err != nil {
@@ -87,6 +89,9 @@ func (d *Daemon) returnWorkspace(j *Job) error {
 	}
 	s := d.workspaces
 	if s == nil || j.workspaceLeaseID == "" {
+		if err := d.settleNamedCaches(j); err != nil {
+			return &cacheSettlementError{err}
+		}
 		return removeOwnedTree(filepath.Join(j.Dir, "workspace"))
 	}
 	unlock := s.lockWorkspace(j.workspaceLeaseID)
@@ -115,17 +120,40 @@ func (d *Daemon) returnWorkspace(j *Job) error {
 	// Shared bindings survive until every process scope has been cleaned and
 	// the final member returns. Failed settlement retains the last lease.
 	if len(r.JobIDs) == 1 {
-		if err := settlePersistentCachePaths(j, data, r.Selection.Caches); err != nil {
+		if j.publishTrees {
+			publishErr := d.publishNamedCacheTrees(j, r.TreeBaselines)
+			// Persist the new comparison base before releasing the final pin.
+			// Keep partial progress if a later binding could not be saved.
+			s.mu.Lock()
+			err := s.write(r)
+			s.mu.Unlock()
+			if err != nil {
+				return errors.Join(publishErr, err)
+			}
+			// Saving disposable cache contents is separate from ownership of
+			// stopped processes. Report the error, but return this member.
+			j.cachePublicationErr = publishErr
+		}
+		var directoryCaches []proto.CacheBinding
+		for _, cache := range r.Selection.Caches {
+			if !slices.Contains(r.TreeCaches, cache.Name) {
+				directoryCaches = append(directoryCaches, cache)
+			}
+		}
+		if err := settlePersistentCachePaths(j, data, directoryCaches); err != nil {
 			return err
 		}
 		if len(r.Selection.Caches) != 0 {
 			if err := d.settleNamedCacheLease(j, r.Owner, r.CacheLeaseID); err != nil {
-				return err
+				return &cacheSettlementError{err}
 			}
 		}
 		if err := syncDirectory(data); err != nil {
 			return err
 		}
+	}
+	if err := d.settleNamedCaches(j); err != nil {
+		return &cacheSettlementError{err}
 	}
 
 	s.mu.Lock()
@@ -140,6 +168,7 @@ func (d *Daemon) returnWorkspace(j *Job) error {
 	r.JobIDs = slices.DeleteFunc(r.JobIDs, func(id string) bool { return id == j.ID })
 	if len(r.JobIDs) == 0 {
 		r.CacheLeaseID = ""
+		r.CacheRestorePending = false
 	}
 	return s.write(r)
 }

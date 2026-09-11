@@ -94,6 +94,7 @@ func storageRows(results []peerQueryResult[proto.StorageStats], changes *proto.C
 			}
 			row.NamedCaches.Bytes += stats.NamedCaches.Bytes
 			row.NamedCaches.Items += stats.NamedCaches.Items
+			row.NamedCaches.Unmeasured += stats.NamedCaches.Unmeasured
 			row.NamedCaches.Protected += stats.NamedCaches.Protected
 			row.TotalBytes += stats.NamedCaches.Bytes
 		}

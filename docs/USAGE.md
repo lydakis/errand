@@ -249,18 +249,17 @@ source bodies still consume storage, and pinned bodies cannot be reclaimed by GC
 Profiles and configuration still provide peer, environment, workdir, forwarding,
 and apply preferences. Persistent workspace selection itself requires the
 explicit `--workspace` flag. Creation freezes ignore rules and named-cache
-bindings; cache directories remain separate from the persistent tree. Ignored
+bindings; restored cache directories stay live inside the persistent tree. Ignored
 files generated inside the tree survive for later jobs, but returning them still
 requires artifact declarations. Per-run artifact flags can override retention.
 Creation-time artifacts are inherited during reuse. Explicit flags or a selected
 profile can override them; later ambient config changes do not replace the
 workspace's defaults. Explicit conflicting cache bindings are rejected.
-If a command replaces a cache symlink with a file or directory, Errand preserves
-that replacement under `.errand-cache-recovery-ID/` in the workspace, records its
-location in the last job's events, and restores the cache binding on the next
-run. Recovery of replacement files happens only when the last job releases the
-workspace. Cache leases and symlinks remain available while any job holds it;
-other workspaces and ordinary jobs still cannot acquire those leased caches.
+Cache paths are real directories shared by members of that workspace. Changed
+trees are saved when the final successful member returns. Independent workspaces
+can use the same named caches concurrently, with the normal responsibility to
+coordinate writes to shared hardlinked files. Errand does not rewrite embedded
+absolute paths or tool configuration. See [named caches](NAMED_CACHES.md).
 
 `df` includes persistent workspace storage. Job and cache GC never collect the
 persistent tree. `workspaces rm` explicitly removes an idle workspace and its
@@ -375,8 +374,12 @@ for profiles, precedence, and limits.
 To reuse disposable build data on a runner, use `--cache compiler=target` or
 configure `[caches]` with `compiler = "target"`. `--no-caches` clears configured
 bindings. Cache contents stay on the runner and are excluded from both input
-snapshots and fetched results. See [named caches](NAMED_CACHES.md) for
-ownership, exclusive leases, restart recovery, and cleanup.
+snapshots and fetched results. Every binding uses the same directory-preservation
+mechanism. For example, `[caches]` with `dependencies = "node_modules"` lets a
+separate `errand -- pnpm install` supply installed files to a later
+`errand -- pnpm test`. Monorepos need explicit bindings for nested installed
+directories too. See [named caches](NAMED_CACHES.md) for concurrency, hardlink
+behavior, path-portability limits, recovery, and cleanup.
 
 Git is not required for non-Git snapshots, running jobs, status, logs, or plain
 fetches. Applying changes needs `git merge-file` on the client only when both

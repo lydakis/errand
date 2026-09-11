@@ -107,6 +107,9 @@ func writeDf(w io.Writer, rows []dfRow) {
 		named := "-"
 		if row.NamedCaches != nil {
 			named = formatByteSize(row.NamedCaches.Bytes)
+			if row.NamedCaches.Unmeasured > 0 {
+				named += fmt.Sprintf(" + %d unmeasured", row.NamedCaches.Unmeasured)
+			}
 			if row.NamedCaches.Protected > 0 {
 				named += fmt.Sprintf(" (%d protected)", row.NamedCaches.Protected)
 			}
@@ -123,8 +126,12 @@ func writeDf(w io.Writer, rows []dfRow) {
 		if row.Workspaces != nil {
 			workspaces = formatByteSize(row.Workspaces.Bytes)
 		}
+		total := formatByteSize(row.TotalBytes)
+		if row.NamedCaches != nil && row.NamedCaches.Unmeasured > 0 {
+			total += " + unmeasured"
+		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			terminalSafeField(row.Location), cache, named, workspaces, jobs, changes, formatByteSize(row.TotalBytes))
+			terminalSafeField(row.Location), cache, named, workspaces, jobs, changes, total)
 	}
 	_ = tw.Flush()
 }

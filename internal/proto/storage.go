@@ -20,12 +20,13 @@ type WorkspaceStorage struct {
 }
 
 type NamedCacheStorage struct {
-	WorkspaceID string   `json:"workspace_id,omitempty"`
-	JobIDs      []string `json:"job_ids,omitempty"`
-	Name        string   `json:"name"`
-	ProjectID   string   `json:"project_id"`
-	JobID       string   `json:"job_id,omitempty"`
-	Bytes       int64    `json:"bytes"` // last settled size while a job holds the cache
+	WorkspaceID  string   `json:"workspace_id,omitempty"`
+	JobIDs       []string `json:"job_ids,omitempty"`
+	Name         string   `json:"name"`
+	ProjectID    string   `json:"project_id"`
+	JobID        string   `json:"job_id,omitempty"`
+	Bytes        int64    `json:"bytes"` // last release or GC measurement, not live writes
+	BytesUnknown bool     `json:"bytes_unknown,omitempty"`
 }
 
 type JobStorage struct {

@@ -99,7 +99,7 @@ func TestNamedCachesReuseWithoutSnapshotOrFetchContents(t *testing.T) {
 				}
 			}
 			stats, err := client.StorageStats(server.URL)
-			if err != nil || stats.NamedCaches == nil || stats.NamedCaches.Items != 1 || stats.NamedCaches.Bytes != 5 || stats.NamedCaches.Protected != 0 {
+			if err != nil || stats.NamedCaches == nil || stats.NamedCaches.Items != 1 || stats.NamedCaches.Unmeasured != 1 || stats.NamedCaches.Protected != 0 {
 				t.Fatalf("stats: %+v %v", stats, err)
 			}
 			var stdout, stderr bytes.Buffer
@@ -107,7 +107,7 @@ func TestNamedCachesReuseWithoutSnapshotOrFetchContents(t *testing.T) {
 				t.Fatalf("df: %d %s", code, &stderr)
 			}
 			var rows []dfRow
-			if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil || rows[0].NamedCaches == nil || rows[0].NamedCaches.Bytes != 5 {
+			if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil || rows[0].NamedCaches == nil || rows[0].NamedCaches.Unmeasured != 1 {
 				t.Fatalf("df: %s %v", &stdout, err)
 			}
 			for _, dry := range []bool{true, false} {
