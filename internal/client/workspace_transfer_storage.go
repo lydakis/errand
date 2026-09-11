@@ -185,7 +185,7 @@ func visitWorkspaceTransfers(ctx context.Context, nonBlocking bool, visit func(s
 			if nonBlocking {
 				var acquired bool
 				var err error
-				unlock, acquired, err = tryAcquireExistingLocalChangeLock(localChangeTransferLockName("workspace-" + e.Name()))
+				unlock, acquired, err = tryAcquireExistingLocalChangeLock(workspaceTransferLockName(dir))
 				if err != nil {
 					return err
 				}

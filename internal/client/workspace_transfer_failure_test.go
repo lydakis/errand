@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,69 @@ import (
 	"testing"
 	"time"
 )
+
+func TestWorkspaceTransferDoesNotReenterDownloadLock(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	prep := prepareSnapshot(root, true, false)
+	if prep.err != nil {
+		t.Fatal(prep.err)
+	}
+	const peer, id = "http://runner", "01M2280R0T4152A3BSV4C2976R"
+	if err := recordWorkspaceOrigin(RunOptions{PeerURL: peer, Root: root}, id, prep.manifest); err != nil {
+		t.Fatal(err)
+	}
+	dir, err := workspaceTransferDir(peer, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Reproduce the old shared-namespace collision with a real job key,
+	// without relying on randomly generated IDs or changing the hash function.
+	want := localChangeTransferLockName("workspace-" + filepath.Base(dir))
+	var name string
+	for i := 0; i < 65536; i++ {
+		candidate := localChangeTransferLockName(localChangeKey(peer, fmt.Sprintf("%026d", i)))
+		if candidate == want {
+			name = candidate
+			break
+		}
+	}
+	if name == "" {
+		t.Fatal("could not construct download/workspace lock collision")
+	}
+	unlock, err := acquireLocalChangeLock(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := sync.OnceFunc(unlock)
+	defer release()
+	done := make(chan error, 1)
+	go func() {
+		// Fetch/apply holds the job download lock through checkout recovery
+		// and subsequent workspace transfer staging/application.
+		done <- withWorkspaceChangeLock(root, func() error {
+			if err := recoverWorkspaceApplications(root); err != nil {
+				return err
+			}
+			unlock, err := lockWorkspaceTransfer(dir)
+			if err != nil {
+				return err
+			}
+			unlock()
+			return nil
+		})
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		release()
+		<-done // Join the waiter before removing its temporary state.
+		t.Fatal("workspace transfer waited on the already-held job download lock")
+	}
+}
 
 func TestRejectedWorkspaceCreationReclaimsOrigin(t *testing.T) {
 	for _, status := range []int{409, 502} {

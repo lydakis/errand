@@ -138,7 +138,14 @@ func recoverWorkspaceTransfers(ctx context.Context, root string) error {
 }
 
 func lockWorkspaceTransfer(dir string) (func(), error) {
-	return acquireLocalChangeLock(localChangeTransferLockName("workspace-" + filepath.Base(dir)))
+	return acquireLocalChangeLock(workspaceTransferLockName(dir))
+}
+
+func workspaceTransferLockName(dir string) string {
+	// Fetch holds a job download lock while recovering and applying workspace
+	// transfers. A separate namespace prevents nested acquisitions from
+	// colliding on the same stripe and waiting on a lock we already hold.
+	return localChangeStripedLockName("workspace-transfer", filepath.Base(dir))
 }
 
 // Only used after a definitive creation rejection. Removing the origin first
