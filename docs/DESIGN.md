@@ -727,9 +727,20 @@ after the remote process and transaction both succeed; `--no-apply` disables
 workspace or personal defaults. That policy is independent of observation:
 explicit `--detach` and interactive Ctrl-D hand it to a detached local
 completion worker. `attach` follows logs and status without choosing or changing
-the policy. Interrupted workers retain their pending policy and are resumed on
-the next client invocation. A different or non-matching workspace can stage
-changes but cannot apply them.
+the policy.
+
+Interrupted workers retain their pending policy but are never restarted by CLI
+startup. Once the job finishes, the user explicitly recovers its apply with
+`fetch --apply HANDLE` from the originating workspace. A different or
+non-matching workspace can stage changes but cannot apply them. Healthy workers
+and their transient-error retries continue independently.
+
+`ps`, `status`, and `doctor` inspect saved state and existing worker ownership
+without launching workers or creating client state. An unfinished policy
+without an owner is reported as needing recovery. The default job list retains
+interrupted applies even when remote execution has finished.
+Worker lease files retain their inode after release so inspectors and starting
+workers always observe the same lock; an unlocked file does not imply ownership.
 
 Application is conflict-safe, never silent:
 

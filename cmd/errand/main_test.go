@@ -161,26 +161,6 @@ func TestCmdGCHelpOnlyShowsFlagsForTarget(t *testing.T) {
 	}
 }
 
-func TestCLIHelpDetectionStopsAtCommandSeparator(t *testing.T) {
-	for _, args := range [][]string{
-		{"--help"},
-		{"peers", "--help"},
-		{"gc", "jobs", "-h"},
-	} {
-		if !cliHelpRequested(args) {
-			t.Errorf("cliHelpRequested(%q) = false, want true", args)
-		}
-	}
-	for _, args := range [][]string{
-		{"--", "tool", "--help"},
-		{"--on", "cabal", "--", "tool", "-h"},
-	} {
-		if cliHelpRequested(args) {
-			t.Errorf("cliHelpRequested(%q) = true, want false", args)
-		}
-	}
-}
-
 func TestCmdGCChangesUsesExplicitLocalTarget(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	var stdout, stderr bytes.Buffer

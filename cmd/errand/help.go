@@ -7,18 +7,6 @@ import (
 	"strings"
 )
 
-func cliHelpRequested(args []string) bool {
-	for _, arg := range args {
-		if arg == "--" {
-			return false
-		}
-		if arg == "-h" || arg == "--help" {
-			return true
-		}
-	}
-	return false
-}
-
 func cmdVersion(args []string) int {
 	fs := flag.NewFlagSet("errand version", flag.ContinueOnError)
 	setFlagUsage(fs, "errand version")

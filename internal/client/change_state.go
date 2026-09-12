@@ -613,18 +613,38 @@ func tryAcquireLocalChangeLease(name string) (func(), bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		f.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
-			return nil, false, nil
+	// Inspectors hold shared leases only for the duration of a nonblocking
+	// probe. Give a descheduled inspector time to close without busy-waiting.
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			break
 		}
-		return nil, false, err
+		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
+			f.Close()
+			return nil, false, err
+		}
+		// Exclusive contention means another worker owns the job. Shared
+		// contention is only a read-only inspection; let it finish and retry.
+		err = syscall.Flock(int(f.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+		if err != nil {
+			f.Close()
+			if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+				return nil, false, nil
+			}
+			return nil, false, err
+		}
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		if time.Now().After(deadline) {
+			f.Close()
+			return nil, false, context.DeadlineExceeded
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
 	return func() {
-		// Contenders never wait on a lease, so unlinking before unlock cannot
-		// strand a waiter on the old inode. The owner has finished polling before
-		// this release runs, making a concurrently recreated lease harmless.
-		_ = os.Remove(f.Name())
+		// Keep the inode stable: an inspector or a starting worker may already
+		// have this file open. Unlinking would split ownership across inodes.
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		_ = f.Close()
 	}, true, nil

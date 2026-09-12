@@ -69,8 +69,33 @@ whether its logs are currently being observed. `--detach --apply` and Ctrl-D
 during an applying run hand completion to a detached local worker, which waits
 for success and applies into the originating workspace. `attach` remains
 observation-only and never chooses or changes that policy. If the worker or
-client machine stops, the persisted policy is resumed by the next client
-command on that machine.
+client machine stops, other CLI commands do not restart it. Once the remote
+job finishes, run `errand fetch --apply HANDLE` from its originating workspace
+to recover and apply its retained changes. Healthy workers continue normally,
+including their existing retries for temporary connection failures.
+If a completed job produced no changes, `fetch --apply` records completion
+without changing workspace files.
+
+`ps`, `status`, and `doctor` inspect saved apply state and existing worker
+ownership without restarting workers. An unfinished apply with no active owner
+is reported as **needs recovery**. This does not mean no files were changed:
+a crash can occur after installation but before completion was recorded.
+Explicit `fetch --apply` uses the transaction journal and current workspace
+checks to resolve that state safely. Conflicts and permanent failures retain
+their error details for review.
+
+The default `ps` listing includes jobs needing apply recovery even after remote
+execution finishes. Explicit peer, workspace, and `--last` filters still apply.
+`status` can show local apply state when the runner is unreachable, while
+reporting remote execution as unknown and returning a failure exit code.
+When only local evidence is available, JSON omits unavailable remote receipt
+fields rather than filling them with empty values. An expired job receipt is
+shown in `ps` without failing a successful fleet listing or suggesting that
+its missing changes can be fetched. An unreachable peer is queried once for
+its listing; local recovery information does not trigger further requests there.
+`doctor` warns about interrupted applies across this client's saved jobs.
+JSON reports the same apply state without extra diagnostic chatter on stdout.
+These reports reflect the state observed when each command runs.
 
 `[run].peer` chooses a preferred configured peer for new runs. `--on` or
 `--url` wins over this preference; an unknown workspace alias fails instead

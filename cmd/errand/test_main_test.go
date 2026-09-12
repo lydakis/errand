@@ -11,8 +11,8 @@ func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == "_automatic-apply" {
 		os.Exit(cmdAutomaticApply(os.Args[2:]))
 	}
-	// CLI entrypoints resume pending applies. Tests must never resume work
-	// from the developer's real client state.
+	// Inspection reads local apply records. Tests must not inspect or modify
+	// the developer's real client state.
 	stateHome, err := os.MkdirTemp("", "errand-cli-test-state-")
 	if err != nil {
 		panic(err)

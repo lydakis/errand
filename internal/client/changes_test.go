@@ -322,41 +322,89 @@ func TestAutomaticApplyWorkerAppliesCompletedDetachedJob(t *testing.T) {
 	}
 }
 
-func TestManualApplyRecoversFailedAutomaticApply(t *testing.T) {
+func TestManualApplyRecoversInterruptedAutomaticApply(t *testing.T) {
+	for _, initialState := range []string{automaticApplyPending, automaticApplyRunning, automaticApplyFailed} {
+		t.Run(initialState, func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			local, bundle, staged := testChangeApplyFixture(t, "base", "remote")
+			peerURL := "http://runner.test"
+			jobID := proto.NewULID()
+			opts := RunOptions{PeerURL: peerURL, Root: local, ApplyOnSuccess: true}
+			if err := initializeChangeState(context.Background(), &opts, jobID, bundle.BaselineRoot); err != nil {
+				t.Fatal(err)
+			}
+			state, err := loadLocalChangeState(peerURL, jobID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state.SubmissionStarted = true
+			state.AdmissionConfirmed = true
+			state.Terminal = true
+			state.AutomaticApply = initialState
+			state.AutomaticApplyErr = "temporary fetch failure"
+			if err := saveLocalChangeState(state); err != nil {
+				t.Fatal(err)
+			}
+
+			issues, err := InterruptedAutomaticApplies()
+			if err != nil || len(issues) != 1 {
+				t.Fatalf("before recovery: %+v, %v", issues, err)
+			}
+			if _, err := applyChangeBundle(peerURL, jobID, local, staged, bundle, nil, false); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(filepath.Join(local, "artifact"))
+			if err != nil || string(got) != "remote" {
+				t.Fatalf("manual recovery value = %q, %v", got, err)
+			}
+			state, err = loadLocalChangeState(peerURL, jobID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.AutomaticApply != automaticApplyApplied || state.AutomaticApplyErr != "" || state.AutomaticApplyDir != staged {
+				t.Fatalf("recovered automatic apply state = %+v", state)
+			}
+			issues, err = InterruptedAutomaticApplies()
+			if err != nil || len(issues) != 0 {
+				t.Fatalf("after recovery: %+v, %v", issues, err)
+			}
+
+		})
+	}
+}
+
+func TestManualApplySettlesNoChangesOnlyFromOrigin(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	local, bundle, staged := testChangeApplyFixture(t, "base", "remote")
-	peerURL := "http://runner.test"
-	jobID := proto.NewULID()
-	opts := RunOptions{PeerURL: peerURL, Root: local, ApplyOnSuccess: true}
-	if err := initializeChangeState(context.Background(), &opts, jobID, bundle.BaselineRoot); err != nil {
+	id := proto.NewULID()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		zero := 0
+		json.NewEncoder(w).Encode(proto.JobDetails{JobStatus: proto.JobStatus{ID: id, State: proto.StateExited,
+			Result: &proto.Result{ExitCode: &zero, ChangesOK: true}}})
+	}))
+	defer server.Close()
+	root := t.TempDir()
+	opts := RunOptions{PeerURL: server.URL, Root: root, ApplyOnSuccess: true}
+	if err := initializeChangeState(context.Background(), &opts, id, (proto.Manifest{}).RootHash()); err != nil {
 		t.Fatal(err)
 	}
-	state, err := loadLocalChangeState(peerURL, jobID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	state, _ := loadLocalChangeState(server.URL, id)
 	state.SubmissionStarted = true
-	state.AdmissionConfirmed = true
-	state.Terminal = true
-	state.AutomaticApply = automaticApplyFailed
-	state.AutomaticApplyErr = "temporary fetch failure"
 	if err := saveLocalChangeState(state); err != nil {
 		t.Fatal(err)
 	}
-
-	if _, err := applyChangeBundle(peerURL, jobID, local, staged, bundle, nil, false); err != nil {
-		t.Fatal(err)
-	}
-	got, err := os.ReadFile(filepath.Join(local, "artifact"))
-	if err != nil || string(got) != "remote" {
-		t.Fatalf("manual recovery value = %q, %v", got, err)
-	}
-	state, err = loadLocalChangeState(peerURL, jobID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if state.AutomaticApply != automaticApplyApplied || state.AutomaticApplyErr != "" || state.AutomaticApplyDir != staged {
-		t.Fatalf("recovered automatic apply state = %+v", state)
+	for _, caller := range []string{t.TempDir(), root} {
+		_, err := FetchChanges(ChangeFetchOptions{PeerURL: server.URL, JobID: id, Apply: true, CallerDir: caller})
+		if (err == nil) != (caller == root) {
+			t.Fatalf("caller=%s err=%v", caller, err)
+		}
+		status, err := GetAutomaticApplyStatus(server.URL, id)
+		want := "needs_recovery"
+		if caller == root {
+			want = automaticApplyNoChanges
+		}
+		if err != nil || status.State != want {
+			t.Fatalf("status=%+v err=%v", status, err)
+		}
 	}
 }
 

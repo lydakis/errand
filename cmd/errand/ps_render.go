@@ -25,6 +25,20 @@ func writePs(w io.Writer, rows []psRow) {
 	writePsWithOptions(w, rows, psRenderOptionsFor(w))
 }
 
+func psApplyText(row psRow) string {
+	if !applyNeedsAttention(row.AutomaticApply) {
+		return ""
+	}
+	if row.applyNote != "" {
+		return row.applyNote
+	}
+	state := "needs recovery"
+	if row.AutomaticApply.State == "failed" {
+		state = "failed"
+	}
+	return state + "; " + applyRecoveryHint(row.Peer+"/"+row.ID, row.AutomaticApply)
+}
+
 func writePsWithOptions(w io.Writer, rows []psRow, options psRenderOptions) {
 	if len(rows) == 0 {
 		fmt.Fprintln(w, "No jobs.")
@@ -104,6 +118,9 @@ func writePsCardsWithStyle(w io.Writer, rows []psRow, width int, style bool) {
 		writeWrappedFields(w, "  ", metadata, width)
 		if row.Command != "" {
 			writeWrappedLabeledLine(w, "  ", "command ", row.Command, width)
+		}
+		if text := psApplyText(row); text != "" {
+			writeWrappedLabeledLine(w, "  ", "apply ", terminalSafeField(text), width)
 		}
 	}
 }
@@ -236,16 +253,21 @@ func terminalRuneWidth(r rune) int {
 func writePsTable(w io.Writer, rows []psRow) {
 	tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
 	showWorkdir := false
+	showApply := false
 	for _, row := range rows {
+		showApply = showApply || applyNeedsAttention(row.AutomaticApply)
 		if psWorkdir(row.JobListEntry) != "" {
 			showWorkdir = true
-			break
 		}
 	}
+	headerEnd := "COMMAND"
+	if showApply {
+		headerEnd += "\tAPPLY"
+	}
 	if showWorkdir {
-		fmt.Fprintln(tw, "PEER\tPROJECT\tJOB\tSTATE\tEXIT\tADMITTED\tSTARTED\tDURATION\tSOURCE\tWORKDIR\tCOMMAND")
+		fmt.Fprintln(tw, "PEER\tPROJECT\tJOB\tSTATE\tEXIT\tADMITTED\tSTARTED\tDURATION\tSOURCE\tWORKDIR\t"+headerEnd)
 	} else {
-		fmt.Fprintln(tw, "PEER\tPROJECT\tJOB\tSTATE\tEXIT\tADMITTED\tSTARTED\tDURATION\tSOURCE\tCOMMAND")
+		fmt.Fprintln(tw, "PEER\tPROJECT\tJOB\tSTATE\tEXIT\tADMITTED\tSTARTED\tDURATION\tSOURCE\t"+headerEnd)
 	}
 	for _, row := range rows {
 		exit := psExit(row.JobListEntry)
@@ -275,12 +297,16 @@ func writePsTable(w io.Writer, rows []psRow) {
 			cmd = string(commandRunes[:59]) + "…"
 		}
 		if showWorkdir {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s",
 				row.Peer, project, row.ID, row.State, exit, admitted, started, duration, source, workdir, cmd)
 		} else {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s",
 				row.Peer, project, row.ID, row.State, exit, admitted, started, duration, source, cmd)
 		}
+		if showApply {
+			fmt.Fprint(tw, "\t"+terminalSafeField(cmpOr(psApplyText(row), "-")))
+		}
+		fmt.Fprintln(tw)
 	}
 	_ = tw.Flush()
 }

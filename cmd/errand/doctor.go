@@ -30,7 +30,7 @@ type doctorReport struct {
 	SocketPath       string               `json:"socket_path,omitempty"`
 }
 
-const doctorScope = "Checks this installation, any configured local runner, and access to the selected peer's info. Custom service definitions and serve CLI overrides require separate inspection. No job is submitted or configuration changed. Success does not guarantee snapshot validity, command availability, submission permission, or capacity."
+const doctorScope = "Checks this installation, local automatic-apply state, any configured local runner, and access to the selected peer's info. Custom service definitions and serve CLI overrides require separate inspection. No job is submitted or configuration changed. Success does not guarantee snapshot validity, command availability, submission permission, or capacity."
 
 type doctorProbe func(context.Context, string) (proto.Info, error)
 
@@ -211,6 +211,7 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 			}
 		}
 	}
+	report.Checks = append(report.Checks, doctorApplyChecks()...)
 	return finishDoctorReport(stdout, stderr, report, *asJSON)
 }
 

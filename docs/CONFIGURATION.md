@@ -642,7 +642,11 @@ or capacity can change after the check.
 
 Doctor does not select or hash snapshot files, validate job command
 availability, submit jobs, change grants or configuration, restart services,
-acquire restart leases, or resume pending automatic applications.
+acquire restart leases, or resume pending automatic applications. It reads
+local apply records and probes existing worker locks to warn about interrupted
+applies, with `errand fetch --apply HANDLE` as the explicit recovery step once
+the job finishes. This check does not contact the saved jobs' runners or create
+client state.
 
 Exit codes are `0` when no check failed (warnings and unconfigured skips are
 allowed), `1` when any local or peer check failed or report output failed, and

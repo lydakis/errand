@@ -18,7 +18,7 @@ type statusJSON struct {
 	Peer           string                       `json:"peer"`
 	Handle         string                       `json:"handle"`
 	AutomaticApply *client.AutomaticApplyStatus `json:"automatic_apply,omitempty"`
-	proto.JobDetails
+	*proto.JobDetails
 }
 
 func cmdStatus(args []string) int {
@@ -47,33 +47,49 @@ func cmdStatusTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "errand: %v\n", err)
 		return 2
 	}
-	details, err := client.GetJobDetails(peerURL, jobID)
-	if err != nil {
-		fmt.Fprintf(stderr, "errand: %v\n", err)
-		return 1
-	}
 	label = cmpOr(label, peerURL)
 	handle := label + "/" + jobID
 	automaticApply, applyErr := client.GetAutomaticApplyStatus(peerURL, jobID)
 	if applyErr != nil {
 		fmt.Fprintf(stderr, "errand: reading automatic apply state: %v\n", applyErr)
 	}
+	details, detailErr := client.GetJobDetails(peerURL, jobID)
+	if detailErr != nil {
+		fmt.Fprintf(stderr, "errand: %v\n", detailErr)
+		if automaticApply == nil {
+			return 1
+		}
+	}
 	if *jsonOutput {
+		var remote *proto.JobDetails
+		if detailErr == nil {
+			remote = &details
+		}
 		encoder := json.NewEncoder(stdout)
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(statusJSON{
-			Peer: label, Handle: handle, AutomaticApply: automaticApply, JobDetails: details,
+			Peer: label, Handle: handle, AutomaticApply: automaticApply, JobDetails: remote,
 		}); err != nil {
 			fmt.Fprintf(stderr, "errand: encoding job status: %v\n", err)
 			return 1
 		}
-		if applyErr != nil {
+		if applyErr != nil || detailErr != nil {
 			return 1
 		}
 		return 0
 	}
-	writeStatus(stdout, label, handle, details, automaticApply)
-	if applyErr != nil {
+	if detailErr == nil {
+		writeStatus(stdout, label, handle, details, automaticApply)
+	} else {
+		writeStatusField(stdout, "Job", handle)
+		if client.IsNotFound(detailErr) {
+			writeStatusField(stdout, "State", "unknown; job receipt is no longer retained on this runner")
+		} else {
+			writeStatusField(stdout, "State", "unknown; runner unavailable")
+		}
+		writeStatusField(stdout, "Automatic apply", formatAutomaticApply(*automaticApply))
+	}
+	if applyErr != nil || detailErr != nil {
 		return 1
 	}
 	return 0
@@ -119,6 +135,7 @@ func writeStatus(
 	writeStatusField(w, "Logs", statusLogs(details))
 	if automaticApply != nil {
 		writeStatusField(w, "Automatic apply", formatAutomaticApply(*automaticApply))
+		writeApplyRecoveryHint(w, handle, automaticApply)
 	}
 
 	if details.Result != nil && details.Result.Changes != nil {
@@ -156,6 +173,11 @@ func writeStatus(
 
 func formatAutomaticApply(status client.AutomaticApplyStatus) string {
 	switch status.State {
+	case client.AutomaticApplyNeedsRecovery:
+		if status.Error != "" {
+			return "needs recovery; no active worker: " + status.Error
+		}
+		return "needs recovery; no active worker"
 	case "pending":
 		if status.Error != "" {
 			return "pending retry: " + status.Error

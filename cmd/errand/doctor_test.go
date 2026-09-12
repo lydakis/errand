@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -102,9 +103,7 @@ func TestDoctorProbeDiagnostics(t *testing.T) {
 
 func TestDoctorOnlyRequestsInfoAndDoesNotResumeApplies(t *testing.T) {
 	if os.Getenv("ERRAND_DOCTOR_ENTRYPOINT_TEST") == "1" {
-		// Override TestMain's isolated state after it runs, so accidental
-		// automatic-apply resumption still emits a diagnostic.
-		t.Setenv("XDG_STATE_HOME", "invalid-relative-state")
+		t.Setenv("XDG_STATE_HOME", os.Getenv("ERRAND_DOCTOR_TEST_STATE"))
 		os.Args = []string{"errand", "doctor", "--json"}
 		main()
 		return
@@ -119,7 +118,8 @@ func TestDoctorOnlyRequestsInfoAndDoesNotResumeApplies(t *testing.T) {
 	writeClientConfig(t, fmt.Sprintf("default_peer = 'test'\n[peers.test]\nurl = %q\n", server.URL))
 	t.Chdir(t.TempDir())
 	command := exec.Command(os.Args[0], "-test.run=^TestDoctorOnlyRequestsInfoAndDoesNotResumeApplies$")
-	command.Env = append(os.Environ(), "ERRAND_DOCTOR_ENTRYPOINT_TEST=1")
+	stateRoot := filepath.Join(t.TempDir(), "absent-state")
+	command.Env = append(os.Environ(), "ERRAND_DOCTOR_ENTRYPOINT_TEST=1", "ERRAND_DOCTOR_TEST_STATE="+stateRoot)
 	var out, errOut bytes.Buffer
 	command.Stdout, command.Stderr = &out, &errOut
 	if err := command.Run(); err != nil || errOut.Len() != 0 {
@@ -135,8 +135,8 @@ func TestDoctorOnlyRequestsInfoAndDoesNotResumeApplies(t *testing.T) {
 	if got := <-requests; got != "GET /v0/info" {
 		t.Fatalf("unexpected request %s", got)
 	}
-	if _, err := os.Stat("invalid-relative-state"); !os.IsNotExist(err) {
-		t.Fatalf("doctor touched client state: %v", err)
+	if _, err := os.Stat(stateRoot); !os.IsNotExist(err) {
+		t.Fatalf("doctor created client state: %v", err)
 	}
 }
 

@@ -105,6 +105,9 @@ errand attach HANDLE
 
 Ctrl-C interrupts the remote command. Reattaching follows logs; it doesn't
 bring changed files back. To start detached, use `errand -d -- COMMAND`.
+If an automatic-apply worker stops, `ps`, `status`, and `doctor` report that
+recovery is needed. After the remote job finishes, use `errand fetch --apply
+HANDLE` from the original workspace. Inspection commands do not restart workers.
 
 ## Let Errand choose a runner
 

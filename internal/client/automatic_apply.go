@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -41,9 +39,9 @@ type automaticApplyOutcome struct {
 	err    string
 }
 
-// AutomaticApplyStatus is the originating client's durable view of a job's
-// requested automatic application. It is absent on clients that did not
-// submit the job.
+// AutomaticApplyStatus combines the originating client's saved apply policy
+// with observed worker ownership. AutomaticApplyNeedsRecovery is derived, never persisted.
+// It is absent on clients that did not submit the job.
 type AutomaticApplyStatus struct {
 	State    string `json:"state"`
 	Error    string `json:"error,omitempty"`
@@ -99,80 +97,6 @@ func automaticApplyWorkerEnvironment() []string {
 		}
 	}
 	return env
-}
-
-// ResumeAutomaticApplies restarts completion workers interrupted by a client
-// crash or machine restart. The apply decision was already persisted by the
-// original job submission; this function does not create new apply intent.
-func ResumeAutomaticApplies() error {
-	root, err := localChangeRoot()
-	if err != nil {
-		return err
-	}
-	jobs := filepath.Join(root, "jobs")
-	entries, err := os.ReadDir(jobs)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	var resumeErrs []error
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-		owner := strings.TrimSuffix(entry.Name(), ".json")
-		if !validLocalChangeKey(owner) {
-			continue
-		}
-		statePath := filepath.Join(jobs, entry.Name())
-		raw, err := os.ReadFile(statePath)
-		if err != nil {
-			resumeErrs = append(resumeErrs, fmt.Errorf("reading %s: %w", entry.Name(), err))
-			continue
-		}
-		var intent struct {
-			ApplyOnSuccess bool `json:"apply_on_success"`
-		}
-		if err := json.Unmarshal(raw, &intent); err != nil {
-			resumeErrs = append(resumeErrs, fmt.Errorf("reading %s: %w", entry.Name(), err))
-			continue
-		}
-		if !intent.ApplyOnSuccess {
-			continue
-		}
-		state, err := loadLocalChangeStateFile(statePath, owner)
-		if err != nil {
-			resumeErrs = append(resumeErrs, fmt.Errorf("loading %s: %w", entry.Name(), err))
-			continue
-		}
-		if !state.SubmissionStarted || !state.ApplyOnSuccess || automaticApplyFinished(state.AutomaticApply) {
-			continue
-		}
-		needsStart, err := automaticApplyWorkerNeedsStart(state.PeerURL, state.JobID)
-		if err != nil {
-			resumeErrs = append(resumeErrs, fmt.Errorf("checking %s: %w", state.JobID, err))
-			continue
-		}
-		if !needsStart {
-			continue
-		}
-		if err := launchAutomaticApplyWorker(state.PeerURL, state.JobID); err != nil {
-			resumeErrs = append(resumeErrs, fmt.Errorf("resuming %s: %w", state.JobID, err))
-		}
-	}
-	return errors.Join(resumeErrs...)
-}
-
-func automaticApplyWorkerNeedsStart(peerURL, jobID string) (bool, error) {
-	key := localChangeKey(peerURL, jobID)
-	unlock, acquired, err := tryAcquireLocalChangeLease(localAutomaticApplyWorkerLockName(key))
-	if err != nil || !acquired {
-		return false, err
-	}
-	unlock()
-	return true, nil
 }
 
 // RunAutomaticApplyWorker completes the apply policy already recorded for a
@@ -408,13 +332,14 @@ func automaticApplyForJob(peerURL, jobID string) (automaticApplyOutcome, bool, e
 }
 
 func GetAutomaticApplyStatus(peerURL, jobID string) (*AutomaticApplyStatus, error) {
-	outcome, requested, err := automaticApplyForJob(peerURL, jobID)
-	if err != nil || !requested {
+	state, err := loadLocalChangeState(peerURL, jobID)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
 		return nil, err
 	}
-	return &AutomaticApplyStatus{
-		State: outcome.state, Error: outcome.err, StagedAt: outcome.staged,
-	}, nil
+	return inspectAutomaticApply(state)
 }
 
 func recordAutomaticApply(peerURL, jobID string, outcome automaticApplyOutcome) error {

@@ -106,6 +106,9 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 			}
 			return "", fmt.Errorf("job's workspace changes were not retained")
 		}
+		if opts.Apply && opts.Path == "" {
+			return "", settleNoChangeApply(opts)
+		}
 		return "", fmt.Errorf("job produced no workspace changes")
 	}
 	var staged string
@@ -366,6 +369,37 @@ func changeSelectionComplete(paths []string, selected map[string]bool) bool {
 		}
 	}
 	return true
+}
+
+func settleNoChangeApply(opts ChangeFetchOptions) error {
+	state, err := loadLocalChangeState(opts.PeerURL, opts.JobID)
+	if err != nil {
+		return err
+	}
+	if err := validateApplyCallerWorkspace(state.Root, opts.CallerDir); err != nil {
+		return err
+	}
+	return withWorkspaceChangeLock(state.Root, func() error {
+		state, err := loadLocalChangeState(opts.PeerURL, opts.JobID)
+		if err != nil {
+			return err
+		}
+		if err := validateApplyCallerWorkspace(state.Root, opts.CallerDir); err != nil {
+			return err
+		}
+		if err := validateLocalWorkspaceIdentity(state); err != nil {
+			return err
+		}
+		if state.Pending != "" {
+			return fmt.Errorf("job has an interrupted apply transaction but no retained changes")
+		}
+		if state.ApplyOnSuccess {
+			state.AutomaticApply = automaticApplyNoChanges
+			state.AutomaticApplyErr, state.AutomaticApplyDir = "", ""
+			return saveLocalChangeState(state)
+		}
+		return nil
+	})
 }
 
 func markRecoveredAutomaticApply(state *localChangeState, staged string, complete bool) {

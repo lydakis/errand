@@ -853,8 +853,11 @@ func TestAutomaticApplyWorkerLeaseDeduplicatesPollers(t *testing.T) {
 		stateRoot, "locks",
 		localAutomaticApplyWorkerLockName(localChangeKey(server.URL, jobID))+".lock",
 	)
-	if _, err := os.Lstat(leasePath); !os.IsNotExist(err) {
-		t.Fatalf("completed automatic apply worker retained lease file: %v", err)
+	if _, err := os.Lstat(leasePath); err != nil {
+		t.Fatalf("worker lease inode must remain stable: %v", err)
+	}
+	if active, err := automaticApplyWorkerActive(server.URL, jobID); err != nil || active {
+		t.Fatalf("completed worker still owns its lease: active=%t err=%v", active, err)
 	}
 }
 
@@ -953,7 +956,7 @@ func TestAutomaticApplyTreatsMissingConfirmedJobAsPermanent(t *testing.T) {
 	}
 }
 
-func TestResumeAutomaticAppliesRestartsOnlyUnfinishedPolicies(t *testing.T) {
+func TestAutomaticApplyInspectionFindsStoppedWorkers(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	previousLauncher := launchAutomaticApplyWorker
 	t.Cleanup(func() { launchAutomaticApplyWorker = previousLauncher })
@@ -997,21 +1000,25 @@ func TestResumeAutomaticAppliesRestartsOnlyUnfinishedPolicies(t *testing.T) {
 	}
 	defer unlock()
 
-	if err := ResumeAutomaticApplies(); err != nil {
+	issues, err := InterruptedAutomaticApplies()
+	if err != nil {
 		t.Fatal(err)
 	}
+	if len(started) != 0 {
+		t.Fatal("inspection started a worker")
+	}
 	resumed := map[string]bool{}
-	for len(started) != 0 {
-		resumed[<-started] = true
+	for _, issue := range issues {
+		resumed[issue.PeerURL+"/"+issue.JobID] = true
 	}
 	if !resumed[peerURL+"/"+pendingID] {
-		t.Fatal("unfinished automatic apply was not resumed")
+		t.Fatal("stopped automatic apply was not reported")
 	}
 	if resumed[peerURL+"/"+activeID] {
-		t.Fatal("active automatic apply worker was redundantly resumed")
+		t.Fatal("active worker was reported as stopped")
 	}
 	if len(resumed) != 1 {
-		t.Fatalf("unexpected automatic applies resumed: %v", resumed)
+		t.Fatalf("unexpected stopped applies: %v", resumed)
 	}
 }
 

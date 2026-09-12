@@ -95,16 +95,6 @@ func runCLI(args []string) int {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
 	}
-	skipResume := cliHelpRequested(args)
-	switch args[0] {
-	case "serve", "setup", "_automatic-apply", "_stdio", "version", "config", "access", "doctor":
-		skipResume = true
-	}
-	if !skipResume {
-		if err := client.ResumeAutomaticApplies(); err != nil {
-			fmt.Fprintf(os.Stderr, "errand: resuming automatic workspace applications: %v\n", err)
-		}
-	}
 	switch args[0] {
 	case "serve":
 		return cmdServe(args[1:])
@@ -398,7 +388,9 @@ func cmdFetch(args []string) int {
 		}
 		return client.ExitTransaction
 	}
-	if *apply {
+	if *apply && staged == "" {
+		fmt.Fprintln(os.Stderr, "errand: no workspace changes to apply")
+	} else if *apply {
 		fmt.Fprintf(os.Stderr, "errand: workspace changes applied from %s\n", staged)
 	} else {
 		fmt.Fprintln(os.Stdout, staged)
@@ -449,7 +441,9 @@ func cmpOr(a, b string) string {
 }
 
 type psRow struct {
-	Peer string `json:"peer"`
+	applyNote      string
+	Peer           string                       `json:"peer"`
+	AutomaticApply *client.AutomaticApplyStatus `json:"automatic_apply,omitempty"`
 	proto.JobListEntry
 }
 
@@ -607,34 +601,50 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "errand: --last must not exceed %d\n", proto.MaxJobListEntries)
 		return 2
 	}
-	list := client.List
-	if !all && last == 0 {
-		list = client.ListActive
+	local, inspectErr := client.InspectAutomaticApplies()
+	byPeer := make(map[string][]client.AutomaticApplyInspection)
+	for _, record := range local {
+		byPeer[record.PeerURL] = append(byPeer[record.PeerURL], record)
 	}
-	if workspaceSet {
-		list = func(url string) ([]proto.JobListEntry, error) {
-			return client.ListWorkspace(url, *workspace, !all && last == 0)
-		}
-	}
-	read, err := readFleet(*rawURL, *on, stderr, list)
+	targets, warnings, err := peerTargets(*rawURL, *on)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand: %v\n", err)
+		fmt.Fprintln(stderr, "errand:", err)
 		return 1
 	}
-
+	read := fleetRead[[]psRow]{targets: targets, failed: len(warnings) != 0 || inspectErr != nil}
+	for _, warning := range warnings {
+		fmt.Fprintln(stderr, "errand:", warning)
+	}
+	if inspectErr != nil {
+		fmt.Fprintln(stderr, "errand: inspecting apply state:", inspectErr)
+	}
+	if len(targets) == 0 {
+		fmt.Fprintln(stderr, "errand:", errNoUsablePeers)
+		return 1
+	}
 	rows := make([]psRow, 0)
-	for _, result := range read.results {
-		for _, e := range result.value {
-			rows = append(rows, psRow{Peer: result.target.name, JobListEntry: e})
+	for _, result := range queryPeerTargets(targets, func(url string) ([]psRow, error) {
+		return psPeerRows(url, *workspace, !all && last == 0, byPeer[url])
+	}) {
+		if result.err != nil {
+			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
+			read.failed = true
+		} else {
+			read.results = append(read.results, result)
+		}
+		for _, row := range result.value {
+			row.Peer = result.target.name
+			rows = append(rows, row)
 		}
 	}
+
 	sort.SliceStable(rows, func(i, k int) bool {
 		return rows[i].ID > rows[k].ID
 	})
 	if !all && last == 0 {
 		active := rows[:0]
 		for _, row := range rows {
-			if activeJobState(row.State) {
+			if activeJobState(row.State) || applyNeedsAttention(row.AutomaticApply) {
 				active = append(active, row)
 			}
 		}
