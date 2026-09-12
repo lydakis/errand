@@ -101,10 +101,10 @@ func TestWorkspaceWhereCreationReportsSelectedPeer(t *testing.T) {
 		d.Handler().ServeHTTP(w, r)
 	}))
 	defer second.Close()
-	writeClientConfig(t, fmt.Sprintf("[peers.first]\nurl=%q\n[peers.second]\nurl=%q\n", first.URL, second.URL))
+	writeClientConfig(t, fmt.Sprintf("[peers.first]\nurl=%q\n[peers.second]\nurl=%q\n[profiles.dev.run]\nworkspace='existing'\nwhere='*'\n", first.URL, second.URL))
 	t.Chdir(t.TempDir())
 	var out, stderr bytes.Buffer
-	if code := cmdWorkspacesTo([]string{"create", "--where", "*", "--no-snapshot", "--json", "experiment"}, &out, &stderr); code != 0 {
+	if code := cmdWorkspacesTo([]string{"create", "--profile", "dev", "--no-snapshot", "--json", "experiment"}, &out, &stderr); code != 0 {
 		t.Fatalf("code=%d stderr=%s", code, &stderr)
 	}
 	var result struct {

@@ -26,6 +26,7 @@ type runConfigFlags struct {
 	session                       sessionFlags
 	envs, passenvs                stringList
 	profile                       string
+	workspace                     string
 	on, url, where, workdir, root string
 	apply, noApply, noSnapshot    bool
 }
@@ -40,6 +41,7 @@ func (f *runConfigFlags) bind(fs *flag.FlagSet) {
 	fs.Var(&f.envs, "e", "set NAME=VALUE in the job environment (repeatable)")
 	fs.Var(&f.passenvs, "passenv", "require and forward a local environment variable (repeatable; replaces configured pass list)")
 	fs.StringVar(&f.profile, "profile", "", "named run preferences from workspace or personal configuration")
+	fs.StringVar(&f.workspace, "workspace", "", "use an existing persistent workspace; overrides the selected profile and never uploads local edits")
 	fs.StringVar(&f.where, "where", "", "select a configured runner matching facts, e.g. os=linux,go or *")
 	fs.StringVar(&f.on, "on", "", "peer name from personal configuration, or local")
 	fs.StringVar(&f.url, "url", "", "peer base URL (mutually exclusive with --on and --where)")
@@ -107,6 +109,12 @@ func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error)
 		result.Environment.Set[name] = value
 	}
 	result.Profile = f.profile
+	if set["workspace"] {
+		if err := proto.ValidateWorkspaceName(f.workspace); err != nil {
+			return result, fmt.Errorf("--workspace: %w", err)
+		}
+		result.Workspace = &f.workspace
+	}
 	if set["profile"] && f.profile == "" {
 		return result, fmt.Errorf("--profile requires a non-empty name")
 	}
@@ -186,6 +194,10 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "errand: %v\n", err)
 		return client.ExitTransaction
 	}
+	if err := effective.PrepareExecution(false); err != nil {
+		fmt.Fprintln(stderr, "errand:", err)
+		return 2
+	}
 	if *asJSON {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetIndent("", "  ")
@@ -198,6 +210,7 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 			value any
 		}{
 			{"profile", effective.Profile},
+			{"workspace", effective.Workspace},
 			{"where", effective.Where}, {"peer", effective.Peer}, {"url", effective.URL},
 			{"remote_command", effective.RemoteCommand}, {"remote_socket", effective.RemoteSocket},
 			{"workspace_root", effective.Root}, {"workdir", displaySourceWorkdir(effective)},
@@ -209,6 +222,9 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 		} {
 			if _, exists := effective.Sources[row.key]; !exists {
 				continue
+			}
+			if effective.Workspace != "" && (row.key == "caches" && !effective.CachesOverride || row.key == "artifacts" && !effective.ArtifactsOverride) {
+				row.value = "inherited (resolved on runner)"
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\n", row.key, terminalSafeField(fmt.Sprint(row.value)), terminalSafeField(effective.Sources[row.key]))
 		}

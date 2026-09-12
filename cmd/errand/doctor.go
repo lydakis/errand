@@ -116,6 +116,12 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 		effective, err = config.ResolveRun(cwd, overrides)
 	}
 	noPeer := errors.Is(err, config.ErrNoPeerSelected)
+	if err == nil || noPeer {
+		if executionErr := effective.PrepareExecution(false); executionErr != nil {
+			err = executionErr
+			noPeer = false
+		}
+	}
 	if err != nil && !noPeer {
 		report.Checks = append(report.Checks,
 			doctorCheck{Name: "configuration", Status: "error", Detail: err.Error(), Hint: "Correct the reported configuration or select a configured peer with --on NAME."},

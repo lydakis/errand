@@ -67,7 +67,7 @@ Commands:
   errand status HANDLE           Inspect a job and its results
   errand attach HANDLE           Follow a job's logs
   errand fetch HANDLE [PATH]      Stage, apply, or export retained files
-  errand push --workspace NAME    Stage or apply local files on a runner
+  errand push [options]           Stage or apply local files in a selected workspace
   errand kill HANDLE             Stop a job
   errand df                      Show storage use
   errand gc TARGET               Collect caches, jobs, or local changes

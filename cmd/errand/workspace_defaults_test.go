@@ -22,7 +22,7 @@ func TestWorkspaceCreationDefaults(t *testing.T) {
 			defer d.Close()
 			srv := httptest.NewServer(d.Handler())
 			defer srv.Close()
-			writeClientConfig(t, fmt.Sprintf("default_peer = 'test'\n[peers.test]\nurl = %q\n", srv.URL))
+			writeClientConfig(t, fmt.Sprintf("default_peer = 'test'\n[peers.test]\nurl = %q\n[profiles.dev.run]\nworkspace = 'experiment'\n", srv.URL))
 			t.Chdir(t.TempDir())
 			if err := os.WriteFile(".errandignore", []byte("ignored/\n"), 0600); err != nil {
 				t.Fatal(err)
@@ -31,12 +31,16 @@ func TestWorkspaceCreationDefaults(t *testing.T) {
 				t.Fatal(err)
 			}
 			name := "experiment"
-			args := []string{"create"}
+			args := []string{"create", "--profile", "dev"}
+			var creationConfig string
 			switch scenario {
 			case "creation-cache-default":
-				args = append(args, "--cache", "compiler=target")
+				creationConfig = "[caches]\ncompiler = 'target'\n"
 			case "creation-artifact-default":
-				args = append(args, "--artifact", "ignored")
+				creationConfig = "[artifacts]\npaths = ['ignored']\n"
+			}
+			if err := os.WriteFile(".errand.toml", []byte(creationConfig), 0600); err != nil {
+				t.Fatal(err)
 			}
 			var out, stderr bytes.Buffer
 			if code := cmdWorkspacesTo(append(args, name), &out, &stderr); code != 0 {

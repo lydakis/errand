@@ -159,6 +159,8 @@ for details.
   without disturbing your current checkout. [Local setup and usage](docs/USAGE.md#local-jobs).
 - **Keep working in the same workspace:** create one explicitly and reuse it across
   jobs. [Persistent workspaces](docs/USAGE.md#persistent-workspaces).
+- **Ongoing development:** keep a remote server running and push local edits.
+  [Persistent development guide](docs/USAGE.md#persistent-development-loop).
 - **Collect a test report:** `errand --artifact reports -- make test` retains
   ignored output too. [Artifacts and exporting results](docs/USAGE.md#artifacts-and-caches).
 - **Speed up repeat builds:** `errand --cache compiler=target -- cargo test`

@@ -1,6 +1,10 @@
 package workspace
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/lydakis/errand/internal/proto"
+)
 
 // Profile is a named set of run preferences shared by personal and workspace
 // configuration. It cannot change snapshot boundaries or define transports.
@@ -10,9 +14,10 @@ type Profile struct {
 	Session     Session     `toml:"session"`
 	Environment Environment `toml:"env,omitempty"`
 	Run         struct {
-		Where   *string `toml:"where,omitempty"`
-		Peer    *string `toml:"peer,omitempty"`
-		Workdir *string `toml:"workdir,omitempty"`
+		Workspace *string `toml:"workspace,omitempty"`
+		Where     *string `toml:"where,omitempty"`
+		Peer      *string `toml:"peer,omitempty"`
+		Workdir   *string `toml:"workdir,omitempty"`
 	} `toml:"run,omitempty"`
 	Changes struct {
 		ApplyOnSuccess *bool `toml:"apply_on_success,omitempty"`
@@ -61,12 +66,17 @@ func (p *Profile) UnmarshalTOML(value any) error {
 		}
 		for key, raw := range fields {
 			switch section + "." + key {
-			case "run.peer", "run.workdir", "run.where":
+			case "run.peer", "run.workdir", "run.where", "run.workspace":
 				value, ok := raw.(string)
 				if !ok {
 					return fmt.Errorf("profile.%s.%s must be a string", section, key)
 				}
-				if key == "peer" {
+				if key == "workspace" {
+					if err := proto.ValidateWorkspaceName(value); err != nil {
+						return fmt.Errorf("profile.run.workspace: %w", err)
+					}
+					p.Run.Workspace = &value
+				} else if key == "peer" {
 					p.Run.Peer = &value
 				} else if key == "where" {
 					p.Run.Where = &value

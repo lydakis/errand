@@ -8,14 +8,12 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
-	"github.com/lydakis/errand/internal/proto"
 )
 
 func cmdRun(args []string) int {
 	fs := flag.NewFlagSet("errand", flag.ContinueOnError)
 	var settings runConfigFlags
 	settings.bind(fs)
-	workspace := fs.String("workspace", "", "run in an explicitly created persistent workspace; never upload local edits")
 	includeAll := fs.Bool("include-all", false, "allow an otherwise refused broad snapshot (never permits a filesystem root)")
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
 	fs.BoolVar(detach, "d", false, "return after admission, printing the job handle on stdout")
@@ -44,22 +42,6 @@ func cmdRun(args []string) int {
 		return 2
 	}
 	argv := args[split+1:]
-	workspaceSet := false
-	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "workspace" {
-			workspaceSet = true
-		}
-	})
-	if workspaceSet {
-		if err := proto.ValidateWorkspaceName(*workspace); err != nil {
-			fmt.Fprintln(os.Stderr, "errand:", err)
-			return 2
-		}
-		if settings.noSnapshot || *includeAll {
-			fmt.Fprintln(os.Stderr, "errand: --workspace cannot use --no-snapshot or --include-all")
-			return 2
-		}
-	}
 	if len(argv) == 0 {
 		fmt.Fprintln(os.Stderr, "errand: empty command after \"--\"")
 		return 2
@@ -77,6 +59,10 @@ func cmdRun(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
+	if settings.workspace != "" && (settings.noSnapshot || *includeAll) {
+		fmt.Fprintln(os.Stderr, "errand: persistent workspace runs cannot use --no-snapshot or --include-all")
+		return 2
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
@@ -87,8 +73,8 @@ func cmdRun(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return client.ExitTransaction
 	}
-	if *workspace != "" && effective.Where != "" {
-		fmt.Fprintln(os.Stderr, "errand: --workspace requires a pinned peer; use --on instead of where")
+	if err := effective.PrepareExecution(*includeAll); err != nil {
+		fmt.Fprintln(os.Stderr, "errand:", err)
 		return 2
 	}
 	if *detach && len(effective.Forwards) != 0 {
@@ -101,21 +87,13 @@ func cmdRun(args []string) int {
 		return 2
 	}
 	env, passenvs := effective.JobEnvironment()
-	if *workspace != "" {
-		if !effective.CachesOverride {
-			effective.Caches = nil
-		}
-		if !effective.ArtifactsOverride {
-			effective.Artifacts = nil
-		}
-	}
 	for _, cache := range effective.Caches {
 		fmt.Fprintf(os.Stderr, "errand: using cache %q at %q\n", cache.Name, cache.Path)
 	}
 	for _, artifact := range effective.Artifacts {
 		fmt.Fprintf(os.Stderr, "errand: retaining artifact %q\n", artifact)
 	}
-	if !effective.NoSnapshot && *workspace == "" {
+	if !effective.NoSnapshot && effective.Workspace == "" {
 		fmt.Fprintf(os.Stderr, "errand: workspace root %s (from %s)\n", terminalSafeField(effective.Root), terminalSafeField(effective.Sources["workspace_root"]))
 		fmt.Fprintf(os.Stderr, "errand: command workdir %s\n", terminalSafeField(displaySourceWorkdir(effective)))
 	}
@@ -130,7 +108,7 @@ func cmdRun(args []string) int {
 	}
 	opts := client.RunOptions{
 		Where:     effective.Where,
-		Workspace: *workspace,
+		Workspace: effective.Workspace,
 		Artifacts: effective.Artifacts, Caches: effective.Caches, Root: effective.Root,
 		Argv: argv, Env: env, PassEnv: passenvs, Workdir: effective.Workdir,
 		Project: effective.Project, IncludeAll: *includeAll, NoSnapshot: effective.NoSnapshot,

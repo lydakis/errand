@@ -9,7 +9,8 @@ automatic apply, precedence is:
 4. Personal defaults.
 5. Safe defaults: no automatic apply and no implicit peer.
 
-Profiles can also set a workdir, overriding the caller's relative directory;
+Explicitly selected profiles can select an existing persistent workspace with
+`run.workspace`; `--workspace NAME` overrides it. Profiles can also set a workdir, overriding the caller's relative directory;
 an explicit CLI workdir wins. Environment settings use the same layers, with
 merge rules described below. Session forwarding and artifact declarations use
 list replacement at each layer. Detachment and broad snapshot opt-in remain CLI options.
@@ -223,12 +224,45 @@ shadowed personal profile. An empty workspace profile (`[profiles.build]`)
 therefore opts out of all settings in that personal profile. Other personal
 profiles remain available by name.
 
-Profiles support `run.peer`, `run.where`, `run.workdir`, `changes.apply_on_success`,
+Profiles support `run.peer`, `run.where`, `run.workspace`, `run.workdir`, `changes.apply_on_success`,
 `env.set`, `env.pass`, `session.forward`, `artifacts.paths`, and `caches`. Explicit `false` and empty workdir values override
 lower layers. Unsupported keys and incorrect value types are errors when
 loading configuration, including in inactive profiles. There is no profile
 inheritance, automatic profile selection, command definition, or transport
 configuration inside profiles.
+
+For persistent development, select the runner and workspace together:
+
+```toml
+[profiles.dev.run]
+peer = "mac-mini"
+workspace = "app-dev"
+workdir = "."
+```
+
+`errand --profile dev -- COMMAND` and `errand push --profile dev --apply` both
+use `app-dev` on `mac-mini`. `errand config --profile dev` shows the workspace
+and its source. An explicit `--workspace NAME` overrides the profile. The name
+must be valid and nonempty; a missing remote workspace fails instead of starting
+a fresh job. Without `--profile` or `--workspace`, runs remain ephemeral.
+`run.workspace` is supported only inside profiles, not as an ambient default.
+
+Config inspection stays offline and rejects incompatible persistent-run options.
+For caches and artifacts inherited from the existing workspace, the table shows
+`inherited (resolved on runner)`. JSON reports `null` with a creation-defaults
+source in `sources`, rather than displaying ambient settings that execution
+ignores. Explicit profile or CLI overrides remain visible; an explicit empty
+list is `[]`. Inspection does not verify workspace existence or whether explicit
+cache overrides match its fixed bindings. The runner's workspace settings are
+loaded when a command runs. Workspace creation still uses the resolved creation
+settings, including ambient caches and artifacts.
+
+Run and push require a pinned peer for persistent workspaces. Override any
+inherited `run.where` with a profile's `run.peer` or CLI `--on`/`--url`.
+Persistent runs cannot use `--no-snapshot` or `--include-all`.
+`workspaces create --profile dev app-dev` still requires an explicit creation
+name; it uses the profile's peer and creation settings, not its `run.workspace`.
+See the [development loop](USAGE.md#persistent-development-loop) for the full flow.
 
 Workspace profiles follow the same boundary and trust rules as workspace
 defaults. With `--no-snapshot`, only profiles in the current directory and

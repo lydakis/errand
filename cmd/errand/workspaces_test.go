@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/lydakis/errand/internal/client"
+	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -24,7 +25,7 @@ func TestWorkspaceCommandsCreateReuseAndRemove(t *testing.T) {
 	defer d.Close()
 	server := httptest.NewServer(d.Handler())
 	defer server.Close()
-	writeClientConfig(t, fmt.Sprintf("default_peer = 'test'\n[peers.test]\nurl = %q\n", server.URL))
+	writeClientConfig(t, fmt.Sprintf("default_peer = 'test'\n[peers.test]\nurl = %q\n[profiles.dev.run]\npeer = 'test'\nworkspace = 'experiment'\n[profiles.other.run]\nworkspace = 'missing'\n", server.URL))
 	root := t.TempDir()
 	t.Chdir(root)
 	for name, value := range map[string]string{".errandignore": "", ".errand.toml": "[caches]\ncompiler = 'target'\n", "file": "initial", "target/local": "do not upload"} {
@@ -36,7 +37,19 @@ func TestWorkspaceCommandsCreateReuseAndRemove(t *testing.T) {
 		}
 	}
 	var out, stderr bytes.Buffer
-	if code := cmdWorkspacesTo([]string{"create", "--json", "experiment"}, &out, &stderr); code != 0 {
+	if code := cmdConfigTo([]string{"--profile", "dev", "--json"}, &out, &stderr); code != 0 {
+		t.Fatalf("inspect profile: %d %s", code, &stderr)
+	}
+	var effective config.EffectiveRun
+	if err := json.Unmarshal(out.Bytes(), &effective); err != nil || effective.Workspace != "experiment" || !strings.Contains(effective.Sources["workspace"], "profiles.dev") {
+		t.Fatalf("workspace inspection: %+v %v", effective, err)
+	}
+	out.Reset()
+	// A selected profile must never fall back to an ephemeral job.
+	if code := cmdRun([]string{"--profile", "dev", "--", "true"}); code == 0 {
+		t.Fatal("missing profile workspace silently created a job")
+	}
+	if code := cmdWorkspacesTo([]string{"create", "--profile", "dev", "--json", "experiment"}, &out, &stderr); code != 0 {
 		t.Fatalf("create: %d %s", code, &stderr)
 	}
 	var workspace proto.Workspace
@@ -46,8 +59,12 @@ func TestWorkspaceCommandsCreateReuseAndRemove(t *testing.T) {
 	if err := os.WriteFile("file", []byte("local"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, script := range []string{"test \"$(cat file)\" = initial && test ! -e target/local && echo reused > target/remote && echo changed > file", "test \"$(cat file)\" = changed && test \"$(cat target/remote)\" = reused"} {
-		if code := cmdRun([]string{"--workspace", "experiment", "--no-apply", "--", "/bin/sh", "-c", script}); code != 0 {
+	for i, script := range []string{"test \"$(cat file)\" = initial && test ! -e target/local && echo reused > target/remote && echo changed > file", "test \"$(cat file)\" = changed && test \"$(cat target/remote)\" = reused"} {
+		args := []string{"--profile", "dev"}
+		if i == 1 {
+			args = []string{"--profile", "other", "--workspace", "experiment"}
+		}
+		if code := cmdRun(append(args, "--no-apply", "--", "/bin/sh", "-c", script)); code != 0 {
 			t.Fatalf("persistent run: %d", code)
 		}
 	}
@@ -161,5 +178,27 @@ func TestWorkspaceCommandValidation(t *testing.T) {
 		if code := cmdRun(append(args, "--", "true")); code != 2 {
 			t.Fatalf("accepted %v: %d", args, code)
 		}
+	}
+}
+
+func TestProfileWorkspaceRejectsIncompatibleRunOptions(t *testing.T) {
+	writeClientConfig(t, "default_peer = 'test'\n[peers.test]\nurl = 'http://runner.invalid'\n[profiles.dev.run]\nworkspace = 'development'\n[profiles.ephemeral.run]\npeer = 'test'\n")
+	t.Chdir(t.TempDir())
+	for _, flags := range [][]string{{"--no-snapshot"}, {"--include-all"}, {"--where", "*"}, {"--workspace", ""}} {
+		args := append([]string{"--profile", "dev"}, flags...)
+		if code := cmdRun(append(args, "--", "true")); code != 2 {
+			t.Fatalf("run %v: %d", flags, code)
+		}
+	}
+	var out, stderr bytes.Buffer
+	if code := cmdPushTo([]string{"--profile", "ephemeral"}, &out, &stderr); code != 2 || !strings.Contains(stderr.String(), "run.workspace") {
+		t.Fatalf("push without workspace: %d %s", code, &stderr)
+	}
+	if err := os.WriteFile(".errand.toml", []byte("[run]\nwhere = '*'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stderr.Reset()
+	if code := cmdPushTo([]string{"--profile", "dev"}, &out, &stderr); code != 2 || !strings.Contains(stderr.String(), "pinned peer") {
+		t.Fatalf("push with automatic placement: %d %s", code, &stderr)
 	}
 }

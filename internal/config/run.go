@@ -23,14 +23,16 @@ type RunOverrides struct {
 	Forwards                        []string
 	Environment                     workspace.Environment
 	Profile                         string
+	Workspace                       *string
 	Peer, URL, Where, WorkspaceRoot string
 	Workdir                         *string
 	ApplyOnSuccess                  *bool
 	NoSnapshot                      bool
 }
 
-// EffectiveRun is shared by submission and config inspection. URL is the
-// configured endpoint, before the client installs its private SSH identity.
+// EffectiveRun holds locally resolved preferences. PrepareExecution applies
+// persistent-job rules for submission and inspection. URL is the configured
+// endpoint, before the client installs its private SSH identity.
 type EffectiveRun struct {
 	// Explicit CLI or selected-profile choices may override a persistent
 	// workspace's creation defaults. Ambient configuration cannot rebind it.
@@ -41,6 +43,7 @@ type EffectiveRun struct {
 	Forwards          []string              `json:"forward"`
 	Environment       []EnvironmentVariable `json:"environment,omitempty"`
 	Profile           string                `json:"profile,omitempty"`
+	Workspace         string                `json:"workspace,omitempty"`
 	Where             string                `json:"where,omitempty"`
 	Candidates        []RunCandidate        `json:"-"`
 	Peer              string                `json:"peer"`
@@ -119,6 +122,17 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	}
 	if cli.Profile != "" {
 		result.Sources["profile"] = profileSource
+	}
+	if profile.Run.Workspace != nil {
+		result.Workspace = *profile.Run.Workspace
+		result.Sources["workspace"] = profileSource + " run.workspace"
+	}
+	if cli.Workspace != nil {
+		if err := proto.ValidateWorkspaceName(*cli.Workspace); err != nil {
+			return result, fmt.Errorf("--workspace: %w", err)
+		}
+		result.Workspace = *cli.Workspace
+		result.Sources["workspace"] = "cli: --workspace"
 	}
 	session, err := resolveSession(personal.Session, selected.Session, profile.Session, cli.Forwards, personalSource, workspaceSource, profileSource)
 	if err != nil {

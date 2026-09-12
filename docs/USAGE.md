@@ -146,7 +146,8 @@ See [local-only setup](OPERATIONS.md#local-only-setup) and
 ## Persistent workspaces
 
 Ordinary runs use a fresh, ephemeral workspace. To keep files across jobs,
-create a persistent workspace explicitly, then select it on each run:
+create a persistent workspace explicitly, then select it with `--workspace`
+or an [explicit profile](CONFIGURATION.md#profiles):
 
 ```sh
 errand workspaces create --on mac-mini experiment
@@ -192,6 +193,53 @@ can fail if they change during capture; it is not an atomic workspace snapshot.
 For a stable final result, wait for writers to finish, then run a final command
 such as `errand --workspace experiment -- true` and fetch that job.
 
+### Persistent development loop
+
+Keep the server on your runner, edit locally, and push changes to the same
+workspace. For a pnpm project, add a profile to `.errand.toml`:
+
+```toml
+[profiles.dev.run]
+peer = "mac-mini"
+workspace = "app-dev"
+workdir = "."
+```
+
+From the project root, create the workspace and prepare the application once:
+
+```sh
+errand workspaces create --profile dev app-dev
+errand --profile dev -- pnpm install --frozen-lockfile
+errand --profile dev -- pnpm build:packages
+errand --profile dev --forward 3000 -- pnpm dev
+```
+
+Use your project's build and development commands and actual server port.
+Omit `build:packages` if your project does not need a separate shared-package
+build. Declare any required exported variables in the profile's `env.pass`
+before invoking these commands; Errand does not load `.env.local` files for you.
+Dependencies and build outputs remain in the persistent tree between jobs,
+including ignored files. Named caches are optional for this loop.
+
+Leave the server attached in that terminal and open `http://localhost:3000`
+in your local browser. In a second terminal, edit files in the same checkout:
+
+```sh
+errand push --profile dev --apply
+```
+
+Push delivers the local source changes into the running workspace. The
+application's existing file watchers can rebuild and hot reload without a
+server restart. Push completion confirms file application, not application
+readiness; check the server output and browser. If shared-package edits need
+a separate build, run `errand --profile dev -- pnpm build:packages` after push.
+Restart the development command when the application requires it.
+
+Runs do not upload edits automatically. Plain `push` stages without applying;
+`--apply` remains explicit even if the profile enables automatic result apply.
+Push uses three-way merging and refuses conflicts by default. Use a separate
+workspace when you need independent files for another development session.
+
 ### Send local edits into a persistent workspace
 
 Fetch addresses a job's fixed result. Push addresses the continuing workspace:
@@ -211,7 +259,7 @@ conflict markers and clean sibling changes. Existing markers are ordinary file
 contents. There is no transfer `--force`, background synchronization, or implicit
 fetch before push. Concurrent commands remain caller-managed writers.
 
-Push requires `--workspace NAME` and the originating checkout on the machine that
+Push requires `--workspace NAME` or a selected profile's `run.workspace`, and the originating checkout on the machine that
 created it. Job handles are fetch targets, not push targets. Workspace names are
 resolved to immutable IDs before transfer; deletion and recreation cannot redirect
 an in-flight push.
@@ -272,8 +320,9 @@ large source file therefore does not consume the delta allowance. Historical
 source bodies still consume storage, and pinned bodies cannot be reclaimed by GC.
 
 Profiles and configuration still provide peer, environment, workdir, forwarding,
-and apply preferences. Persistent workspace selection itself requires the
-explicit `--workspace` flag. Creation freezes ignore rules and named-cache
+and apply preferences. Persistent workspace selection requires the explicit
+`--workspace` flag or `run.workspace` in an explicitly selected profile.
+Creation freezes ignore rules and named-cache
 bindings; restored cache directories stay live inside the persistent tree. Ignored
 files generated inside the tree survive for later jobs, but returning them still
 requires artifact declarations. Per-run artifact flags can override retention.

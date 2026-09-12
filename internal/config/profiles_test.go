@@ -90,7 +90,7 @@ func TestProfileErrorsAndWorkdirOverride(t *testing.T) {
 }
 
 func TestProfileSchemaAndPersistence(t *testing.T) {
-	for _, body := range []string{"peer = 'mac'", "[run]\nurl = 'http://other'", "[run]\nworkdir = false", "[changes]\napply_on_sucess = true"} {
+	for _, body := range []string{"peer = 'mac'", "[run]\nurl = 'http://other'", "[run]\nworkdir = false", "[run]\nworkspace = false", "[run]\nworkspace = ''", "[run]\nworkspace = '../escape'", "[changes]\napply_on_sucess = true"} {
 		for _, location := range []string{"personal", "workspace"} {
 			t.Run(location+body, func(t *testing.T) {
 				profile := "\n[profiles.dev]\n" + strings.ReplaceAll(body, "[", "[profiles.dev.") + "\n"
@@ -107,7 +107,7 @@ func TestProfileSchemaAndPersistence(t *testing.T) {
 			})
 		}
 	}
-	root := runFixture(t, personalPeers+"\n[profiles.empty]\n[profiles.dev.run]\npeer = 'mac'\nworkdir = ''\n[profiles.dev.changes]\napply_on_success = false\n", "")
+	root := runFixture(t, personalPeers+"\n[profiles.empty]\n[profiles.dev.run]\npeer = 'mac'\nworkspace = 'development'\nworkdir = ''\n[profiles.dev.changes]\napply_on_success = false\n", "")
 	path, _ := ClientPath()
 	if _, err := AddPeer(path, "linux", Peer{URL: "http://updated:7443"}, true); err != nil {
 		t.Fatal(err)
@@ -116,10 +116,32 @@ func TestProfileSchemaAndPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := ResolveRun(root, RunOverrides{Profile: "dev"})
-	if err != nil || got.Peer != "mac" || got.ApplyOnSuccess || !strings.Contains(got.Sources["workdir"], "profiles.dev") {
+	if err != nil || got.Peer != "mac" || got.Workspace != "development" || got.ApplyOnSuccess || !strings.Contains(got.Sources["workdir"], "profiles.dev") {
 		t.Fatalf("profile lost during peer edits: %+v, %v", got, err)
 	}
 	if _, err := ResolveRun(root, RunOverrides{Profile: "empty", Peer: "mac"}); err != nil {
 		t.Fatalf("empty profile lost during peer edits: %v", err)
+	}
+}
+
+func TestProfileWorkspaceSelection(t *testing.T) {
+	root := runFixture(t, personalPeers+"\n[profiles.personal.run]\nworkspace = 'personal-dev'\n", "[profiles.dev.run]\npeer = 'mac'\nworkspace = 'project-dev'\n[profiles.personal]\n")
+	for _, tc := range []struct {
+		name   string
+		cli    RunOverrides
+		want   string
+		source string
+	}{
+		{"inactive", RunOverrides{}, "", ""},
+		{"selected", RunOverrides{Profile: "dev"}, "project-dev", "profiles.dev"},
+		{"override", RunOverrides{Profile: "dev", Workspace: new("other")}, "other", "cli: --workspace"},
+		{"shadowed", RunOverrides{Profile: "personal"}, "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ResolveRun(root, tc.cli)
+			if err != nil || got.Workspace != tc.want || !strings.Contains(got.Sources["workspace"], tc.source) {
+				t.Fatalf("resolved: %+v, %v", got, err)
+			}
+		})
 	}
 }

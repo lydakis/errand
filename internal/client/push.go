@@ -93,6 +93,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	}
 	policy := prep.selection
 	policy.Artifacts = ws.Selection.Artifacts
+	policy.Caches = ws.Selection.Caches
 	if (proto.Spec{Selection: policy}).Digest() != (proto.Spec{Selection: ws.Selection}).Digest() {
 		return fmt.Errorf("push selection policy differs from workspace creation; create a new workspace for the new policy")
 	}
