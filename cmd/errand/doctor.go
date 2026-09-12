@@ -20,13 +20,14 @@ import (
 type doctorCheck = setup.DiagnosticCheck
 
 type doctorReport struct {
-	OK         bool                 `json:"ok"`
-	Effective  *config.EffectiveRun `json:"effective,omitempty"`
-	Checks     []doctorCheck        `json:"checks"`
-	Info       *proto.Info          `json:"info,omitempty"`
-	LocalInfo  *proto.Info          `json:"local_info,omitempty"`
-	Scope      string               `json:"scope"`
-	SocketPath string               `json:"socket_path,omitempty"`
+	PlacementSkipped []placementExclusion `json:"placement_skipped,omitempty"`
+	OK               bool                 `json:"ok"`
+	Effective        *config.EffectiveRun `json:"effective,omitempty"`
+	Checks           []doctorCheck        `json:"checks"`
+	Info             *proto.Info          `json:"info,omitempty"`
+	LocalInfo        *proto.Info          `json:"local_info,omitempty"`
+	Scope            string               `json:"scope"`
+	SocketPath       string               `json:"socket_path,omitempty"`
 }
 
 const doctorScope = "Checks this installation, any configured local runner, and access to the selected peer's info. Custom service definitions and serve CLI overrides require separate inspection. No job is submitted or configuration changed. Success does not guarantee snapshot validity, command availability, submission permission, or capacity."
@@ -34,6 +35,7 @@ const doctorScope = "Checks this installation, any configured local runner, and 
 type doctorProbe func(context.Context, string) (proto.Info, error)
 
 type doctorServices struct {
+	where placementProbe
 	probe doctorProbe
 	local func(context.Context, string) setup.Diagnosis
 	ssh   func(context.Context, string) error
@@ -42,11 +44,13 @@ type doctorServices struct {
 func cmdDoctor(args []string) int {
 	return cmdDoctorWith(args, os.Stdout, os.Stderr, doctorServices{probe: func(ctx context.Context, target string) (proto.Info, error) {
 		return client.ProbeInfo(ctx, target, probeTimeout)
-	}, local: localDoctor, ssh: client.InspectSSH})
+	}, where: client.ProbeWhereInfo, local: localDoctor, ssh: client.InspectSSH})
 }
 
 func cmdDoctorTo(args []string, stdout, stderr io.Writer, probe doctorProbe) int {
-	return cmdDoctorWith(args, stdout, stderr, doctorServices{probe: probe})
+	return cmdDoctorWith(args, stdout, stderr, doctorServices{probe: probe, where: func(ctx context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
+		return probe(ctx, target)
+	}})
 }
 
 func localDoctor(ctx context.Context, path string) setup.Diagnosis {
@@ -120,6 +124,9 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 	} else {
 		report.Effective = &effective
 		detail := fmt.Sprintf("Selected %s at %s (from %s)", effective.Peer, effective.URL, effective.Sources["peer"])
+		if effective.Where != "" {
+			detail = fmt.Sprintf("Select a configured runner matching %s (from %s)", effective.Where, effective.Sources["where"])
+		}
 		if noPeer {
 			detail = "Run settings resolved; no outbound peer is selected."
 		}
@@ -135,11 +142,33 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 			if len(effective.Environment) != 0 {
 				report.Checks = append(report.Checks, doctorCheck{Name: "environment", Status: "ok", Detail: fmt.Sprintf("%d environment variables resolved; values hidden.", len(effective.Environment))})
 			}
+			var selectedInfo *proto.Info
+			var selectionTarget string
+			if effective.Where != "" {
+				probe := services.where
+				selection, selectionErr := chooseRunners(context.Background(), effective, probe)
+				report.PlacementSkipped = selection.Excluded
+				if !*asJSON && selectionErr == nil {
+					selection.printExcluded(stderr)
+				}
+				if selectionErr != nil {
+					report.Checks = append(report.Checks, doctorCheck{Name: "runner", Status: "error", Detail: selectionErr.Error(), Hint: "Check peer connectivity and requirements with errand peers."})
+					return finishDoctorReport(stdout, stderr, report, *asJSON)
+				}
+				chosen := selection.Choices[0]
+				effective.Peer, effective.URL = chosen.Name, chosen.URL
+				selectionTarget = chosen.Target
+				effective.RemoteCommand, effective.RemoteSocket = chosen.RemoteCommand, chosen.RemoteSocket
+				selectedInfo = &chosen.Info
+				report.Checks = append(report.Checks, doctorCheck{Name: "placement", Status: "ok", Detail: fmt.Sprintf("Selected %s for %s; capacity is a point-in-time observation.", chosen.Name, effective.Where)})
+			}
 			target := effective.URL
-			if overrides.URL == "" {
+			if selectionTarget != "" {
+				target = selectionTarget
+			} else if overrides.URL == "" {
 				target = client.ConfigureSSHPeer(target, effective.Peer, effective.RemoteCommand, effective.RemoteSocket)
 			}
-			if client.IsSSHPeer(target) && services.ssh != nil {
+			if client.IsSSHPeer(target) && services.ssh != nil && selectedInfo == nil {
 				ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 				sshErr := services.ssh(ctx, target)
 				cancel()
@@ -155,7 +184,13 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 				report.Checks = append(report.Checks, doctorCheck{Name: "ssh", Status: "ok", Detail: "Non-interactive SSH connected and resolved the configured bridge executable."})
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
-			info, probeErr := services.probe(ctx, target)
+			var info proto.Info
+			var probeErr error
+			if selectedInfo != nil {
+				info = *selectedInfo
+			} else {
+				info, probeErr = services.probe(ctx, target)
+			}
 			cancel()
 			if probeErr != nil {
 				report.Checks = append(report.Checks, doctorProbeFailure(effective.URL, probeErr))

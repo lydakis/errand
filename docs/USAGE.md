@@ -451,3 +451,21 @@ sends SIGKILL. `errand kill HANDLE` requests graceful SIGTERM termination;
 `errand kill --force HANDLE` sends SIGKILL. Staging and queued jobs can be
 cancelled durably before they start. A submission is rejected as busy only
 when both the configured running slots and bounded queue are full.
+
+## Choose a runner by requirements
+
+For commands that can run on several configured machines, use `--where`:
+
+```sh
+errand --where 'os=linux,kvm' -- ./run-vm-tests
+errand --where 'go' -- go test ./...
+```
+
+Errand filters for the required capabilities, chooses by available job capacity,
+and prints the selected peer. The returned job handle works with `attach`,
+`fetch`, and other job commands as usual. Use `--on` when you want a specific
+machine, including when continuing a persistent workspace.
+
+Requirements also work in workspace defaults and profiles. See
+[automatic runner selection](CONFIGURATION.md#automatic-runner-selection)
+for syntax, selection rules, local opt-in, and retry behavior.

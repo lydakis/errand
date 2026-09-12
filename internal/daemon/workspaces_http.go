@@ -13,6 +13,7 @@ import (
 	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/pathpolicy"
+	"github.com/lydakis/errand/internal/placement"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -36,6 +37,17 @@ func (d *Daemon) handleWorkspaceCreate(w http.ResponseWriter, r *http.Request, i
 	if err := proto.ValidateWorkspaceName(request.Name); err != nil {
 		httpError(w, 400, err.Error())
 		return
+	}
+	if request.Where != "" {
+		q, err := placement.Parse(request.Where)
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if missing := q.Missing(d.measurePlacementFacts(r.Context(), q, (&Job{}).buildEnv())); len(missing) > 0 {
+			httpError(w, http.StatusPreconditionFailed, strings.Join(missing, "; "))
+			return
+		}
 	}
 	d.workspaces.mu.Lock()
 	_, existingErr := d.workspaces.lookup(d.workspaceOwner(id), request.Name)

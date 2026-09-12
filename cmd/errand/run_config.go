@@ -19,15 +19,15 @@ import (
 
 // Both submission and inspection use these flags and the same resolver.
 type runConfigFlags struct {
-	caches                     stringList
-	noCaches                   bool
-	artifacts                  stringList
-	noArtifacts                bool
-	session                    sessionFlags
-	envs, passenvs             stringList
-	profile                    string
-	on, url, workdir, root     string
-	apply, noApply, noSnapshot bool
+	caches                        stringList
+	noCaches                      bool
+	artifacts                     stringList
+	noArtifacts                   bool
+	session                       sessionFlags
+	envs, passenvs                stringList
+	profile                       string
+	on, url, where, workdir, root string
+	apply, noApply, noSnapshot    bool
 }
 
 func (f *runConfigFlags) bind(fs *flag.FlagSet) {
@@ -40,8 +40,9 @@ func (f *runConfigFlags) bind(fs *flag.FlagSet) {
 	fs.Var(&f.envs, "e", "set NAME=VALUE in the job environment (repeatable)")
 	fs.Var(&f.passenvs, "passenv", "require and forward a local environment variable (repeatable; replaces configured pass list)")
 	fs.StringVar(&f.profile, "profile", "", "named run preferences from workspace or personal configuration")
+	fs.StringVar(&f.where, "where", "", "select a configured runner matching facts, e.g. os=linux,go or *")
 	fs.StringVar(&f.on, "on", "", "peer name from personal configuration, or local")
-	fs.StringVar(&f.url, "url", "", "peer base URL (mutually exclusive with --on)")
+	fs.StringVar(&f.url, "url", "", "peer base URL (mutually exclusive with --on and --where)")
 	fs.StringVar(&f.workdir, "workdir", "", "working directory, relative to the workspace root")
 	fs.StringVar(&f.workdir, "w", "", "working directory, relative to the workspace root")
 	fs.StringVar(&f.root, "workspace-root", "", "snapshot root containing the current directory")
@@ -53,7 +54,7 @@ func (f *runConfigFlags) bind(fs *flag.FlagSet) {
 func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error) {
 	set := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
-	result := config.RunOverrides{Peer: f.on, URL: f.url, WorkspaceRoot: f.root, NoSnapshot: f.noSnapshot}
+	result := config.RunOverrides{Peer: f.on, URL: f.url, Where: f.where, WorkspaceRoot: f.root, NoSnapshot: f.noSnapshot}
 	if set["artifact"] && set["no-artifacts"] {
 		return result, fmt.Errorf("--artifact and --no-artifacts are mutually exclusive")
 	}
@@ -108,6 +109,12 @@ func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error)
 	result.Profile = f.profile
 	if set["profile"] && f.profile == "" {
 		return result, fmt.Errorf("--profile requires a non-empty name")
+	}
+	if set["where"] && f.where == "" {
+		return result, fmt.Errorf("--where requires a non-empty selector")
+	}
+	if f.where != "" && (f.on != "" || f.url != "") {
+		return result, fmt.Errorf("--where cannot be combined with --on or --url")
 	}
 	if set["on"] && f.on == "" || set["url"] && f.url == "" {
 		return result, fmt.Errorf("--on and --url require non-empty values")
@@ -191,7 +198,7 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 			value any
 		}{
 			{"profile", effective.Profile},
-			{"peer", effective.Peer}, {"url", effective.URL},
+			{"where", effective.Where}, {"peer", effective.Peer}, {"url", effective.URL},
 			{"remote_command", effective.RemoteCommand}, {"remote_socket", effective.RemoteSocket},
 			{"workspace_root", effective.Root}, {"workdir", displaySourceWorkdir(effective)},
 			{"project", effective.Project}, {"apply_on_success", effective.ApplyOnSuccess},

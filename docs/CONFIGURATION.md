@@ -41,6 +41,79 @@ is retained through peer edits and appears as a personal choice in provenance.
 The resolver reads the personal file once per resolution; malformed TOML is
 an error even when CLI flags override its settings.
 
+### Automatic runner selection
+
+Use `--where` to select among your personally configured peers:
+
+```sh
+errand --where 'os=linux,kvm' -- ./run-vm-tests
+errand --where 'go,cpus>=4' -- go test ./...
+errand --where '*' -- make test
+```
+
+Comma-separated requirements are combined with AND. Supported terms are
+`os=linux`, `os=darwin`, `arch=amd64`, `arch=arm64`, `cpus>=N`, `kvm`, and
+`git`, `nix`, `docker`, `podman`, `python3`, `go`, `cargo`, `node`.
+`*` alone accepts any eligible configured peer. Unknown terms are errors.
+CPU counts describe the machine, not reserved cores. Tool requirements check
+installed executables; Docker and Podman additionally must answer `info` as
+the runner's service user. These checks do not establish project dependencies,
+tool versions, GPU access, or the eventual command's success.
+
+For workspace defaults or a selected profile:
+
+```toml
+[run]
+where = "os=linux,kvm"
+
+[profiles.portable.run]
+where = "go"
+```
+
+Personal defaults use `default_where = "go"` at the top of
+`~/.config/errand/config.toml`. Use either `default_peer` or `default_where`.
+Within a run table, use either `peer` or `where`. Each higher-precedence
+selection replaces the lower one: `--on` or `--url` pins a target and clears
+configured requirements; `--where` replaces a configured peer. The three CLI
+selectors are mutually exclusive.
+
+Selection probes at most eight peers concurrently with a shared two-second
+deadline. Unreachable, full, incompatible, and nonmatching runners are skipped
+with a reason. Among matches, Errand prefers a free job slot, then the lowest
+ratio of staging, starting, running, and queued jobs to `max_jobs`. Ties are
+randomized. These are observed job counts, not CPU utilization or memory
+reservations. Errand prints the chosen peer; its alias appears in the normal
+job handle. There is no shared scheduler.
+
+Only personal peer entries participate. An installed local daemon is not
+included automatically. Add an empty `[peers.local]` table, a personal socket
+alias, or set `default_peer = "local"` to permit automatic selection of it.
+Workspace configuration cannot add transport targets.
+
+The runner rechecks executable access in the job's effective PATH before
+admission, without executing those tools. Docker and Podman probes run only
+with the daemon's base job environment and its own runtime executable; a job
+PATH that selects a different runtime is refused. Job environment overrides
+can change runtime behavior, so liveness in that environment is not guaranteed.
+Relative PATH entries cannot establish an installed tool for selection.
+Runtime probes share a one-second deadline, run concurrently, and allow at
+most four subprocesses across the daemon. Diagnostics distinguish timeouts
+from absent tools or a failing runtime. If a runner definitively rejects a
+job before admission because its capacity or requirements changed, Errand
+tries the next candidate. An uncertain submission stops selection and prints
+the original handle; it never sends the command to another runner. Queued jobs
+stay on their selected runner. Fallback reuses the prepared manifest and
+resolved environment. Files are checked against the manifest during upload;
+if they changed meanwhile, the upload fails instead of silently rebuilding it.
+
+`workspaces create --where ... NAME` chooses the initial host and rechecks
+requirements before creation. Its `--json` output includes the selected `peer`
+and configured `url`, so scripts can address the created workspace. Existing
+persistent workspace runs require a
+pinned peer; use `--on NAME` to override any configured `where`. `errand config`
+shows requirements and provenance without networking. `errand doctor` probes
+and reports the current choice without submitting a job.
+
 ### Local targets
 
 Available since v0.1.2. `--on local` is a built-in target
@@ -166,7 +239,7 @@ shadowed personal profile. An empty workspace profile (`[profiles.build]`)
 therefore opts out of all settings in that personal profile. Other personal
 profiles remain available by name.
 
-Profiles support `run.peer`, `run.workdir`, `changes.apply_on_success`,
+Profiles support `run.peer`, `run.where`, `run.workdir`, `changes.apply_on_success`,
 `env.set`, `env.pass`, `session.forward`, `artifacts.paths`, and `caches`. Explicit `false` and empty workdir values override
 lower layers. Unsupported keys and incorrect value types are errors when
 loading configuration, including in inactive profiles. There is no profile

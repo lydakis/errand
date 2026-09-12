@@ -10,6 +10,7 @@ type Profile struct {
 	Session     Session     `toml:"session"`
 	Environment Environment `toml:"env,omitempty"`
 	Run         struct {
+		Where   *string `toml:"where,omitempty"`
 		Peer    *string `toml:"peer,omitempty"`
 		Workdir *string `toml:"workdir,omitempty"`
 	} `toml:"run,omitempty"`
@@ -60,13 +61,15 @@ func (p *Profile) UnmarshalTOML(value any) error {
 		}
 		for key, raw := range fields {
 			switch section + "." + key {
-			case "run.peer", "run.workdir":
+			case "run.peer", "run.workdir", "run.where":
 				value, ok := raw.(string)
 				if !ok {
 					return fmt.Errorf("profile.%s.%s must be a string", section, key)
 				}
 				if key == "peer" {
 					p.Run.Peer = &value
+				} else if key == "where" {
+					p.Run.Where = &value
 				} else {
 					p.Run.Workdir = &value
 				}

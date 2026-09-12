@@ -34,6 +34,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
 	includeAll := false
 	if verb == "create" {
+		fs.StringVar(&settings.where, "where", "", "select a configured runner matching facts")
 		fs.StringVar(&settings.profile, "profile", "", "use a named configuration profile")
 		fs.StringVar(&settings.root, "workspace-root", "", "snapshot root containing the current directory")
 		fs.BoolVar(&settings.noSnapshot, "no-snapshot", false, "create an empty persistent workspace")
@@ -68,6 +69,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 	}
 	var url, label string
 	var opts client.RunOptions
+	var creationChoices []placementChoice
 	var err error
 	if verb == "create" {
 		if err := proto.ValidateWorkspaceName(fs.Arg(0)); err != nil {
@@ -89,11 +91,13 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "errand:", resolveErr)
 			return 1
 		}
-		url, label = effective.URL, effective.Peer
-		if settings.url == "" {
-			url = client.ConfigureSSHPeer(url, label, effective.RemoteCommand, effective.RemoteSocket)
+		creationChoices, err = runChoices(effective, settings.url != "", stderr)
+		if err != nil {
+			fmt.Fprintln(stderr, "errand:", err)
+			return 1
 		}
-		opts = client.RunOptions{PeerURL: url, Root: effective.Root, Project: effective.Project, Caches: effective.Caches, Artifacts: effective.Artifacts, NoSnapshot: effective.NoSnapshot, IncludeAll: includeAll}
+		opts = client.RunOptions{Where: effective.Where, Root: effective.Root, Project: effective.Project, Caches: effective.Caches, Artifacts: effective.Artifacts, NoSnapshot: effective.NoSnapshot, IncludeAll: includeAll, Stderr: stderr}
+
 	} else {
 		url, label, err = resolvePeerTarget(settings.url, settings.on)
 		if err != nil {
@@ -103,13 +107,21 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 	}
 	switch verb {
 	case "create":
+		var chosen placementChoice
+		configurePlacement(&opts, creationChoices, stderr, func(c placementChoice) { chosen = c })
 		w, err := client.CreateWorkspace(opts, fs.Arg(0))
+		url, label = chosen.URL, chosen.Name
+
 		if err != nil {
 			fmt.Fprintln(stderr, "errand:", err)
 			return 1
 		}
 		if *jsonOutput {
-			err = json.NewEncoder(out).Encode(w)
+			err = json.NewEncoder(out).Encode(struct {
+				proto.Workspace
+				Peer string `json:"peer"`
+				URL  string `json:"url"`
+			}{w, label, url})
 		} else {
 			_, err = fmt.Fprintf(out, "%s\n", w.Name)
 			fmt.Fprintf(stderr, "errand: created workspace %s on %s\n", w.Name, cmpOr(label, url))

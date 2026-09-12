@@ -91,7 +91,7 @@ func CreateWorkspace(opts RunOptions, name string) (proto.Workspace, error) {
 	selection := prep.selection
 	selection.Artifacts = opts.Artifacts
 	selection.Caches = opts.Caches
-	request := proto.Workspace{ID: proto.NewULID(), Name: name, Project: opts.Project, Selection: selection}
+	request := proto.Workspace{Where: opts.Where, ID: proto.NewULID(), Name: name, Project: opts.Project, Selection: selection}
 	if len(opts.Caches) > 0 {
 		var err error
 		request.CacheProjectID, err = cacheProjectID(opts.Root)
@@ -99,6 +99,20 @@ func CreateWorkspace(opts RunOptions, name string) (proto.Workspace, error) {
 			return result, err
 		}
 	}
+	resultWithError := tryCandidates(opts, func(attempt RunOptions) (workspaceCreation, bool) {
+		w, err := createPreparedWorkspace(attempt, prep, request)
+		return workspaceCreation{w, err}, placementRejection(err)
+	})
+	return resultWithError.workspace, resultWithError.err
+}
+
+type workspaceCreation struct {
+	workspace proto.Workspace
+	err       error
+}
+
+func createPreparedWorkspace(opts RunOptions, prep snapshotPreparation, request proto.Workspace) (proto.Workspace, error) {
+	var result proto.Workspace
 	if err := prep.guard.Verify(); err != nil {
 		return result, err
 	}
@@ -152,12 +166,15 @@ func CreateWorkspace(opts RunOptions, name string) (proto.Workspace, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		err := fmt.Errorf("creating workspace: %s: %s", resp.Status, apiError(raw))
+		var err error = fmt.Errorf("creating workspace: %s: %s", resp.Status, apiError(raw))
+		if resp.StatusCode == http.StatusPreconditionFailed {
+			err = &placementRefusal{err}
+		}
 		// These rejections precede publication. Transport failures, timeouts and
 		// server errors remain uncertain and must preserve the frozen origin.
 		switch resp.StatusCode {
 		case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden,
-			http.StatusConflict, http.StatusRequestEntityTooLarge:
+			http.StatusConflict, http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge:
 			err = errors.Join(err, discardWorkspaceOrigin(opts.PeerURL, request.ID))
 		}
 		return result, err

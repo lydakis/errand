@@ -22,6 +22,7 @@ type Selection struct {
 	Project        string
 	Source         string
 	ApplyOnSuccess *bool
+	Where          *string
 	Peer           *string
 	Profiles       map[string]Profile
 }
@@ -33,7 +34,8 @@ type projectConfig struct {
 	Environment Environment        `toml:"env"`
 	Profiles    map[string]Profile `toml:"profiles"`
 	Run         struct {
-		Peer *string `toml:"peer"`
+		Where *string `toml:"where"`
+		Peer  *string `toml:"peer"`
 	} `toml:"run"`
 	Workspace struct {
 		Root bool `toml:"root"`
@@ -168,7 +170,7 @@ func selection(root, cwd, source string, cfg projectConfig) (Selection, error) {
 		Artifacts: cfg.Artifacts, Caches: cfg.Caches,
 		Environment: cfg.Environment, Session: cfg.Session,
 		Root: root, Workdir: rel, Project: project, Source: source,
-		ApplyOnSuccess: cfg.Changes.ApplyOnSuccess, Peer: cfg.Run.Peer, Profiles: cfg.Profiles,
+		ApplyOnSuccess: cfg.Changes.ApplyOnSuccess, Peer: cfg.Run.Peer, Where: cfg.Run.Where, Profiles: cfg.Profiles,
 	}, nil
 }
 

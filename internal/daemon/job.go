@@ -838,8 +838,7 @@ func envValue(env []string, key string) string {
 
 func resolveExecutable(name, pathEnv, workdir string) (string, error) {
 	check := func(candidate string) (string, bool) {
-		fi, err := os.Stat(candidate)
-		return candidate, err == nil && fi.Mode().IsRegular() && fi.Mode().Perm()&0o111 != 0
+		return candidate, executableFile(candidate)
 	}
 	if strings.ContainsRune(name, filepath.Separator) {
 		candidate := name

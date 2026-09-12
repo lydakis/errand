@@ -72,7 +72,9 @@ type Admission struct {
 }
 
 type RunOptions struct {
-	BeforeContact func() // optional CLI advisory, after local validation and before network work
+	Where      string
+	Candidates []RunTarget     // ordered eligible runners; used only with Where
+	OnSelected func(RunTarget) // advisory before contacting each selected runner
 	// OnAdmitted observes one confirmed admission after retries and policy resolution.
 	OnAdmitted     func(Admission)
 	Workspace      string // explicitly selected existing persistent workspace
@@ -173,35 +175,53 @@ func runWithDetachNotifications(
 		return ExitTransaction
 	}
 	defer forwarding.Close()
-	if opts.BeforeContact != nil {
-		opts.BeforeContact()
-	}
+	var prep *snapshotPreparation
+	return tryCandidates(opts, func(attempt RunOptions) (int, bool) {
+		if prep == nil {
+			opts := attempt
+			prepared := make(chan snapshotPreparation, 1)
+			go func() {
+				if opts.Workspace != "" {
+					prepared <- prepareWorkspaceRun(opts)
+					return
+				}
+				prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot, opts.Caches...)
+			}()
+			var preparedSnapshot snapshotPreparation
+			select {
+			case <-sigCh:
+				errf("interrupted before submission")
+				return signalExit("interrupt", 2), false
+			case preparedSnapshot = <-prepared:
+			}
+			if preparedSnapshot.err != nil {
+				errf("%s: %v", preparedSnapshot.stage, preparedSnapshot.err)
+				return ExitTransaction, false
+			}
+			prep = &preparedSnapshot
+			files, snapshotBytes := snapshotSize(prep.manifest)
+			if opts.Workspace != "" {
+				fmt.Fprintf(opts.Stderr, "errand: using persistent workspace %s; local files are not uploaded\n", opts.Workspace)
+			} else if opts.NoSnapshot {
+				fmt.Fprintln(opts.Stderr, "errand: no snapshot; using an empty remote workspace")
+			} else {
+				fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
+			}
 
+		}
+		return runPrepared(attempt, *prep, env, envSources, forwarding, sigCh, interruptsControl, detach)
+	})
+}
+
+func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[string]string, forwarding *forwardSession, sigCh <-chan os.Signal, interruptsControl interruptNotifications, detach <-chan struct{}) (int, bool) {
+	errf := func(format string, args ...any) { fmt.Fprintf(opts.Stderr, "errand: "+format+"\n", args...) }
+	var err error
 	jobID := proto.NewULID()
 	handle := peerLabel(opts.PeerName, opts.PeerURL) + "/" + jobID
 	interruptCtx, stopInterrupts := context.WithCancel(context.Background())
 	defer stopInterrupts()
 	target := newInterruptTarget(opts.PeerURL, jobID, handle, errf, interruptsControl)
 
-	prepared := make(chan snapshotPreparation, 1)
-	go func() {
-		if opts.Workspace != "" {
-			prepared <- prepareWorkspaceRun(opts)
-			return
-		}
-		prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot, opts.Caches...)
-	}()
-	var prep snapshotPreparation
-	select {
-	case <-sigCh:
-		errf("interrupted before submission")
-		return signalExit("interrupt", 2)
-	case prep = <-prepared:
-	}
-	if prep.err != nil {
-		errf("%s: %v", prep.stage, prep.err)
-		return ExitTransaction
-	}
 	opts.selectionGuard = prep.guard
 	if prep.workspace != nil {
 		opts.workspaceID = prep.workspace.ID
@@ -229,25 +249,19 @@ func runWithDetachNotifications(
 		cancelChangeInit()
 		<-changeInitialized
 		errf("interrupted before submission")
-		return signalExit("interrupt", 2)
+		return signalExit("interrupt", 2), false
 	case err := <-changeInitialized:
 		cancelChangeInit()
 		if err != nil {
 			errf("%v", err)
-			return ExitTransaction
+			return ExitTransaction, false
 		}
 	}
 	paths, gitInfo, manifest := prep.paths, prep.gitInfo, prep.manifest
-	files, snapshotBytes := snapshotSize(manifest)
-	if opts.Workspace != "" {
-		fmt.Fprintf(opts.Stderr, "errand: using persistent workspace %s; local files are not uploaded\n", opts.Workspace)
-	} else if opts.NoSnapshot {
-		fmt.Fprintln(opts.Stderr, "errand: no snapshot; using an empty remote workspace")
-	} else {
-		fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
-	}
+	files, _ := snapshotSize(manifest)
 
 	spec := proto.Spec{
+		Where:          opts.Where,
 		WorkspaceID:    opts.workspaceID,
 		Argv:           opts.Argv,
 		Env:            env,
@@ -269,7 +283,7 @@ func runWithDetachNotifications(
 		spec.CacheProjectID, err = cacheProjectID(opts.Root)
 		if err != nil {
 			errf("cache project identity: %v", err)
-			return ExitTransaction
+			return ExitTransaction, false
 		}
 	}
 
@@ -289,7 +303,7 @@ func runWithDetachNotifications(
 		cancelNegotiation()
 		<-negotiated
 		errf("interrupted before submission")
-		return signalExit("interrupt", 2)
+		return signalExit("interrupt", 2), false
 	case negotiation = <-negotiated:
 		cancelNegotiation()
 	}
@@ -313,14 +327,18 @@ func runWithDetachNotifications(
 	if changeStateInitialized {
 		if err := markLocalChangeSubmissionStarted(opts.PeerURL, jobID); err != nil {
 			errf("recording change submission state: %v", err)
-			return ExitTransaction
+			return ExitTransaction, false
 		}
 	}
 	controller := admitJobController(interruptCtx, sigCh, target)
 	if controller == nil {
 		errf("interrupted before submission")
-		return signalExit("interrupt", 2)
+		return signalExit("interrupt", 2), false
 	}
+	defer func() {
+		stopInterrupts()
+		<-controller.done // release the shared signal channel before a fallback attempt
+	}()
 
 	submissionStarted = true
 	status, admissionUncertain, err := submit(opts, jobID, spec, manifest, plan)
@@ -328,7 +346,14 @@ func runWithDetachNotifications(
 		errf("%v", err)
 		if !admissionUncertain && submitDefinitelyRejected(err) {
 			submissionStarted = false
-			return ExitTransaction
+			stopInterrupts()
+			<-controller.done
+			select {
+			case <-controller.remote:
+				return signalExit("interrupt", 2), false
+			default:
+			}
+			return ExitTransaction, placementRejection(err)
 		}
 		if opts.ApplyOnSuccess {
 			if workerErr := handoffAutomaticApply(opts.PeerURL, jobID); workerErr != nil {
@@ -336,7 +361,7 @@ func runWithDetachNotifications(
 			}
 		}
 		errf("the job may have been admitted; handle %s", handle)
-		return ExitTransaction
+		return ExitTransaction, false
 	}
 	if opts.OnAdmitted != nil {
 		opts.OnAdmitted(Admission{
@@ -371,13 +396,13 @@ func runWithDetachNotifications(
 		if opts.Detach {
 			fmt.Fprintln(opts.Stdout, handle)
 		}
-		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted)
+		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted), false
 	}
 
 	reportAdmissionState(status, opts.Stderr)
 	final, err, detached := streamUntilDetach(opts, jobID, status, detach)
 	if detached {
-		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted)
+		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted), false
 	}
 	if err != nil {
 		if _, workerErr := ensureAutomaticApplyWorker(opts, jobID, automaticWorkerStarted); workerErr != nil {
@@ -385,7 +410,7 @@ func runWithDetachNotifications(
 		}
 		errf("%v", err)
 		errf("the job may still be running; resume with handle %s", handle)
-		return ExitTransaction
+		return ExitTransaction, false
 	}
 	if !controller.releaseAtTerminal(interruptCtx) {
 		forwarding.Close()
@@ -395,10 +420,10 @@ func runWithDetachNotifications(
 		stopInterrupts()
 		<-controller.done
 		errf("interrupted as the job completed; inspect or fetch workspace changes with handle %s", handle)
-		return signalExit("interrupt", 2)
+		return signalExit("interrupt", 2), false
 	}
 	forwarding.Close()
-	return finishTerminalChanges(opts, jobID, handle, final)
+	return finishTerminalChanges(opts, jobID, handle, final), false
 }
 
 func reportAdmissionState(status proto.JobStatus, stderr io.Writer) {

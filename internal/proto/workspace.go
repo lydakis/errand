@@ -21,6 +21,7 @@ func ValidateWorkspaceName(name string) error {
 // Workspace identifies an explicitly created persistent working tree. Manifest
 // and Selection describe its immutable creation snapshot, not its live files.
 type Workspace struct {
+	Where          string          `json:"where,omitempty"`
 	ID             string          `json:"id"`
 	Name           string          `json:"name"`
 	CreatedAt      time.Time       `json:"created_at"`

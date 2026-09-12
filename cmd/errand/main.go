@@ -41,7 +41,8 @@ Usage:
   errand COMMAND --help
 
 Run options:
-  --on PEER | --url URL           Select a runner (local for this machine)
+  --on PEER | --url URL | --where FACTS
+                                  Select a runner (local for this machine)
   --profile NAME                 Use a named configuration profile
   -d, --detach                   Return a job handle after admission
   -w, --workdir REL               Command directory within the workspace

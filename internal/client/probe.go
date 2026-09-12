@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -41,9 +42,17 @@ func (e *ProbeError) Error() string {
 
 // ProbeInfo fetches and validates a peer's /v0/info response.
 func ProbeInfo(ctx context.Context, peerURL string, timeout time.Duration) (proto.Info, error) {
+	return probeInfo(ctx, peerURL, "", timeout)
+}
+
+func ProbeWhereInfo(ctx context.Context, peerURL, where string, timeout time.Duration) (proto.Info, error) {
+	return probeInfo(ctx, peerURL, "?where="+url.QueryEscape(where), timeout)
+}
+
+func probeInfo(ctx context.Context, peerURL, query string, timeout time.Duration) (proto.Info, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(peerURL, "/")+"/v0/info", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(peerURL, "/")+"/v0/info"+query, nil)
 	if err != nil {
 		return proto.Info{}, &ProbeError{Kind: ProbeUnreachable, Detail: err.Error()}
 	}

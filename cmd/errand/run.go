@@ -88,6 +88,10 @@ func cmdRun(args []string, reporter *telemetry.Reporter) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return client.ExitTransaction
 	}
+	if *workspace != "" && effective.Where != "" {
+		fmt.Fprintln(os.Stderr, "errand: --workspace requires a pinned peer; use --on instead of where")
+		return 2
+	}
 	if *detach && len(effective.Forwards) != 0 {
 		fmt.Fprintln(os.Stderr, "errand: --detach cannot use configured forwards; add --no-forward")
 		return 2
@@ -116,22 +120,32 @@ func cmdRun(args []string, reporter *telemetry.Reporter) int {
 		fmt.Fprintf(os.Stderr, "errand: workspace root %s (from %s)\n", terminalSafeField(effective.Root), terminalSafeField(effective.Sources["workspace_root"]))
 		fmt.Fprintf(os.Stderr, "errand: command workdir %s\n", terminalSafeField(displaySourceWorkdir(effective)))
 	}
-	peerURL := effective.URL
-	// Raw URLs must remain the same identity used by handle resolution and
-	// local change-state lookups. Only configured aliases need SSH registration.
-	if overrides.URL == "" {
-		peerURL = client.ConfigureSSHPeer(peerURL, effective.Peer, effective.RemoteCommand, effective.RemoteSocket)
+	if effective.Where != "" && len(effective.MissingEnvironment()) != 0 {
+		fmt.Fprintf(os.Stderr, "errand: required local variables are unset: %q\n", effective.MissingEnvironment())
+		return client.ExitTransaction
 	}
-	return client.Run(client.RunOptions{
-		BeforeContact: func() { warnRunnerVersion(peerURL, effective.Peer) },
+	choices, err := runChoices(effective, overrides.URL != "", os.Stderr)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "errand:", err)
+		return client.ExitTransaction
+	}
+	var chosen placementChoice
+	opts := client.RunOptions{
+		Where: effective.Where,
 		OnAdmitted: func(admission client.Admission) {
-			reporter.Admitted(telemetry.Run{Transport: telemetryTransport(effective.URL), Workspace: admission.Workspace, Caches: admission.Caches, Artifacts: admission.Artifacts, Forwarding: admission.Forwarding, Apply: admission.Apply, Detached: admission.Detached})
+			reporter.Admitted(telemetry.Run{Transport: telemetryTransport(chosen.URL), Workspace: admission.Workspace, Caches: admission.Caches, Artifacts: admission.Artifacts, Forwarding: admission.Forwarding, Apply: admission.Apply, Detached: admission.Detached})
 		},
 		Workspace: *workspace,
-		Artifacts: effective.Artifacts, Caches: effective.Caches,
-		PeerURL: peerURL, PeerName: effective.Peer, Root: effective.Root,
+		Artifacts: effective.Artifacts, Caches: effective.Caches, Root: effective.Root,
 		Argv: argv, Env: env, PassEnv: passenvs, Workdir: effective.Workdir,
 		Project: effective.Project, IncludeAll: *includeAll, NoSnapshot: effective.NoSnapshot,
 		Detach: *detach, ApplyOnSuccess: effective.ApplyOnSuccess, Forwards: forwards,
+	}
+	configurePlacement(&opts, choices, os.Stderr, func(c placementChoice) {
+		chosen = c
+		if effective.Where == "" {
+			warnRunnerVersion(c.Target, c.Name)
+		}
 	})
+	return client.Run(opts)
 }

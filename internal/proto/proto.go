@@ -150,6 +150,7 @@ func (s ChangeSummary) Matches(bundle ChangeBundle) bool {
 // identity: same job ID + same digest is a retry, a different digest is a
 // conflict.
 type Spec struct {
+	Where          string            `json:"where,omitempty"`
 	WorkspaceID    string            `json:"workspace_id,omitempty"`
 	CacheProjectID string            `json:"cache_project_id,omitempty"`
 	Argv           []string          `json:"argv"`
@@ -172,6 +173,7 @@ func (s Spec) Digest() string {
 // ReceiptSpec is the durable, non-secret view of an admitted request. No value
 // derived from the runtime environment is persisted.
 type ReceiptSpec struct {
+	Where          string            `json:"where,omitempty"`
 	WorkspaceID    string            `json:"workspace_id,omitempty"`
 	CacheProjectID string            `json:"cache_project_id,omitempty"`
 	ReceiptVersion int               `json:"receipt_version"`
@@ -202,6 +204,7 @@ func NewReceiptSpec(s Spec) ReceiptSpec {
 	}
 	sort.Strings(names)
 	return ReceiptSpec{
+		Where:          s.Where,
 		WorkspaceID:    s.WorkspaceID,
 		ReceiptVersion: ReceiptVersion,
 		Argv:           s.Argv, EnvNames: names, EnvSources: s.EnvSources, Workdir: s.Workdir,
@@ -213,6 +216,7 @@ func NewReceiptSpec(s Spec) ReceiptSpec {
 
 func (r ReceiptSpec) SpecWithoutEnv() Spec {
 	return Spec{
+		Where:       r.Where,
 		WorkspaceID: r.WorkspaceID,
 		Argv:        r.Argv, EnvSources: r.EnvSources, Workdir: r.Workdir, ManifestRoot: r.ManifestRoot,
 		Limits: r.Limits, GitCommit: r.GitCommit, GitDirty: r.GitDirty, NoSnapshot: r.NoSnapshot,
@@ -456,10 +460,12 @@ type Facts struct {
 	Arch       string            `json:"arch"`
 	NumCPU     int               `json:"num_cpu"`
 	KVM        bool              `json:"kvm"`
-	Tools      map[string]string `json:"tools,omitempty"` // name -> resolved path
+	Tools      map[string]string `json:"tools,omitempty"`       // name -> resolved path
+	ToolErrors map[string]string `json:"tool_errors,omitempty"` // requested tools that could not be attested
 }
 
 type Info struct {
+	Placement   bool   `json:"placement"`            // admission-time requirement validation
 	LocalOnly   bool   `json:"local_only,omitempty"` // confirms network requests and SSH bridging are disabled
 	SSHDisabled bool   `json:"ssh_disabled"`
 	Proto       int    `json:"proto"`

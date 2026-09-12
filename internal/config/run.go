@@ -18,15 +18,15 @@ var ErrNoPeerSelected = errors.New("no peer selected")
 // RunOverrides contains only explicit caller choices. Pointers distinguish
 // an absent override from false or an empty (workspace-root) workdir.
 type RunOverrides struct {
-	Caches                   []proto.CacheBinding
-	Artifacts                []string
-	Forwards                 []string
-	Environment              workspace.Environment
-	Profile                  string
-	Peer, URL, WorkspaceRoot string
-	Workdir                  *string
-	ApplyOnSuccess           *bool
-	NoSnapshot               bool
+	Caches                          []proto.CacheBinding
+	Artifacts                       []string
+	Forwards                        []string
+	Environment                     workspace.Environment
+	Profile                         string
+	Peer, URL, Where, WorkspaceRoot string
+	Workdir                         *string
+	ApplyOnSuccess                  *bool
+	NoSnapshot                      bool
 }
 
 // EffectiveRun is shared by submission and config inspection. URL is the
@@ -41,6 +41,8 @@ type EffectiveRun struct {
 	Forwards          []string              `json:"forward"`
 	Environment       []EnvironmentVariable `json:"environment,omitempty"`
 	Profile           string                `json:"profile,omitempty"`
+	Where             string                `json:"where,omitempty"`
+	Candidates        []RunCandidate        `json:"-"`
 	Peer              string                `json:"peer"`
 	URL               string                `json:"url"`
 	RemoteCommand     string                `json:"remote_command,omitempty"`
@@ -58,6 +60,9 @@ type EffectiveRun struct {
 // inspect snapshot contents, register transports, or mutate client state.
 func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	var result EffectiveRun
+	if cli.Where != "" && (cli.Peer != "" || cli.URL != "") {
+		return result, fmt.Errorf("--where cannot be combined with --on or --url")
+	}
 	if cli.Peer != "" && cli.URL != "" {
 		return result, fmt.Errorf("--on and --url are mutually exclusive")
 	}
@@ -168,19 +173,11 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 		result.ApplyOnSuccess = *cli.ApplyOnSuccess
 		result.Sources["apply_on_success"] = "cli: --apply/--no-apply"
 	}
-	result.Peer = personal.DefaultPeer
-	result.Sources["peer"] = personalSource + " (default_peer)"
-	if selected.Peer != nil {
-		result.Peer = *selected.Peer
-		result.Sources["peer"] = workspaceSource + " (run.peer)"
+	if err := resolvePlacement(&result, personal, selected, profile, cli, personalSource, workspaceSource, profileSource); err != nil {
+		return result, err
 	}
-	if profile.Run.Peer != nil {
-		result.Peer = *profile.Run.Peer
-		result.Sources["peer"] = profileSource + " run.peer"
-	}
-	if cli.Peer != "" {
-		result.Peer = cli.Peer
-		result.Sources["peer"] = "cli: --on"
+	if result.Where != "" {
+		return result, nil
 	}
 	if cli.URL != "" {
 		result.URL = strings.TrimSuffix(cli.URL, "/")

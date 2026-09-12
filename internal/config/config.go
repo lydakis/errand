@@ -53,6 +53,7 @@ type Client struct {
 	Session        workspace.Session            `toml:"session"`
 	Environment    workspace.Environment        `toml:"env,omitempty"`
 	Profiles       map[string]workspace.Profile `toml:"profiles,omitempty"`
+	DefaultWhere   string                       `toml:"default_where,omitempty"`
 	DefaultPeer    string                       `toml:"default_peer,omitempty"`
 	ApplyOnSuccess *bool                        `toml:"apply_on_success,omitempty"`
 	Peers          map[string]Peer              `toml:"peers,omitempty"`
@@ -436,7 +437,7 @@ func prepareAddPeer(path, name string, peer Peer, replace bool) (addPeerState, e
 	if state.plan.Replacing && !replace {
 		return state, fmt.Errorf("peer %q already exists in %s (use --force to replace it)", name, path)
 	}
-	state.plan.MadeDefault = state.client.DefaultPeer == "" && len(state.client.Peers) == 0
+	state.plan.MadeDefault = state.client.DefaultPeer == "" && state.client.DefaultWhere == "" && len(state.client.Peers) == 0
 	return state, nil
 }
 

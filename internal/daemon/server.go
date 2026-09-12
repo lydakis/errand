@@ -30,6 +30,7 @@ import (
 	"github.com/lydakis/errand/internal/logio"
 	"github.com/lydakis/errand/internal/namedcache"
 	"github.com/lydakis/errand/internal/pathpolicy"
+	"github.com/lydakis/errand/internal/placement"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/tailnet"
 )
@@ -82,12 +83,13 @@ type Config struct {
 }
 
 type Daemon struct {
-	workspaces  *workspaceStore
-	namedCaches *namedcache.Store
-	cfg         Config
-	identity    tailnet.Provider
-	selfUID     uint32
-	cache       *blobCache // nil when the cache is disabled
+	placementSlots chan struct{}
+	workspaces     *workspaceStore
+	namedCaches    *namedcache.Store
+	cfg            Config
+	identity       tailnet.Provider
+	selfUID        uint32
+	cache          *blobCache // nil when the cache is disabled
 	// Kept per daemon so receipt and scope storage failures can be tested independently.
 	writeAdmissionReceipt func(*Job, string, any) error
 	writeProcessScope     func(string, any) error
@@ -163,7 +165,8 @@ func New(cfg Config) (*Daemon, error) {
 		cfg.MaxQueued = 0
 	}
 	d := &Daemon{
-		cfg: cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{},
+		placementSlots: make(chan struct{}, 4),
+		cfg:            cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{},
 		identity: identity, selfUID: currentUID(),
 		writeAdmissionReceipt: (*Job).writeJSON,
 		writeProcessScope:     replaceJSONDurable,
@@ -794,11 +797,22 @@ func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 }
 
 func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) {
+	facts := measureFacts()
+	if where := r.URL.Query().Get("where"); where != "" {
+		q, err := placement.Parse(where)
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		facts = d.measurePlacementFacts(r.Context(), q, (&Job{}).buildEnv())
+	}
+
 	d.mu.Lock()
 	o := d.occupancyLocked()
 	busy := d.capacityFullLocked() || d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil)
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, proto.Info{
+		Placement:    true,
 		SSHDisabled:  d.cfg.DisableSSH || d.cfg.LocalOnly,
 		LocalOnly:    d.cfg.LocalOnly,
 		Proto:        proto.ProtoVersion,
@@ -810,7 +824,7 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) 
 		QueuedJobs:   o.queued,
 		MaxJobs:      d.cfg.MaxJobs,
 		MaxQueued:    d.cfg.MaxQueued,
-		Facts:        measureFacts(),
+		Facts:        facts,
 	})
 }
 
@@ -954,6 +968,9 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 		return
 	}
 
+	var requirementError error
+	requirementsChecked := spec.Where == ""
+admissionCheck:
 	d.mu.Lock()
 	if existing, ok := d.jobs[jobID]; ok {
 		d.mu.Unlock()
@@ -1003,6 +1020,21 @@ func (d *Daemon) handleSubmit(w http.ResponseWriter, r *http.Request, id Identit
 			o.running, o.starting, o.staging, o.queued, d.cfg.MaxJobs, d.cfg.MaxQueued)
 		d.mu.Unlock()
 		httpError(w, http.StatusTooManyRequests, msg)
+		return
+	}
+	if !requirementsChecked {
+		d.mu.Unlock()
+		q, _ := placement.Parse(spec.Where) // validateSpec parsed the same immutable selector
+		if missing := q.Missing(d.measurePlacementFacts(r.Context(), q, (&Job{Spec: spec}).buildEnv())); len(missing) > 0 {
+			requirementError = fmt.Errorf("requirements no longer match: %s", strings.Join(missing, "; "))
+		}
+		requirementsChecked = true
+		// Recheck replay, quiescence and capacity after measuring outside the lock.
+		goto admissionCheck
+	}
+	if requirementError != nil {
+		d.mu.Unlock()
+		httpError(w, http.StatusPreconditionFailed, requirementError.Error())
 		return
 	}
 	dir := filepath.Join(d.jobsDir(), jobID)
@@ -1317,6 +1349,11 @@ func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 }
 
 func validateSpec(s proto.Spec, maxLimits proto.Limits) error {
+	if s.Where != "" {
+		if _, err := placement.Parse(s.Where); err != nil {
+			return err
+		}
+	}
 	if s.WorkspaceID != "" && (!proto.ValidULID(s.WorkspaceID) || s.NoSnapshot) {
 		return fmt.Errorf("persistent workspace requires a valid workspace_id and cannot use no_snapshot")
 	}

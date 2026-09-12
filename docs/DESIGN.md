@@ -84,6 +84,28 @@ node list and probes each online node's errand port with an authenticated
 implied by holding any errand capability (plus network-level access); no
 separate probe grant exists in v0.
 
+`--where` is opt-in client-side placement over personal peer entries. A shared
+probe deadline bounds latency and concurrency; matches prefer a free slot,
+then normalized occupied/queued capacity, with randomized ties. Installing a
+local daemon alone does not include it. Workspace defaults and profiles may
+select requirements, but cannot introduce transport authority. Fixed `--on`
+and `--url` selections override requirements and retain their normal path.
+
+Requested tool facts are measured in the runner's base job environment;
+Docker and Podman must answer `info` using only the daemon's executable and
+base environment, never submitted PATH or environment values. Admission checks
+executable access in the job PATH and requires runtime paths to resolve to the
+same file as the daemon's. Runtime probes are bounded and run outside the
+admission mutex, after replay, quiescence and capacity checks. Those checks are
+repeated after probing before reserving capacity. Requirements are
+part of the submission digest and receipt. An already admitted job's replay
+is answered from that job, even if facts have since changed. Only a definite
+pre-admission capacity or requirements refusal permits trying another peer;
+a transport failure after submission begins never permits cross-peer retry.
+There are no CPU/memory reservations, global queues, or post-admission moves.
+Persistent workspace creation can select a host, but continuing a workspace
+requires a pinned target. See [selection details](CONFIGURATION.md#automatic-runner-selection).
+
 `errand access [list|add|remove|deny|undeny]` inspects or edits the local runner
 config's `allow_users` and `deny_users`. It never changes a remote peer or
 active service. Activation requires a restart. Exact `deny_users` matches override both allowlist entries
@@ -132,11 +154,12 @@ remain backend-specific follow-on work.
 ```
 errand -- cargo test                  # configured default peer
 errand --on cabal -- nix flake check  # named peer (personal alias)
-errand --where kvm,x86_64 -- ...      # facts-based selection among peers
+errand --where kvm,arch=amd64 -- ...      # facts-based selection among peers
 ```
 
-Facts (arch, OS, cores, memory, /dev/kvm, container runtime, nix, disk
-free) are measured with `observed_at` timestamps. Client-side they are
+Facts (arch, OS, CPU count, /dev/kvm, and installed tools) are measured
+with `observed_at` timestamps. Memory, disk, GPU and tool-version
+requirements are not part of the current selector. Client-side they are
 selection hints; **the daemon revalidates them as requirements at
 admission** against the actual job user — `/dev/kvm` must be openable, a
 container runtime must actually respond, not merely sit on PATH.
@@ -925,7 +948,8 @@ Development builds can use an explicit version label to identify them
    `ssh://` peers with ControlMaster sharing, and a tailnet identity provider
    abstraction that also supports macOS runners.
 7. Nix backend.
-8. Facts-based `--where` selection with admission-time revalidation.
+8. Facts-based `--where` selection with admission-time revalidation. Implemented
+   with client-side capacity ranking; resource reservations remain out of scope.
 
 ### Next slices (2026-09-07)
 
@@ -1065,9 +1089,8 @@ unpublished upload directories. Failed upload cleanup stays inventoried and bloc
 new uploads to that workspace until startup retries it. GC stops on cancellation,
 including while waiting for a workspace gate. Push retries retain the original immutable request after
 an uncertain outcome, while completed receipts replay without reapplying files.
-The next feature slice is rootless container execution.
-
-Nix and facts-based selection remain later work. A harness wrapper can build
+Facts-based selection is now implemented. Rootless container execution and
+Nix remain deferred until concrete use cases justify their lifecycle costs. A harness wrapper can build
 on job execution and workspace continuity while owning its own agent-thread
 resumption; Errand need not own harness-specific conversation state.
 
