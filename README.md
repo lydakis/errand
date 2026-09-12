@@ -106,6 +106,19 @@ errand attach HANDLE
 Ctrl-C interrupts the remote command. Reattaching follows logs; it doesn't
 bring changed files back. To start detached, use `errand -d -- COMMAND`.
 
+## Let Errand choose a runner
+
+Have several runners? Ask for what your command needs:
+
+```sh
+errand --where 'os=linux,go' -- go test ./...
+```
+
+Errand checks your configured runners for Linux and Go, then chooses among
+the matches based on available job capacity. It prints the selected peer;
+detach, attach, and fetch work as usual. See [runner selection](docs/CONFIGURATION.md#automatic-runner-selection)
+for other requirements and saved preferences.
+
 ## Open a remote development server locally
 
 Start your project's development server on your Mac mini, including its

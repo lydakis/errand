@@ -269,10 +269,12 @@ Use repeatable `--cache NAME=PATH` for a run override, or `--no-caches` to disab
 bindings. `errand config` shows the effective list and its source.
 
 Caches are runner-local and disposable. They are excluded from snapshots and
-retained results even when artifact declarations include them. The runner
-refuses concurrent reuse of a leased cache until process cleanup completes.
-See [named caches](NAMED_CACHES.md) for lifecycle behavior, project identity,
+retained results even when artifact declarations include them. Jobs can reuse
+the same cache concurrently; commands must cooperate with native shared-file
+behavior. See [named caches](NAMED_CACHES.md) for lifecycle behavior, project identity,
 `df`, `gc cache`, and the runner's separate `[named_cache]` budget.
+For installed dependencies and package downloads, see the
+[pnpm examples](NAMED_CACHES.md#pnpm-installed-dependencies-and-download-store).
 
 ## Artifact declarations
 

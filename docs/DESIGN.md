@@ -1,8 +1,8 @@
 # errand — a personal job runner for machines you own
 
-> **Status: frozen for v0** (2026-08-28). Further conceptual elaboration is
-> deliberately deferred until milestone 1 replaces `scripts/remote-check`
-> in the Atlas workflow and reality reports back.
+> This document describes the current implementation on `main`, including
+> unreleased work. See the [roadmap](#roadmap) for completed capabilities,
+> the next release, and deferred work.
 
 Run the thing you would have run locally, on another machine you own, and
 get the result back. Same argv, same working tree, logs streaming to your
@@ -917,58 +917,67 @@ Development builds can use an explicit version label to identify them
 - No execution tracing / attestation; the receipt claims only what errand
   observed.
 
-## Build order
+## Roadmap
 
-1. **Transactional core:** tailnet transport, one explicit peer, host
-   backend, non-interactive jobs — with at-most-once admission (ID +
-   digest, 409 on mismatch), consistent-or-refused snapshots, safe archive
-   extraction, framed resumable logs, two-layer exit status, hard limits
-   with busy semantics, full receipt format. The boring correctness goes
-   first, not last.
-2. Disconnect/reattach (`--detach`, `attach`, `ps`) and daemon-restart
-   reconciliation.
-3. **Content-addressed snapshot cache** (amendment, 2026-08-28): the
-   manifest already carries per-file hashes, so sync becomes negotiation —
-   the client sends the manifest, the runner replies with the hashes it is
-   missing, the client ships only those blobs, and the runner materializes
-   the workspace from its cache. The cache is errand-owned persistent
-   state with a TTL and size limit, listed and pruned via `errand gc cache`. The
-   job's workspace still dies with the job, so the cleanup contract is
-   unchanged; what persists is cache with an explicit lifecycle. This is
-   what makes a tight edit-run loop cheap instead of a full re-ship per
-   run.
-4. Automatic workspace-change retention, staging, success-only apply defaults,
-   clean-or-refuse merging, explicit conflict materialization, and
-   failure-artifact retention.
-   **Milestone 4.5 amendment:** attached TCP forwarding over the existing
-   authenticated transport, with host-loopback support and a backend-owned
-   job-endpoint seam for later isolated runtimes.
-5. Rootless container backend + named-cache model.
-6. SSH transport: Unix-socket listener with peer-credential identity,
-   `ssh://` peers with ControlMaster sharing, and a tailnet identity provider
-   abstraction that also supports macOS runners.
-7. Nix backend.
-8. Facts-based `--where` selection with admission-time revalidation. Implemented
-   with client-side capacity ranking; resource reservations remain out of scope.
+### Implemented on main
 
-### Next slices (2026-09-07)
+- Remote command execution over Tailscale and SSH, with workspace snapshots,
+  resumable logs, receipts, admission replay protection, and bounded job queues.
+- Local execution and local-only daemon setup.
+- Automatic change retention, artifacts, fetch, export, apply, and explicit
+  conflict materialization, including results from failed jobs.
+- Attached TCP forwarding, content-addressed snapshot caching, and named caches.
+- Explicit persistent workspaces with concurrent jobs, directional push/fetch,
+  recovery, and storage accounting through `df` and `gc`.
+- Configuration precedence, profiles, environment-forwarding consent, access
+  controls, and read-only diagnostics.
+- GitHub releases, Homebrew distribution, and opt-out usage telemetry.
+- Opt-in `--where` selection among personally configured runners, with capability
+  checks, job-capacity ranking, and admission-time revalidation.
 
-The core, SSH, forwarding, retention, named caches, local execution, local-only
-setup, and persistent workspaces with concurrent jobs are implemented.
-Directional transfer now connects an originating checkout and a persistent
-workspace. The next feature slice is the rootless container backend. Attaching
-to a job remains observation.
+Unreleased changes since v0.3.0 include snapshot and startup performance
+improvements, a workspace transfer locking fix, named-cache directory-tree
+changes, and `--where`.
 
-The agreed transfer interface mirrors fetch: plain `push` stages remotely,
+### Next: release and use
+
+Prepare v0.4.0 from the reviewed changes, verify CI and release packaging, publish
+through GitHub and Homebrew, then upgrade client and runner installations.
+
+After release, prioritize real workloads, adoption, and measured problems.
+Changes to runner selection should follow evidence about placement decisions,
+queueing, and startup latency.
+
+### Deferred until needed
+
+- Container and Nix backends need a concrete workload that justifies managing
+  execution environments and their lifecycle. Named caches already work with
+  the host backend independently of containers.
+- Resource reservations and richer requirements, such as memory, GPUs, or tool
+  versions, should follow workloads that job-slot balancing cannot serve.
+  The current CPU predicate describes machine capacity; it does not reserve cores.
+- Privilege separation between the daemon and workers remains future work.
+  Errand's current trusted-host model does not contain hostile code.
+
+An agent CLI wrapper can build on Errand's jobs and persistent workspaces as a
+separate project. It would own harness-specific events and thread resumption.
+None of these options is a scheduled next milestone.
+
+## Persistent workspace transfer design
+
+Directional transfer connects an originating checkout and a persistent workspace.
+The following contracts are implemented. Attaching to a job remains observation.
+
+The transfer interface mirrors fetch: plain `push` stages remotely,
 `push --apply` merges remotely, and `push --apply --conflicts` permits conflict
 materialization there. Fetch provides the corresponding local operations.
 Without `--conflicts`, a new conflict leaves selected destination files untouched.
 Existing conflict markers are ordinary file contents and may travel in either
 direction. No conflict index, resolution lifecycle, or transfer `--force` is
-planned. Transfer checkpoint and retry handling, including partial conflict
-materialization, must be implemented before these workspace operations ship.
+provided. Transfer checkpoints and retry handling cover partial conflict
+materialization as well as clean application.
 
-The first transfer prerequisite is an internal receiver-side apply receipt.
+An internal receiver-side apply receipt records each application.
 It binds one application to its owner, destination directory identity, immutable
 bundle, selected roots, and conflict option. The existing apply journal records
 conflict outcomes alongside installed states, so recovery can persist the receipt
@@ -989,7 +998,7 @@ directory ancestry identities, including on case-insensitive filesystems.
 Installed states can include markers or preserved destination values and must not
 be mistaken for complete acceptance of the incoming source tree.
 
-An internal directional checkpoint now records the accepted source manifest for
+An internal directional checkpoint records the accepted source manifest for
 one stable source identity and receiving directory identity, scoped to its owner.
 Each direction has independent progress. A completed apply receipt advances
 installed paths outside conflicts to their source values, preserving the previous
@@ -1018,7 +1027,7 @@ operation, verify its revision before applying, and bind the receipt to that
 relationship. Source identity and expected revision are
 integration inputs, not values inferred from job handles or live file contents.
 
-A dedicated internal transfer blob store now retains source file bodies by hash,
+A dedicated internal transfer blob store retains source file bodies by hash,
 independently of the evictable upload cache. Retention verifies size and content
 before atomically publishing durable private copies, deduplicates identical
 bodies, and refuses additional data when its configured capacity is exhausted.
@@ -1047,7 +1056,7 @@ automatic size eviction. Retain bodies before publishing the checkpoint that
 references them. The store must live in dedicated private owner-scoped storage
 outside working trees; it does not discover relationships or pins on its own.
 
-The integrated transfer session now stages immutable source deltas, retains
+The transfer session stages immutable source deltas, retains
 source bodies before mutation, persists apply intent, and advances the directional
 checkpoint only from a completed receipt. Recovery completes that sequence before
 another transfer or job admission on the affected workspace. A workspace control
@@ -1089,17 +1098,3 @@ unpublished upload directories. Failed upload cleanup stays inventoried and bloc
 new uploads to that workspace until startup retries it. GC stops on cancellation,
 including while waiting for a workspace gate. Push retries retain the original immutable request after
 an uncertain outcome, while completed receipts replay without reapplying files.
-Facts-based selection is now implemented. Rootless container execution and
-Nix remain deferred until concrete use cases justify their lifecycle costs. A harness wrapper can build
-on job execution and workspace continuity while owning its own agent-thread
-resumption; Errand need not own harness-specific conversation state.
-
-Milestone 1 alone replaces `scripts/remote-check` in the Atlas workflow and
-proves the shape on a real daily need.
-
-## Open questions (carried into implementation, none blocking)
-
-1. macOS receiving story: launchd for `errand serve`; which backends make
-   sense there (no systemd scopes, no rootless podman by default)?
-2. Privilege separation (`errandd` vs worker account): post-v0, unless
-   adversarial receipt integrity gets promoted into the North Star.

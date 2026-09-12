@@ -7,7 +7,7 @@ a cold or evicted cache may require an explicit install or rebuild.
 
 ## Using a cache
 
-Declare a name and an exact directory relative to the workspace root:
+In `.errand.toml`, declare a name and an exact directory relative to the workspace root:
 
 ```toml
 [caches]
@@ -17,9 +17,14 @@ dependencies = "node_modules"
 Then run native commands separately on the same runner:
 
 ```sh
-errand -- pnpm install
-errand -- pnpm test
+errand --on mac-mini -- pnpm install
+errand --on mac-mini -- pnpm test
 ```
+
+Replace `mac-mini` with your configured peer. Pinning the peer keeps both commands
+on the same runner; `--where` may choose a different runner for each job.
+Run the install again when dependencies change or the cache is cold. Errand
+does not run installs or invalidate caches when a lockfile changes.
 
 Each ephemeral job gets a real `node_modules` directory populated from the last
 saved tree. Directories and symlinks are recreated. macOS uses private native
@@ -71,6 +76,40 @@ dots, underscores, or hyphens; a job can declare at most 64 caches. Bindings
 sharing a parent must use identical casing for that parent. Exclusion matches
 path casing exactly. Case-insensitive filesystems reject existing entries whose
 casing differs from the declared path.
+
+## pnpm installed dependencies and download store
+
+Caching `node_modules` preserves installed dependencies for the next command.
+With pnpm's default layout, this includes its `node_modules/.pnpm` virtual store.
+Keep the monorepo entries above for any nested `node_modules` directories too.
+
+The pnpm download store is separate. Caching it saves package downloads, but
+each fresh workspace still needs an install to create `node_modules`. To manage
+that store through Errand, use this binding in `.errand.toml`:
+
+```toml
+[caches]
+pnpm-store = ".pnpm-store"
+```
+
+Point pnpm at that directory with its native option:
+
+```sh
+errand --on mac-mini -- pnpm install --store-dir .pnpm-store
+```
+
+This example preserves only the download store. For separate install and test
+jobs, start with the `node_modules` recipe above and pnpm's default runner-side
+store. A workspace-relative custom store moves between ephemeral jobs, so
+combining it with saved modules can leave stale absolute paths in pnpm metadata.
+Errand does not rewrite those paths. Recreate the installation if pnpm rejects
+it, or use a persistent workspace to keep its path stable.
+
+You do not need an Errand cache for pnpm's default runner-side store. pnpm can
+reuse that store normally; Errand's `df` and `gc cache` manage only declared
+cache directories. See [pnpm's store settings](https://pnpm.io/10.x/settings#storedir)
+for store locations and [virtual store settings](https://pnpm.io/10.x/settings#virtualstoredir)
+for custom installation layouts.
 
 ## Concurrent jobs and saved trees
 
