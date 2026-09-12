@@ -63,7 +63,8 @@ func TestPushRecoversCollectedStageFromFrozenSource(t *testing.T) {
 		}
 	}
 	write("frozen\n")
-	opts := client.PushOptions{PeerURL: server.URL, Workspace: ws.Name, Root: root}
+	var stats client.TransferStats
+	opts := client.PushOptions{PeerURL: server.URL, Workspace: ws.Name, Root: root, Stats: &stats}
 	if _, err := client.PushChanges(opts); err != nil {
 		t.Fatal(err)
 	}
@@ -74,11 +75,17 @@ func TestPushRecoversCollectedStageFromFrozenSource(t *testing.T) {
 	if uploads.Load() != 1 {
 		t.Fatalf("applying acknowledged stage re-uploaded: %d", uploads.Load())
 	}
+	if stats.TransferredBytes != 0 {
+		t.Fatalf("acknowledged stage counted another upload: %+v", stats)
+	}
 	write("new local edits\n")
 	opts.Apply = false
 	result, err := client.PushChanges(opts)
 	if err != nil || !result.Recovered {
 		t.Fatalf("recovery: %+v %v", result, err)
+	}
+	if stats.TransferredBytes <= 0 || stats.ChangedPaths != 1 {
+		t.Fatalf("recovery omitted frozen-source reupload: %+v", stats)
 	}
 	remote := filepath.Join(d.workspaces.dir, ws.ID, "data", "value")
 	if body, err := os.ReadFile(remote); err != nil || string(body) != "frozen\n" {
@@ -199,7 +206,8 @@ func TestWorkspacePushConflictAndLostResponse(t *testing.T) {
 	write(root, "value", "local\n")
 	write(remote, "value", "remote\n")
 	write(root, "clean", "clean change\n")
-	opts := client.PushOptions{PeerURL: server.URL, Root: root, Workspace: ws.Name, Apply: true}
+	var stats client.TransferStats
+	opts := client.PushOptions{PeerURL: server.URL, Root: root, Workspace: ws.Name, Apply: true, Stats: &stats}
 	_, err = client.PushChanges(opts)
 	var conflict *changeops.MergeConflictError
 	if !errors.As(err, &conflict) || conflict.Materialized {
@@ -226,6 +234,9 @@ func TestWorkspacePushConflictAndLostResponse(t *testing.T) {
 	write(remote, "value", "job edited after apply\n")
 	if _, err := client.PushChanges(opts); err != nil {
 		t.Fatalf("retry: %v", err)
+	}
+	if stats.TransferredBytes != 0 {
+		t.Fatalf("receipt-only recovery counted an upload: %+v", stats)
 	}
 	if got, _ := os.ReadFile(filepath.Join(remote, "value")); string(got) != "job edited after apply\n" {
 		t.Fatalf("retry overwrote later edit: %q", got)

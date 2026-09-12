@@ -14,6 +14,8 @@ func cmdRun(args []string) int {
 	fs := flag.NewFlagSet("errand", flag.ContinueOnError)
 	var settings runConfigFlags
 	settings.bind(fs)
+	verbose := fs.Bool("verbose", false, "show individual cache and artifact bindings")
+	fs.BoolVar(verbose, "v", false, "show individual cache and artifact bindings")
 	includeAll := fs.Bool("include-all", false, "allow an otherwise refused broad snapshot (never permits a filesystem root)")
 	detach := fs.Bool("detach", false, "return after admission, printing the job handle on stdout")
 	fs.BoolVar(detach, "d", false, "return after admission, printing the job handle on stdout")
@@ -87,12 +89,7 @@ func cmdRun(args []string) int {
 		return 2
 	}
 	env, passenvs := effective.JobEnvironment()
-	for _, cache := range effective.Caches {
-		fmt.Fprintf(os.Stderr, "errand: using cache %q at %q\n", cache.Name, cache.Path)
-	}
-	for _, artifact := range effective.Artifacts {
-		fmt.Fprintf(os.Stderr, "errand: retaining artifact %q\n", artifact)
-	}
+	printRunBindings(os.Stderr, effective, *verbose)
 	if !effective.NoSnapshot && effective.Workspace == "" {
 		fmt.Fprintf(os.Stderr, "errand: workspace root %s (from %s)\n", terminalSafeField(effective.Root), terminalSafeField(effective.Sources["workspace_root"]))
 		fmt.Fprintf(os.Stderr, "errand: command workdir %s\n", terminalSafeField(displaySourceWorkdir(effective)))

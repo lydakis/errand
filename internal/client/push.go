@@ -21,6 +21,8 @@ import (
 type PushOptions struct {
 	PeerURL, Workspace, Root, Path          string
 	Apply, MaterializeConflicts, IncludeAll bool
+	Stats                                   *TransferStats
+	meter                                   *transferMeter
 }
 type pendingPush struct {
 	Request  proto.PushRequest      `json:"request"`
@@ -30,6 +32,8 @@ type pendingPush struct {
 }
 
 func PushChanges(opts PushOptions) (proto.PushResult, error) {
+	opts.meter = startTransfer(opts.Stats)
+	defer opts.meter.finish()
 	var result proto.PushResult
 	if opts.Workspace == "" {
 		return result, fmt.Errorf("--workspace is required")
@@ -83,7 +87,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if pending.Applying {
 		// Complete the exact interrupted request before accepting another one. The
 		// remote receipt makes a lost response safe to retry despite later job edits.
-		err := finishPush(opts.PeerURL, ws.ID, dir, pending, result)
+		err := finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter)
 		result.Recovered = true
 		return err
 	}
@@ -124,7 +128,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if opts.Apply && pending.Staged != nil {
 		response = *pending.Staged
 	} else {
-		response, err = uploadPush(opts.PeerURL, ws.ID, filepath.Join(dir, "push-sources", pending.Request.ID), pending.Request)
+		response, err = uploadPush(opts.PeerURL, ws.ID, filepath.Join(dir, "push-sources", pending.Request.ID), pending.Request, opts.meter)
 		if err != nil {
 			return err
 		}
@@ -134,6 +138,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 		}
 	}
 	*result = response
+	opts.meter.paths(response.Paths, nil)
 	if _, err := changeops.SelectTransferPaths(proto.ChangeBundle{Paths: response.Paths}, opts.Path); err != nil {
 		return err
 	}
@@ -145,9 +150,9 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if err := replaceTransferJSON(pendingPath, pending); err != nil {
 		return err
 	}
-	return finishPush(opts.PeerURL, ws.ID, dir, pending, result)
+	return finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter)
 }
-func uploadPush(peer, workspace, source string, request proto.PushRequest) (proto.PushResult, error) {
+func uploadPush(peer, workspace, source string, request proto.PushRequest, meter *transferMeter) (proto.PushResult, error) {
 	var result proto.PushResult
 	pr, pw := io.Pipe()
 	defer pr.Close()
@@ -174,7 +179,7 @@ func uploadPush(peer, workspace, source string, request proto.PushRequest) (prot
 		}()
 		pw.CloseWithError(err)
 	}()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(peer, "/")+"/v0/workspaces/"+workspace+"/push", pr)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(peer, "/")+"/v0/workspaces/"+workspace+"/push", meter.readCloser(pr))
 	if err != nil {
 		return result, err
 	}
@@ -202,14 +207,15 @@ func uploadPush(peer, workspace, source string, request proto.PushRequest) (prot
 
 var errPushStageMissing = errors.New("push stage is missing")
 
-func finishPush(peer, workspace, dir string, pending pendingPush, result *proto.PushResult) error {
+func finishPush(peer, workspace, dir string, pending pendingPush, result *proto.PushResult, meter *transferMeter) error {
+	defer func() { meter.paths(result.Paths, nil) }()
 	err := finishPushOnce(peer, workspace, dir, pending, result)
 	if !errors.Is(err, errPushStageMissing) {
 		return err
 	}
 	// Only the daemon's explicit missing-stage response permits re-staging.
 	// Generic 404s and damaged attempts do not establish that apply never ran.
-	_, err = uploadPush(peer, workspace, filepath.Join(dir, "push-sources", pending.Request.ID), pending.Request)
+	_, err = uploadPush(peer, workspace, filepath.Join(dir, "push-sources", pending.Request.ID), pending.Request, meter)
 	if err == nil {
 		err = finishPushOnce(peer, workspace, dir, pending, result)
 	}

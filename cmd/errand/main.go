@@ -55,6 +55,7 @@ Run options:
   --no-artifacts                 Clear configured artifact declarations
   --cache NAME=PATH               Reuse a runner cache (repeatable)
   --no-caches                    Clear configured caches
+  -v, --verbose                  Show individual cache and artifact bindings
   --workspace-root PATH          Select an explicit workspace boundary
   --workspace NAME               Use an explicitly created persistent workspace
   --include-all                  Allow a broad snapshot (never /)
@@ -324,78 +325,6 @@ func cmdAttach(args []string) int {
 		return 2
 	}
 	return client.Attach(client.AttachOptions{BeforeContact: func() { warnRunnerVersion(peerURL, label) }, PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards})
-}
-
-func cmdFetch(args []string) int {
-	fs := flag.NewFlagSet("errand fetch", flag.ContinueOnError)
-	apply := fs.Bool("apply", false, "apply retained workspace changes with a clean-or-refuse three-way merge")
-	conflicts := fs.Bool("conflicts", false, "materialize text conflicts and apply clean changes")
-	output := fs.String("output", "", "export retained remote files into a new directory")
-	fs.StringVar(output, "o", "", "export retained remote files into a new directory")
-	on := fs.String("on", "", "peer name")
-	rawURL := fs.String("url", "", "peer base URL")
-	setFlagUsage(fs, "errand fetch [options] HANDLE [PATH]")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
-	}
-	invalidOutput := false
-	fs.Visit(func(f *flag.Flag) {
-		if (f.Name == "output" || f.Name == "o") && *output == "" {
-			invalidOutput = true
-		}
-	})
-	if invalidOutput || (*output != "" && (*apply || *conflicts)) {
-		fmt.Fprintln(os.Stderr, "errand fetch: --output requires a non-empty directory and cannot be combined with --apply or --conflicts")
-		return 2
-	}
-	if fs.NArg() < 1 || fs.NArg() > 2 {
-		fmt.Fprintln(os.Stderr, "errand fetch: HANDLE (peer/ULID) and at most one changed PATH are required")
-		return 2
-	}
-	if *conflicts && !*apply {
-		fmt.Fprintln(os.Stderr, "errand fetch: --conflicts requires --apply")
-		return 2
-	}
-	peerURL, label, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return 2
-	}
-	changePath := ""
-	if fs.NArg() == 2 {
-		changePath = fs.Arg(1)
-	}
-	callerDir := ""
-	if *apply {
-		callerDir, err = os.Getwd()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "errand: resolving current workspace: %v\n", err)
-			return client.ExitTransaction
-		}
-	}
-	warnRunnerVersion(peerURL, label)
-	staged, err := client.FetchChanges(client.ChangeFetchOptions{
-		PeerURL: peerURL, JobID: jobID, Apply: *apply, MaterializeConflicts: *conflicts,
-		Path: changePath, CallerDir: callerDir, OutputDir: *output,
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		if staged != "" {
-			fmt.Fprintf(os.Stderr, "errand: workspace changes remain staged at %s\n", staged)
-		}
-		return client.ExitTransaction
-	}
-	if *apply && staged == "" {
-		fmt.Fprintln(os.Stderr, "errand: no workspace changes to apply")
-	} else if *apply {
-		fmt.Fprintf(os.Stderr, "errand: workspace changes applied from %s\n", staged)
-	} else {
-		fmt.Fprintln(os.Stdout, staged)
-	}
-	return 0
 }
 
 func cmdKill(args []string) int {

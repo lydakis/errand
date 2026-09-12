@@ -41,7 +41,7 @@ func applyWorkspaceJob(opts ChangeFetchOptions, details proto.JobDetails, origin
 	var downloaded string
 	b := proto.ChangeBundle{V: changeops.BundleVersion, BaselineRoot: origin.Initial.RootHash()}
 	if details.Result.Changes != nil {
-		downloaded, b, err = downloadChangeBundleLocked(opts.PeerURL, opts.JobID, key, *details.Result.Changes)
+		downloaded, b, err = downloadChangeBundleLocked(opts.PeerURL, opts.JobID, key, *details.Result.Changes, opts.meter)
 		if err != nil {
 			return "", err
 		}
@@ -132,7 +132,8 @@ func applyWorkspaceJob(opts ChangeFetchOptions, details proto.JobDetails, origin
 		if err != nil {
 			return err
 		}
-		_, applyErr := session.Apply(index.ID, selected, opts.MaterializeConflicts)
+		result, applyErr := session.Apply(index.ID, selected, opts.MaterializeConflicts)
+		opts.meter.paths(result.Applied, nil)
 		var conflict *changeops.MergeConflictError
 		if errors.As(applyErr, &conflict) {
 			index.Retry = true

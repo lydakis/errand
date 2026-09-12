@@ -19,6 +19,10 @@ import (
 )
 
 func downloadChangeBundle(peerURL, jobID string, expected proto.ChangeSummary) (string, proto.ChangeBundle, error) {
+	return downloadChangeBundleMetered(peerURL, jobID, expected, nil)
+}
+
+func downloadChangeBundleMetered(peerURL, jobID string, expected proto.ChangeSummary, meter *transferMeter) (string, proto.ChangeBundle, error) {
 	var bundle proto.ChangeBundle
 	key := localChangeKey(peerURL, jobID)
 	unlock, err := acquireLocalChangeLock(localChangeTransferLockName(key))
@@ -26,10 +30,10 @@ func downloadChangeBundle(peerURL, jobID string, expected proto.ChangeSummary) (
 		return "", bundle, err
 	}
 	defer unlock()
-	return downloadChangeBundleLocked(peerURL, jobID, key, expected)
+	return downloadChangeBundleLocked(peerURL, jobID, key, expected, meter)
 }
 
-func downloadChangeBundleLocked(peerURL, jobID, key string, expected proto.ChangeSummary) (string, proto.ChangeBundle, error) {
+func downloadChangeBundleLocked(peerURL, jobID, key string, expected proto.ChangeSummary, meter *transferMeter) (string, proto.ChangeBundle, error) {
 	var bundle proto.ChangeBundle
 	root, err := localChangeRoot()
 	if err != nil {
@@ -99,7 +103,7 @@ func downloadChangeBundleLocked(peerURL, jobID, key string, expected proto.Chang
 	if err != nil {
 		return "", bundle, fmt.Errorf("fetching changes: %w", err)
 	}
-	boundedBody := &hardLimitReader{reader: body, remaining: responseLimit}
+	boundedBody := &hardLimitReader{reader: meter.reader(body), remaining: responseLimit}
 	mr := multipart.NewReader(boundedBody, params["boundary"])
 	bundlePart, err := mr.NextPart()
 	if err != nil || bundlePart.FormName() != "bundle" {

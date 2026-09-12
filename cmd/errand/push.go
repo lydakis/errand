@@ -9,6 +9,7 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
+	"github.com/lydakis/errand/internal/proto"
 )
 
 func cmdPush(args []string) int { return cmdPushTo(args, os.Stdout, os.Stderr) }
@@ -70,9 +71,21 @@ func cmdPushTo(args []string, out, stderr io.Writer) int {
 	}
 	// Apply is always explicit for push. Run profiles' automatic-apply preference
 	// controls successful jobs, not remote workspace mutation.
-	result, err := client.PushChanges(client.PushOptions{PeerURL: peer, Workspace: workspace, Root: effective.Root, Path: fs.Arg(0), Apply: *apply, MaterializeConflicts: *conflicts, IncludeAll: *includeAll})
-	if *jsonOutput && result.ID != "" {
-		if writeErr := json.NewEncoder(out).Encode(result); writeErr != nil {
+	var stats client.TransferStats
+	result, err := client.PushChanges(client.PushOptions{PeerURL: peer, Workspace: workspace, Root: effective.Root, Path: fs.Arg(0), Apply: *apply, MaterializeConflicts: *conflicts, IncludeAll: *includeAll, Stats: &stats})
+	action := "staged"
+	if *apply {
+		action = "applied"
+	}
+	if result.Recovered {
+		action = "recovered"
+	}
+	if *jsonOutput {
+		report := struct {
+			proto.PushResult
+			transferReport
+		}{result, newTransferReport(action, stats, err)}
+		if writeErr := json.NewEncoder(out).Encode(report); writeErr != nil {
 			fmt.Fprintln(stderr, "errand:", writeErr)
 			return 1
 		}
@@ -82,11 +95,10 @@ func cmdPushTo(args []string, out, stderr io.Writer) int {
 		return client.ExitTransaction
 	}
 	if !*jsonOutput {
+		printTransferSummary(stderr, "push", action, "to workspace "+workspace+" on "+cmpOr(effective.Peer, peer), stats)
 		if result.Recovered {
 			fmt.Fprintf(stderr, "errand: completed earlier push %s to workspace %s on %s; run push again to send your current changes\n", result.ID, workspace, cmpOr(effective.Peer, peer))
-		} else if *apply {
-			fmt.Fprintf(stderr, "errand: applied local changes to workspace %s on %s\n", workspace, cmpOr(effective.Peer, peer))
-		} else {
+		} else if !*apply {
 			fmt.Fprintf(out, "%s\n", result.ID)
 			fmt.Fprintf(stderr, "errand: changes staged for workspace %s; repeat push with the same options and --apply to apply\n", workspace)
 		}

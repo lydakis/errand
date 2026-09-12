@@ -303,6 +303,41 @@ without another upload, or prepares a new transfer if local files changed. Repea
 fetch/apply with the same job and selection replays its recorded outcome; use a
 new job result to fetch subsequent remote work.
 
+### Transfer output
+
+Push and fetch use the same summary format on stderr:
+
+```text
+errand: push: applied 3 changed paths to workspace experiment on mac-mini; 12 KiB transferred in 0.42s
+errand: fetch: staged 3 changed paths from mac-mini/JOB_ID; 8.0 KiB transferred in 0.31s
+```
+
+`staged` means files are available for inspection. `applied` means the file
+application completed; it does not check application readiness or hot reload.
+Fetch uses `exported` for `--output`. Recovered pushes are identified separately
+and still require another push to send newer local edits.
+
+Counts refer to changed paths, including directory changes represented by one
+root. Staging reports the staged roots (or the requested fetch selection),
+export reports the selected roots, and apply reports accepted roots from the
+application outcome. A repeated persistent apply can replay that recorded
+outcome. Conflicts exit nonzero and never print a success summary.
+
+Bytes measure multipart transfer bodies sent or received during this invocation,
+including archive framing and metadata, excluding HTTP headers and control
+requests. They describe the transferred snapshot or bundle, even when `PATH`
+limits application. Reusing a staged upload or cached download reports zero;
+re-uploading a collected stage during recovery counts the new upload. Elapsed
+time includes local preparation, transfer, and application.
+
+Plain push still prints only its transfer ID on stdout; plain fetch and export
+print only the resulting path. Both accept `--json`, with matching `status` and
+`transfer` fields (`changed_paths`, `transferred_bytes`, `elapsed_ms`). Push keeps
+its existing receipt fields; fetch includes `path`. Transfer failures include
+`error`, and conflicts include `conflicts` and `materialized`. Counts on failure
+are partial and do not establish completion. Flag or target-resolution errors
+are reported on stderr before a transfer report is available.
+
 `df` includes local transfer storage under changes and remote transfer storage
 under its workspace (`df --verbose` shows a transfers column). Use
 `gc changes --older-than 7d` locally or
@@ -438,6 +473,9 @@ be combined with `--apply` or `--conflicts`. Selecting a deleted path has no
 remote value to export; use plain fetch to inspect its deletion metadata.
 
 ## Artifacts and caches
+
+Runs summarize configured caches and artifacts on one line. Use `--verbose`
+(or `-v`) before `--` to show each cache binding and retained artifact path.
 
 To retain generated outputs that Git or `.errandignore` excludes, declare exact
 workspace-relative files or directories:

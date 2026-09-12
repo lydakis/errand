@@ -22,6 +22,8 @@ type ChangeFetchOptions struct {
 	Path                 string
 	CallerDir            string
 	OutputDir            string
+	Stats                *TransferStats
+	meter                *transferMeter
 }
 
 func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifestRoot string) error {
@@ -71,6 +73,8 @@ func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifes
 // machine's workspace identity record and applies still-unapplied changes.
 // With neither option, it only stages the bundle.
 func FetchChanges(opts ChangeFetchOptions) (string, error) {
+	opts.meter = startTransfer(opts.Stats)
+	defer opts.meter.finish()
 	if opts.OutputDir != "" && (opts.Apply || opts.MaterializeConflicts) {
 		return "", fmt.Errorf("--output cannot be combined with --apply or --conflicts")
 	}
@@ -121,10 +125,10 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 		}
 		defer unlock()
 		staged, bundle, err = downloadChangeBundleLocked(
-			opts.PeerURL, opts.JobID, key, *status.Result.Changes,
+			opts.PeerURL, opts.JobID, key, *status.Result.Changes, opts.meter,
 		)
 	} else {
-		staged, bundle, err = downloadChangeBundle(opts.PeerURL, opts.JobID, *status.Result.Changes)
+		staged, bundle, err = downloadChangeBundleMetered(opts.PeerURL, opts.JobID, *status.Result.Changes, opts.meter)
 	}
 	if err != nil {
 		return "", err
@@ -133,6 +137,7 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 	if err != nil {
 		return staged, err
 	}
+	opts.meter.paths(bundle.Paths, selected)
 	if opts.OutputDir != "" {
 		output, err := filepath.Abs(opts.OutputDir)
 		if err != nil {
@@ -147,9 +152,11 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 		if err := validateApplySelection(selected, opts.Path); err != nil {
 			return staged, err
 		}
-		if _, err := applyChangeBundle(
+		applied, err := applyChangeBundle(
 			opts.PeerURL, opts.JobID, opts.CallerDir, staged, bundle, selected, opts.MaterializeConflicts,
-		); err != nil {
+		)
+		opts.meter.paths(applied, nil)
+		if err != nil {
 			return staged, err
 		}
 	}
@@ -354,7 +361,11 @@ func applyChangeBundle(
 	})
 	sort.Strings(applied)
 	if err != nil {
-		return nil, fmt.Errorf("applying changes: %w", err)
+		var conflict *changeops.MergeConflictError
+		if !errors.As(err, &conflict) {
+			applied = nil
+		}
+		return applied, fmt.Errorf("applying changes: %w", err)
 	}
 	return applied, nil
 }
