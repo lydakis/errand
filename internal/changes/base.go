@@ -8,18 +8,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
-const (
-	workspaceBaseDirectory = "change-base"
-	// Bound concurrent disk work and open files per baseline capture.
-	baseCaptureWorkers = 16
-)
+const workspaceBaseDirectory = "change-base"
 
 func workspaceBasePath(jobDir string) string {
 	return filepath.Join(jobDir, workspaceBaseDirectory)
@@ -29,7 +24,7 @@ func workspaceBasePath(jobDir string) string {
 // can mutate it. Filesystems with copy-on-write cloning keep this inexpensive;
 // other filesystems fall back to verified copies.
 func CaptureWorkspaceBaseContext(ctx context.Context, workspace, jobDir string, manifest proto.Manifest) error {
-	return captureWorkspaceBaseContext(ctx, workspace, jobDir, manifest, syncCapturedData, syncDirectory)
+	return captureWorkspaceBaseContext(ctx, workspace, jobDir, manifest, syncStagedData, syncDirectory)
 }
 
 func captureWorkspaceBaseContext(ctx context.Context, workspace, jobDir string, manifest proto.Manifest, syncData func(*os.File) error, syncDir func(string) error) error {
@@ -111,38 +106,12 @@ func captureWorkspaceBaseContext(ctx context.Context, workspace, jobDir string, 
 }
 
 func captureBaseFiles(ctx context.Context, workspace, dest string, files []proto.ManifestEntry, syncData func(*os.File) error) error {
-	ctx, cancel := context.WithCancelCause(ctx)
-	defer cancel(nil)
-	queue := make(chan proto.ManifestEntry)
-	var workers sync.WaitGroup
-	// Overlap disk flushes without creating a goroutine/file descriptor per
-	// entry. All files still sync before verification and atomic publication.
-	for range min(baseCaptureWorkers, len(files)) {
-		workers.Go(func() {
-			for entry := range queue {
-				err := cloneOrCopyFile(ctx,
-					filepath.Join(workspace, filepath.FromSlash(entry.Path)),
-					filepath.Join(dest, filepath.FromSlash(entry.Path)), os.FileMode(entry.Mode), syncData)
-				if err != nil {
-					cancel(err)
-					return
-				}
-			}
-		})
-	}
-send:
-	for _, entry := range files {
-		select {
-		case queue <- entry:
-		case <-ctx.Done():
-			break send
-		}
-	}
-	close(queue)
-	// Even on failure, join every worker before the caller removes the staging
-	// directory. No worker may still be writing when cleanup starts.
-	workers.Wait()
-	return context.Cause(ctx)
+	return runStagingTasksContext(ctx, len(files), func(ctx context.Context, i int) error {
+		entry := files[i]
+		return cloneOrCopyFile(ctx,
+			filepath.Join(workspace, filepath.FromSlash(entry.Path)),
+			filepath.Join(dest, filepath.FromSlash(entry.Path)), os.FileMode(entry.Mode), syncData)
+	})
 }
 
 func cloneOrCopyFile(ctx context.Context, src, dest string, mode fs.FileMode, syncData func(*os.File) error) error {
@@ -215,13 +184,21 @@ func syncCapturedFile(path string, mode fs.FileMode, syncData func(*os.File) err
 }
 
 func finalizeCapturedDirectories(root string, directories []proto.ManifestEntry, syncData func(*os.File) error) error {
-	for i := len(directories) - 1; i >= 0; i-- {
-		entry := directories[i]
-		dir, err := os.Open(filepath.Join(root, filepath.FromSlash(entry.Path)))
-		if err != nil {
-			return err
-		}
-		if err := errors.Join(dir.Chmod(os.FileMode(entry.Mode)), syncData(dir), dir.Close()); err != nil {
+	paths := make([]string, 0, len(directories))
+	modes := make(map[string]os.FileMode, len(directories))
+	for _, entry := range directories {
+		paths = append(paths, entry.Path)
+		modes[entry.Path] = os.FileMode(entry.Mode)
+	}
+	for _, group := range childFirstPathGroups(paths) {
+		if err := runStagingTasks(len(group), func(i int) error {
+			path := group[i]
+			dir, err := os.Open(filepath.Join(root, filepath.FromSlash(path)))
+			if err != nil {
+				return err
+			}
+			return errors.Join(dir.Chmod(modes[path]), syncData(dir), dir.Close())
+		}); err != nil {
 			return err
 		}
 	}

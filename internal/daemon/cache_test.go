@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -38,6 +40,16 @@ func insertContent(t *testing.T, c *blobCache, content string) (sha string, size
 }
 
 func TestCacheInsertMaterializeRoundTrip(t *testing.T) {
+	// Isolate the process-wide umask from other daemon tests and goroutines.
+	if os.Getenv("ERRAND_TEST_CACHE_UMASK") != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestCacheInsertMaterializeRoundTrip$")
+		cmd.Env = append(os.Environ(), "ERRAND_TEST_CACHE_UMASK=1")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("umask subprocess: %v\n%s", err, output)
+		}
+		return
+	}
+	defer syscall.Umask(syscall.Umask(0o077))
 	c := testCache(t, 1<<20, time.Hour)
 	sha, size := insertContent(t, c, "hello cache")
 	dest := filepath.Join(t.TempDir(), "out.txt")

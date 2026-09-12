@@ -173,6 +173,11 @@ func (c *blobCache) Materialize(ctx context.Context, dest string, e proto.Manife
 		io.MultiWriter(out, h),
 		io.LimitReader(&contextReader{ctx: ctx, r: src}, e.Size+1),
 	)
+	// Match streamed extraction: finalize permissions on the owned descriptor.
+	var modeErr error
+	if copyErr == nil {
+		modeErr = out.Chmod(os.FileMode(e.Mode))
+	}
 	closeErr := out.Close()
 	if copyErr != nil || closeErr != nil {
 		os.Remove(dest)
@@ -195,9 +200,11 @@ func (c *blobCache) Materialize(ctx context.Context, dest string, e proto.Manife
 		os.Remove(dest)
 		return false, err
 	}
-	if err := os.Chmod(dest, os.FileMode(e.Mode)); err != nil {
+	if modeErr != nil {
+		// Corrupt content above must still become a cache miss, allowing the
+		// caller to retry the original body even if chmod also failed.
 		os.Remove(dest)
-		return false, err
+		return false, modeErr
 	}
 	now := time.Now()
 	if err := c.mu.LockContext(ctx); err != nil {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/proto"
@@ -32,25 +31,23 @@ func CopyTransferSource(ctx context.Context, source, destination string, m proto
 
 // SyncTransferSource is for private staging only, never a concurrently used tree.
 func SyncTransferSource(root string, m proto.Manifest) error {
+	return syncTransferSource(root, m, syncStagedData, syncStagingBarrier)
+}
+
+func syncTransferSource(root string, m proto.Manifest, syncData, publish func(*os.File) error) error {
 	access, err := makeManifestAccessibleContext(context.Background(), root, m)
 	if err != nil {
 		return err
 	}
-	syncErr := func() error {
-		for _, e := range m.Entries {
-			if e.Type == proto.EntrySymlink {
-				continue
-			}
-			f, err := os.Open(filepath.Join(root, filepath.FromSlash(e.Path)))
-			if err != nil {
-				return err
-			}
-			err = errors.Join(f.Sync(), f.Close())
-			if err != nil {
-				return err
-			}
-		}
-		return syncDirectory(root)
-	}()
-	return errors.Join(syncErr, access.restore())
+	// Keep the descriptor open while final modes (including a restricted root)
+	// are restored. The full flush follows all member fsyncs and mode updates.
+	directory, err := access.root.Open(".")
+	if err != nil {
+		return errors.Join(err, access.restore())
+	}
+	defer directory.Close()
+	if err := access.restoreWithSync(syncData); err != nil {
+		return err
+	}
+	return publish(directory)
 }

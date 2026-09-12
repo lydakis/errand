@@ -402,36 +402,59 @@ func (a *treeAccess) closeWithoutRestore() error {
 	return nil
 }
 
-func (a *treeAccess) restore() error {
+func (a *treeAccess) restore() error { return a.restoreWithSync(nil) }
+
+// Restore children before their parents. Private staging can also synchronize
+// each member through its open descriptor after its final mode is restored.
+func (a *treeAccess) restoreWithSync(syncData func(*os.File) error) error {
 	paths := make([]string, 0, len(a.original))
 	for rel := range a.original {
 		paths = append(paths, rel)
 	}
-	sort.Slice(paths, func(i, j int) bool {
-		leftDepth := strings.Count(paths[i], "/")
-		rightDepth := strings.Count(paths[j], "/")
-		if leftDepth != rightDepth {
-			return leftDepth > rightDepth
-		}
-		return paths[i] > paths[j]
-	})
-	var restoreErr error
-	for _, rel := range paths {
+	restorePath := func(rel string) error {
 		info, err := a.root.Lstat(rel)
 		if err != nil {
-			restoreErr = errors.Join(restoreErr, err)
-			continue
+			return err
 		}
 		identity, identityErr := fsidentity.FromInfo(info)
 		if identityErr != nil || identity != a.identity[rel] {
-			restoreErr = errors.Join(restoreErr,
-				fmt.Errorf("workspace path %q changed while restoring change retention permissions", rel))
-			continue
+			return fmt.Errorf("workspace path %q changed while restoring change retention permissions", rel)
 		}
-		if info.Mode()&fs.ModeSymlink != 0 || info.Mode().Perm() == a.original[rel] {
-			continue
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return nil
 		}
-		restoreErr = errors.Join(restoreErr, a.root.Chmod(rel, a.original[rel]))
+		if syncData == nil {
+			if info.Mode().Perm() != a.original[rel] {
+				return a.root.Chmod(rel, a.original[rel])
+			}
+			return nil
+		}
+		file, err := a.root.Open(rel)
+		if err != nil {
+			return err
+		}
+		opened, err := file.Stat()
+		if err != nil || !os.SameFile(info, opened) {
+			return errors.Join(fmt.Errorf("workspace path %q changed while syncing retained data", rel), err, file.Close())
+		}
+		var modeErr error
+		if info.Mode().Perm() != a.original[rel] {
+			modeErr = file.Chmod(a.original[rel])
+		}
+		return errors.Join(modeErr, syncData(file), file.Close())
+	}
+	var restoreErr error
+	for _, group := range childFirstPathGroups(paths) {
+		// Only private staging uses parallel descriptor-based synchronization.
+		// Live-tree permission restoration stays serial. Both use the same
+		// child-before-parent grouping and finish all members after errors.
+		if syncData == nil {
+			for _, rel := range group {
+				restoreErr = errors.Join(restoreErr, restorePath(rel))
+			}
+		} else {
+			restoreErr = errors.Join(restoreErr, runStagingTasks(len(group), func(i int) error { return restorePath(group[i]) }))
+		}
 	}
 	if a.ownsRoot {
 		restoreErr = errors.Join(restoreErr, a.root.Close())

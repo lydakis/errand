@@ -471,5 +471,5 @@ func syncDirectory(path string) error {
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return syncStagingBarrier(dir)
 }

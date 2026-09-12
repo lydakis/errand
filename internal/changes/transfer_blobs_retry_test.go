@@ -59,7 +59,7 @@ func TestTransferBlobsCancelInsertionMidCopy(t *testing.T) {
 	}
 	defer storage.Close()
 	reader := cancelTransferBlobReader{Reader: strings.NewReader(body), cancel: cancel}
-	if err := retainTransferBlob(ctx, storage, reader, entry.SHA256, entry); !errors.Is(err, context.Canceled) {
+	if _, err := prepareTransferBlob(ctx, storage, reader, entry, syncStagedData); !errors.Is(err, context.Canceled) {
 		t.Fatalf("mid-copy cancellation = %v", err)
 	}
 	entries, err := os.ReadDir(store.Directory)
@@ -146,6 +146,36 @@ func TestTransferBlobsCachedCorruptionIsNotRepaired(t *testing.T) {
 	assertTransferFile(t, store.Directory, manifest.Entries[0].SHA256, "evil")
 }
 
+func TestTransferBlobsRetainReclaimsAbandonedBatch(t *testing.T) {
+	ctx := context.Background()
+	source := t.TempDir()
+	for _, name := range []string{"a", "b", "cached"} {
+		writeTransferFile(t, source, name, strings.Repeat(name[:1], 8))
+	}
+	manifest, err := snapshot.Build(source, []string{"a", "b", "cached"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := TransferBlobStore{Directory: t.TempDir(), MaxBytes: 24}
+	for _, e := range manifest.Entries {
+		name := transferBlobTempPrefix + e.Path
+		if e.Path == "cached" {
+			name = e.SHA256
+		}
+		writeTransferFile(t, store.Directory, name, strings.Repeat(e.Path[:1], 8))
+	}
+	if err := store.Retain(ctx, source, manifest); err != nil {
+		t.Fatalf("retry after abandoned batch: %v", err)
+	}
+	stats, err := store.Stats(ctx)
+	if err != nil || stats.Blobs != 3 || stats.Bytes != 24 {
+		t.Fatalf("stats after recovery = %+v, %v", stats, err)
+	}
+	for _, e := range manifest.Entries {
+		assertTransferFile(t, store.Directory, e.SHA256, strings.Repeat(e.Path[:1], 8))
+	}
+}
+
 func TestTransferBlobsPruneAbandonedInsertionThenRetry(t *testing.T) {
 	ctx := context.Background()
 	source := t.TempDir()
@@ -159,9 +189,6 @@ func TestTransferBlobsPruneAbandonedInsertionThenRetry(t *testing.T) {
 	before, err := store.Stats(ctx)
 	if err != nil || before.Blobs != 0 || before.Bytes != 4 {
 		t.Fatalf("stats = %+v, %v", before, err)
-	}
-	if err := store.Retain(ctx, source, manifest); !errors.Is(err, ErrByteLimitExceeded) {
-		t.Fatalf("quota = %v", err)
 	}
 	dry, err := store.Prune(ctx, nil, true)
 	if err != nil || dry.RemovedBlobs != 0 || dry.FreedBytes != 4 {
@@ -177,6 +204,41 @@ func TestTransferBlobsPruneAbandonedInsertionThenRetry(t *testing.T) {
 	}
 	if err := store.Retain(ctx, source, manifest); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTransferBlobsAbandonedCleanupGuards(t *testing.T) {
+	for _, scenario := range []string{"canceled", "overlapping source", "nonregular temporary"} {
+		t.Run(scenario, func(t *testing.T) {
+			source := t.TempDir()
+			writeTransferFile(t, source, "file", "body")
+			manifest, err := snapshot.Build(source, []string{"file"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			store := TransferBlobStore{Directory: t.TempDir(), MaxBytes: 100}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			switch scenario {
+			case "canceled":
+				cancel()
+			case "overlapping source":
+				store.Directory = filepath.Join(source, "store")
+				if err := os.Mkdir(store.Directory, 0700); err != nil {
+					t.Fatal(err)
+				}
+			case "nonregular temporary":
+				if err := os.Symlink(filepath.Join(source, "file"), filepath.Join(store.Directory, transferBlobTempPrefix+"link")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			writeTransferFile(t, store.Directory, transferBlobTempPrefix+"abandoned", "body")
+			if err := store.Retain(ctx, source, manifest); err == nil {
+				t.Fatal("accepted invalid retention")
+			}
+			assertTransferFile(t, store.Directory, transferBlobTempPrefix+"abandoned", "body")
+			assertTransferFile(t, source, "file", "body")
+		})
 	}
 }
 

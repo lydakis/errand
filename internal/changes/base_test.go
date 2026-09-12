@@ -83,7 +83,7 @@ func TestCloneOrCopyFileFallback(t *testing.T) {
 				if failure {
 					return injected
 				}
-				return syncCapturedData(file)
+				return syncStagedData(file)
 			})
 			if failure {
 				if !errors.Is(err, injected) {
@@ -135,7 +135,7 @@ func TestCaptureBaseFailureLeavesNoPartialTree(t *testing.T) {
 				if failure == "cancelled" {
 					cancel()
 				}
-				return syncCapturedData(file)
+				return syncStagedData(file)
 			}, syncDirectory)
 			if err == nil {
 				t.Fatal("capture succeeded despite failure")
@@ -170,7 +170,7 @@ func TestCaptureBaseDurabilityBeforePublication(t *testing.T) {
 					if failure == "member" {
 						return injected
 					}
-					if err := syncCapturedData(file); err != nil {
+					if err := syncStagedData(file); err != nil {
 						return err
 					}
 					synced.Add(1)

@@ -82,8 +82,13 @@ func transferBlobEntries(manifest proto.Manifest) (map[string]proto.ManifestEntr
 // widen permissions, restoring them on return but not after a process crash.
 // Callers must keep that staging tree unchanged throughout the operation.
 // Already-stored bodies remain reusable after lowering MaxBytes or losing the
-// source. Capacity limits additional bytes, including abandoned insertion files.
-func (s TransferBlobStore) Retain(ctx context.Context, sourceRoot string, manifest proto.Manifest) (err error) {
+// source. Abandoned insertion files are reclaimed before budgeting new bodies.
+// Capacity limits growth; published bodies are never evicted by Retain.
+func (s TransferBlobStore) Retain(ctx context.Context, sourceRoot string, manifest proto.Manifest) error {
+	return s.retain(ctx, sourceRoot, manifest, syncStagedData, func(root *os.Root) error { return syncApplyRootDirectory(root, ".") })
+}
+
+func (s TransferBlobStore) retain(ctx context.Context, sourceRoot string, manifest proto.Manifest, syncData func(*os.File) error, barrier func(*os.Root) error) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -100,19 +105,13 @@ func (s TransferBlobStore) Retain(ctx context.Context, sourceRoot string, manife
 	if err != nil {
 		return err
 	}
-	required := stats.Bytes
 	var missing proto.Manifest
 	for hash, e := range blobs {
 		if _, exists := files[hash]; exists {
 			continue
 		}
-		if e.Size > 0 && e.Size > s.MaxBytes-required {
-			return ErrByteLimitExceeded
-		}
-		required += e.Size
 		missing.Entries = append(missing.Entries, e)
 	}
-	var access *treeAccess
 	if len(missing.Entries) > 0 {
 		identity, err := applyWorkspaceIdentity(sourceRoot)
 		if err != nil {
@@ -121,6 +120,39 @@ func (s TransferBlobStore) Retain(ctx context.Context, sourceRoot string, manife
 		if err := transferStorageOutsideWorkspace(storage.root, identity); err != nil {
 			return err
 		}
+	}
+	// The caller's operation lock excludes other writers, so every temporary
+	// entry from the initial scan belongs to an interrupted retention. Reclaim
+	// it only after validating source/storage separation and before budgeting
+	// the same bodies again. Stats and dry-run pruning remain read-only.
+	required := stats.Bytes
+	for name, info := range files {
+		if !strings.HasPrefix(name, transferBlobTempPrefix) {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := storage.verifyPath(); err != nil {
+			return err
+		}
+		current, err := storage.root.Lstat(name)
+		if err != nil || !os.SameFile(info, current) {
+			return fmt.Errorf("transfer storage changed during temporary cleanup")
+		}
+		if err := storage.root.Remove(name); err != nil {
+			return err
+		}
+		required -= info.Size()
+	}
+	for _, e := range missing.Entries {
+		if e.Size > 0 && e.Size > s.MaxBytes-required {
+			return ErrByteLimitExceeded
+		}
+		required += e.Size
+	}
+	var access *treeAccess
+	if len(missing.Entries) > 0 {
 		access, err = makeManifestAccessibleContext(ctx, sourceRoot, missing)
 		if err != nil {
 			return err
@@ -130,33 +162,69 @@ func (s TransferBlobStore) Retain(ctx context.Context, sourceRoot string, manife
 			return err
 		}
 	}
-	for hash, e := range blobs {
-		if err := ctx.Err(); err != nil {
-			return err
+	hashes := make([]string, 0, len(blobs))
+	for hash := range blobs {
+		hashes = append(hashes, hash)
+	}
+	prepared := make([]string, len(hashes))
+	defer func() {
+		for _, name := range prepared {
+			if name != "" {
+				_ = storage.root.Remove(name)
+			}
 		}
+	}()
+	if err := runStagingTasksContext(ctx, len(hashes), func(ctx context.Context, i int) error {
+		hash := hashes[i]
+		e := blobs[hash]
 		if _, exists := files[hash]; exists {
 			in, err := openTransferBlob(storage.root, hash, e)
 			if err != nil {
 				return err
 			}
 			err = copyTransferBlob(ctx, io.Discard, in, e)
-			if err := errors.Join(err, in.Close()); err != nil {
-				return err
-			}
-			continue
+			return errors.Join(err, in.Close())
 		}
 		in, err := openTransferBlob(access.root, e.Path, e)
 		if err != nil {
 			return err
 		}
-		err = retainTransferBlob(ctx, storage, in, hash, e)
-		if err := errors.Join(err, in.Close()); err != nil {
+		prepared[i], err = prepareTransferBlob(ctx, storage, in, e, syncData)
+		return errors.Join(err, in.Close())
+	}); err != nil {
+		return err
+	}
+
+	if len(missing.Entries) > 0 {
+		// Until this full flush completes, bodies have only temporary names.
+		// A surviving hash name must never refer to unflushed device-cache data,
+		// even if the process stops before the final directory sync/checkpoint.
+		if err := errors.Join(barrier(storage.root), storage.verifyPath()); err != nil {
 			return err
 		}
+		dir, err := storage.root.Open(".")
+		if err != nil {
+			return err
+		}
+		defer dir.Close()
+		for i, name := range prepared {
+			if name == "" {
+				continue
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := storage.verifyPath(); err != nil {
+				return err
+			}
+			if err := renameNoReplace(dir, name, dir, hashes[i]); err != nil {
+				return err
+			}
+			prepared[i] = ""
+		}
 	}
-	// A previous process may have stopped after renaming a body but before
-	// syncing its directory entry. Complete publication even for cached retries.
-	return errors.Join(syncApplyRootDirectory(storage.root, "."), storage.verifyPath())
+	// Also complete directory publication when a retry finds all bodies stored.
+	return errors.Join(barrier(storage.root), storage.verifyPath())
 }
 
 func openTransferBlob(root *os.Root, name string, entry proto.ManifestEntry) (*os.File, error) {
@@ -194,29 +262,27 @@ func copyTransferBlob(ctx context.Context, out io.Writer, in io.Reader, entry pr
 	return nil
 }
 
-func retainTransferBlob(ctx context.Context, storage *applyDestination, in io.Reader, hash string, entry proto.ManifestEntry) error {
+// prepareTransferBlob returns a verified, member-synced temporary body. The
+// caller owns cleanup and must complete the full batch barrier before renaming.
+func prepareTransferBlob(ctx context.Context, storage *applyDestination, in io.Reader, entry proto.ManifestEntry, syncData func(*os.File) error) (name string, err error) {
 	tmp := transferBlobTempPrefix + proto.NewULID()
 	out, err := storage.root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return err
+		return "", err
 	}
-	defer storage.root.Remove(tmp)
+	defer func() {
+		if err != nil {
+			_ = storage.root.Remove(tmp)
+		}
+	}()
 	copyErr := copyTransferBlob(ctx, out, in, entry)
-	if err := errors.Join(copyErr, out.Sync(), out.Close()); err != nil {
-		return err
+	if err := errors.Join(copyErr, syncData(out), out.Close()); err != nil {
+		return "", err
 	}
 	if err := storage.verifyPath(); err != nil {
-		return err
+		return "", err
 	}
-	dir, err := storage.root.Open(".")
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	if err := renameNoReplace(dir, tmp, dir, hash); err != nil {
-		return err
-	}
-	return errors.Join(dir.Sync(), storage.verifyPath())
+	return tmp, nil
 }
 
 func (s TransferBlobStore) Stats(ctx context.Context) (TransferBlobStats, error) {

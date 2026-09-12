@@ -84,7 +84,7 @@ func (s TransferBlobStore) MaterializeBase(ctx context.Context, jobDir string, m
 	if err := renameNoReplace(dir, tmp, dir, workspaceBaseDirectory); err != nil {
 		return err
 	}
-	return errors.Join(dir.Sync(), verifyTransferPaths(storage, job))
+	return errors.Join(syncStagingBarrier(dir), verifyTransferPaths(storage, job))
 }
 
 func materializeTransferBase(ctx context.Context, storage, tree *os.Root, manifest proto.Manifest) error {
@@ -122,14 +122,15 @@ func materializeTransferBase(ctx context.Context, storage, tree *os.Root, manife
 				return err
 			}
 			copyErr := copyTransferBlob(ctx, out, in, e)
-			err = errors.Join(copyErr, out.Chmod(os.FileMode(e.Mode)), out.Sync(), out.Close(), in.Close())
+			err = errors.Join(copyErr, out.Chmod(os.FileMode(e.Mode)), syncStagedData(out), out.Close(), in.Close())
 			if err != nil {
 				return err
 			}
 		}
 	}
-	// Sync all directory entries, including implicit parents, before restricting
-	// access. Reverse lexical order visits each descendant before its ancestors.
+	// Sync all directory entries, including implicit parents, with their final
+	// modes before the full tree flush. Reverse lexical order visits each
+	// descendant before its ancestors, so restricted modes remain accessible.
 	names := make([]string, 0, len(directories))
 	for name := range directories {
 		names = append(names, name)
@@ -143,7 +144,7 @@ func materializeTransferBase(ctx context.Context, storage, tree *os.Root, manife
 		if err != nil {
 			return err
 		}
-		if err := errors.Join(dir.Chmod(directories[name]), dir.Sync(), dir.Close()); err != nil {
+		if err := errors.Join(dir.Chmod(directories[name]), syncStagedData(dir), dir.Close()); err != nil {
 			return err
 		}
 	}

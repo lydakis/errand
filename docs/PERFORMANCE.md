@@ -100,7 +100,8 @@ the submitted files for later change merging. To measure this step separately:
 go test ./internal/changes -run '^$' -bench '^BenchmarkCaptureWorkspaceBase$' -benchtime=1x -count=5
 ```
 
-The two shapes each contain 8 MiB, split across one file or 512 files. Timing
+The shapes each contain 8 MiB, split across one file, 512 files, or 512 files
+each in its own directory. Timing
 includes cloning or copying, content verification, syncing, and publication;
 fixture construction and cleanup are excluded. Set `TMPDIR` to a writable
 directory on the runner's job-storage filesystem. A RAM-backed `/tmp` hides
@@ -108,7 +109,7 @@ disk flush costs and is not representative of jobs stored on disk.
 Record the filesystem type, mount options, and storage hardware with the
 results. Clone, copy, and sync costs can differ between filesystems on the
 same operating system; a result on Btrfs is not a Linux-wide guarantee.
-Each capture uses at most 16 file workers. Check concurrent submissions and
+Each capture uses at most 16 workers, for files and then each directory depth. Check concurrent submissions and
 filesystems without cloning before generalizing the measured gains or tuning
 that limit.
 
@@ -258,3 +259,222 @@ Local capture logs, the synthetic CLI probe, and binary SHA-256 values are in
 the ignored `dist/benchmarks/push-cache-review/` directory. The probe uses a
 private Unix socket and temporary daemon state; its HTTP-body counts are not
 transport-level wire measurements.
+
+### Native filesystem staging optimization
+
+The September 12 follow-up changed two parts of staging. Cached materialization
+now sets permissions through the open descriptor, matching streamed extraction.
+The retained measurements combine that change with sync batching, so they do
+not establish an isolated speedup from descriptor-based chmod. In addition,
+transfer staging was draining the drive cache separately for every file on
+Darwin. It now shares baseline capture's member `fsync` implementation, followed
+by a full `File.Sync` at each publication boundary. Linux keeps its normal
+`File.Sync` semantics.
+
+Baseline capture, staged-tree synchronization, and retained-blob verification
+and insertion share a worker implementation capped at 16 tasks per operation.
+Siblings can synchronize concurrently; every depth finishes before its parents
+receive final permissions and synchronization. This matters on disk-backed Btrfs as well as APFS. Blob
+retention prepares verified temporary bodies, completes a full data barrier,
+then assigns their permanent hash names and completes a second directory
+barrier. A crash before the first barrier cannot leave a permanent name pointing
+at unflushed data. Retention reclaims abandoned temporary bodies before quota
+accounting, so retrying an interrupted batch does not budget its bytes twice.
+Published blobs remain intact; stats and dry-run pruning remain read-only.
+A retry finding every body already stored verifies them and
+completes only the directory barrier. Baseline reconstruction also uses member
+syncs before its full tree flush and publication. These helpers cover both push
+and fetch. Content hashing, quotas, source consistency checks, and checkpoint
+publication remain required.
+
+Tests cover restricted files, implicit parents, restricted roots with punctuation
+in child names, bounded parallelism, completion of all permission restoration
+after a member error, failed publication, and recovery using retained blobs.
+The first worker failure remains the reported cause when its siblings cancel.
+Successful tests establish ordering and error propagation; they do not simulate
+a physical power failure or certify a storage device's flush implementation.
+
+The following historical comparisons use installed **0.4.3** versus the initial
+working patch based on `ca39562`, before the two-phase blob publication review
+fix. Each native host ran its own isolated client and daemon
+through a Unix-socket capture proxy. Source, client state, and daemon state lived
+on the runner's job-storage filesystem, with short socket paths kept separately.
+The mini used APFS on SSD, macOS 26.6.2/arm64. Cabal used Btrfs with
+`compress=zstd:3`, Linux 7.1.9/amd64. A previous `/tmp` test on Cabal measured
+RAM-backed storage and concealed its per-file synchronization cost; it must not
+be used as a disk baseline.
+
+The fixture contains 1,000 1-KiB files in ten directories, every fifth body
+identical, an empty `.errandignore`, and one 7-byte edited file. Workspace creation
+and the first push are single observations. Later edits report the median of two
+pushes; no-ops report the median of three. Benchmarks ran separately from tests
+on each host. Baseline, intermediate variants, and final candidate ran in that
+order with fresh isolated state, without dropping filesystem caches or reserving
+the host. These small samples show mechanism and magnitude, not percentiles.
+
+| Host / filesystem | Operation | 0.4.3 seconds | Candidate seconds |
+| --- | --- | ---: | ---: |
+| Mac mini / APFS | Create workspace | 7.50 | 0.62 |
+| Mac mini / APFS | First edited push | 10.91 | 0.69 |
+| Mac mini / APFS | Later edited push | 4.71 | 0.61 |
+| Mac mini / APFS | No-op push | 4.42 | 0.49 |
+| Cabal / Btrfs | Create workspace | 9.52 | 1.54 |
+| Cabal / Btrfs | First edited push | 13.71 | 1.64 |
+| Cabal / Btrfs | Later edited push | 7.15 | 1.55 |
+| Cabal / Btrfs | No-op push | 7.01 | 1.27 |
+
+The final Cabal later-edit samples ranged from 1.34 to 1.76 seconds; its no-ops
+ranged from 1.18 to 1.61 seconds. The mini's later edits were 0.59–0.64 seconds
+and no-ops 0.49–0.50 seconds. The probe verified applied file contents and
+changed-path counts after every push. Multipart receipts remained 159,369 bytes
+for edits and 158,345 bytes for no-ops, carrying 7 and 0 file-body bytes
+respectively. These are complete CLI timings on one host, **not** measurements
+of laptop-to-runner transport or Blue's browser readiness. Installed clients and
+services were not upgraded.
+
+The regression benchmark includes cache materialization and its subsequent
+durability pass, since materialization alone missed the expensive interaction:
+
+```sh
+go test ./internal/daemon -run '^$' \
+  -bench '^BenchmarkCachedSourceStaging$' -benchtime=1x -count=3
+```
+
+Use `TMPDIR` on the filesystem being evaluated. The fixture is 1,000 cached
+1-KiB regular files with final mode 0644. Fixture setup and deletion are excluded;
+content verification, permission finalization, member synchronization, and the
+full publication flush are included.
+On the M1 Max laptop, two baseline samples took 4.87–4.88 seconds. Three samples
+with the optimization took 0.18–0.25 seconds (median 0.18 seconds).
+
+Local raw evidence and harness copies are retained under the ignored
+`dist/benchmarks/native-staging/`, including binary hashes, filesystem facts,
+HTTP-body timings, and the source patch. The final Darwin candidate SHA-256 was
+`96c8ee5e1ed826284cb503d6764cb48aa5b6a16635718666d720383439d1650a`;
+the Linux candidate was
+`98d4475ae97d9bdacfc119489c5330f27d97f687cc132e274f857cbbed6fb065`.
+
+Full source freezing, metadata exchange, and validation still scale with the
+selected tree. A 10,000-file laptop run with batched synchronization and parallel
+blob retention still took 7.78 seconds for a later edit and 7.64–7.66 seconds for
+no-ops. These measurements preceded the final error-cause-only correction.
+Reducing this further requires measuring source copying, inventories, cleanup, and metadata
+exchange separately; skipping them based only on local changes would weaken
+remote consistency and recovery guarantees.
+
+### Reproducible persistent-push harness
+
+The checked-in harness runs the selected binary as both client and an isolated
+native daemon. It generates the same 1,000-file content shape described above,
+creates a persistent workspace, then alternates targeted edits and no-op pushes:
+
+```sh
+go build -trimpath -o dist/errand-benchmark ./cmd/errand
+python3 scripts/benchmark_push.py --binary ./dist/errand-benchmark \
+  --output dist/benchmarks/push-standard
+python3 scripts/benchmark_push.py --binary ./dist/errand-benchmark \
+  --directories 1000 --output dist/benchmarks/push-directories
+python3 scripts/benchmark_push.py --binary ./dist/errand-benchmark \
+  --workspaces 4 --output dist/benchmarks/push-concurrent
+```
+
+Run on each native host. Put the new output directory on its actual job-storage
+filesystem; source, client state, and daemon data all live there during the run.
+Only the short Unix-socket path uses `/tmp`. Installed services, user config,
+shared caches, and real development workspaces are untouched. Temporary data is
+removed after the run, while reports and daemon logs remain under the output
+directory. These local reports include filesystem/device facts and should be
+reviewed before sharing.
+
+The report records binary hash and version, filesystem facts, fixture parameters,
+per-command wall time and transfer receipts. Every push must report the expected
+changed-path count and match the applied file on disk. Check `complete` before
+comparing runs. Creation is sequential; with multiple workspaces, each edit/no-op
+round submits pushes concurrently to the same daemon and waits for all of them.
+Round duration includes dispatch and preparing the tiny edits; per-command time
+begins after the edit is written. The first edit seeds durable blobs and should
+be reported separately from later edits.
+
+Failed commands retain their arguments, workspace/sample identity, elapsed time,
+exit code or timeout status, and the last 8,192 characters of stdout and stderr
+with truncation flags. Successful siblings from a failed round are saved too;
+the report stays incomplete. The inherited environment is never recorded.
+
+Unlike the historical probe, this harness connects directly to the daemon
+without a capture proxy. It measures CLI latency and receipt bytes, not individual
+HTTP phases or wire traffic. Repeat both baseline and candidate with this same
+harness, outside other tests and benchmarks. Alternate their run order to reduce
+warming and host-load bias; keep first-edit results separate from warm results.
+The fixture has sibling directories, so these results do not establish latency
+for deeply nested trees. Increasing `--directories` exposes
+directory work; increasing `--workspaces` measures contention across operations,
+each of which can independently use up to 16 staging workers. Neither setting
+changes the production concurrency limit.
+
+### Review-fix validation
+
+September 12, 2026: the harness above reran installed 0.4.3 and the working
+patch on the same native hosts and filesystems. The measured patch includes
+two-phase blob publication, the shared full durability barrier, and bounded
+directory finalization, before the subsequent abandoned-temporary cleanup and
+benchmark-diagnostics fixes. “Final patch” below identifies that measured
+revision, not later working-tree changes. Each run used fresh isolated state. Baseline ran first,
+then the publication fix, then the directory optimization; caches were not
+dropped and the hosts were not reserved. Tests finished before each benchmark
+run. These small samples demonstrate the improvement but are not percentiles.
+
+Standard 1,000-file, ten-directory fixture, seconds:
+
+| Host / filesystem | Operation | 0.4.3 | Final patch |
+| --- | --- | ---: | ---: |
+| Mac mini / APFS | Create workspace | 7.66 | 0.63 |
+| Mac mini / APFS | First edited push | 11.42 | 0.70 |
+| Mac mini / APFS | Later edited push | 4.65 | 0.65 |
+| Mac mini / APFS | No-op push | 4.58 | 0.55 |
+| Cabal / Btrfs | Create workspace | 8.96 | 1.54 |
+| Cabal / Btrfs | First edited push | 14.76 | 2.44 |
+| Cabal / Btrfs | Later edited push | 7.42 | 1.47 |
+| Cabal / Btrfs | No-op push | 7.62 | 1.52 |
+
+Creation and first edits are single observations; later edits are medians of two
+samples, no-ops of three. Final Cabal later edits ranged from 1.25–1.68 seconds
+and no-ops from 1.20–2.00 seconds. These complete local CLI timings exclude
+laptop-to-runner transport and application readiness.
+
+The new directory-heavy capture benchmark justified reusing the bounded worker
+loop for directory finalization. On Cabal, the median of three captures with
+512 directories fell from 1.99 to 0.57 seconds; on APFS it was 0.123 versus 0.113
+seconds. In the end-to-end 1,000-directory fixture, Cabal workspace creation
+fell from 5.51 to 2.42 seconds. Its later pushes remained variable, with a final
+median of 2.83 seconds for edits and 2.26 seconds for no-ops. Directory batching
+improves capture; it does not eliminate source inventory and staging work.
+
+Four workspaces also pushed concurrently through one isolated daemon. All 24
+pushes on each host passed the receipt and applied-content checks. Final
+later-edit medians were 1.59 seconds per push on APFS and 2.81 seconds on Btrfs;
+no-op medians were 1.30 and 2.43 seconds. This establishes correct behavior for
+the tested concurrency, not unlimited capacity or a worst-case descriptor
+bound. No global semaphore or change to the per-operation limit was warranted
+by this run.
+
+Both platforms passed the full Go race suite, `go vet ./...`, and 28 Python
+tests after the publication fix. After directory batching, the affected changes
+and daemon race suites and full vet passed again. Regression coverage includes
+no permanent blob names before the data barrier, failures at both barriers,
+cancellation before renaming, cached retry without source, ordinary restricted
+root restoration, and joining sibling directory work before restricting parents.
+
+Raw reports and logs are under ignored `dist/benchmarks/review-fix-{mini,cabal}/`
+and `dist/benchmarks/review-final-{mini,cabal}/`. Final binaries:
+
+- Darwin arm64 SHA-256: `69ed4b4dcd9efe527c535f40e4cfb1b38c81467417cbfeea13203b5ac4034593`
+- Linux amd64 SHA-256: `9c741babaea40b0bc6f079a73def9f58d5545bcc88a0b1d436521fb15f8aa88b`
+
+The subsequent recovery/diagnostics pass also passed changes and daemon race
+tests, full `go vet ./...`, and all 32 Python tests on both hosts. Its isolated
+smoke fixture used 64 files, 16 sibling directories, and two workspaces, with
+eight verified pushes per host. Reports are under ignored
+`dist/benchmarks/review-recovery-{mini,cabal}/`; these smoke runs validate
+behavior, not a new performance comparison. The abandoned-batch regression
+failed before cleanup was added and passed afterward. The restrictive-umask
+test also failed when chmod was removed through a temporary Go overlay.

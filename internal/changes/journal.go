@@ -944,5 +944,5 @@ func syncApplyRootDirectory(root *os.Root, directory string) error {
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return syncStagingBarrier(dir)
 }

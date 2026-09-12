@@ -4,6 +4,6 @@ package changes
 
 import "os"
 
-func syncCapturedData(file *os.File) error {
+func syncStagedData(file *os.File) error {
 	return file.Sync()
 }
