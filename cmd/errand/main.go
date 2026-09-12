@@ -90,16 +90,11 @@ Full command options: errand COMMAND --help`
 
 func main() { os.Exit(runCLI(os.Args[1:])) }
 
-func runCLI(args []string) (code int) {
-	// A panic still unwinds the telemetry defer. Only a normal return may
-	// replace this conservative outcome with success.
-	code = client.ExitTransaction
+func runCLI(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
 	}
-	reporter := startTelemetry(args, os.Stderr)
-	defer func() { reporter.Finish(telemetryOperation(args), code) }()
 	skipResume := cliHelpRequested(args)
 	switch args[0] {
 	case "serve", "setup", "_automatic-apply", "_stdio", "version", "config", "access", "doctor":
@@ -151,7 +146,7 @@ func runCLI(args []string) (code int) {
 		fmt.Println(usage)
 		return 0
 	default:
-		return cmdRun(args, reporter)
+		return cmdRun(args)
 	}
 }
 

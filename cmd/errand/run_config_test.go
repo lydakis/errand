@@ -51,7 +51,7 @@ func TestConfigInspectionAndRunUseWorkspacePreferences(t *testing.T) {
 			args = append(args, "--apply")
 		}
 		args = append(args, "--", "/bin/sh", "-c", "printf changed > report.txt")
-		if code := cmdRun(args, nil); code != 0 {
+		if code := cmdRun(args); code != 0 {
 			t.Fatalf("run apply=%t exit %d", apply, code)
 		}
 		content, err := os.ReadFile("report.txt")
@@ -87,7 +87,7 @@ func TestConfigInspectionAndRunUseWorkspacePreferences(t *testing.T) {
 	if got.Profile != "edit" || got.Peer != "profile-target" || got.Workdir != "nested" || !got.ApplyOnSuccess || !strings.Contains(got.Sources["peer"], "profiles.edit") {
 		t.Fatalf("profile inspection: %+v", got)
 	}
-	if code := cmdRun([]string{"--profile", "edit", "--include-all", "--", "/bin/sh", "-c", "printf profiled > report.txt"}, nil); code != 0 {
+	if code := cmdRun([]string{"--profile", "edit", "--include-all", "--", "/bin/sh", "-c", "printf profiled > report.txt"}); code != 0 {
 		t.Fatalf("profile run: %d", code)
 	}
 	content, err := os.ReadFile(filepath.Join("nested", "report.txt"))

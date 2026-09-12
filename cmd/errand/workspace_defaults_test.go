@@ -47,7 +47,7 @@ func TestWorkspaceCreationDefaults(t *testing.T) {
 			if err := os.WriteFile(".errand.toml", []byte("[caches]\nother = 'other-cache'\n[artifacts]\npaths = ['other-output']\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
-			if code := cmdRun([]string{"--workspace", name, "--no-apply", "--", "/bin/sh", "-c", "mkdir -p ignored; echo output > ignored/out"}, nil); code != 0 {
+			if code := cmdRun([]string{"--workspace", name, "--no-apply", "--", "/bin/sh", "-c", "mkdir -p ignored; echo output > ignored/out"}); code != 0 {
 				t.Fatalf("plain reuse failed: %d", code)
 			}
 			if scenario == "creation-artifact-default" {
@@ -62,7 +62,7 @@ func TestWorkspaceCreationDefaults(t *testing.T) {
 				if len(job.Spec.Selection.Artifacts) != 1 || job.Spec.Selection.Artifacts[0] != "ignored" {
 					t.Fatalf("creation artifact default lost: %v", job.Spec.Selection.Artifacts)
 				}
-				if code := cmdRun([]string{"--workspace", name, "--no-artifacts", "--no-apply", "--", "true"}, nil); code != 0 {
+				if code := cmdRun([]string{"--workspace", name, "--no-artifacts", "--no-apply", "--", "true"}); code != 0 {
 					t.Fatalf("explicit artifact clear: %d", code)
 				}
 				jobs, err = client.List(srv.URL)
@@ -83,7 +83,7 @@ func TestWorkspaceCreationDefaults(t *testing.T) {
 					t.Fatal("--no-artifacts did not clear retained-output defaults")
 				}
 			} else {
-				if code := cmdRun([]string{"--workspace", name, "--no-caches", "--no-apply", "--", "true"}, nil); code == 0 {
+				if code := cmdRun([]string{"--workspace", name, "--no-caches", "--no-apply", "--", "true"}); code == 0 {
 					t.Fatal("explicit conflicting cache clear was silently ignored")
 				}
 			}

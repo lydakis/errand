@@ -125,7 +125,7 @@ apply_on_success = true
 		}
 		forwarded <- fmt.Errorf("profile forward never served the helper response")
 	}()
-	code := cmdRun([]string{"--profile", "integration", "--", executable, "-test.run=^TestCombinedProfileEndToEnd$"}, nil)
+	code := cmdRun([]string{"--profile", "integration", "--", executable, "-test.run=^TestCombinedProfileEndToEnd$"})
 	if err := <-forwarded; err != nil {
 		t.Fatal(err)
 	}

@@ -47,7 +47,6 @@ func (c Client) SSHRemoteSocket(name string) string {
 }
 
 type Client struct {
-	Telemetry      *Telemetry                   `toml:"telemetry,omitempty"`
 	Caches         workspace.Caches             `toml:"caches"`
 	Artifacts      workspace.Artifacts          `toml:"artifacts"`
 	Session        workspace.Session            `toml:"session"`
@@ -57,11 +56,6 @@ type Client struct {
 	DefaultPeer    string                       `toml:"default_peer,omitempty"`
 	ApplyOnSuccess *bool                        `toml:"apply_on_success,omitempty"`
 	Peers          map[string]Peer              `toml:"peers,omitempty"`
-}
-
-// Telemetry is personal only. Workspace files and profiles cannot enable it.
-type Telemetry struct {
-	Enabled bool `toml:"enabled"`
 }
 
 // Directory resolves the shared client and runner configuration directory.

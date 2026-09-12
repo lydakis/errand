@@ -931,7 +931,7 @@ Development builds can use an explicit version label to identify them
   recovery, and storage accounting through `df` and `gc`.
 - Configuration precedence, profiles, environment-forwarding consent, access
   controls, and read-only diagnostics.
-- GitHub releases, Homebrew distribution, and opt-out usage telemetry.
+- GitHub releases and Homebrew distribution.
 - Opt-in `--where` selection among personally configured runners, with capability
   checks, job-capacity ranking, and admission-time revalidation.
 

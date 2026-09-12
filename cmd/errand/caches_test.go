@@ -40,7 +40,7 @@ func TestCacheFlagsAndInspection(t *testing.T) {
 		}
 	}
 	for _, args := range [][]string{{"--cache", ""}, {"--cache", "a=out", "--no-caches"}, {"--cache", "a=../out"}} {
-		if code := cmdRun(append(args, "--", "true"), nil); code != 2 {
+		if code := cmdRun(append(args, "--", "true")); code != 2 {
 			t.Fatalf("accepted %v: %d", args, code)
 		}
 	}
@@ -73,7 +73,7 @@ func TestNamedCachesReuseWithoutSnapshotOrFetchContents(t *testing.T) {
 				if empty {
 					args = append(args, "--no-snapshot")
 				}
-				code := cmdRun(append(args, "--", "/bin/sh", "-c", script), nil)
+				code := cmdRun(append(args, "--", "/bin/sh", "-c", script))
 				want := 0
 				if i == 1 {
 					want = 7

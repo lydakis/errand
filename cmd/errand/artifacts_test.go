@@ -34,7 +34,7 @@ func TestArtifactFlagsAndInspection(t *testing.T) {
 		}
 	}
 	for _, args := range [][]string{{"--artifact", ""}, {"--artifact", "out", "--no-artifacts"}, {"--artifact", "../out"}} {
-		if code := cmdRun(append(args, "--", "true"), nil); code != 2 {
+		if code := cmdRun(append(args, "--", "true")); code != 2 {
 			t.Fatalf("accepted flags %v: %d", args, code)
 		}
 	}
@@ -72,7 +72,7 @@ func TestArtifactsRunFetchAndApply(t *testing.T) {
 				args = append(args, "--no-snapshot")
 			}
 			args = append(args, "--", "/bin/sh", "-c", "test ! -e ignored/local.txt || exit 9; mkdir -p ignored/reports; printf report > ignored/reports/result.txt; exit 7")
-			if code := cmdRun(args, nil); code != 7 {
+			if code := cmdRun(args); code != 7 {
 				t.Fatalf("run: %d", code)
 			}
 			jobs, err := client.List(server.URL)

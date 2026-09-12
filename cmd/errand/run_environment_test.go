@@ -93,7 +93,7 @@ func TestWorkspacePassStopsDoctorAndRunBeforeContact(t *testing.T) {
 	if code != 1 || !strings.Contains(out.String(), "workspace env.pass") || strings.Contains(out.String(), "dummy-value") {
 		t.Fatalf("doctor: %d %s", code, &out)
 	}
-	if code := cmdRun([]string{"--no-snapshot", "--", "true"}, nil); code != client.ExitTransaction {
+	if code := cmdRun([]string{"--no-snapshot", "--", "true"}); code != client.ExitTransaction {
 		t.Fatalf("run accepted workspace env.pass: %d", code)
 	}
 	if _, err := os.Stat("invalid-state-root"); !os.IsNotExist(err) {
@@ -118,7 +118,7 @@ func TestConfiguredEnvironmentReachesJobWithoutPersistingValues(t *testing.T) {
 	if err := os.WriteFile(".errand.toml", []byte("[profiles.integration.env]\nset = { CI = 'workspace' }\npass = ['ERRAND_TEST_PASS']\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code := cmdRun([]string{"--profile", "integration", "--env", "CI=cli", "--no-snapshot", "--", "/bin/sh", "-c", `test "$CI" = cli && test "$KEEP" = yes && test -n "$ERRAND_TEST_PASS" && test -z "${ERRAND_TEST_INACTIVE+x}"`}, nil)
+	code := cmdRun([]string{"--profile", "integration", "--env", "CI=cli", "--no-snapshot", "--", "/bin/sh", "-c", `test "$CI" = cli && test "$KEEP" = yes && test -n "$ERRAND_TEST_PASS" && test -z "${ERRAND_TEST_INACTIVE+x}"`})
 	if code != 0 {
 		t.Fatalf("environment job exit=%d", code)
 	}

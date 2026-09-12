@@ -13,6 +13,7 @@ func TestLoadConfigRejectsUnknownSettings(t *testing.T) {
 		daemon          bool
 	}{
 		{"personal", "apply_on_sucess = true", "apply_on_sucess", false},
+		{"removed telemetry", "[telemetry]\nenabled = false", "telemetry", false},
 		{"peer", "[peers.build]\nurl = 'http://build:7443'\nremote_comand = '/bin/errand'", "peers.build.remote_comand", false},
 		{"runner", "max_job = 2", "max_job", true},
 		{"runner cache", "[named_cache]\nmax_byte = 10", "named_cache.max_byte", true},

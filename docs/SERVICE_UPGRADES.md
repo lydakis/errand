@@ -112,6 +112,15 @@ it running until the next idle setup.
 
 Client-only machines have no daemon to stop. They only need the binary upgrade.
 
+## Removing old telemetry settings
+
+Version 0.4.0 included usage telemetry. It has been removed from the current
+source. Before upgrading, remove any `[telemetry]` table from personal
+`config.toml`; unknown settings are rejected. The old `ERRAND_TELEMETRY` and
+`ERRAND_TELEMETRY_DEBUG` environment variables have no effect on the new binary.
+Existing `telemetry-id` and `telemetry-id.notice` files beside personal
+configuration are unused and may be deleted manually.
+
 ## Acceptance
 
 The ordinary runtime suite re-executes a subprocess after removing its installed

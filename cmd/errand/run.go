@@ -9,10 +9,9 @@ import (
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/proto"
-	"github.com/lydakis/errand/internal/telemetry"
 )
 
-func cmdRun(args []string, reporter *telemetry.Reporter) int {
+func cmdRun(args []string) int {
 	fs := flag.NewFlagSet("errand", flag.ContinueOnError)
 	var settings runConfigFlags
 	settings.bind(fs)
@@ -129,12 +128,8 @@ func cmdRun(args []string, reporter *telemetry.Reporter) int {
 		fmt.Fprintln(os.Stderr, "errand:", err)
 		return client.ExitTransaction
 	}
-	var chosen placementChoice
 	opts := client.RunOptions{
-		Where: effective.Where,
-		OnAdmitted: func(admission client.Admission) {
-			reporter.Admitted(telemetry.Run{Transport: telemetryTransport(chosen.URL), Workspace: admission.Workspace, Caches: admission.Caches, Artifacts: admission.Artifacts, Forwarding: admission.Forwarding, Apply: admission.Apply, Detached: admission.Detached})
-		},
+		Where:     effective.Where,
 		Workspace: *workspace,
 		Artifacts: effective.Artifacts, Caches: effective.Caches, Root: effective.Root,
 		Argv: argv, Env: env, PassEnv: passenvs, Workdir: effective.Workdir,
@@ -142,7 +137,6 @@ func cmdRun(args []string, reporter *telemetry.Reporter) int {
 		Detach: *detach, ApplyOnSuccess: effective.ApplyOnSuccess, Forwards: forwards,
 	}
 	configurePlacement(&opts, choices, os.Stderr, func(c placementChoice) {
-		chosen = c
 		if effective.Where == "" {
 			warnRunnerVersion(c.Target, c.Name)
 		}

@@ -6,11 +6,6 @@ a source archive, SHA-256 checksums, and a Homebrew formula. It creates a
 requests pass. Publishing a stable release then triggers a validated Homebrew
 tap update automatically.
 
-Before distributing telemetry changes, verify the
-[telemetry settings and ingestion](TELEMETRY.md#maintainer-verification),
-including first-invocation notice, opt-out, region, retention, and stored
-event fields. Release binaries and Homebrew builds use the same public token.
-
 ## Local rehearsal
 
 Use GoReleaser 2.18.0, Go from `go.mod`, Python 3, and Ruby:
