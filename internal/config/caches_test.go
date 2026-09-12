@@ -42,6 +42,7 @@ func TestCachePrecedence(t *testing.T) {
 
 func TestRemovePeerPreservesCacheConfiguration(t *testing.T) {
 	for _, caches := range []string{
+		"[caches]\ncompiler = 'target'\nquoted = 'quote\"path'\n[caches.dependencies]\nroots = ['.', 'packages/*']\npath = 'node_modules'\n[profiles.build.caches.outputs]\nroots = ['packages/*']\npath = 'dist'\n",
 		"[caches]\ncompiler = 'target'\n[profiles.clean.caches]\n[profiles.inherit.run]\nworkdir = '.'\n",
 		"[caches]\n[profiles.build.caches]\n'go.build' = 'cache/go build'\n",
 		"",

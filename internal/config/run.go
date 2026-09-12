@@ -40,6 +40,7 @@ type EffectiveRun struct {
 	CachesOverride    bool                  `json:"-"`
 	ArtifactsOverride bool                  `json:"-"`
 	Caches            []proto.CacheBinding  `json:"caches"`
+	CacheSources      map[string]string     `json:"cache_sources,omitempty"`
 	Artifacts         []string              `json:"artifacts"`
 	Forwards          []string              `json:"forward"`
 	Environment       []EnvironmentVariable `json:"environment,omitempty"`
@@ -61,9 +62,34 @@ type EffectiveRun struct {
 
 // ResolveRun reads personal configuration once and uses only the workspace
 // configuration accepted by boundary discovery. It does not contact runners,
-// read environment files, inspect snapshot contents, register transports, or
-// mutate client state. Call PrepareExecution before using the job environment.
+// read environment files, register transports, or mutate client state. Cache
+// groups inspect directory names locally when bindings are needed. Call
+// PrepareExecution before using the job environment.
 func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
+	return resolveRun(cwd, cli, cachesForRun)
+}
+
+// ResolveWorkspaceCreation expands configured caches even when the profile
+// names an existing workspace. Creation always takes a new set of bindings.
+func ResolveWorkspaceCreation(cwd string, cli RunOverrides) (EffectiveRun, error) {
+	return resolveRun(cwd, cli, cachesForCreation)
+}
+
+// ResolvePush leaves cache resolution to the workspace's frozen selection.
+// Local package discovery must not prevent pushing package additions/removals.
+func ResolvePush(cwd string, cli RunOverrides) (EffectiveRun, error) {
+	return resolveRun(cwd, cli, cachesForPush)
+}
+
+type cacheResolution int
+
+const (
+	cachesForRun cacheResolution = iota
+	cachesForCreation
+	cachesForPush
+)
+
+func resolveRun(cwd string, cli RunOverrides, cacheMode cacheResolution) (EffectiveRun, error) {
 	var result EffectiveRun
 	if cli.Where != "" && (cli.Peer != "" || cli.URL != "") {
 		return result, fmt.Errorf("--where cannot be combined with --on or --url")
@@ -112,7 +138,7 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 		return result, err
 	}
 	result = EffectiveRun{
-		CachesOverride:    cli.Caches != nil || profile.Caches.Bindings() != nil,
+		CachesOverride:    cli.Caches != nil || profile.Caches != nil,
 		ArtifactsOverride: cli.Artifacts != nil || profile.Artifacts.Paths != nil,
 		Profile:           cli.Profile,
 		Root:              selected.Root, Workdir: selected.Workdir, Project: selected.Project,
@@ -148,9 +174,13 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	if err != nil {
 		return result, err
 	}
-	result.Caches, result.Sources["caches"], err = resolveCaches(personal.Caches.Bindings(), selected.Caches.Bindings(), profile.Caches.Bindings(), cli.Caches, personalSource, workspaceSource, profileSource)
-	if err != nil {
-		return result, err
+	if cacheMode == cachesForPush || (cacheMode == cachesForRun && result.Workspace != "" && !result.CachesOverride) {
+		result.Sources["caches"] = workspaceDefaultsSource(result.Workspace)
+	} else {
+		result.Caches, result.CacheSources, result.Sources["caches"], err = resolveCaches(selected.Root, personal.Caches, selected.Caches, profile.Caches, cli.Caches, personalSource, workspaceSource, profileSource)
+		if err != nil {
+			return result, err
+		}
 	}
 	profileDir := filepath.Dir(personalPath)
 	if _, ok := selected.Profiles[cli.Profile]; ok {

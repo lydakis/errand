@@ -9,11 +9,13 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+const MaxCaches = 64
+
 // ValidateCaches requires distinct names and non-overlapping directory paths.
 // Case-insensitive overlap is refused so bindings work on both target platforms.
 func ValidateCaches(caches []proto.CacheBinding) error {
-	if len(caches) > 64 {
-		return fmt.Errorf("at most 64 named caches may be bound")
+	if len(caches) > MaxCaches {
+		return fmt.Errorf("at most %d named caches may be bound", MaxCaches)
 	}
 	names := map[string]bool{}
 	paths := []string{}

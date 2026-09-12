@@ -500,7 +500,8 @@ snapshots and fetched results. Every binding uses the same directory-preservatio
 mechanism. For example, `[caches]` with `dependencies = "node_modules"` lets a
 separate `errand -- pnpm install` supply installed files to a later
 `errand -- pnpm test`. Monorepos need explicit bindings for nested installed
-directories too. See [named caches](NAMED_CACHES.md) for concurrency, hardlink
+directories too. [Directory groups](NAMED_CACHES.md#directory-groups-for-monorepos)
+can declare those package caches together. See [named caches](NAMED_CACHES.md) for concurrency, hardlink
 behavior, path-portability limits, recovery, and cleanup.
 
 Git is not required for non-Git snapshots, running jobs, status, logs, or plain

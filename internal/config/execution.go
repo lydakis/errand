@@ -4,7 +4,8 @@ import "fmt"
 
 // PrepareExecution applies persistent-job rules and loads the job environment.
 // Run, config, and doctor call this; source push and workspace creation do not.
-// Remote defaults remain unknown until the client loads the selected workspace.
+// Cache inheritance is already settled by ResolveRun. Artifact defaults remain
+// unknown until the client loads the selected workspace.
 func (e *EffectiveRun) PrepareExecution(includeAll bool) error {
 	if e.Workspace != "" {
 		if e.NoSnapshot || includeAll {
@@ -16,11 +17,7 @@ func (e *EffectiveRun) PrepareExecution(includeAll bool) error {
 		if e.Sources == nil {
 			e.Sources = make(map[string]string)
 		}
-		source := fmt.Sprintf("persistent workspace %q: creation defaults (resolved on runner)", e.Workspace)
-		if !e.CachesOverride {
-			e.Caches = nil
-			e.Sources["caches"] = source
-		}
+		source := workspaceDefaultsSource(e.Workspace)
 		if !e.ArtifactsOverride {
 			e.Artifacts = nil
 			e.Sources["artifacts"] = source
@@ -29,4 +26,8 @@ func (e *EffectiveRun) PrepareExecution(includeAll bool) error {
 	var err error
 	e.Environment, err = resolveEnvironment(e.environmentLayers...)
 	return err
+}
+
+func workspaceDefaultsSource(name string) string {
+	return fmt.Sprintf("persistent workspace %q: creation defaults (resolved on runner)", name)
 }

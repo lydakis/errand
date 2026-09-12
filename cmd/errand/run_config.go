@@ -1,12 +1,14 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -234,7 +236,7 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 			{"no_snapshot", effective.NoSnapshot},
 			{"forward", effective.Forwards},
 			{"artifacts", effective.Artifacts},
-			{"caches", effective.Caches},
+			{"caches", fmt.Sprintf("%d bindings", len(effective.Caches))},
 		} {
 			if _, exists := effective.Sources[row.key]; !exists {
 				continue
@@ -243,6 +245,20 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 				row.value = "inherited (resolved on runner)"
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\n", row.key, terminalSafeField(fmt.Sprint(row.value)), terminalSafeField(effective.Sources[row.key]))
+		}
+		cacheRows := slices.Clone(effective.Caches)
+		slices.SortFunc(cacheRows, func(a, b proto.CacheBinding) int {
+			if order := cmp.Compare(effective.CacheSources[a.Name], effective.CacheSources[b.Name]); order != 0 {
+				return order
+			}
+			return cmp.Compare(a.Path, b.Path)
+		})
+		for _, cache := range cacheRows {
+			source := effective.CacheSources[cache.Name]
+			if source == "" {
+				source = effective.Sources["caches"]
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\n", terminalSafeField("cache."+cache.Name), terminalSafeField(cache.Path), terminalSafeField(source))
 		}
 		for _, entry := range effective.Environment {
 			state := entry.Kind + " (value hidden)"

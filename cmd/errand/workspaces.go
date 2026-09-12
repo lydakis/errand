@@ -86,7 +86,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "errand:", cwdErr)
 			return 1
 		}
-		effective, resolveErr := config.ResolveRun(cwd, overrides)
+		effective, resolveErr := config.ResolveWorkspaceCreation(cwd, overrides)
 		if resolveErr != nil {
 			fmt.Fprintln(stderr, "errand:", resolveErr)
 			return 1

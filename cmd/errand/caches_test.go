@@ -38,6 +38,11 @@ func TestCacheFlagsAndInspection(t *testing.T) {
 		} else if len(got.Caches) != 1 || got.Caches[0].Path != tc.path {
 			t.Fatal(got.Caches)
 		}
+		for _, binding := range got.Caches {
+			if got.CacheSources[binding.Name] == "" {
+				t.Fatalf("missing per-binding source: %+v", got)
+			}
+		}
 	}
 	for _, args := range [][]string{{"--cache", ""}, {"--cache", "a=out", "--no-caches"}, {"--cache", "a=../out"}} {
 		if code := cmdRun(append(args, "--", "true")); code != 2 {

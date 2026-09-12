@@ -284,7 +284,23 @@ compiler = "target"
 The empty profile table clears inherited caches. Personal, workspace, selected
 profile, and CLI settings use that precedence, replacing the whole binding list.
 Use repeatable `--cache NAME=PATH` for a run override, or `--no-caches` to disable
-bindings. `errand config` shows the effective list and its source.
+bindings. `errand config` shows each resolved binding and its declaration source;
+JSON includes `cache_sources` keyed by cache name.
+
+For monorepos, a group expands source package directories into separate bindings:
+
+```toml
+[caches.dependencies]
+roots = [".", "packages/*"]
+path = "node_modules"
+```
+
+Cache paths need not exist locally. Patterns match existing directories relative
+to the workspace root, without following symlink directories. Unmatched patterns
+and overlapping bindings are errors. Groups expand only in the winning layer;
+persistent workspaces freeze them at creation. See
+[directory groups](NAMED_CACHES.md#directory-groups-for-monorepos) for pattern
+syntax, stable identities, and persistent-workspace behavior.
 
 Caches are runner-local and disposable. They are excluded from snapshots and
 retained results even when artifact declarations include them. Jobs can reuse

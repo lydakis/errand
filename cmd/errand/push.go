@@ -51,7 +51,7 @@ func cmdPushTo(args []string, out, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "errand:", err)
 		return 1
 	}
-	effective, err := config.ResolveRun(cwd, overrides)
+	effective, err := config.ResolvePush(cwd, overrides)
 	if err != nil {
 		fmt.Fprintln(stderr, "errand:", err)
 		return 2

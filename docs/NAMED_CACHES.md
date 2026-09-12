@@ -50,8 +50,7 @@ settings. Errand does not change runner-wide tool configuration or `HOME`.
 Commands themselves retain their normal native access to the runner.
 
 Only directories, regular files, and symlinks are supported; sockets, pipes,
-and device nodes cannot be saved. Paths are exact and do not expand globs. Monorepos need an entry for each
-installed directory they want to preserve, for example:
+and device nodes cannot be saved. The shorthand binds one exact directory:
 
 ```toml
 [caches]
@@ -77,11 +76,71 @@ sharing a parent must use identical casing for that parent. Exclusion matches
 path casing exactly. Case-insensitive filesystems reject existing entries whose
 casing differs from the declared path.
 
+## Directory groups for monorepos
+
+Use `roots` to select existing package directories and `path` for the cache
+location inside each one:
+
+```toml
+[caches.dependencies]
+roots = [".", "apps/*", "packages/*"]
+path = "node_modules"
+
+[caches.package-builds]
+roots = ["packages/*"]
+path = "dist"
+```
+
+These groups coexist with exact bindings such as `compiler = "target"` under
+`[caches]`. Each matching root gets an independent cache. Discovery uses source
+package directories, so `node_modules` and `dist` need not exist locally before
+installation or compilation. Errand does not discover package-manager manifests,
+run installs, or infer which packages produce build outputs. Choose roots that
+actually need the declared directory.
+
+Roots are relative to the selected workspace root, even in personal config or a
+profile. `.` selects that root. Patterns support `*`, `?`, and character classes
+within a path component; `*` does not cross `/`, and recursive `**` is unsupported.
+Only directories match, including ordinary hidden directories. Wildcards skip
+reserved metadata directories (`.git` and root-level `.errand-change-*`); explicitly
+naming those roots is an error. Other generated directories remain eligible, so
+prefer package-specific patterns over broad roots that also match build output.
+Discovery does not follow symlink directories. Every
+pattern must match at least one directory; a typo or missing package group fails
+with the declaration and pattern in the error. The appended `path` is always
+exact and workspace-relative. Duplicate matches within a group are deduplicated;
+overlaps between resolved bindings are rejected. The existing 64-cache limit
+applies to the expanded list, and discovery stops at the first excess final
+match. A separate shared budget of 10,000 filesystem visits (directory entries
+and path lookups) bounds discovery across all groups, including intermediate
+matches and nonmatching files. Exceeding it reports the group and pattern to
+narrow. More than 64 intermediate directories are allowed when the final binding
+count and discovery budget remain within their limits.
+
+Generated names use the group name and a digest of the group name plus resolved
+path. Their identities do not depend on checkout location, pattern order, or the
+number of packages. Adding a package preserves existing caches; renaming a group
+or moving a package selects a new cache. Switching an existing exact binding to
+a group also selects a new cache, so run installation/build again after migrating.
+Old caches remain subject to normal GC.
+
+`errand config` lists bindings ordered by declaration source and path. JSON adds
+`cache_sources`, keyed by resolved cache name, including CLI bindings. Expansion happens only for the
+winning configuration layer: `--no-caches` or an empty profile table can clear
+groups even when their patterns do not match this checkout.
+
+Fresh jobs expand the groups on each invocation. Persistent workspace creation
+expands and freezes its bindings. Runs that inherit those bindings and `push`
+use the frozen selection without rediscovering cache roots. An explicitly chosen
+profile or CLI cache override still has to agree with that selection. Packages
+added later retain their files normally in the persistent tree, but gain no new
+named-cache binding. Create a new workspace to use a different binding list.
+
 ## pnpm installed dependencies and download store
 
 Caching `node_modules` preserves installed dependencies for the next command.
 With pnpm's default layout, this includes its `node_modules/.pnpm` virtual store.
-Keep the monorepo entries above for any nested `node_modules` directories too.
+Use exact bindings or directory groups for nested `node_modules` directories too.
 
 The pnpm download store is separate. Caching it saves package downloads, but
 each fresh workspace still needs an install to create `node_modules`. To manage
