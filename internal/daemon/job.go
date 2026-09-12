@@ -382,17 +382,7 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 	if err := os.Mkdir(workspace, 0o700); err != nil {
 		return false, err
 	}
-	cachedPaths := map[string]bool{}
-	extractOpts := archive.ExtractOptions{}
-	if d.cache != nil {
-		extractOpts.ResolveMissing = func(dest string, entry proto.ManifestEntry) (bool, error) {
-			hit, err := d.cache.Materialize(stagingCtx, dest, entry)
-			if hit {
-				cachedPaths[entry.Path] = true
-			}
-			return hit, err
-		}
-	}
+	extractOpts, cachedPaths := d.snapshotExtractOptions(stagingCtx)
 	extractErr := archive.ExtractWith(&contextReader{ctx: stagingCtx, r: workspaceTar}, workspace, manifest, j.Spec.Limits.MaxWorkspaceBytes, extractOpts)
 	if extractErr != nil {
 		j.markStagingDone()
@@ -413,19 +403,8 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 		return false, fmt.Errorf("capturing submitted workspace for change merging: %w", err)
 	}
 	j.event("change-base-captured", manifest.RootHash())
-	if d.cache != nil {
-		for _, e := range manifest.Entries {
-			if e.Type != proto.EntryFile || cachedPaths[e.Path] {
-				continue
-			}
-			src := filepath.Join(workspace, filepath.FromSlash(e.Path))
-			if err := d.cache.Insert(stagingCtx, src, e.SHA256, e.Size); err != nil {
-				if stagingCtx.Err() == nil {
-					j.event("cache-insert-failed", e.Path+": "+err.Error())
-				}
-				break
-			}
-		}
+	if err := d.cacheSnapshotSource(stagingCtx, workspace, manifest, cachedPaths); err != nil && stagingCtx.Err() == nil {
+		j.event("cache-insert-failed", err.Error())
 	}
 	if err := j.prepareNamedCacheTrees(stagingCtx, d); err != nil {
 		return false, err

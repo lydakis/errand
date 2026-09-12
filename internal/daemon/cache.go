@@ -182,11 +182,14 @@ func (c *blobCache) Materialize(ctx context.Context, dest string, e proto.Manife
 		return false, copyErr
 	}
 	if n != e.Size || hex.EncodeToString(h.Sum(nil)) != e.SHA256 {
-		os.Remove(dest)
-		if err := c.removeIfCurrent(ctx, e.SHA256, fi); err != nil {
+		if err := os.Remove(dest); err != nil {
 			return false, err
 		}
-		return false, nil
+		// Cache cleanup is best effort. An unavailable or read-only cache
+		// must still allow the caller to retry with the original file body.
+		// Destination failures and cancellation remain hard errors.
+		_ = c.removeIfCurrent(ctx, e.SHA256, fi)
+		return false, ctx.Err()
 	}
 	if err := ctx.Err(); err != nil {
 		os.Remove(dest)

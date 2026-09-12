@@ -684,6 +684,7 @@ func (d *Daemon) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v0/gc/changes", d.auth(proto.ActionGCJobs, d.handleTransferGC))
 	mux.HandleFunc("POST /v0/workspaces/{id}/push", d.auth(proto.ActionSubmit, d.handleWorkspacePush))
+	mux.HandleFunc("POST /v0/workspaces/{id}/push/diff", d.auth(proto.ActionSubmit, d.handleWorkspacePushDiff))
 	mux.HandleFunc("POST /v0/workspaces/{id}/push/{transfer}/apply", d.auth(proto.ActionSubmit, d.handleWorkspacePushApply))
 	mux.HandleFunc("POST /v0/workspaces/{id}", d.auth(proto.ActionSubmit, d.handleWorkspaceCreate))
 	mux.HandleFunc("GET /v0/workspaces", d.auth(proto.ActionReadOwn, d.handleWorkspaceList))

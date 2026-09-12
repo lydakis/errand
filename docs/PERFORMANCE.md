@@ -193,11 +193,68 @@ The fixture has an unchanged 8 MiB file and a small edited file. The benchmark
 reports preparation time and retained bytes per attempt, without an artificial
 throughput figure for unchanged files that staging skips. Setup and cleanup are
 outside the timed section. Staging materializes only the changed base paths.
-It does not measure network time: a new push still uploads its selected source
-snapshot. Applying an acknowledged unchanged stage does not upload it again.
+It does not measure network time: a new push still describes its complete
+selected source snapshot, but negotiated cache hits omit file bodies from the
+upload. Applying an acknowledged unchanged stage does not upload it again.
 
-Source blobs remain private to each transfer relationship. A shared blob store
-or incremental push protocol is not part of the current plan; revisit those only
-when representative workloads show storage duplication or network transfer is
-the limiting cost. Use this benchmark alongside the end-to-end harness before
-adding either mechanism.
+Durable source blobs remain private to each transfer relationship. Push also
+uses the existing evictable upload cache; it does not change durable transfer
+retention or introduce block-level deltas.
+
+### Push cache maintenance measurement
+
+September 12, 2026, Apple M1 Max, Darwin arm64, AC power, Go 1.27.1.
+A temporary native daemon and a Unix-socket capture proxy used synthetic data
+and isolated client/configuration state. The fixture contained 1,000 1-KiB files
+across ten directories, every fifth body identical, an empty `.errandignore`,
+and a 7-byte edited file. The targeted push applied only the edited path; the
+second push was a no-op. These are single local samples, not Blue or network latency
+measurements. "Before" is the initial uncommitted push-cache implementation;
+"after" includes the review fixes, not a released client upgrade.
+
+| Targeted push measurement | Before review fixes | After review fixes |
+| --- | ---: | ---: |
+| Changed file-body bytes | 7 | 7 |
+| Multipart request bytes (CLI receipt) | 159,369 | 159,369 |
+| Negotiation request bytes | 90,185 | 72,275 |
+| All HTTP request-body bytes | 249,573 | 231,663 |
+| All HTTP response-body bytes | 152,168 | 152,168 |
+| End-to-end seconds | 15.07 | 16.04 |
+| No-op seconds | 5.87 | 5.92 |
+| Cold workspace creation seconds | 10.15 | 10.17 |
+| Warm workspace creation seconds | 10.19 | 10.32 |
+
+The captured multipart bodies matched the CLI receipts, including retry bodies
+in separate corruption tests. Deduplication reduced negotiation bytes by about
+20%; metadata still dominated this small-file upload. There is no demonstrated
+wall-time improvement. Total body counts include workspace lookup, negotiation,
+staging, and apply, but exclude HTTP headers and transport framing.
+
+A 10,000-file version exposed the existing 15-second response-header timeout
+on push staging. After switching staging to the bulk-operation HTTP client,
+the previously interrupted push recovered its frozen source and applied in
+107.26 seconds. A subsequent no-op completed in 23.59 seconds, with a
+1,567,655-byte multipart upload and 720,275-byte negotiation request, despite
+sending no file bodies. The applied file was checked on disk. This reused
+fixture validates timeout recovery; it is not a fresh-run latency comparison.
+
+Isolate the added cache population work from source freezing, extraction, and
+durable staging with:
+
+```sh
+go test ./internal/daemon -run '^$' -bench '^BenchmarkSnapshotCacheIngestion$' -benchtime=1x -count=3
+```
+
+For the same 1,000-file content shape, three local samples measured 189–198 ms
+with an empty cache and 207–242 ms with a warm cache. Setup and initial warming
+are excluded. One ingestion pass inserts 801 unique bodies instead of 1,000;
+warm ingestion still copies and verifies those bodies. This measures cache
+population alone, not filesystem-wide physical write amplification. The small
+measured cost does not justify adding a second verified-cache lookup path in
+this maintenance patch. Source freezing and durable staging retain their
+existing integrity checks and can dominate total time.
+
+Local capture logs, the synthetic CLI probe, and binary SHA-256 values are in
+the ignored `dist/benchmarks/push-cache-review/` directory. The probe uses a
+private Unix socket and temporary daemon state; its HTTP-body counts are not
+transport-level wire measurements.

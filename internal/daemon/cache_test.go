@@ -335,6 +335,24 @@ func TestCacheMaterializeHonorsCanceledContext(t *testing.T) {
 	}
 }
 
+func TestCacheMaterializePreservesDestinationErrors(t *testing.T) {
+	c := testCache(t, 1<<20, time.Hour)
+	sha, size := insertContent(t, c, "cached content")
+	dest := filepath.Join(t.TempDir(), "occupied")
+	if err := os.WriteFile(dest, []byte("existing destination"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	hit, err := c.Materialize(context.Background(), dest, proto.ManifestEntry{
+		Path: "occupied", Type: proto.EntryFile, Mode: 0600, Size: size, SHA256: sha,
+	})
+	if hit || !errors.Is(err, os.ErrExist) {
+		t.Fatalf("destination error treated as a cache miss: hit=%v err=%v", hit, err)
+	}
+	if body, err := os.ReadFile(dest); err != nil || string(body) != "existing destination" {
+		t.Fatalf("destination changed: %q %v", body, err)
+	}
+}
+
 func TestCacheCorruptionRemovalCanBeCanceledWhileWaiting(t *testing.T) {
 	c := testCache(t, 1<<20, time.Hour)
 	sha, _ := insertContent(t, c, "corrupt me")

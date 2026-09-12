@@ -153,6 +153,21 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	return finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter)
 }
 func uploadPush(peer, workspace, source string, request proto.PushRequest, meter *transferMeter) (proto.PushResult, error) {
+	endpoint := strings.TrimSuffix(peer, "/") + "/v0/workspaces/" + workspace + "/push/diff"
+	plan, err := negotiateSnapshotAt(context.Background(), endpoint, request.Manifest)
+	if err != nil {
+		return proto.PushResult{}, err
+	}
+	var result proto.PushResult
+	err = uploadWithSnapshotFallback(plan, func(attempt shipPlan) error {
+		var err error
+		result, err = uploadPushOnce(peer, workspace, source, request, meter, attempt)
+		return err
+	}, nil)
+	return result, err
+}
+
+func uploadPushOnce(peer, workspace, source string, request proto.PushRequest, meter *transferMeter, plan shipPlan) (proto.PushResult, error) {
 	var result proto.PushResult
 	pr, pw := io.Pipe()
 	defer pr.Close()
@@ -172,7 +187,7 @@ func uploadPush(peer, workspace, source string, request proto.PushRequest, meter
 			if err != nil {
 				return err
 			}
-			if err := snapshot.PackContext(ctx, part, source, request.Manifest); err != nil {
+			if err := snapshot.PackPartialContext(ctx, part, source, request.Manifest, plan.ships); err != nil {
 				return err
 			}
 			return mw.Close()
@@ -184,7 +199,9 @@ func uploadPush(peer, workspace, source string, request proto.PushRequest, meter
 		return result, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	resp, err := directHTTP.Do(req)
+	// Reconstruction and durable staging happen after the upload is read.
+	// Their budget must not shrink to the short control-request timeout.
+	resp, err := maintenanceHTTP.Do(req)
 	if err != nil {
 		return result, err
 	}
@@ -194,6 +211,10 @@ func uploadPush(peer, workspace, source string, request proto.PushRequest, meter
 		return result, err
 	}
 	if resp.StatusCode != 201 {
+		var apiErr proto.APIError
+		if resp.StatusCode == http.StatusConflict && json.Unmarshal(raw, &apiErr) == nil && apiErr.Code == proto.ErrorCodeSnapshotCacheMiss {
+			return result, fmt.Errorf("staging push: %w: %s", errSnapshotCacheMiss, apiErr.Error)
+		}
 		return result, fmt.Errorf("staging push: %s: %s", resp.Status, apiError(raw))
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {

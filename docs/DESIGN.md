@@ -888,6 +888,20 @@ Versioned HTTP+JSON: `PUT /v0/jobs/<ulid>` is idempotent;
 details used by `errand status`; SSE with event IDs powers
 `GET /v0/jobs/<ulid>/logs?from=<sequence>`; the signal and kill routes control owned
 jobs and return `204 No Content` on success; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;
+`POST /v0/workspaces/<id>/push/diff` negotiates the same cache for an owned
+workspace and establishes support for partial push archives. Push reconstructs
+and verifies the complete source before staging its delta; a missing cached
+body returns `snapshot_cache_miss` before staging, allowing a full-upload retry.
+Runners without this endpoint, or with snapshot caching disabled, return 404
+and receive full archives. Both submission and push share the negotiation and
+single full-upload fallback policy. Negotiation deduplicates content hashes;
+its response limit scales with the requested hashes so a valid cold manifest
+does not exceed an unrelated fixed response cap. Cache corruption is a miss
+even if deleting the bad cache entry fails; destination failures and cancellation
+remain errors. Upload ingestion caches each unique body once and continues past
+an unavailable source, reporting the first failure. Push staging uses the bulk
+operation response deadline because verification and durable staging continue
+after the last request byte arrives;
 `GET /v0/storage` reports caller-visible storage, including snapshot and named caches;
 `POST /v0/cache/gc` prunes snapshot blobs and idle named caches;
 `POST /v0/jobs/gc` applies bounded owner-scoped receipt retention;

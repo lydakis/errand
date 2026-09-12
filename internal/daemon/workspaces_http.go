@@ -117,6 +117,7 @@ func (d *Daemon) handleWorkspaceCreate(w http.ResponseWriter, r *http.Request, i
 		httpError(w, 500, err.Error())
 		return
 	}
+	d.cacheWorkspaceSource(r.Context(), data, request.Manifest, nil)
 	identity, _, err := fsidentity.Lstat(data)
 	if err != nil {
 		httpError(w, 500, err.Error())

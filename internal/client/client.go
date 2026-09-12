@@ -828,76 +828,23 @@ func shortCommit(gi snapshot.GitInfo) string {
 	return c
 }
 
-type shipPlan struct {
-	partial bool
-	hashes  map[string]bool
-}
-
-func (p shipPlan) ships(entry proto.ManifestEntry) bool {
-	return !p.partial || p.hashes[entry.SHA256]
-}
-
-func negotiateSnapshot(ctx context.Context, opts RunOptions, manifest proto.Manifest) (shipPlan, error) {
-	if opts.workspaceID != "" {
-		return shipPlan{}, nil
-	}
-	refs := make([]proto.BlobRef, 0, len(manifest.Entries))
-	for _, e := range manifest.Entries {
-		if e.Type == proto.EntryFile {
-			refs = append(refs, proto.BlobRef{SHA256: e.SHA256, Size: e.Size})
-		}
-	}
-	if len(refs) == 0 {
-		return shipPlan{}, nil
-	}
-	body, err := json.Marshal(proto.SnapshotDiffRequest{Blobs: refs})
-	if err != nil {
-		return shipPlan{}, err
-	}
-	ctx, cancel := context.WithTimeout(ctx, controlRequestTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, opts.PeerURL+"/v0/snapshot/diff", bytes.NewReader(body))
-	if err != nil {
-		return shipPlan{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := directHTTP.Do(req)
-	if err != nil {
-		return shipPlan{}, err
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	switch resp.StatusCode {
-	case http.StatusOK:
-	case http.StatusNotFound: // Snapshot caching is disabled on this runner.
-		return shipPlan{}, nil
-	default:
-		return shipPlan{}, fmt.Errorf("snapshot negotiation: %s: %s", resp.Status, apiError(raw))
-	}
-	var diff proto.SnapshotDiffResponse
-	if err := json.Unmarshal(raw, &diff); err != nil {
-		return shipPlan{}, err
-	}
-	ship := make(map[string]bool, len(diff.Missing))
-	for _, h := range diff.Missing {
-		ship[h] = true
-	}
-	return shipPlan{partial: true, hashes: ship}, nil
-}
-
 func submit(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, bool, error) {
-	status, admissionUncertain, err := submitAttempts(opts, jobID, spec, manifest, plan)
-	var responseErr *submitHTTPError
-	if err == nil || !plan.partial || !errors.As(err, &responseErr) || responseErr.code != proto.ErrorCodeSnapshotCacheMiss {
-		return status, admissionUncertain, err
-	}
-	stderr := opts.Stderr
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-	fmt.Fprintln(stderr, "errand: runner evicted negotiated blobs; re-shipping the full snapshot")
-	status, fallbackUncertain, err := submitAttempts(opts, jobID, spec, manifest, shipPlan{})
-	return status, admissionUncertain || fallbackUncertain, err
+	var status proto.JobStatus
+	var admissionUncertain bool
+	err := uploadWithSnapshotFallback(plan, func(attempt shipPlan) error {
+		var uncertain bool
+		var err error
+		status, uncertain, err = submitAttempts(opts, jobID, spec, manifest, attempt)
+		admissionUncertain = admissionUncertain || uncertain
+		return err
+	}, func() {
+		stderr := opts.Stderr
+		if stderr == nil {
+			stderr = os.Stderr
+		}
+		fmt.Fprintln(stderr, "errand: runner could not restore negotiated blobs; re-shipping the full snapshot")
+	})
+	return status, admissionUncertain, err
 }
 
 func submitAttempts(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manifest, plan shipPlan) (proto.JobStatus, bool, error) {
@@ -1038,6 +985,10 @@ type submitNotStartedError struct {
 
 func (e *submitNotStartedError) Error() string { return e.err.Error() }
 func (e *submitNotStartedError) Unwrap() error { return e.err }
+
+func (e *submitHTTPError) Is(target error) bool {
+	return target == errSnapshotCacheMiss && e.statusCode == http.StatusConflict && e.code == proto.ErrorCodeSnapshotCacheMiss
+}
 
 func (e *submitHTTPError) Error() string {
 	if e.capacity {

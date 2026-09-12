@@ -3,6 +3,8 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	changeops "github.com/lydakis/errand/internal/changes"
 	"net/http"
@@ -79,6 +81,10 @@ func TestPushRecoversCollectedStageFromFrozenSource(t *testing.T) {
 		t.Fatalf("acknowledged stage counted another upload: %+v", stats)
 	}
 	write("new local edits\n")
+	// Losing both the stage and the evictable upload cache must still recover
+	// the frozen source, rather than taking the latest local edits.
+	frozenHash := sha256.Sum256([]byte("frozen\n"))
+	d.cache.remove(hex.EncodeToString(frozenHash[:]))
 	opts.Apply = false
 	result, err := client.PushChanges(opts)
 	if err != nil || !result.Recovered {

@@ -276,8 +276,13 @@ an in-flight push.
 
 Push supports `--on`, `--url`, `--profile`, `--workspace-root`, `--include-all`,
 `--json`, and an optional complete changed `PATH` to limit application. Staging
-uploads the selected snapshot, as fetching downloads the retained bundle. Push
-uses the normal snapshot
+describes the complete selected snapshot, but reuses verified file contents in
+the runner's snapshot cache and uploads only missing bodies. Workspace creation
+and successful uploads populate that cache. A cold or disabled cache, or an
+older runner, can require a full upload; eviction or corrupt cached content
+during transfer safely retries the same frozen snapshot. Cache cleanup failures
+do not prevent that retry. The optional `PATH` limits application, not snapshot
+selection. Fetch downloads the retained change bundle. Push uses the normal snapshot
 selection rules and the workspace's fixed cache bindings. Artifact declarations
 retain remote outputs; they do not opt ignored local files into an upload.
 Changing snapshot policy requires a new workspace. Apply is explicit even when

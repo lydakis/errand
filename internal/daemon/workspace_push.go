@@ -81,7 +81,12 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		httpError(w, 400, err.Error())
 		return
 	}
-	if err := archive.Extract(part, source, request.Manifest, d.cfg.MaxLimits.MaxWorkspaceBytes); err != nil {
+	extractOpts, restored := d.snapshotExtractOptions(r.Context())
+	if err := archive.ExtractWith(&contextReader{ctx: r.Context(), r: part}, source, request.Manifest, d.cfg.MaxLimits.MaxWorkspaceBytes, extractOpts); err != nil {
+		if errors.Is(err, archive.ErrCacheMiss) {
+			httpErrorCode(w, http.StatusConflict, proto.ErrorCodeSnapshotCacheMiss, err.Error())
+			return
+		}
 		httpError(w, 400, err.Error())
 		return
 	}
@@ -93,6 +98,7 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		httpError(w, 500, err.Error())
 		return
 	}
+	d.cacheWorkspaceSource(r.Context(), source, request.Manifest, restored)
 	unlock, err := d.workspaces.lockWorkspaceContext(r.Context(), row.ID)
 	if err != nil {
 		return
