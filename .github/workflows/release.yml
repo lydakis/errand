@@ -18,13 +18,52 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.source.outputs.tag }}
+      commit: ${{ steps.source.outputs.commit }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo 'Expected a tag such as v0.1.0 or v0.1.0-rc.1' >&2
+            exit 1
+          fi
+          git check-ref-format "refs/tags/$RELEASE_TAG"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/heads/main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve approved release
+        id: source
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          # Resolve once, before executing any code from the selected tag.
+          commit=$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")
+          approved_main=$(git rev-parse --verify "refs/remotes/origin/main^{commit}")
+          if ! git merge-base --is-ancestor "$commit" "$approved_main"; then
+            echo 'Release tag must point to a commit on main' >&2
+            exit 1
+          fi
+          printf 'tag=%s\ncommit=%s\n' "$RELEASE_TAG" "$commit" >> "$GITHUB_OUTPUT"
+
   check:
+    needs: resolve
     uses: ./.github/workflows/ci.yml
     with:
-      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+      ref: ${{ needs.resolve.outputs.commit }}
 
   package:
-    needs: check
+    needs: [resolve, check]
     runs-on: macos-15
     timeout-minutes: 45
     permissions:
@@ -35,21 +74,26 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Verify release checkout
+        env:
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$RELEASE_COMMIT" ]; then
+            echo 'Release checkout does not match the approved commit' >&2
+            exit 1
+          fi
+          if [ "$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")" != "$RELEASE_COMMIT" ]; then
+            echo 'Release tag changed after approval' >&2
+            exit 1
+          fi
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
-      - name: Validate release tag
-        env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo 'Expected a tag such as v0.1.0 or v0.1.0-rc.1' >&2
-            exit 1
-          fi
+          cache: false
       - name: Prepare Apple signing credentials
         env:
           APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
@@ -119,12 +163,13 @@ jobs:
           args: release --clean --skip=publish --timeout=40m
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ needs.resolve.outputs.tag }}
           APPLE_DEVELOPER_ID_APPLICATION: ${{ env.ERRAND_SIGNING_IDENTITY }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       - name: Package Homebrew formula and verify assets
         env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
         run: |
           version="${RELEASE_TAG#v}"
           python3 scripts/homebrew_formula.py "$version" "dist/errand_${version}_source.tar.gz" dist/errand.rb
@@ -141,10 +186,24 @@ jobs:
           tar -xzf "errand_${version}_darwin_${architecture}.tar.gz" -C smoke
           codesign --verify --strict smoke/errand
           test "$(smoke/errand version)" = "errand ${version}"
+      - name: Verify release tag before publishing
+        env:
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
+        run: |
+          remote_refs=$(git ls-remote --exit-code origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}")
+          remote_commit=$(printf '%s\n' "$remote_refs" | awk '
+            $2 ~ /\^\{\}$/ { peeled = $1 }
+            $2 !~ /\^\{\}$/ { direct = $1 }
+            END { print (peeled != "" ? peeled : direct) }')
+          if [ "$remote_commit" != "$RELEASE_COMMIT" ]; then
+            echo 'Release tag changed during the build' >&2
+            exit 1
+          fi
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
         run: |
           options=()
           if [[ "$RELEASE_TAG" == *-* ]]; then

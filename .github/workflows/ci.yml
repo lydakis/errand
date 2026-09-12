@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: Exact source ref to check when called by a release workflow
+        description: Approved source commit to check when called by a release workflow
         required: false
         type: string
 
@@ -40,6 +40,8 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # Release checks must not restore or save the ordinary CI cache.
+          cache: ${{ inputs.ref == '' }}
           cache-dependency-path: go.sum
       - name: Check formatting
         run: |
@@ -72,7 +74,7 @@ jobs:
           ERRAND_TEST_SERVICE_MANAGER: "1"
         run: go test -v -count=1 -run '^TestLiveServiceLifecycle$' -timeout=4m ./internal/setup
       - name: Rehearse release packaging
-        if: runner.os == 'Linux' && !startsWith(inputs.ref || github.ref, 'refs/tags/')
+        if: runner.os == 'Linux' && inputs.ref == '' && !startsWith(github.ref, 'refs/tags/')
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: v2.18.0
@@ -80,7 +82,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Check generated Homebrew formula
-        if: runner.os == 'Linux' && !startsWith(inputs.ref || github.ref, 'refs/tags/')
+        if: runner.os == 'Linux' && inputs.ref == '' && !startsWith(github.ref, 'refs/tags/')
         run: |
           version=$(python3 -c 'import json; print(json.load(open("dist/metadata.json"))["version"])')
           python3 scripts/homebrew_formula.py "$version" "dist/errand_${version}_source.tar.gz" dist/errand.rb
