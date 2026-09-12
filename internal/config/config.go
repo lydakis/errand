@@ -50,7 +50,7 @@ type Client struct {
 	Caches         workspace.Caches             `toml:"caches"`
 	Artifacts      workspace.Artifacts          `toml:"artifacts"`
 	Session        workspace.Session            `toml:"session"`
-	Environment    workspace.Environment        `toml:"env,omitempty"`
+	Environment    workspace.Environment        `toml:"env"` // preserve explicit empty lists
 	Profiles       map[string]workspace.Profile `toml:"profiles,omitempty"`
 	DefaultWhere   string                       `toml:"default_where,omitempty"`
 	DefaultPeer    string                       `toml:"default_peer,omitempty"`

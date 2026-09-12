@@ -225,7 +225,7 @@ therefore opts out of all settings in that personal profile. Other personal
 profiles remain available by name.
 
 Profiles support `run.peer`, `run.where`, `run.workspace`, `run.workdir`, `changes.apply_on_success`,
-`env.set`, `env.pass`, `session.forward`, `artifacts.paths`, and `caches`. Explicit `false` and empty workdir values override
+`env.set`, `env.pass`, `env.files`, `session.forward`, `artifacts.paths`, and `caches`. Explicit `false` and empty workdir values override
 lower layers. Unsupported keys and incorrect value types are errors when
 loading configuration, including in inactive profiles. There is no profile
 inheritance, automatic profile selection, command definition, or transport
@@ -406,9 +406,67 @@ provenance, not values; commands can still print values into their own logs.
 without showing values, including literal values. Missing variables remain
 visible in its successful inspection report. `errand doctor` reports missing
 variables as a failed environment check and skips its runner probe. Both
-commands accept `--env` and `--passenv` to inspect the same overrides as a run.
+commands accept `--env`, `--passenv`, `--env-file`, and `--no-env-files` to inspect the same overrides as a run.
 JSON contains an `environment` array with `name`, `kind`, `source`, and
 `available`; it contains no environment values.
+
+### Local environment files
+
+Load local files explicitly, without preparing the shell:
+
+```sh
+errand --env-file .env.local -- pnpm dev
+errand --env-file .env --env-file .env.local --env NODE_ENV=development -- pnpm dev
+```
+
+Or select them through personal configuration or a named profile:
+
+```toml
+[profiles.dev.env]
+files = [".env.local", "apps/api/.env.local"]
+```
+
+Every assignment in the selected files is sent as a runtime environment value.
+Relative paths in configuration are relative to the file defining the setting;
+CLI paths are relative to the invoking directory. Absolute paths are accepted.
+The remote workdir does not affect local file lookup. Persistent runs read the
+local files on every invocation, so changes take effect on the next command
+without a source push. Running processes keep their existing environment.
+Workspace creation and source push do not load environment files; missing or
+malformed files do not block those operations. Run, config, and doctor load and
+validate the selected files.
+
+`files` uses list replacement across personal defaults, workspace defaults,
+the selected profile, and CLI. Later files in the winning list override earlier
+ones. Only that list is read, so an override can replace missing default files.
+File values override lower-layer settings; `set` and `pass` in the same layer
+override file values, and higher layers win as usual. `pass` still requires an
+exported shell variable; remove a name from `pass` to use its file value instead.
+`--no-env-files` or `files = []` clears inherited files. `--env-file` and
+`--no-env-files` cannot be combined. Omitted lists inherit.
+
+As with forwarding, nonempty top-level workspace `env.files` is rejected even
+when overridden. Put those paths in an explicitly selected profile, personal
+configuration, or CLI options. Inactive profiles never cause files to be read.
+
+Files accept UTF-8 `NAME=VALUE` assignments with optional `export`, blank lines,
+and `#` comments. Names use letters, digits, and underscores, beginning with a
+letter or underscore. Unquoted surrounding whitespace is trimmed; an unquoted
+`#` starts a comment at the beginning of a value or after whitespace. Single
+and double quotes preserve whitespace and support multiline values. Double
+quotes recognize `\n`, `\r`, `\t`, `\\`, `\"`, and `\$`; other escapes stay literal.
+Duplicate assignments use the last value. Empty values are allowed. There is
+no shell execution, variable expansion, or implicit file discovery.
+
+Missing, unreadable, malformed, non-regular, NUL-containing, or larger-than-1-MiB
+files fail before submission. Errors identify paths and, for syntax errors,
+line numbers without displaying file contents. Config and doctor show kind
+`file` and the source path with values hidden. Runner receipts retain names
+with `literal` provenance, without retaining the values themselves.
+
+Loading environment files does not change snapshot selection. Keep secret files
+excluded with `.gitignore` or `.errandignore`; explicitly loading a file does
+not by itself exclude it from source uploads.
 
 ## Inspect without submitting
 

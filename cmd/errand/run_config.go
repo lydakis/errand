@@ -25,6 +25,8 @@ type runConfigFlags struct {
 	noArtifacts                   bool
 	session                       sessionFlags
 	envs, passenvs                stringList
+	envFiles                      stringList
+	noEnvFiles                    bool
 	profile                       string
 	workspace                     string
 	on, url, where, workdir, root string
@@ -40,6 +42,8 @@ func (f *runConfigFlags) bind(fs *flag.FlagSet) {
 	fs.Var(&f.envs, "env", "set NAME=VALUE in the job environment (repeatable; values hidden in diagnostics)")
 	fs.Var(&f.envs, "e", "set NAME=VALUE in the job environment (repeatable)")
 	fs.Var(&f.passenvs, "passenv", "require and forward a local environment variable (repeatable; replaces configured pass list)")
+	fs.Var(&f.envFiles, "env-file", "load a local environment file (repeatable; replaces configured file list)")
+	fs.BoolVar(&f.noEnvFiles, "no-env-files", false, "clear configured environment files")
 	fs.StringVar(&f.profile, "profile", "", "named run preferences from workspace or personal configuration")
 	fs.StringVar(&f.workspace, "workspace", "", "use an existing persistent workspace; overrides the selected profile and never uploads local edits")
 	fs.StringVar(&f.where, "where", "", "select a configured runner matching facts, e.g. os=linux,go or *")
@@ -89,6 +93,18 @@ func (f runConfigFlags) overrides(fs *flag.FlagSet) (config.RunOverrides, error)
 		return result, err
 	}
 	result.Environment.Pass = f.passenvs
+	if set["env-file"] && set["no-env-files"] {
+		return result, fmt.Errorf("--env-file and --no-env-files are mutually exclusive")
+	}
+	result.Environment.Files = f.envFiles
+	if f.noEnvFiles {
+		result.Environment.Files = []string{}
+	}
+	for _, path := range result.Environment.Files {
+		if path == "" || strings.ContainsRune(path, 0) {
+			return result, fmt.Errorf("--env-file requires a nonempty path without NUL")
+		}
+	}
 	for _, name := range f.passenvs {
 		if err := workspace.ValidateEnvironmentName(name); err != nil {
 			return result, err
@@ -229,7 +245,7 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(w, "%s\t%s\t%s\n", row.key, terminalSafeField(fmt.Sprint(row.value)), terminalSafeField(effective.Sources[row.key]))
 		}
 		for _, entry := range effective.Environment {
-			state := "literal (value hidden)"
+			state := entry.Kind + " (value hidden)"
 			if entry.Kind == "passenv" {
 				state = "passenv (available)"
 				if !entry.Available {

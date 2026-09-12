@@ -12,7 +12,7 @@ type Profile struct {
 	Caches      Caches      `toml:"caches"`
 	Artifacts   Artifacts   `toml:"artifacts"`
 	Session     Session     `toml:"session"`
-	Environment Environment `toml:"env,omitempty"`
+	Environment Environment `toml:"env"` // preserve explicit empty lists
 	Run         struct {
 		Workspace *string `toml:"workspace,omitempty"`
 		Where     *string `toml:"where,omitempty"`

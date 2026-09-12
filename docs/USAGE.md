@@ -216,8 +216,18 @@ errand --profile dev --forward 3000 -- pnpm dev
 
 Use your project's build and development commands and actual server port.
 Omit `build:packages` if your project does not need a separate shared-package
-build. Declare any required exported variables in the profile's `env.pass`
-before invoking these commands; Errand does not load `.env.local` files for you.
+build. If the application needs local environment files, add their paths to the
+profile before starting it:
+
+```toml
+[profiles.dev.env]
+files = [".env.local"]
+```
+
+Keep secret files excluded with `.gitignore` or `.errandignore`. Files are loaded
+explicitly; `env.pass` remains available for exported shell variables.
+See [environment files](CONFIGURATION.md#local-environment-files) for precedence
+and supported syntax.
 Dependencies and build outputs remain in the persistent tree between jobs,
 including ignored files. Named caches are optional for this loop.
 

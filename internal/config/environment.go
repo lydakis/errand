@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/lydakis/errand/internal/workspace"
@@ -11,26 +12,48 @@ import (
 // stay private, and the resolver does not retain forwarded values.
 type EnvironmentVariable struct {
 	Name      string `json:"name"`
-	Kind      string `json:"kind"` // literal or passenv
+	Kind      string `json:"kind"` // literal, file, or passenv
 	Source    string `json:"source"`
 	Available bool   `json:"available"`
 	value     string
 }
 
 type environmentLayer struct {
-	settings workspace.Environment
-	source   string
+	settings  workspace.Environment
+	source    string
+	directory string
 }
 
-func resolveEnvironment(layers ...environmentLayer) []EnvironmentVariable {
-	byName := map[string]EnvironmentVariable{}
-	for _, layer := range layers {
+func resolveEnvironment(layers ...environmentLayer) ([]EnvironmentVariable, error) {
+	// Select replacement lists before folding values. A superseded pass list
+	// must not overwrite file or literal defaults that should remain available.
+	fileLayer, passLayer := -1, -1
+	for i, layer := range layers {
+		if layer.settings.Files != nil {
+			fileLayer = i
+		}
 		if layer.settings.Pass != nil {
-			for name, entry := range byName {
-				if entry.Kind == "passenv" {
-					delete(byName, name)
+			passLayer = i
+		}
+	}
+	byName := map[string]EnvironmentVariable{}
+	for i, layer := range layers {
+		if i == fileLayer {
+			for _, name := range layer.settings.Files {
+				path := name
+				if !filepath.IsAbs(path) {
+					path = filepath.Join(layer.directory, path)
+				}
+				values, err := readEnvironmentFile(path)
+				if err != nil {
+					return nil, err
+				}
+				for name, value := range values {
+					byName[name] = EnvironmentVariable{Name: name, Kind: "file", Source: layer.source + ".files: " + path, Available: true, value: value}
 				}
 			}
+		}
+		if i == passLayer {
 			for _, name := range layer.settings.Pass {
 				_, available := os.LookupEnv(name)
 				byName[name] = EnvironmentVariable{Name: name, Kind: "passenv", Source: layer.source + ".pass", Available: available}
@@ -49,14 +72,15 @@ func resolveEnvironment(layers ...environmentLayer) []EnvironmentVariable {
 	for _, name := range names {
 		result = append(result, byName[name])
 	}
-	return result
+	return result, nil
 }
 
+// JobEnvironment returns values loaded by PrepareExecution.
 func (r EffectiveRun) JobEnvironment() (map[string]string, []string) {
 	literals := map[string]string{}
 	var pass []string
 	for _, entry := range r.Environment {
-		if entry.Kind == "literal" {
+		if entry.Kind != "passenv" {
 			literals[entry.Name] = entry.value
 		} else {
 			pass = append(pass, entry.Name)

@@ -30,10 +30,11 @@ type RunOverrides struct {
 	NoSnapshot                      bool
 }
 
-// EffectiveRun holds locally resolved preferences. PrepareExecution applies
-// persistent-job rules for submission and inspection. URL is the configured
-// endpoint, before the client installs its private SSH identity.
+// EffectiveRun holds locally resolved preferences. PrepareExecution loads the
+// environment and applies persistent-job rules for submission and inspection.
+// URL is the configured endpoint, before the client installs its private SSH identity.
 type EffectiveRun struct {
+	environmentLayers []environmentLayer
 	// Explicit CLI or selected-profile choices may override a persistent
 	// workspace's creation defaults. Ambient configuration cannot rebind it.
 	CachesOverride    bool                  `json:"-"`
@@ -60,7 +61,8 @@ type EffectiveRun struct {
 
 // ResolveRun reads personal configuration once and uses only the workspace
 // configuration accepted by boundary discovery. It does not contact runners,
-// inspect snapshot contents, register transports, or mutate client state.
+// read environment files, inspect snapshot contents, register transports, or
+// mutate client state. Call PrepareExecution before using the job environment.
 func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	var result EffectiveRun
 	if cli.Where != "" && (cli.Peer != "" || cli.URL != "") {
@@ -101,6 +103,9 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	// caller variables without a personal setting or explicit profile choice.
 	if len(selected.Environment.Pass) != 0 {
 		return result, fmt.Errorf("%s: nonempty workspace env.pass requires an explicit choice; move the names to personal config or an explicitly selected profile, or remove this default and use --passenv", workspaceSource)
+	}
+	if len(selected.Environment.Files) != 0 {
+		return result, fmt.Errorf("%s: nonempty workspace env.files requires an explicit choice; move paths to personal config or an explicitly selected profile, or use --env-file", workspaceSource)
 	}
 	profile, profileSource, err := selectProfile(personal, selected, cli.Profile, personalSource, workspaceSource)
 	if err != nil {
@@ -147,12 +152,16 @@ func ResolveRun(cwd string, cli RunOverrides) (EffectiveRun, error) {
 	if err != nil {
 		return result, err
 	}
-	result.Environment = resolveEnvironment(
-		environmentLayer{personal.Environment, personalSource + " env"},
-		environmentLayer{selected.Environment, workspaceSource + " env"},
-		environmentLayer{profile.Environment, profileSource + " env"},
-		environmentLayer{cli.Environment, "cli: --env/--passenv"},
-	)
+	profileDir := filepath.Dir(personalPath)
+	if _, ok := selected.Profiles[cli.Profile]; ok {
+		profileDir = selected.Root
+	}
+	result.environmentLayers = []environmentLayer{
+		environmentLayer{personal.Environment, personalSource + " env", filepath.Dir(personalPath)},
+		environmentLayer{selected.Environment, workspaceSource + " env", selected.Root},
+		environmentLayer{profile.Environment, profileSource + " env", profileDir},
+		environmentLayer{cli.Environment, "cli: --env/--passenv/--env-file", cwd},
+	}
 	if cli.NoSnapshot {
 		result.Sources["workspace_root"] = "current directory (--no-snapshot)"
 		result.Sources["no_snapshot"] = "cli: --no-snapshot"

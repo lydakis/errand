@@ -22,8 +22,11 @@ func TestEnvironmentInspectionAndDoctorHideValues(t *testing.T) {
 	t.Setenv("ERRAND_TEST_PASS", "dummy-forwarded-value")
 	writeClientConfig(t, "default_peer = 'test'\n[peers.test]\nurl = 'http://runner.invalid'\n[env]\npass = ['ERRAND_TEST_PASS']\n")
 	t.Chdir(t.TempDir())
+	if err := os.WriteFile("input.env", []byte("FILE_VALUE=dummy-file-value\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	for _, asJSON := range []bool{false, true} {
-		args := []string{"--env", "CI=dummy-literal-value"}
+		args := []string{"--env", "CI=dummy-literal-value", "--env-file", "input.env"}
 		if asJSON {
 			args = append(args, "--json")
 		}
@@ -34,12 +37,15 @@ func TestEnvironmentInspectionAndDoctorHideValues(t *testing.T) {
 		if strings.Contains(out.String()+errOut.String(), "dummy-") {
 			t.Fatal("config leaked a value")
 		}
-		if !strings.Contains(out.String(), "ERRAND_TEST_PASS") || !strings.Contains(out.String(), "CI") {
+		if !strings.Contains(out.String(), "ERRAND_TEST_PASS") || !strings.Contains(out.String(), "CI") || !strings.Contains(out.String(), "FILE_VALUE") {
 			t.Fatal("config omitted environment metadata")
+		}
+		if !asJSON && !strings.Contains(out.String(), "file (value hidden)") {
+			t.Fatal("config did not label file values")
 		}
 	}
 	var out, errOut bytes.Buffer
-	code := cmdDoctorTo([]string{"--json", "--env", "CI=dummy-literal-value"}, &out, &errOut, func(context.Context, string) (proto.Info, error) { return proto.Info{Version: version}, nil })
+	code := cmdDoctorTo([]string{"--json", "--env", "CI=dummy-literal-value", "--env-file", "input.env"}, &out, &errOut, func(context.Context, string) (proto.Info, error) { return proto.Info{Version: version}, nil })
 	if code != 0 || strings.Contains(out.String()+errOut.String(), "dummy-") {
 		t.Fatal("doctor failed or leaked values")
 	}

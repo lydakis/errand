@@ -11,10 +11,18 @@ import (
 	"github.com/lydakis/errand/internal/workspace"
 )
 
+func resolvePreparedRun(root string, overrides RunOverrides) (EffectiveRun, error) {
+	got, err := ResolveRun(root, overrides)
+	if err == nil {
+		err = got.PrepareExecution(false)
+	}
+	return got, err
+}
+
 func TestEnvironmentPrecedenceAndRedaction(t *testing.T) {
 	t.Setenv("ERRAND_TEST_PASS", "dummy-forwarded-value")
 	root := runFixture(t, personalPeers+"\n[env]\nset = { CI = 'personal', KEEP = 'yes' }\npass = ['OLD']\n[profiles.build.env]\nset = { CI = 'profile', TO_PASS = 'old' }\npass = ['ERRAND_TEST_PASS']\n", "[env]\nset = { CI = 'workspace' }\n")
-	got, err := ResolveRun(root, RunOverrides{Profile: "build", Environment: workspace.Environment{Set: map[string]string{"CI": "dummy-literal-value"}, Pass: []string{"TO_PASS"}}})
+	got, err := resolvePreparedRun(root, RunOverrides{Profile: "build", Environment: workspace.Environment{Set: map[string]string{"CI": "dummy-literal-value"}, Pass: []string{"TO_PASS"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +42,7 @@ func TestEnvironmentPrecedenceAndRedaction(t *testing.T) {
 	if strings.Contains(string(raw), "dummy-literal-value") || strings.Contains(string(raw), "dummy-forwarded-value") {
 		t.Fatal("environment value leaked in JSON")
 	}
-	got, err = ResolveRun(root, RunOverrides{Profile: "build"})
+	got, err = resolvePreparedRun(root, RunOverrides{Profile: "build"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,14 +57,14 @@ func TestEnvironmentPrecedenceAndRedaction(t *testing.T) {
 
 func TestEnvironmentEmptyPassAndProfileReplacement(t *testing.T) {
 	root := runFixture(t, personalPeers+"\n[env]\npass = ['ERRAND_TEST_REQUIRED']\n[profiles.build.env]\nset = { ONLY_IN_PERSONAL_PROFILE = 'yes' }\n", "[profiles.build.env]\npass = []\n")
-	got, err := ResolveRun(root, RunOverrides{})
+	got, err := resolvePreparedRun(root, RunOverrides{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(got.MissingEnvironment(), []string{"ERRAND_TEST_REQUIRED"}) {
 		t.Fatal("inactive profile changed required variables")
 	}
-	got, err = ResolveRun(root, RunOverrides{Profile: "build"})
+	got, err = resolvePreparedRun(root, RunOverrides{Profile: "build"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +125,7 @@ func TestWorkspaceEnvironmentRequiresExplicitForwardingChoice(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, ".errand.toml"), []byte(project), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, err := ResolveRun(root, RunOverrides{Profile: "integration"})
+	got, err := resolvePreparedRun(root, RunOverrides{Profile: "integration"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +133,7 @@ func TestWorkspaceEnvironmentRequiresExplicitForwardingChoice(t *testing.T) {
 	if !reflect.DeepEqual(pass, []string{"ERRAND_CONSENT_TEST"}) {
 		t.Fatal("explicit profile lost its forwarding choice")
 	}
-	got, err = ResolveRun(root, RunOverrides{})
+	got, err = resolvePreparedRun(root, RunOverrides{})
 	if err != nil {
 		t.Fatal(err)
 	}

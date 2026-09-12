@@ -5,11 +5,12 @@ import (
 	"strings"
 )
 
-// Environment contains non-secret literals and names to forward. A nil Pass
-// inherits forwarding; a non-nil empty list explicitly clears it.
+// Environment contains literals, files to load locally, and names to forward.
+// Nil lists inherit; non-nil empty lists explicitly clear inherited choices.
 type Environment struct {
-	Set  map[string]string `toml:"set,omitempty"`
-	Pass []string          `toml:"pass"`
+	Set   map[string]string `toml:"set,omitempty"`
+	Pass  []string          `toml:"pass"`
+	Files []string          `toml:"files"`
 }
 
 func ValidateEnvironmentName(name string) error {
@@ -27,6 +28,19 @@ func (e *Environment) UnmarshalTOML(value any) error {
 	*e = Environment{}
 	for key, raw := range table {
 		switch key {
+		case "files":
+			values, ok := raw.([]any)
+			if !ok {
+				return fmt.Errorf("env.files must be an array of paths")
+			}
+			e.Files = make([]string, 0, len(values))
+			for _, raw := range values {
+				path, ok := raw.(string)
+				if !ok || path == "" || strings.ContainsRune(path, 0) {
+					return fmt.Errorf("env.files must contain nonempty paths without NUL")
+				}
+				e.Files = append(e.Files, path)
+			}
 		case "set":
 			values, ok := raw.(map[string]any)
 			if !ok {
