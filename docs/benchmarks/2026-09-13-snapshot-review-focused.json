@@ -1,0 +1,484 @@
+{
+  "mini": {
+    "scope": "Focused followups for slower main-matrix observations, no code changes",
+    "script": "import hashlib,importlib.util,json,os,platform,re,tempfile\nfrom pathlib import Path\n\nroot=Path.cwd();spec=importlib.util.spec_from_file_location('bench',root/'scripts/benchmark_snapshot_integration.py')\nbench=importlib.util.module_from_spec(spec);spec.loader.exec_module(bench)\nout=root.parent/'followup-results';out.mkdir(exist_ok=False);fixtures=out/'fixtures';fixtures.mkdir()\nenv=dict(os.environ,GOMAXPROCS='2',CGO_ENABLED='0',TMPDIR=str(fixtures))\ncases=[('watch-small','./internal/snapshot','^BenchmarkWatchPreparation$/^1000$/^retained-edit$','10x')] if platform.system()=='Darwin' else [('push','./cmd/errand','^BenchmarkPushPhases$','3x'),('submission','./cmd/errand','^BenchmarkWorkspaceCreationAndSubmission$/^ephemeral-job$','3x')]\nreport={'scope':'Focused followups for slower main-matrix observations, no code changes','script':Path(__file__).read_text(),'platform':platform.platform(),'filesystem':bench.filesystem(fixtures,env,out,'fixture-filesystem'),'orders':[],'versions':{}}\nwith tempfile.TemporaryDirectory(dir='/tmp') as p:\n report['default_tmp_filesystem']=bench.filesystem(Path(p),env,out,'default-tmp-filesystem')\nfor name,source in [('baseline',root.parent/'baseline'),('candidate',root)]:\n directory=out/name;directory.mkdir();digest=hashlib.sha256()\n for p in sorted([*source.rglob('*.go'),source/'go.mod',source/'go.sum']):digest.update(str(p.relative_to(source)).encode()+b'\\0'+p.read_bytes()+b'\\0')\n report['versions'][name]={'source_sha256':digest.hexdigest(),'samples':[],'binaries':{}}\n for key,package,_,_ in cases:\n  binary=directory/(key+'.test');bench.run(['go','test','-c','-o',str(binary),package],source,env,directory/('build-'+key+'.txt'))\n  report['versions'][name]['binaries'][key]=hashlib.sha256(binary.read_bytes()).hexdigest()\nfor number in range(5):\n order=['baseline','candidate'] if number%2==0 else ['candidate','baseline'];report['orders'].append(order)\n for name in order:\n  directory=out/name;source=root if name=='candidate' else root.parent/'baseline'\n  for key,_,pattern,duration in cases:\n   raw=bench.run([str(directory/(key+'.test')),'-test.v','-test.run=^$','-test.bench='+pattern,'-test.benchtime='+duration,'-test.benchmem','-test.timeout=10m'],source,env,directory/(str(number)+'-'+key+'.txt'))\n   samples=[]\n   for line in raw.splitlines():\n    m=re.match(r'^(Benchmark\\S+)-\\d+\\s+(\\d+)\\s+(.+)$',line)\n    if m:\n     values=m[3].split();samples.append({'name':m[1],'round':number,'iterations':int(m[2]),'metrics':{values[i+1]:float(values[i]) for i in range(0,len(values),2)}})\n   if len(samples)!=1:raise RuntimeError((key,len(samples)))\n   report['versions'][name]['samples']+=samples\n  (out/'report.json').write_text(json.dumps(report,indent=2)+'\\n');print(f'Round {number+1}/5: {name} complete',flush=True)\nfor name in report['versions']:\n for key,_,_,_ in cases:(out/name/(key+'.test')).unlink()\n",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "filesystem": "apfs",
+    "orders": [
+      [
+        "baseline",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "baseline"
+      ],
+      [
+        "baseline",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "baseline"
+      ],
+      [
+        "baseline",
+        "candidate"
+      ]
+    ],
+    "versions": {
+      "baseline": {
+        "source_sha256": "170fdcf16d9a5328e704920dea2149033b57ec641f1a445b4d44c3c9d7921ee2",
+        "samples": [
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "round": 0,
+            "iterations": 10,
+            "metrics": {
+              "ns/op": 33411517.0,
+              "B/op": 272100.0,
+              "allocs/op": 539.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "round": 1,
+            "iterations": 10,
+            "metrics": {
+              "ns/op": 33168967.0,
+              "B/op": 273512.0,
+              "allocs/op": 541.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "round": 2,
+            "iterations": 10,
+            "metrics": {
+              "ns/op": 28688050.0,
+              "B/op": 272214.0,
+              "allocs/op": 539.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "round": 3,
+            "iterations": 10,
+            "metrics": {
+              "ns/op": 27243846.0,
+              "B/op": 273965.0,
+              "allocs/op": 542.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "round": 4,
+            "iterations": 10,
+            "metrics": {
+              "ns/op": 35728266.0,
+              "B/op": 273087.0,
+              "allocs/op": 540.0
+            }
+          }
+        ],
+        "binaries": {
+          "watch-small": "2afa23b63868b519ba3055bbf31282f05971b9b97f019d246fdfe4d7708bc920"
+        }
+      },
+      "candidate": {
+        "source_sha256": "3bfe275eab3b763f66986848a4deb91f1cd423f2e5dce697cfbbe5848e80f47c",
+        "samples": [
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "round": 0,
+            "iterations": 10,
+            "metrics": {
+              "ns/op": 31547633.0,
+              "B/op": 352203.0,
+              "allocs/op": 529.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "round": 1,
+            "iterations": 10,
+            "metrics": {
+              "ns/op": 33267538.0,
+              "B/op": 353752.0,
+              "allocs/op": 531.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "round": 2,
+            "iterations": 10,
+            "metrics": {
+              "ns/op": 26393254.0,
+              "B/op": 352780.0,
+              "allocs/op": 530.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "round": 3,
+            "iterations": 10,
+            "metrics": {
+              "ns/op": 26452796.0,
+              "B/op": 353160.0,
+              "allocs/op": 531.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "round": 4,
+            "iterations": 10,
+            "metrics": {
+              "ns/op": 26400667.0,
+              "B/op": 352753.0,
+              "allocs/op": 530.0
+            }
+          }
+        ],
+        "binaries": {
+          "watch-small": "a365e9dfd0d0433dc4a24f3059494a27009768737f8fc5d9916c187ad77c5eb0"
+        }
+      }
+    },
+    "default_tmp_filesystem": "apfs",
+    "logs": {
+      "default-tmp-filesystem-disk.txt": "Filesystem   512-blocks      Used Available Capacity  Mounted on\n/dev/disk3s5  478724992 408043944  17190312    96%    /System/Volumes/Data\n",
+      "fixture-filesystem-disk.txt": "Filesystem   512-blocks      Used Available Capacity  Mounted on\n/dev/disk3s5  478724992 408043904  17190352    96%    /System/Volumes/Data\n",
+      "fixture-filesystem.txt": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>AESHardware</key>\n\t<true/>\n\t<key>APFSContainerFree</key>\n\t<integer>8801452032</integer>\n\t<key>APFSContainerReference</key>\n\t<string>disk3</string>\n\t<key>APFSContainerSize</key>\n\t<integer>245107195904</integer>\n\t<key>APFSPhysicalStores</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>APFSPhysicalStore</key>\n\t\t\t<string>disk0s2</string>\n\t\t</dict>\n\t</array>\n\t<key>APFSSnapshot</key>\n\t<false/>\n\t<key>APFSVolumeGroupID</key>\n\t<string>06525E93-14FC-4F0E-99DC-8217E24624E8</string>\n\t<key>Bootable</key>\n\t<true/>\n\t<key>BooterDeviceIdentifier</key>\n\t<string>disk3s2</string>\n\t<key>BusProtocol</key>\n\t<string>Apple Fabric</string>\n\t<key>CanBeMadeBootable</key>\n\t<false/>\n\t<key>CanBeMadeBootableRequiresDestroy</key>\n\t<false/>\n\t<key>CapacityInUse</key>\n\t<integer>208918487040</integer>\n\t<key>Content</key>\n\t<string>41504653-0000-11AA-AA11-00306543ECAC</string>\n\t<key>DeviceBlockSize</key>\n\t<integer>4096</integer>\n\t<key>DeviceIdentifier</key>\n\t<string>disk3s5</string>\n\t<key>DeviceNode</key>\n\t<string>/dev/disk3s5</string>\n\t<key>DeviceTreePath</key>\n\t<string>IODeviceTree:/arm-io@10F00000/ans@81600000/iop-ans-nub/AppleANS3CGv2Controller</string>\n\t<key>DiskUUID</key>\n\t<string>06525E93-14FC-4F0E-99DC-8217E24624E8</string>\n\t<key>Ejectable</key>\n\t<false/>\n\t<key>EjectableMediaAutomaticUnderSoftwareControl</key>\n\t<false/>\n\t<key>EjectableOnly</key>\n\t<false/>\n\t<key>Encryption</key>\n\t<true/>\n\t<key>EncryptionThisVolumeProper</key>\n\t<true/>\n\t<key>FileVault</key>\n\t<true/>\n\t<key>FilesystemName</key>\n\t<string>APFS</string>\n\t<key>FilesystemType</key>\n\t<string>apfs</string>\n\t<key>FilesystemUserVisibleName</key>\n\t<string>APFS</string>\n\t<key>FreeSpace</key>\n\t<integer>0</integer>\n\t<key>GlobalPermissionsEnabled</key>\n\t<true/>\n\t<key>IOKitSize</key>\n\t<integer>245107195904</integer>\n\t<key>IORegistryEntryName</key>\n\t<string>Data</string>\n\t<key>Internal</key>\n\t<true/>\n\t<key>Locked</key>\n\t<false/>\n\t<key>MediaName</key>\n\t<string></string>\n\t<key>MediaType</key>\n\t<string>Generic</string>\n\t<key>MountPoint</key>\n\t<string>/System/Volumes/Data</string>\n\t<key>OSInternalMedia</key>\n\t<false/>\n\t<key>ParentWholeDisk</key>\n\t<string>disk3</string>\n\t<key>PartitionMapPartition</key>\n\t<false/>\n\t<key>RAIDMaster</key>\n\t<false/>\n\t<key>RAIDSlice</key>\n\t<false/>\n\t<key>RecoveryDeviceIdentifier</key>\n\t<string>disk3s3</string>\n\t<key>Removable</key>\n\t<false/>\n\t<key>RemovableMedia</key>\n\t<false/>\n\t<key>RemovableMediaOrExternalDevice</key>\n\t<false/>\n\t<key>SMARTDeviceSpecificKeysMayVaryNotGuaranteed</key>\n\t<dict>\n\t\t<key>AVAILABLE_SPARE</key>\n\t\t<integer>100</integer>\n\t\t<key>AVAILABLE_SPARE_THRESHOLD</key>\n\t\t<integer>99</integer>\n\t\t<key>CONTROLLER_BUSY_TIME_0</key>\n\t\t<integer>0</integer>\n\t\t<key>CONTROLLER_BUSY_TIME_1</key>\n\t\t<integer>0</integer>\n\t\t<key>DATA_UNITS_READ_0</key>\n\t\t<integer>18568948</integer>\n\t\t<key>DATA_UNITS_READ_1</key>\n\t\t<integer>0</integer>\n\t\t<key>DATA_UNITS_WRITTEN_0</key>\n\t\t<integer>16885271</integer>\n\t\t<key>DATA_UNITS_WRITTEN_1</key>\n\t\t<integer>0</integer>\n\t\t<key>HOST_READ_COMMANDS_0</key>\n\t\t<integer>485941256</integer>\n\t\t<key>HOST_READ_COMMANDS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>HOST_WRITE_COMMANDS_0</key>\n\t\t<integer>369987649</integer>\n\t\t<key>HOST_WRITE_COMMANDS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>MEDIA_ERRORS_0</key>\n\t\t<integer>0</integer>\n\t\t<key>MEDIA_ERRORS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>NUM_ERROR_INFO_LOG_ENTRIES_0</key>\n\t\t<integer>0</integer>\n\t\t<key>NUM_ERROR_INFO_LOG_ENTRIES_1</key>\n\t\t<integer>0</integer>\n\t\t<key>PERCENTAGE_USED</key>\n\t\t<integer>0</integer>\n\t\t<key>POWER_CYCLES_0</key>\n\t\t<integer>152</integer>\n\t\t<key>POWER_CYCLES_1</key>\n\t\t<integer>0</integer>\n\t\t<key>POWER_ON_HOURS_0</key>\n\t\t<integer>297</integer>\n\t\t<key>POWER_ON_HOURS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>TEMPERATURE</key>\n\t\t<integer>311</integer>\n\t\t<key>UNSAFE_SHUTDOWNS_0</key>\n\t\t<integer>3</integer>\n\t\t<key>UNSAFE_SHUTDOWNS_1</key>\n\t\t<integer>0</integer>\n\t</dict>\n\t<key>SMARTStatus</key>\n\t<string>Verified</string>\n\t<key>Sealed</key>\n\t<string>No</string>\n\t<key>Size</key>\n\t<integer>245107195904</integer>\n\t<key>SolidState</key>\n\t<true/>\n\t<key>SupportsGlobalPermissionsDisable</key>\n\t<true/>\n\t<key>SystemImage</key>\n\t<false/>\n\t<key>TotalSize</key>\n\t<integer>245107195904</integer>\n\t<key>VolumeAllocationBlockSize</key>\n\t<integer>4096</integer>\n\t<key>VolumeName</key>\n\t<string>Data</string>\n\t<key>VolumeSize</key>\n\t<integer>0</integer>\n\t<key>VolumeUUID</key>\n\t<string>06525E93-14FC-4F0E-99DC-8217E24624E8</string>\n\t<key>WholeDisk</key>\n\t<false/>\n\t<key>Writable</key>\n\t<true/>\n\t<key>WritableMedia</key>\n\t<true/>\n\t<key>WritableVolume</key>\n\t<true/>\n</dict>\n</plist>\n",
+      "default-tmp-filesystem.txt": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>AESHardware</key>\n\t<true/>\n\t<key>APFSContainerFree</key>\n\t<integer>8801435648</integer>\n\t<key>APFSContainerReference</key>\n\t<string>disk3</string>\n\t<key>APFSContainerSize</key>\n\t<integer>245107195904</integer>\n\t<key>APFSPhysicalStores</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>APFSPhysicalStore</key>\n\t\t\t<string>disk0s2</string>\n\t\t</dict>\n\t</array>\n\t<key>APFSSnapshot</key>\n\t<false/>\n\t<key>APFSVolumeGroupID</key>\n\t<string>06525E93-14FC-4F0E-99DC-8217E24624E8</string>\n\t<key>Bootable</key>\n\t<true/>\n\t<key>BooterDeviceIdentifier</key>\n\t<string>disk3s2</string>\n\t<key>BusProtocol</key>\n\t<string>Apple Fabric</string>\n\t<key>CanBeMadeBootable</key>\n\t<false/>\n\t<key>CanBeMadeBootableRequiresDestroy</key>\n\t<false/>\n\t<key>CapacityInUse</key>\n\t<integer>208918503424</integer>\n\t<key>Content</key>\n\t<string>41504653-0000-11AA-AA11-00306543ECAC</string>\n\t<key>DeviceBlockSize</key>\n\t<integer>4096</integer>\n\t<key>DeviceIdentifier</key>\n\t<string>disk3s5</string>\n\t<key>DeviceNode</key>\n\t<string>/dev/disk3s5</string>\n\t<key>DeviceTreePath</key>\n\t<string>IODeviceTree:/arm-io@10F00000/ans@81600000/iop-ans-nub/AppleANS3CGv2Controller</string>\n\t<key>DiskUUID</key>\n\t<string>06525E93-14FC-4F0E-99DC-8217E24624E8</string>\n\t<key>Ejectable</key>\n\t<false/>\n\t<key>EjectableMediaAutomaticUnderSoftwareControl</key>\n\t<false/>\n\t<key>EjectableOnly</key>\n\t<false/>\n\t<key>Encryption</key>\n\t<true/>\n\t<key>EncryptionThisVolumeProper</key>\n\t<true/>\n\t<key>FileVault</key>\n\t<true/>\n\t<key>FilesystemName</key>\n\t<string>APFS</string>\n\t<key>FilesystemType</key>\n\t<string>apfs</string>\n\t<key>FilesystemUserVisibleName</key>\n\t<string>APFS</string>\n\t<key>FreeSpace</key>\n\t<integer>0</integer>\n\t<key>GlobalPermissionsEnabled</key>\n\t<true/>\n\t<key>IOKitSize</key>\n\t<integer>245107195904</integer>\n\t<key>IORegistryEntryName</key>\n\t<string>Data</string>\n\t<key>Internal</key>\n\t<true/>\n\t<key>Locked</key>\n\t<false/>\n\t<key>MediaName</key>\n\t<string></string>\n\t<key>MediaType</key>\n\t<string>Generic</string>\n\t<key>MountPoint</key>\n\t<string>/System/Volumes/Data</string>\n\t<key>OSInternalMedia</key>\n\t<false/>\n\t<key>ParentWholeDisk</key>\n\t<string>disk3</string>\n\t<key>PartitionMapPartition</key>\n\t<false/>\n\t<key>RAIDMaster</key>\n\t<false/>\n\t<key>RAIDSlice</key>\n\t<false/>\n\t<key>RecoveryDeviceIdentifier</key>\n\t<string>disk3s3</string>\n\t<key>Removable</key>\n\t<false/>\n\t<key>RemovableMedia</key>\n\t<false/>\n\t<key>RemovableMediaOrExternalDevice</key>\n\t<false/>\n\t<key>SMARTDeviceSpecificKeysMayVaryNotGuaranteed</key>\n\t<dict>\n\t\t<key>AVAILABLE_SPARE</key>\n\t\t<integer>100</integer>\n\t\t<key>AVAILABLE_SPARE_THRESHOLD</key>\n\t\t<integer>99</integer>\n\t\t<key>CONTROLLER_BUSY_TIME_0</key>\n\t\t<integer>0</integer>\n\t\t<key>CONTROLLER_BUSY_TIME_1</key>\n\t\t<integer>0</integer>\n\t\t<key>DATA_UNITS_READ_0</key>\n\t\t<integer>18568951</integer>\n\t\t<key>DATA_UNITS_READ_1</key>\n\t\t<integer>0</integer>\n\t\t<key>DATA_UNITS_WRITTEN_0</key>\n\t\t<integer>16885271</integer>\n\t\t<key>DATA_UNITS_WRITTEN_1</key>\n\t\t<integer>0</integer>\n\t\t<key>HOST_READ_COMMANDS_0</key>\n\t\t<integer>485941407</integer>\n\t\t<key>HOST_READ_COMMANDS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>HOST_WRITE_COMMANDS_0</key>\n\t\t<integer>369987651</integer>\n\t\t<key>HOST_WRITE_COMMANDS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>MEDIA_ERRORS_0</key>\n\t\t<integer>0</integer>\n\t\t<key>MEDIA_ERRORS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>NUM_ERROR_INFO_LOG_ENTRIES_0</key>\n\t\t<integer>0</integer>\n\t\t<key>NUM_ERROR_INFO_LOG_ENTRIES_1</key>\n\t\t<integer>0</integer>\n\t\t<key>PERCENTAGE_USED</key>\n\t\t<integer>0</integer>\n\t\t<key>POWER_CYCLES_0</key>\n\t\t<integer>152</integer>\n\t\t<key>POWER_CYCLES_1</key>\n\t\t<integer>0</integer>\n\t\t<key>POWER_ON_HOURS_0</key>\n\t\t<integer>297</integer>\n\t\t<key>POWER_ON_HOURS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>TEMPERATURE</key>\n\t\t<integer>311</integer>\n\t\t<key>UNSAFE_SHUTDOWNS_0</key>\n\t\t<integer>3</integer>\n\t\t<key>UNSAFE_SHUTDOWNS_1</key>\n\t\t<integer>0</integer>\n\t</dict>\n\t<key>SMARTStatus</key>\n\t<string>Verified</string>\n\t<key>Sealed</key>\n\t<string>No</string>\n\t<key>Size</key>\n\t<integer>245107195904</integer>\n\t<key>SolidState</key>\n\t<true/>\n\t<key>SupportsGlobalPermissionsDisable</key>\n\t<true/>\n\t<key>SystemImage</key>\n\t<false/>\n\t<key>TotalSize</key>\n\t<integer>245107195904</integer>\n\t<key>VolumeAllocationBlockSize</key>\n\t<integer>4096</integer>\n\t<key>VolumeName</key>\n\t<string>Data</string>\n\t<key>VolumeSize</key>\n\t<integer>0</integer>\n\t<key>VolumeUUID</key>\n\t<string>06525E93-14FC-4F0E-99DC-8217E24624E8</string>\n\t<key>WholeDisk</key>\n\t<false/>\n\t<key>Writable</key>\n\t<true/>\n\t<key>WritableMedia</key>\n\t<true/>\n\t<key>WritableVolume</key>\n\t<true/>\n</dict>\n</plist>\n",
+      "candidate/0-watch-small.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2         \t      10\t  31547633 ns/op\t  352203 B/op\t     529 allocs/op\nPASS\n",
+      "candidate/1-watch-small.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2         \t      10\t  33267538 ns/op\t  353752 B/op\t     531 allocs/op\nPASS\n",
+      "candidate/4-watch-small.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2         \t      10\t  26400667 ns/op\t  352753 B/op\t     530 allocs/op\nPASS\n",
+      "candidate/3-watch-small.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2         \t      10\t  26452796 ns/op\t  353160 B/op\t     531 allocs/op\nPASS\n",
+      "candidate/2-watch-small.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2         \t      10\t  26393254 ns/op\t  352780 B/op\t     530 allocs/op\nPASS\n",
+      "candidate/build-watch-small.txt": "",
+      "baseline/0-watch-small.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2         \t      10\t  33411517 ns/op\t  272100 B/op\t     539 allocs/op\nPASS\n",
+      "baseline/1-watch-small.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2         \t      10\t  33168967 ns/op\t  273512 B/op\t     541 allocs/op\nPASS\n",
+      "baseline/4-watch-small.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2         \t      10\t  35728266 ns/op\t  273087 B/op\t     540 allocs/op\nPASS\n",
+      "baseline/3-watch-small.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2         \t      10\t  27243846 ns/op\t  273965 B/op\t     542 allocs/op\nPASS\n",
+      "baseline/2-watch-small.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2         \t      10\t  28688050 ns/op\t  272214 B/op\t     539 allocs/op\nPASS\n",
+      "baseline/build-watch-small.txt": ""
+    }
+  },
+  "cabal": {
+    "scope": "Focused followups for slower main-matrix observations, no code changes",
+    "script": "import hashlib,importlib.util,json,os,platform,re,tempfile\nfrom pathlib import Path\n\nroot=Path.cwd();spec=importlib.util.spec_from_file_location('bench',root/'scripts/benchmark_snapshot_integration.py')\nbench=importlib.util.module_from_spec(spec);spec.loader.exec_module(bench)\nout=root.parent/'followup-results';out.mkdir(exist_ok=False);fixtures=out/'fixtures';fixtures.mkdir()\nenv=dict(os.environ,GOMAXPROCS='2',CGO_ENABLED='0',TMPDIR=str(fixtures))\ncases=[('watch-small','./internal/snapshot','^BenchmarkWatchPreparation$/^1000$/^retained-edit$','10x')] if platform.system()=='Darwin' else [('push','./cmd/errand','^BenchmarkPushPhases$','3x'),('submission','./cmd/errand','^BenchmarkWorkspaceCreationAndSubmission$/^ephemeral-job$','3x')]\nreport={'scope':'Focused followups for slower main-matrix observations, no code changes','script':Path(__file__).read_text(),'platform':platform.platform(),'filesystem':bench.filesystem(fixtures,env,out,'fixture-filesystem'),'orders':[],'versions':{}}\nwith tempfile.TemporaryDirectory(dir='/tmp') as p:\n report['default_tmp_filesystem']=bench.filesystem(Path(p),env,out,'default-tmp-filesystem')\nfor name,source in [('baseline',root.parent/'baseline'),('candidate',root)]:\n directory=out/name;directory.mkdir();digest=hashlib.sha256()\n for p in sorted([*source.rglob('*.go'),source/'go.mod',source/'go.sum']):digest.update(str(p.relative_to(source)).encode()+b'\\0'+p.read_bytes()+b'\\0')\n report['versions'][name]={'source_sha256':digest.hexdigest(),'samples':[],'binaries':{}}\n for key,package,_,_ in cases:\n  binary=directory/(key+'.test');bench.run(['go','test','-c','-o',str(binary),package],source,env,directory/('build-'+key+'.txt'))\n  report['versions'][name]['binaries'][key]=hashlib.sha256(binary.read_bytes()).hexdigest()\nfor number in range(5):\n order=['baseline','candidate'] if number%2==0 else ['candidate','baseline'];report['orders'].append(order)\n for name in order:\n  directory=out/name;source=root if name=='candidate' else root.parent/'baseline'\n  for key,_,pattern,duration in cases:\n   raw=bench.run([str(directory/(key+'.test')),'-test.v','-test.run=^$','-test.bench='+pattern,'-test.benchtime='+duration,'-test.benchmem','-test.timeout=10m'],source,env,directory/(str(number)+'-'+key+'.txt'))\n   samples=[]\n   for line in raw.splitlines():\n    m=re.match(r'^(Benchmark\\S+)-\\d+\\s+(\\d+)\\s+(.+)$',line)\n    if m:\n     values=m[3].split();samples.append({'name':m[1],'round':number,'iterations':int(m[2]),'metrics':{values[i+1]:float(values[i]) for i in range(0,len(values),2)}})\n   if len(samples)!=1:raise RuntimeError((key,len(samples)))\n   report['versions'][name]['samples']+=samples\n  (out/'report.json').write_text(json.dumps(report,indent=2)+'\\n');print(f'Round {number+1}/5: {name} complete',flush=True)\nfor name in report['versions']:\n for key,_,_,_ in cases:(out/name/(key+'.test')).unlink()\n",
+    "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+    "filesystem": "btrfs",
+    "orders": [
+      [
+        "baseline",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "baseline"
+      ],
+      [
+        "baseline",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "baseline"
+      ],
+      [
+        "baseline",
+        "candidate"
+      ]
+    ],
+    "versions": {
+      "baseline": {
+        "source_sha256": "170fdcf16d9a5328e704920dea2149033b57ec641f1a445b4d44c3c9d7921ee2",
+        "samples": [
+          {
+            "name": "BenchmarkPushPhases",
+            "round": 0,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 980287201.0,
+              "apply-ms/op": 215.5,
+              "client-ms/op": 523.2,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 241.6,
+              "B/op": 273964005.0,
+              "allocs/op": 542787.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "round": 0,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 751501182.0,
+              "B/op": 40484496.0,
+              "allocs/op": 192407.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "round": 1,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 1006842405.0,
+              "apply-ms/op": 241.2,
+              "client-ms/op": 523.1,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 242.6,
+              "B/op": 271766040.0,
+              "allocs/op": 542782.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "round": 1,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 771260783.0,
+              "B/op": 40372685.0,
+              "allocs/op": 192425.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "round": 2,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 963945939.0,
+              "apply-ms/op": 246.8,
+              "client-ms/op": 478.7,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 238.4,
+              "B/op": 273958149.0,
+              "allocs/op": 542768.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "round": 2,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 751998525.0,
+              "B/op": 40668440.0,
+              "allocs/op": 192412.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "round": 3,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 986489652.0,
+              "apply-ms/op": 233.5,
+              "client-ms/op": 519.6,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 233.4,
+              "B/op": 271761674.0,
+              "allocs/op": 542772.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "round": 3,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 792886766.0,
+              "B/op": 40446880.0,
+              "allocs/op": 192401.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "round": 4,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 1008996936.0,
+              "apply-ms/op": 229.1,
+              "client-ms/op": 540.1,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 239.7,
+              "B/op": 280620109.0,
+              "allocs/op": 542827.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "round": 4,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 929633297.0,
+              "B/op": 40462581.0,
+              "allocs/op": 192416.0
+            }
+          }
+        ],
+        "binaries": {
+          "push": "0b895406b9ef14ef58778f285234545b6a7e1f6de1493bc094cbacd236e080db",
+          "submission": "0b895406b9ef14ef58778f285234545b6a7e1f6de1493bc094cbacd236e080db"
+        }
+      },
+      "candidate": {
+        "source_sha256": "3bfe275eab3b763f66986848a4deb91f1cd423f2e5dce697cfbbe5848e80f47c",
+        "samples": [
+          {
+            "name": "BenchmarkPushPhases",
+            "round": 0,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 1026912652.0,
+              "apply-ms/op": 271.2,
+              "client-ms/op": 526.0,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 229.7,
+              "B/op": 263146714.0,
+              "allocs/op": 552445.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "round": 0,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 885362215.0,
+              "B/op": 41167456.0,
+              "allocs/op": 192459.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "round": 1,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 1016236460.0,
+              "apply-ms/op": 238.2,
+              "client-ms/op": 542.4,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 235.6,
+              "B/op": 260929077.0,
+              "allocs/op": 552412.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "round": 1,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 805790566.0,
+              "B/op": 40850794.0,
+              "allocs/op": 192443.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "round": 2,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 934143870.0,
+              "apply-ms/op": 212.8,
+              "client-ms/op": 477.0,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 244.4,
+              "B/op": 267572917.0,
+              "allocs/op": 552464.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "round": 2,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 815457649.0,
+              "B/op": 40537282.0,
+              "allocs/op": 192425.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "round": 3,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 1032226179.0,
+              "apply-ms/op": 242.7,
+              "client-ms/op": 532.1,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 257.4,
+              "B/op": 263122114.0,
+              "allocs/op": 552409.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "round": 3,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 783793938.0,
+              "B/op": 40696368.0,
+              "allocs/op": 192424.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "round": 4,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 1410952838.0,
+              "apply-ms/op": 529.1,
+              "client-ms/op": 589.3,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 292.6,
+              "B/op": 260921250.0,
+              "allocs/op": 552411.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "round": 4,
+            "iterations": 3,
+            "metrics": {
+              "ns/op": 741328928.0,
+              "B/op": 41058752.0,
+              "allocs/op": 192447.0
+            }
+          }
+        ],
+        "binaries": {
+          "push": "0a296ae9d693bde520538cabc249a4ea6b1c5a8a796629841c386c8ca13ff0c0",
+          "submission": "0a296ae9d693bde520538cabc249a4ea6b1c5a8a796629841c386c8ca13ff0c0"
+        }
+      }
+    },
+    "default_tmp_filesystem": "tmpfs",
+    "logs": {
+      "fixture-filesystem.txt": "btrfs\n",
+      "default-tmp-filesystem.txt": "tmpfs\n",
+      "candidate/build-push.txt": "",
+      "candidate/0-push.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases\nBenchmarkPushPhases-2   \t       3\t1026912652 ns/op\t       271.2 apply-ms/op\t       526.0 client-ms/op\t         0 negotiate-ms/op\t       229.7 stage-ms/op\t263146714 B/op\t  552445 allocs/op\nPASS\n",
+      "candidate/1-push.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases\nBenchmarkPushPhases-2   \t       3\t1016236460 ns/op\t       238.2 apply-ms/op\t       542.4 client-ms/op\t         0 negotiate-ms/op\t       235.6 stage-ms/op\t260929077 B/op\t  552412 allocs/op\nPASS\n",
+      "candidate/1-submission.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.849960599}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.922132547}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":1,\"seconds\":0.746963825}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":2,\"seconds\":0.748273418}\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         \t       3\t 805790566 ns/op\t40850794 B/op\t  192443 allocs/op\nPASS\n",
+      "candidate/4-push.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases\nBenchmarkPushPhases-2   \t       3\t1410952838 ns/op\t       529.1 apply-ms/op\t       589.3 client-ms/op\t         0 negotiate-ms/op\t       292.6 stage-ms/op\t260921250 B/op\t  552411 allocs/op\nPASS\n",
+      "candidate/0-submission.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":1.114999151}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":1.022786871}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":1,\"seconds\":0.910705203}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":2,\"seconds\":0.722592996}\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         \t       3\t 885362215 ns/op\t41167456 B/op\t  192459 allocs/op\nPASS\n",
+      "candidate/2-submission.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.819508383}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.811517854}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":1,\"seconds\":0.732980445}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":2,\"seconds\":0.901872801}\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         \t       3\t 815457649 ns/op\t40537282 B/op\t  192425 allocs/op\nPASS\n",
+      "candidate/build-submission.txt": "",
+      "candidate/3-push.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases\nBenchmarkPushPhases-2   \t       3\t1032226179 ns/op\t       242.7 apply-ms/op\t       532.1 client-ms/op\t         0 negotiate-ms/op\t       257.4 stage-ms/op\t263122114 B/op\t  552409 allocs/op\nPASS\n",
+      "candidate/2-push.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases\nBenchmarkPushPhases-2   \t       3\t 934143870 ns/op\t       212.8 apply-ms/op\t       477.0 client-ms/op\t         0 negotiate-ms/op\t       244.4 stage-ms/op\t267572917 B/op\t  552464 allocs/op\nPASS\n",
+      "candidate/4-submission.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.813942138}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.824867017}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":1,\"seconds\":0.70171334}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":2,\"seconds\":0.697404356}\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         \t       3\t 741328928 ns/op\t41058752 B/op\t  192447 allocs/op\nPASS\n",
+      "candidate/3-submission.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":1.1712056770000001}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.828571789}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":1,\"seconds\":0.754293969}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":2,\"seconds\":0.768514392}\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         \t       3\t 783793938 ns/op\t40696368 B/op\t  192424 allocs/op\nPASS\n",
+      "baseline/build-push.txt": "",
+      "baseline/0-push.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases\nBenchmarkPushPhases-2   \t       3\t 980287201 ns/op\t       215.5 apply-ms/op\t       523.2 client-ms/op\t         0 negotiate-ms/op\t       241.6 stage-ms/op\t273964005 B/op\t  542787 allocs/op\nPASS\n",
+      "baseline/1-push.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases\nBenchmarkPushPhases-2   \t       3\t1006842405 ns/op\t       241.2 apply-ms/op\t       523.1 client-ms/op\t         0 negotiate-ms/op\t       242.6 stage-ms/op\t271766040 B/op\t  542782 allocs/op\nPASS\n",
+      "baseline/1-submission.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.803396268}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.846328769}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":1,\"seconds\":0.73998323}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":2,\"seconds\":0.72746852}\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         \t       3\t 771260783 ns/op\t40372685 B/op\t  192425 allocs/op\nPASS\n",
+      "baseline/4-push.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases\nBenchmarkPushPhases-2   \t       3\t1008996936 ns/op\t       229.1 apply-ms/op\t       540.1 client-ms/op\t         0 negotiate-ms/op\t       239.7 stage-ms/op\t280620109 B/op\t  542827 allocs/op\nPASS\n",
+      "baseline/0-submission.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.832641399}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.811804455}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":1,\"seconds\":0.719126626}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":2,\"seconds\":0.723570533}\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         \t       3\t 751501182 ns/op\t40484496 B/op\t  192407 allocs/op\nPASS\n",
+      "baseline/2-submission.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.775626576}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.804256442}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":1,\"seconds\":0.737950454}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":2,\"seconds\":0.713786687}\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         \t       3\t 751998525 ns/op\t40668440 B/op\t  192412 allocs/op\nPASS\n",
+      "baseline/build-submission.txt": "",
+      "baseline/3-push.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases\nBenchmarkPushPhases-2   \t       3\t 986489652 ns/op\t       233.5 apply-ms/op\t       519.6 client-ms/op\t         0 negotiate-ms/op\t       233.4 stage-ms/op\t271761674 B/op\t  542772 allocs/op\nPASS\n",
+      "baseline/2-push.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases\nBenchmarkPushPhases-2   \t       3\t 963945939 ns/op\t       246.8 apply-ms/op\t       478.7 client-ms/op\t         0 negotiate-ms/op\t       238.4 stage-ms/op\t273958149 B/op\t  542768 allocs/op\nPASS\n",
+      "baseline/4-submission.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.834442342}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":1.168732104}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":1,\"seconds\":0.91605554}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":2,\"seconds\":0.704110312}\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         \t       3\t 929633297 ns/op\t40462581 B/op\t  192416 allocs/op\nPASS\n",
+      "baseline/3-submission.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":1.149688554}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":0,\"seconds\":0.913199618}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":1,\"seconds\":0.730310061}\nEVALUATION {\"mode\":\"ephemeral-job\",\"sample\":2,\"seconds\":0.73514881}\nBenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         \t       3\t 792886766 ns/op\t40446880 B/op\t  192401 allocs/op\nPASS\n"
+    }
+  }
+}

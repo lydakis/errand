@@ -1,0 +1,82 @@
+{
+  "scope": "Focused workspace-create follow-up; native Mac temporary directory; five alternating pairs of three operations",
+  "binaries": {
+    "baseline": "6fe3449666a9d173d0730b5eb6dbaa3a8e2bfc0a5fb35383e8e63360b03b138a",
+    "candidate": "7df9ab3856772a26e0ca6b00f6f274d8ed9bb1a1bc61e9c2eafa92191499e80a"
+  },
+  "samples": [
+    {
+      "version": "baseline",
+      "round": 0,
+      "iterations": 3,
+      "ns_per_op": 2192094264.0
+    },
+    {
+      "version": "candidate",
+      "round": 0,
+      "iterations": 3,
+      "ns_per_op": 2465831430.0
+    },
+    {
+      "version": "candidate",
+      "round": 1,
+      "iterations": 3,
+      "ns_per_op": 1469259181.0
+    },
+    {
+      "version": "baseline",
+      "round": 1,
+      "iterations": 3,
+      "ns_per_op": 1418166680.0
+    },
+    {
+      "version": "baseline",
+      "round": 2,
+      "iterations": 3,
+      "ns_per_op": 1240514444.0
+    },
+    {
+      "version": "candidate",
+      "round": 2,
+      "iterations": 3,
+      "ns_per_op": 1219430764.0
+    },
+    {
+      "version": "candidate",
+      "round": 3,
+      "iterations": 3,
+      "ns_per_op": 834415903.0
+    },
+    {
+      "version": "baseline",
+      "round": 3,
+      "iterations": 3,
+      "ns_per_op": 1302560125.0
+    },
+    {
+      "version": "baseline",
+      "round": 4,
+      "iterations": 3,
+      "ns_per_op": 1289828291.0
+    },
+    {
+      "version": "candidate",
+      "round": 4,
+      "iterations": 3,
+      "ns_per_op": 546115222.0
+    }
+  ],
+  "script": "import json, os, re, subprocess, hashlib\nfrom pathlib import Path\nout = (Path.cwd().parent / \"results\").resolve()\nout.mkdir(exist_ok=False)\nenv = dict(os.environ, GOMAXPROCS=\"2\", CGO_ENABLED=\"0\")\nroots = {\"baseline\": Path.cwd().parent / \"baseline\", \"candidate\": Path.cwd()}\nreport = {\"scope\": \"Focused workspace-create follow-up; native Mac temporary directory; five alternating pairs of three operations\", \"binaries\": {}, \"samples\": []}\nfor name, root in roots.items():\n    binary = out / (name + \".test\")\n    subprocess.run([\"go\", \"test\", \"-c\", \"-o\", str(binary), \"./cmd/errand\"], cwd=root, env=env, check=True)\n    report[\"binaries\"][name] = hashlib.sha256(binary.read_bytes()).hexdigest()\nfor round_number in range(5):\n    order = list(roots) if round_number % 2 == 0 else list(reversed(roots))\n    for name in order:\n        p = subprocess.run([str(out / (name + \".test\")), \"-test.v\", \"-test.run=^$\", \"-test.bench=^BenchmarkWorkspaceCreationAndSubmission$/^workspace-create$\", \"-test.benchtime=3x\", \"-test.benchmem\", \"-test.timeout=5m\"], cwd=roots[name], env=env, text=True, capture_output=True)\n        (out / f\"{round_number}-{name}.txt\").write_text(p.stdout + p.stderr)\n        p.check_returncode()\n        match = re.search(r\"^BenchmarkWorkspaceCreationAndSubmission/workspace-create-\\d+\\s+(\\d+)\\s+([\\d.]+) ns/op\", p.stdout, re.M)\n        if match is None: raise RuntimeError(\"Missing benchmark result\")\n        report[\"samples\"].append(dict(version=name, round=round_number, iterations=int(match[1]), ns_per_op=float(match[2])))\n    print(f\"Completed pair {round_number + 1}/5\", flush=True)\n    (out / \"report.json\").write_text(json.dumps(report, indent=2) + \"\\n\")\nfor name in roots: (out / (name + \".test\")).unlink()\n",
+  "raw_logs": {
+    "1-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/workspace-create\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.216484833}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":0.860613166}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":1,\"seconds\":1.558225542}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":2,\"seconds\":1.835660292}\nBenchmarkWorkspaceCreationAndSubmission/workspace-create-2         \t       3\t1418166680 ns/op\t41596640 B/op\t  271695 allocs/op\nPASS\n",
+    "0-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/workspace-create\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.184048}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.738314875}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":1,\"seconds\":1.9564107910000001}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":2,\"seconds\":2.881555625}\nBenchmarkWorkspaceCreationAndSubmission/workspace-create-2         \t       3\t2192094264 ns/op\t41952696 B/op\t  271713 allocs/op\nPASS\n",
+    "1-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/workspace-create\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.220311792}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.464661541}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":1,\"seconds\":1.788698459}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":2,\"seconds\":1.1544165}\nBenchmarkWorkspaceCreationAndSubmission/workspace-create-2         \t       3\t1469259181 ns/op\t41603000 B/op\t  263693 allocs/op\nPASS\n",
+    "2-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/workspace-create\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.7683392919999998}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.6337745830000001}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":1,\"seconds\":1.225499625}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":2,\"seconds\":0.799016917}\nBenchmarkWorkspaceCreationAndSubmission/workspace-create-2         \t       3\t1219430764 ns/op\t41145512 B/op\t  263680 allocs/op\nPASS\n",
+    "3-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/workspace-create\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":0.928310583}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":0.882449667}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":1,\"seconds\":0.871883125}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":2,\"seconds\":0.748913958}\nBenchmarkWorkspaceCreationAndSubmission/workspace-create-2         \t       3\t 834415903 ns/op\t41467053 B/op\t  263694 allocs/op\nPASS\n",
+    "4-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/workspace-create\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.2681742919999999}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":0.585351334}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":1,\"seconds\":0.525043583}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":2,\"seconds\":0.527950208}\nBenchmarkWorkspaceCreationAndSubmission/workspace-create-2         \t       3\t 546115222 ns/op\t41334965 B/op\t  263674 allocs/op\nPASS\n",
+    "0-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/workspace-create\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":2.151183291}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":2.547916416}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":1,\"seconds\":2.486352083}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":2,\"seconds\":2.363224666}\nBenchmarkWorkspaceCreationAndSubmission/workspace-create-2         \t       3\t2465831430 ns/op\t41608368 B/op\t  263705 allocs/op\nPASS\n",
+    "2-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/workspace-create\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.476843958}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":0.950245458}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":1,\"seconds\":0.956075208}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":2,\"seconds\":1.815221458}\nBenchmarkWorkspaceCreationAndSubmission/workspace-create-2         \t       3\t1240514444 ns/op\t41387869 B/op\t  271674 allocs/op\nPASS\n",
+    "4-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/workspace-create\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.733146333}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.393650709}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":1,\"seconds\":1.348366458}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":2,\"seconds\":1.1274667919999999}\nBenchmarkWorkspaceCreationAndSubmission/workspace-create-2         \t       3\t1289828291 ns/op\t42080704 B/op\t  271695 allocs/op\nPASS\n",
+    "3-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkWorkspaceCreationAndSubmission\nBenchmarkWorkspaceCreationAndSubmission/workspace-create\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":1.254036334}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":0,\"seconds\":2.048368708}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":1,\"seconds\":1.11916325}\nEVALUATION {\"mode\":\"workspace-create\",\"sample\":2,\"seconds\":0.740147166}\nBenchmarkWorkspaceCreationAndSubmission/workspace-create-2         \t       3\t1302560125 ns/op\t42056549 B/op\t  271714 allocs/op\nPASS\n"
+  }
+}

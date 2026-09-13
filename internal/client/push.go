@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	changeops "github.com/lydakis/errand/internal/changes"
+	manifeststate "github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
 )
@@ -32,7 +33,7 @@ type PushOptions struct {
 
 type pushWatchState struct {
 	manifest    string
-	base        *proto.Manifest
+	base        *manifeststate.Snapshot
 	baseChecked bool
 	generation  string
 	builder     snapshot.Builder
@@ -138,8 +139,10 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 		builder = &opts.watchState.builder
 	}
 	var prep snapshotPreparation
+	var sourceState *manifeststate.Snapshot
+	var preparedDelta *changeops.SnapshotDelta
 	if opts.watchState != nil && opts.watchState.watcher != nil {
-		prep.manifest, prep.gitInfo, prep.selection, prep.guard, prep.err = opts.watchState.watcher.Prepare(builder)
+		sourceState, prep.gitInfo, prep.selection, prep.guard, prep.err = opts.watchState.watcher.PrepareSnapshot(builder)
 		prep.stage = "preparing watched source"
 	} else {
 		prep = prepareSnapshotWithBuilder(origin.Root, opts.IncludeAll, ws.Selection.Caches, builder)
@@ -153,12 +156,25 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if (proto.Spec{Selection: policy}).Digest() != (proto.Spec{Selection: ws.Selection}).Digest() {
 		return fmt.Errorf("push selection policy differs from workspace creation; create a new workspace for the new policy")
 	}
-	manifestHash := prep.manifest.RootHash()
+	if sourceState == nil {
+		sourceState, err = manifeststate.New(context.Background(), prep.manifest)
+		if err != nil {
+			return err
+		}
+	}
+	manifestHash, err := sourceState.RootHash(context.Background())
+	if err != nil {
+		return err
+	}
 	if opts.watchState != nil && opts.watchState.manifest == manifestHash {
 		return errWatchUnchanged
 	}
-	if opts.refreshSource || pending.Request.ID == "" || pending.Request.Manifest.RootHash() != prep.manifest.RootHash() {
+	if opts.refreshSource || pending.Request.ID == "" || pushManifestRoot(pending.Request) != manifestHash {
 		clientID, err := localChangeClientID()
+		if err != nil {
+			return err
+		}
+		prep.manifest, err = sourceState.Manifest(context.Background())
 		if err != nil {
 			return err
 		}
@@ -175,14 +191,27 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 				if err != nil {
 					return err
 				}
-				state.base, state.baseChecked = base, true
+				if base != nil {
+					state.base, err = manifeststate.New(context.Background(), *base)
+					if err != nil {
+						return err
+					}
+					if opts.watchState != nil {
+						if err := state.base.PrepareUpdates(context.Background()); err != nil {
+							return err
+						}
+					}
+				}
+				state.baseChecked = true
 			}
 			base := state.base
 			if base != nil {
-				delta, err := changeops.PrepareSourceDelta(context.Background(), *base, prep.manifest, proto.DefaultLimits().MaxChangeBytes)
+				plan, err := changeops.PrepareSnapshotDelta(context.Background(), base, sourceState, proto.DefaultLimits().MaxChangeBytes)
 				if err != nil {
 					return err
 				}
+				preparedDelta = plan
+				delta := plan.Bundle()
 				pending.Request.Delta = &delta
 				pending.Request.SourceRoot = manifestHash
 			}
@@ -256,11 +285,17 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if err == nil && opts.watchState != nil {
 		opts.watchState.generation = pending.Request.ID
 		if opts.watchState.base != nil && pending.Request.Delta != nil {
-			base, err := changeops.AcceptedSourceDelta(context.Background(), *opts.watchState.base, *pending.Request.Delta, result.Paths)
+			var base *manifeststate.Snapshot
+			var err error
+			if preparedDelta != nil {
+				base, err = preparedDelta.Accepted(context.Background(), result.Paths)
+			} else {
+				base, err = changeops.AcceptedSnapshotDelta(context.Background(), opts.watchState.base, *pending.Request.Delta, result.Paths)
+			}
 			if err != nil {
 				return err
 			}
-			opts.watchState.base = &base
+			opts.watchState.base = base
 		}
 		opts.watchState.manifest = manifestHash
 	}

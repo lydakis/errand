@@ -1,0 +1,1637 @@
+{
+  "Mac mini (APFS)": {
+    "scope": "Corrected hybrid vs flat, identical watch-cache and reconstruction fixes; native preparation and separate GC diagnostics.",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "script": "import hashlib, importlib.util, json, os, platform, re\nfrom pathlib import Path\n\nroot=Path.cwd()\nspec=importlib.util.spec_from_file_location('bench',root/'scripts/benchmark_snapshot_integration.py')\nbench=importlib.util.module_from_spec(spec); spec.loader.exec_module(bench)\nout=root.parent/'ablation-results'; out.mkdir(exist_ok=False)\nfixtures=out/'fixtures'; fixtures.mkdir()\nenv=dict(os.environ,GOMAXPROCS='2',CGO_ENABLED='0',TMPDIR=str(fixtures))\nreport={'scope':'Corrected hybrid vs flat, identical watch-cache and reconstruction fixes; native preparation and separate GC diagnostics.', 'platform':platform.platform(),'script':Path(__file__).read_text(),'versions':{},'orders':[], 'filesystem':bench.filesystem(fixtures,env,out,'fixture-filesystem')}\ncases={'snapshot':('./internal/snapshot','^BenchmarkWatchPreparation$','5x',6),'memory':('./internal/manifest','^BenchmarkSnapshotRetention$','1x',6)}\nfor name,source in [('hybrid',root.parent/'hybrid'),('flat',root)]:\n directory=out/name; directory.mkdir()\n bench.run(['go','test','./internal/manifest'],source,env,directory/'tests.txt')\n files=sorted([*source.rglob('*.go'),source/'go.mod',source/'go.sum'])\n digest=hashlib.sha256()\n for p in files: digest.update(str(p.relative_to(source)).encode()+b'\\0'+p.read_bytes()+b'\\0')\n report['versions'][name]={'source_sha256':digest.hexdigest(),'binaries':{},'samples':[]}\n for key,(package,_,_,_) in cases.items():\n  binary=directory/(key+'.test')\n  bench.run(['go','test','-c','-o',str(binary),package],source,env,directory/('build-'+key+'.txt'))\n  report['versions'][name]['binaries'][key]=hashlib.sha256(binary.read_bytes()).hexdigest()\nfor number in range(3):\n order=['hybrid','flat'] if number%2==0 else ['flat','hybrid']; report['orders'].append(order)\n for name in order:\n  directory=out/name; source=root if name=='flat' else root.parent/'hybrid'\n  for key,(_,pattern,duration,count) in cases.items():\n   raw=bench.run([str(directory/(key+'.test')),'-test.v','-test.run=^$','-test.bench='+pattern,'-test.benchtime='+duration,'-test.benchmem','-test.timeout=10m'],source,env,directory/(str(number)+'-'+key+'.txt'))\n   samples=[]\n   for line in raw.splitlines():\n    m=re.match(r'^(Benchmark\\S+)-\\d+\\s+(\\d+)\\s+(.+)$',line)\n    if m:\n     metrics=m[3].split(); samples.append({'name':m[1],'iterations':int(m[2]),'round':number,'metrics':{metrics[i+1]:float(metrics[i]) for i in range(0,len(metrics),2)}})\n   if len(samples)!=count: raise RuntimeError((key,len(samples),count))\n   report['versions'][name]['samples']+=samples\n  (out/'report.json').write_text(json.dumps(report,indent=2)+'\\n')\n  print(f'Round {number+1}/3: {name} complete',flush=True)\nfor name in report['versions']:\n for key in cases: (out/name/(key+'.test')).unlink()\n",
+    "versions": {
+      "hybrid": {
+        "source_sha256": "a7b558c71204e1e4fc2b6fe3db6bc1eeb7a17a3ea520e4968af593b98271b607",
+        "binaries": {
+          "snapshot": "692d263276401780a0b4b9c32f0db1be78b972e8f37e578bb3b5fca14baea8e6",
+          "memory": "b9dadd362a6a0c82a9b17d59ea6cb731ae9fcfd1563831a39e178b1c77866ed0"
+        },
+        "samples": [
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 30629167.0,
+              "B/op": 272016.0,
+              "allocs/op": 539.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 26276842.0,
+              "B/op": 273056.0,
+              "allocs/op": 541.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 65039800.0,
+              "B/op": 3490689.0,
+              "allocs/op": 27098.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 34685800.0,
+              "B/op": 992435.0,
+              "allocs/op": 538.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 27099433.0,
+              "B/op": 992515.0,
+              "allocs/op": 538.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 180912658.0,
+              "B/op": 34239668.0,
+              "allocs/op": 261226.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 8500125.0,
+              "retained-B": 385192.0,
+              "B/op": 473584.0,
+              "allocs/op": 2776.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 1225459.0,
+              "retained-B": 304680.0,
+              "B/op": 475272.0,
+              "allocs/op": 2790.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 3166834.0,
+              "retained-B": 1560.0,
+              "B/op": 2167816.0,
+              "allocs/op": 9048.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 8829417.0,
+              "retained-B": 3842960.0,
+              "B/op": 4724768.0,
+              "allocs/op": 29807.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 7704584.0,
+              "retained-B": 3043000.0,
+              "B/op": 4727904.0,
+              "allocs/op": 29827.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 22420417.0,
+              "retained-B": 560.0,
+              "B/op": 28460448.0,
+              "allocs/op": 122482.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 28078683.0,
+              "B/op": 271539.0,
+              "allocs/op": 538.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 27243650.0,
+              "B/op": 272675.0,
+              "allocs/op": 540.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 67020400.0,
+              "B/op": 3492001.0,
+              "allocs/op": 27100.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 31545000.0,
+              "B/op": 992444.0,
+              "allocs/op": 538.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 27864475.0,
+              "B/op": 992691.0,
+              "allocs/op": 538.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 181415558.0,
+              "B/op": 34239771.0,
+              "allocs/op": 261226.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 656542.0,
+              "retained-B": 385192.0,
+              "B/op": 473584.0,
+              "allocs/op": 2776.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 614625.0,
+              "retained-B": 304920.0,
+              "B/op": 475528.0,
+              "allocs/op": 2790.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 1362041.0,
+              "retained-B": 1080.0,
+              "B/op": 2167336.0,
+              "allocs/op": 9047.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 4094917.0,
+              "retained-B": 3842960.0,
+              "B/op": 4724768.0,
+              "allocs/op": 29807.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 3998958.0,
+              "retained-B": 3043000.0,
+              "B/op": 4727904.0,
+              "allocs/op": 29827.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 15624958.0,
+              "retained-B": 560.0,
+              "B/op": 28460448.0,
+              "allocs/op": 122482.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 33262842.0,
+              "B/op": 272534.0,
+              "allocs/op": 539.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 27212208.0,
+              "B/op": 271628.0,
+              "allocs/op": 538.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 66988041.0,
+              "B/op": 3490712.0,
+              "allocs/op": 27098.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 29698525.0,
+              "B/op": 992435.0,
+              "allocs/op": 538.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 28077275.0,
+              "B/op": 992694.0,
+              "allocs/op": 538.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 182454625.0,
+              "B/op": 34239739.0,
+              "allocs/op": 261226.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 645708.0,
+              "retained-B": 385080.0,
+              "B/op": 473472.0,
+              "allocs/op": 2775.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 612041.0,
+              "retained-B": 304920.0,
+              "B/op": 475512.0,
+              "allocs/op": 2789.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 1305750.0,
+              "retained-B": 1080.0,
+              "B/op": 2167336.0,
+              "allocs/op": 9047.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 4022833.0,
+              "retained-B": 3843440.0,
+              "B/op": 4725248.0,
+              "allocs/op": 29808.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 3988750.0,
+              "retained-B": 3043480.0,
+              "B/op": 4728144.0,
+              "allocs/op": 29826.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 15237833.0,
+              "retained-B": 560.0,
+              "B/op": 28460208.0,
+              "allocs/op": 122480.0
+            }
+          }
+        ]
+      },
+      "flat": {
+        "source_sha256": "1b4b3f60c54e4ef3ead32f8de78142865adc4d1d66cd34d4a998db7abf64bb5e",
+        "binaries": {
+          "snapshot": "b3db1225823774fea0002ada28c3595c1d403a4c5a497906a38621c799772ffc",
+          "memory": "c4003f1253a18e2e313ab1bccd5d41d4be4ce7ed6407f8d1f97f6299bcadd042"
+        },
+        "samples": [
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 26882800.0,
+              "B/op": 351864.0,
+              "allocs/op": 528.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 26825600.0,
+              "B/op": 351214.0,
+              "allocs/op": 527.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 65176125.0,
+              "B/op": 3269020.0,
+              "allocs/op": 27082.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 31933184.0,
+              "B/op": 1792920.0,
+              "allocs/op": 527.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 27525683.0,
+              "B/op": 1793176.0,
+              "allocs/op": 527.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 175676491.0,
+              "B/op": 31998710.0,
+              "allocs/op": 261174.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 430709.0,
+              "retained-B": 162696.0,
+              "B/op": 250584.0,
+              "allocs/op": 2755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 458292.0,
+              "retained-B": 162696.0,
+              "B/op": 332824.0,
+              "allocs/op": 2761.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 503459.0,
+              "retained-B": 936.0,
+              "B/op": 643864.0,
+              "allocs/op": 2771.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 1967917.0,
+              "retained-B": 1603592.0,
+              "B/op": 2484376.0,
+              "allocs/op": 29755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 1965083.0,
+              "retained-B": 1603592.0,
+              "B/op": 3287496.0,
+              "allocs/op": 29760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 3851167.0,
+              "retained-B": 416.0,
+              "B/op": 6949080.0,
+              "allocs/op": 29778.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 28483892.0,
+              "B/op": 351867.0,
+              "allocs/op": 528.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 27464159.0,
+              "B/op": 351236.0,
+              "allocs/op": 527.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 66924842.0,
+              "B/op": 3268985.0,
+              "allocs/op": 27082.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 35045458.0,
+              "B/op": 1792926.0,
+              "allocs/op": 527.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 28112842.0,
+              "B/op": 1793192.0,
+              "allocs/op": 527.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 193416658.0,
+              "B/op": 31998697.0,
+              "allocs/op": 261174.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 420375.0,
+              "retained-B": 162696.0,
+              "B/op": 250584.0,
+              "allocs/op": 2755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 404167.0,
+              "retained-B": 162696.0,
+              "B/op": 332808.0,
+              "allocs/op": 2760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 515959.0,
+              "retained-B": 936.0,
+              "B/op": 643880.0,
+              "allocs/op": 2772.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 1961833.0,
+              "retained-B": 1603592.0,
+              "B/op": 2484376.0,
+              "allocs/op": 29755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 1994709.0,
+              "retained-B": 1603592.0,
+              "B/op": 3287496.0,
+              "allocs/op": 29760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 3890458.0,
+              "retained-B": 416.0,
+              "B/op": 6949080.0,
+              "allocs/op": 29778.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 27857925.0,
+              "B/op": 352132.0,
+              "allocs/op": 528.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 27203558.0,
+              "B/op": 351224.0,
+              "allocs/op": 527.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 78664367.0,
+              "B/op": 3268979.0,
+              "allocs/op": 27082.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 32868975.0,
+              "B/op": 1792926.0,
+              "allocs/op": 527.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 28013583.0,
+              "B/op": 1793179.0,
+              "allocs/op": 527.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 179227509.0,
+              "B/op": 31998694.0,
+              "allocs/op": 261174.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 418417.0,
+              "retained-B": 162696.0,
+              "B/op": 250584.0,
+              "allocs/op": 2755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 420084.0,
+              "retained-B": 162696.0,
+              "B/op": 332808.0,
+              "allocs/op": 2760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 521041.0,
+              "retained-B": 936.0,
+              "B/op": 643864.0,
+              "allocs/op": 2771.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 2033625.0,
+              "retained-B": 1603592.0,
+              "B/op": 2484376.0,
+              "allocs/op": 29755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 2034125.0,
+              "retained-B": 1603592.0,
+              "B/op": 3287496.0,
+              "allocs/op": 29760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 3914708.0,
+              "retained-B": 416.0,
+              "B/op": 6949080.0,
+              "allocs/op": 29778.0
+            }
+          }
+        ]
+      }
+    },
+    "orders": [
+      [
+        "hybrid",
+        "flat"
+      ],
+      [
+        "flat",
+        "hybrid"
+      ],
+      [
+        "hybrid",
+        "flat"
+      ]
+    ],
+    "filesystem": "apfs",
+    "raw_logs": {
+      "fixture-filesystem-disk.txt": "Filesystem   512-blocks      Used Available Capacity  Mounted on\n/dev/disk3s5  478724992 407599496  17634760    96%    /System/Volumes/Data\n",
+      "fixture-filesystem.txt": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>AESHardware</key>\n\t<true/>\n\t<key>APFSContainerFree</key>\n\t<integer>9028874240</integer>\n\t<key>APFSContainerReference</key>\n\t<string>disk3</string>\n\t<key>APFSContainerSize</key>\n\t<integer>245107195904</integer>\n\t<key>APFSPhysicalStores</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>APFSPhysicalStore</key>\n\t\t\t<string>disk0s2</string>\n\t\t</dict>\n\t</array>\n\t<key>APFSSnapshot</key>\n\t<false/>\n\t<key>APFSVolumeGroupID</key>\n\t<string>06525E93-14FC-4F0E-99DC-8217E24624E8</string>\n\t<key>Bootable</key>\n\t<true/>\n\t<key>BooterDeviceIdentifier</key>\n\t<string>disk3s2</string>\n\t<key>BusProtocol</key>\n\t<string>Apple Fabric</string>\n\t<key>CanBeMadeBootable</key>\n\t<false/>\n\t<key>CanBeMadeBootableRequiresDestroy</key>\n\t<false/>\n\t<key>CapacityInUse</key>\n\t<integer>208691064832</integer>\n\t<key>Content</key>\n\t<string>41504653-0000-11AA-AA11-00306543ECAC</string>\n\t<key>DeviceBlockSize</key>\n\t<integer>4096</integer>\n\t<key>DeviceIdentifier</key>\n\t<string>disk3s5</string>\n\t<key>DeviceNode</key>\n\t<string>/dev/disk3s5</string>\n\t<key>DeviceTreePath</key>\n\t<string>IODeviceTree:/arm-io@10F00000/ans@81600000/iop-ans-nub/AppleANS3CGv2Controller</string>\n\t<key>DiskUUID</key>\n\t<string>06525E93-14FC-4F0E-99DC-8217E24624E8</string>\n\t<key>Ejectable</key>\n\t<false/>\n\t<key>EjectableMediaAutomaticUnderSoftwareControl</key>\n\t<false/>\n\t<key>EjectableOnly</key>\n\t<false/>\n\t<key>Encryption</key>\n\t<true/>\n\t<key>EncryptionThisVolumeProper</key>\n\t<true/>\n\t<key>FileVault</key>\n\t<true/>\n\t<key>FilesystemName</key>\n\t<string>APFS</string>\n\t<key>FilesystemType</key>\n\t<string>apfs</string>\n\t<key>FilesystemUserVisibleName</key>\n\t<string>APFS</string>\n\t<key>FreeSpace</key>\n\t<integer>0</integer>\n\t<key>GlobalPermissionsEnabled</key>\n\t<true/>\n\t<key>IOKitSize</key>\n\t<integer>245107195904</integer>\n\t<key>IORegistryEntryName</key>\n\t<string>Data</string>\n\t<key>Internal</key>\n\t<true/>\n\t<key>Locked</key>\n\t<false/>\n\t<key>MediaName</key>\n\t<string></string>\n\t<key>MediaType</key>\n\t<string>Generic</string>\n\t<key>MountPoint</key>\n\t<string>/System/Volumes/Data</string>\n\t<key>OSInternalMedia</key>\n\t<false/>\n\t<key>ParentWholeDisk</key>\n\t<string>disk3</string>\n\t<key>PartitionMapPartition</key>\n\t<false/>\n\t<key>RAIDMaster</key>\n\t<false/>\n\t<key>RAIDSlice</key>\n\t<false/>\n\t<key>RecoveryDeviceIdentifier</key>\n\t<string>disk3s3</string>\n\t<key>Removable</key>\n\t<false/>\n\t<key>RemovableMedia</key>\n\t<false/>\n\t<key>RemovableMediaOrExternalDevice</key>\n\t<false/>\n\t<key>SMARTDeviceSpecificKeysMayVaryNotGuaranteed</key>\n\t<dict>\n\t\t<key>AVAILABLE_SPARE</key>\n\t\t<integer>100</integer>\n\t\t<key>AVAILABLE_SPARE_THRESHOLD</key>\n\t\t<integer>99</integer>\n\t\t<key>CONTROLLER_BUSY_TIME_0</key>\n\t\t<integer>0</integer>\n\t\t<key>CONTROLLER_BUSY_TIME_1</key>\n\t\t<integer>0</integer>\n\t\t<key>DATA_UNITS_READ_0</key>\n\t\t<integer>18544261</integer>\n\t\t<key>DATA_UNITS_READ_1</key>\n\t\t<integer>0</integer>\n\t\t<key>DATA_UNITS_WRITTEN_0</key>\n\t\t<integer>16855450</integer>\n\t\t<key>DATA_UNITS_WRITTEN_1</key>\n\t\t<integer>0</integer>\n\t\t<key>HOST_READ_COMMANDS_0</key>\n\t\t<integer>484377456</integer>\n\t\t<key>HOST_READ_COMMANDS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>HOST_WRITE_COMMANDS_0</key>\n\t\t<integer>366927414</integer>\n\t\t<key>HOST_WRITE_COMMANDS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>MEDIA_ERRORS_0</key>\n\t\t<integer>0</integer>\n\t\t<key>MEDIA_ERRORS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>NUM_ERROR_INFO_LOG_ENTRIES_0</key>\n\t\t<integer>0</integer>\n\t\t<key>NUM_ERROR_INFO_LOG_ENTRIES_1</key>\n\t\t<integer>0</integer>\n\t\t<key>PERCENTAGE_USED</key>\n\t\t<integer>0</integer>\n\t\t<key>POWER_CYCLES_0</key>\n\t\t<integer>152</integer>\n\t\t<key>POWER_CYCLES_1</key>\n\t\t<integer>0</integer>\n\t\t<key>POWER_ON_HOURS_0</key>\n\t\t<integer>297</integer>\n\t\t<key>POWER_ON_HOURS_1</key>\n\t\t<integer>0</integer>\n\t\t<key>TEMPERATURE</key>\n\t\t<integer>308</integer>\n\t\t<key>UNSAFE_SHUTDOWNS_0</key>\n\t\t<integer>3</integer>\n\t\t<key>UNSAFE_SHUTDOWNS_1</key>\n\t\t<integer>0</integer>\n\t</dict>\n\t<key>SMARTStatus</key>\n\t<string>Verified</string>\n\t<key>Sealed</key>\n\t<string>No</string>\n\t<key>Size</key>\n\t<integer>245107195904</integer>\n\t<key>SolidState</key>\n\t<true/>\n\t<key>SupportsGlobalPermissionsDisable</key>\n\t<true/>\n\t<key>SystemImage</key>\n\t<false/>\n\t<key>TotalSize</key>\n\t<integer>245107195904</integer>\n\t<key>VolumeAllocationBlockSize</key>\n\t<integer>4096</integer>\n\t<key>VolumeName</key>\n\t<string>Data</string>\n\t<key>VolumeSize</key>\n\t<integer>0</integer>\n\t<key>VolumeUUID</key>\n\t<string>06525E93-14FC-4F0E-99DC-8217E24624E8</string>\n\t<key>WholeDisk</key>\n\t<false/>\n\t<key>Writable</key>\n\t<true/>\n\t<key>WritableMedia</key>\n\t<true/>\n\t<key>WritableVolume</key>\n\t<true/>\n</dict>\n</plist>\n",
+      "flat/0-memory.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M4\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t    430709 ns/op\t    162696 retained-B\t  250584 B/op\t    2755 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t    458292 ns/op\t    162696 retained-B\t  332824 B/op\t    2761 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t    503459 ns/op\t       936.0 retained-B\t  643864 B/op\t    2771 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t   1967917 ns/op\t   1603592 retained-B\t 2484376 B/op\t   29755 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t   1965083 ns/op\t   1603592 retained-B\t 3287496 B/op\t   29760 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t   3851167 ns/op\t       416.0 retained-B\t 6949080 B/op\t   29778 allocs/op\nPASS\n",
+      "flat/0-snapshot.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t  26882800 ns/op\t  351864 B/op\t     528 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t  26825600 ns/op\t  351214 B/op\t     527 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  65176125 ns/op\t 3269020 B/op\t   27082 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t  31933184 ns/op\t 1792920 B/op\t     527 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t  27525683 ns/op\t 1793176 B/op\t     527 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 175676491 ns/op\t31998710 B/op\t  261174 allocs/op\nPASS\n",
+      "flat/1-memory.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M4\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t    420375 ns/op\t    162696 retained-B\t  250584 B/op\t    2755 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t    404167 ns/op\t    162696 retained-B\t  332808 B/op\t    2760 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t    515959 ns/op\t       936.0 retained-B\t  643880 B/op\t    2772 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t   1961833 ns/op\t   1603592 retained-B\t 2484376 B/op\t   29755 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t   1994709 ns/op\t   1603592 retained-B\t 3287496 B/op\t   29760 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t   3890458 ns/op\t       416.0 retained-B\t 6949080 B/op\t   29778 allocs/op\nPASS\n",
+      "flat/1-snapshot.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t  28483892 ns/op\t  351867 B/op\t     528 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t  27464159 ns/op\t  351236 B/op\t     527 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  66924842 ns/op\t 3268985 B/op\t   27082 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t  35045458 ns/op\t 1792926 B/op\t     527 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t  28112842 ns/op\t 1793192 B/op\t     527 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 193416658 ns/op\t31998697 B/op\t  261174 allocs/op\nPASS\n",
+      "flat/2-memory.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M4\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t    418417 ns/op\t    162696 retained-B\t  250584 B/op\t    2755 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t    420084 ns/op\t    162696 retained-B\t  332808 B/op\t    2760 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t    521041 ns/op\t       936.0 retained-B\t  643864 B/op\t    2771 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t   2033625 ns/op\t   1603592 retained-B\t 2484376 B/op\t   29755 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t   2034125 ns/op\t   1603592 retained-B\t 3287496 B/op\t   29760 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t   3914708 ns/op\t       416.0 retained-B\t 6949080 B/op\t   29778 allocs/op\nPASS\n",
+      "flat/2-snapshot.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t  27857925 ns/op\t  352132 B/op\t     528 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t  27203558 ns/op\t  351224 B/op\t     527 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  78664367 ns/op\t 3268979 B/op\t   27082 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t  32868975 ns/op\t 1792926 B/op\t     527 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t  28013583 ns/op\t 1793179 B/op\t     527 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 179227509 ns/op\t31998694 B/op\t  261174 allocs/op\nPASS\n",
+      "flat/build-memory.txt": "",
+      "flat/build-snapshot.txt": "",
+      "flat/tests.txt": "ok  \tgithub.com/lydakis/errand/internal/manifest\t0.084s\n",
+      "hybrid/0-memory.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M4\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t   8500125 ns/op\t    385192 retained-B\t  473584 B/op\t    2776 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t   1225459 ns/op\t    304680 retained-B\t  475272 B/op\t    2790 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t   3166834 ns/op\t      1560 retained-B\t 2167816 B/op\t    9048 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t   8829417 ns/op\t   3842960 retained-B\t 4724768 B/op\t   29807 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t   7704584 ns/op\t   3043000 retained-B\t 4727904 B/op\t   29827 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t  22420417 ns/op\t       560.0 retained-B\t28460448 B/op\t  122482 allocs/op\nPASS\n",
+      "hybrid/0-snapshot.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t  30629167 ns/op\t  272016 B/op\t     539 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t  26276842 ns/op\t  273056 B/op\t     541 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  65039800 ns/op\t 3490689 B/op\t   27098 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t  34685800 ns/op\t  992435 B/op\t     538 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t  27099433 ns/op\t  992515 B/op\t     538 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 180912658 ns/op\t34239668 B/op\t  261226 allocs/op\nPASS\n",
+      "hybrid/1-memory.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M4\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t    656542 ns/op\t    385192 retained-B\t  473584 B/op\t    2776 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t    614625 ns/op\t    304920 retained-B\t  475528 B/op\t    2790 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t   1362041 ns/op\t      1080 retained-B\t 2167336 B/op\t    9047 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t   4094917 ns/op\t   3842960 retained-B\t 4724768 B/op\t   29807 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t   3998958 ns/op\t   3043000 retained-B\t 4727904 B/op\t   29827 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t  15624958 ns/op\t       560.0 retained-B\t28460448 B/op\t  122482 allocs/op\nPASS\n",
+      "hybrid/1-snapshot.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t  28078683 ns/op\t  271539 B/op\t     538 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t  27243650 ns/op\t  272675 B/op\t     540 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  67020400 ns/op\t 3492001 B/op\t   27100 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t  31545000 ns/op\t  992444 B/op\t     538 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t  27864475 ns/op\t  992691 B/op\t     538 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 181415558 ns/op\t34239771 B/op\t  261226 allocs/op\nPASS\n",
+      "hybrid/2-memory.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M4\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t    645708 ns/op\t    385080 retained-B\t  473472 B/op\t    2775 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t    612041 ns/op\t    304920 retained-B\t  475512 B/op\t    2789 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t   1305750 ns/op\t      1080 retained-B\t 2167336 B/op\t    9047 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t   4022833 ns/op\t   3843440 retained-B\t 4725248 B/op\t   29808 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t   3988750 ns/op\t   3043480 retained-B\t 4728144 B/op\t   29826 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t  15237833 ns/op\t       560.0 retained-B\t28460208 B/op\t  122480 allocs/op\nPASS\n",
+      "hybrid/2-snapshot.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Apple M4\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t  33262842 ns/op\t  272534 B/op\t     539 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t  27212208 ns/op\t  271628 B/op\t     538 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  66988041 ns/op\t 3490712 B/op\t   27098 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t  29698525 ns/op\t  992435 B/op\t     538 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t  28077275 ns/op\t  992694 B/op\t     538 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 182454625 ns/op\t34239739 B/op\t  261226 allocs/op\nPASS\n",
+      "hybrid/build-memory.txt": "",
+      "hybrid/build-snapshot.txt": "",
+      "hybrid/tests.txt": "ok  \tgithub.com/lydakis/errand/internal/manifest\t0.132s\n"
+    }
+  },
+  "Cabal (Btrfs)": {
+    "scope": "Corrected hybrid vs flat, identical watch-cache and reconstruction fixes; native preparation and separate GC diagnostics.",
+    "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+    "script": "import hashlib, importlib.util, json, os, platform, re\nfrom pathlib import Path\n\nroot=Path.cwd()\nspec=importlib.util.spec_from_file_location('bench',root/'scripts/benchmark_snapshot_integration.py')\nbench=importlib.util.module_from_spec(spec); spec.loader.exec_module(bench)\nout=root.parent/'ablation-results'; out.mkdir(exist_ok=False)\nfixtures=out/'fixtures'; fixtures.mkdir()\nenv=dict(os.environ,GOMAXPROCS='2',CGO_ENABLED='0',TMPDIR=str(fixtures))\nreport={'scope':'Corrected hybrid vs flat, identical watch-cache and reconstruction fixes; native preparation and separate GC diagnostics.', 'platform':platform.platform(),'script':Path(__file__).read_text(),'versions':{},'orders':[], 'filesystem':bench.filesystem(fixtures,env,out,'fixture-filesystem')}\ncases={'snapshot':('./internal/snapshot','^BenchmarkWatchPreparation$','5x',6),'memory':('./internal/manifest','^BenchmarkSnapshotRetention$','1x',6)}\nfor name,source in [('hybrid',root.parent/'hybrid'),('flat',root)]:\n directory=out/name; directory.mkdir()\n bench.run(['go','test','./internal/manifest'],source,env,directory/'tests.txt')\n files=sorted([*source.rglob('*.go'),source/'go.mod',source/'go.sum'])\n digest=hashlib.sha256()\n for p in files: digest.update(str(p.relative_to(source)).encode()+b'\\0'+p.read_bytes()+b'\\0')\n report['versions'][name]={'source_sha256':digest.hexdigest(),'binaries':{},'samples':[]}\n for key,(package,_,_,_) in cases.items():\n  binary=directory/(key+'.test')\n  bench.run(['go','test','-c','-o',str(binary),package],source,env,directory/('build-'+key+'.txt'))\n  report['versions'][name]['binaries'][key]=hashlib.sha256(binary.read_bytes()).hexdigest()\nfor number in range(3):\n order=['hybrid','flat'] if number%2==0 else ['flat','hybrid']; report['orders'].append(order)\n for name in order:\n  directory=out/name; source=root if name=='flat' else root.parent/'hybrid'\n  for key,(_,pattern,duration,count) in cases.items():\n   raw=bench.run([str(directory/(key+'.test')),'-test.v','-test.run=^$','-test.bench='+pattern,'-test.benchtime='+duration,'-test.benchmem','-test.timeout=10m'],source,env,directory/(str(number)+'-'+key+'.txt'))\n   samples=[]\n   for line in raw.splitlines():\n    m=re.match(r'^(Benchmark\\S+)-\\d+\\s+(\\d+)\\s+(.+)$',line)\n    if m:\n     metrics=m[3].split(); samples.append({'name':m[1],'iterations':int(m[2]),'round':number,'metrics':{metrics[i+1]:float(metrics[i]) for i in range(0,len(metrics),2)}})\n   if len(samples)!=count: raise RuntimeError((key,len(samples),count))\n   report['versions'][name]['samples']+=samples\n  (out/'report.json').write_text(json.dumps(report,indent=2)+'\\n')\n  print(f'Round {number+1}/3: {name} complete',flush=True)\nfor name in report['versions']:\n for key in cases: (out/name/(key+'.test')).unlink()\n",
+    "versions": {
+      "hybrid": {
+        "source_sha256": "a7b558c71204e1e4fc2b6fe3db6bc1eeb7a17a3ea520e4968af593b98271b607",
+        "binaries": {
+          "snapshot": "6bd7fddb9fd238edc47a71781fb7f203e801d0099bfe9caa6dd2b2ada24e421a",
+          "memory": "f8e8d47a16afd1dfc7e7b5f7f0f848b1637d2893b9fcd2cad8993cbe118711c4"
+        },
+        "samples": [
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 4351191.0,
+              "B/op": 289529.0,
+              "allocs/op": 680.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 4314843.0,
+              "B/op": 288944.0,
+              "allocs/op": 679.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 27238812.0,
+              "B/op": 3530510.0,
+              "allocs/op": 27380.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5099868.0,
+              "B/op": 1009155.0,
+              "allocs/op": 678.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5308486.0,
+              "B/op": 1009622.0,
+              "allocs/op": 678.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 198377756.0,
+              "B/op": 34279540.0,
+              "allocs/op": 261507.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 2720303.0,
+              "retained-B": 385192.0,
+              "B/op": 473584.0,
+              "allocs/op": 2776.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 3439639.0,
+              "retained-B": 305160.0,
+              "B/op": 475752.0,
+              "allocs/op": 2791.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5603556.0,
+              "retained-B": 1080.0,
+              "B/op": 2167336.0,
+              "allocs/op": 9047.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 17280661.0,
+              "retained-B": 3843072.0,
+              "B/op": 4724880.0,
+              "allocs/op": 29808.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 16373835.0,
+              "retained-B": 3043480.0,
+              "B/op": 4728144.0,
+              "allocs/op": 29826.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 79027048.0,
+              "retained-B": 1040.0,
+              "B/op": 28460928.0,
+              "allocs/op": 122483.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 4316486.0,
+              "B/op": 289756.0,
+              "allocs/op": 681.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 4290636.0,
+              "B/op": 288976.0,
+              "allocs/op": 678.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 27064865.0,
+              "B/op": 3530411.0,
+              "allocs/op": 27379.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 5840913.0,
+              "B/op": 1009347.0,
+              "allocs/op": 678.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 5409379.0,
+              "B/op": 1009619.0,
+              "allocs/op": 678.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 200567839.0,
+              "B/op": 34279580.0,
+              "allocs/op": 261508.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 2138830.0,
+              "retained-B": 385080.0,
+              "B/op": 473472.0,
+              "allocs/op": 2775.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 2020805.0,
+              "retained-B": 305160.0,
+              "B/op": 475752.0,
+              "allocs/op": 2791.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 5907647.0,
+              "retained-B": 1080.0,
+              "B/op": 2167352.0,
+              "allocs/op": 9048.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 21791823.0,
+              "retained-B": 3843072.0,
+              "B/op": 4724880.0,
+              "allocs/op": 29808.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 22494759.0,
+              "retained-B": 3043000.0,
+              "B/op": 4727904.0,
+              "allocs/op": 29827.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 90499222.0,
+              "retained-B": 560.0,
+              "B/op": 28460208.0,
+              "allocs/op": 122480.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 4384498.0,
+              "B/op": 288646.0,
+              "allocs/op": 678.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 4240116.0,
+              "B/op": 288476.0,
+              "allocs/op": 678.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 27110509.0,
+              "B/op": 3525444.0,
+              "allocs/op": 27378.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 5467974.0,
+              "B/op": 1009340.0,
+              "allocs/op": 678.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 5240154.0,
+              "B/op": 1009491.0,
+              "allocs/op": 678.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 201552886.0,
+              "B/op": 34283030.0,
+              "allocs/op": 261509.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 2863191.0,
+              "retained-B": 385080.0,
+              "B/op": 473472.0,
+              "allocs/op": 2775.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 2650340.0,
+              "retained-B": 304920.0,
+              "B/op": 475512.0,
+              "allocs/op": 2789.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 6396596.0,
+              "retained-B": 1560.0,
+              "B/op": 2167816.0,
+              "allocs/op": 9048.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 26717710.0,
+              "retained-B": 3842960.0,
+              "B/op": 4724768.0,
+              "allocs/op": 29807.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 24514976.0,
+              "retained-B": 3043000.0,
+              "B/op": 4727680.0,
+              "allocs/op": 29826.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 80560369.0,
+              "retained-B": 1040.0,
+              "B/op": 28460688.0,
+              "allocs/op": 122481.0
+            }
+          }
+        ]
+      },
+      "flat": {
+        "source_sha256": "1b4b3f60c54e4ef3ead32f8de78142865adc4d1d66cd34d4a998db7abf64bb5e",
+        "binaries": {
+          "snapshot": "10aaf08540bcacad9f196bcf9ec8448738058f4fa4d4925f49a1c549a468720b",
+          "memory": "f5d8ef95734f77914e2011b4a3253edbb019ef1e29d0f390c5c7019e10b9eb96"
+        },
+        "samples": [
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 4284374.0,
+              "B/op": 368622.0,
+              "allocs/op": 668.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 4261129.0,
+              "B/op": 369668.0,
+              "allocs/op": 669.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 25320144.0,
+              "B/op": 3310283.0,
+              "allocs/op": 27363.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5985863.0,
+              "B/op": 1809825.0,
+              "allocs/op": 667.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5610028.0,
+              "B/op": 1810107.0,
+              "allocs/op": 667.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 197754530.0,
+              "B/op": 32045131.0,
+              "allocs/op": 261457.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 1013215.0,
+              "retained-B": 162696.0,
+              "B/op": 250584.0,
+              "allocs/op": 2755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 929553.0,
+              "retained-B": 162696.0,
+              "B/op": 332808.0,
+              "allocs/op": 2760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 1156899.0,
+              "retained-B": 936.0,
+              "B/op": 643864.0,
+              "allocs/op": 2771.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5558438.0,
+              "retained-B": 1603592.0,
+              "B/op": 2484376.0,
+              "allocs/op": 29755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5588226.0,
+              "retained-B": 1603592.0,
+              "B/op": 3287496.0,
+              "allocs/op": 29760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 13286898.0,
+              "retained-B": 416.0,
+              "B/op": 6949192.0,
+              "allocs/op": 29779.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 4285210.0,
+              "B/op": 368945.0,
+              "allocs/op": 669.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 4319074.0,
+              "B/op": 368190.0,
+              "allocs/op": 667.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 25231932.0,
+              "B/op": 3308585.0,
+              "allocs/op": 27362.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 5758483.0,
+              "B/op": 1809825.0,
+              "allocs/op": 667.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 5849143.0,
+              "B/op": 1810036.0,
+              "allocs/op": 667.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 194751192.0,
+              "B/op": 32041788.0,
+              "allocs/op": 261457.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 1035339.0,
+              "retained-B": 162696.0,
+              "B/op": 250584.0,
+              "allocs/op": 2755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 926666.0,
+              "retained-B": 162696.0,
+              "B/op": 332808.0,
+              "allocs/op": 2760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 1174264.0,
+              "retained-B": 936.0,
+              "B/op": 643864.0,
+              "allocs/op": 2771.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 5674487.0,
+              "retained-B": 1603592.0,
+              "B/op": 2484376.0,
+              "allocs/op": 29755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 6034946.0,
+              "retained-B": 1603592.0,
+              "B/op": 3287496.0,
+              "allocs/op": 29760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 13102346.0,
+              "retained-B": 416.0,
+              "B/op": 6949080.0,
+              "allocs/op": 29778.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 4241538.0,
+              "B/op": 368052.0,
+              "allocs/op": 667.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 4219346.0,
+              "B/op": 368584.0,
+              "allocs/op": 667.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 25279637.0,
+              "B/op": 3307064.0,
+              "allocs/op": 27363.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 5333474.0,
+              "B/op": 1809572.0,
+              "allocs/op": 667.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 5309860.0,
+              "B/op": 1810107.0,
+              "allocs/op": 667.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 200297849.0,
+              "B/op": 32040148.0,
+              "allocs/op": 261456.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/prepared",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 959849.0,
+              "retained-B": 162712.0,
+              "B/op": 250600.0,
+              "allocs/op": 2756.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/updated",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 880582.0,
+              "retained-B": 162696.0,
+              "B/op": 332808.0,
+              "allocs/op": 2760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/1000/one-survivor",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 1658741.0,
+              "retained-B": 936.0,
+              "B/op": 643864.0,
+              "allocs/op": 2771.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/prepared",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 5844390.0,
+              "retained-B": 1603592.0,
+              "B/op": 2484376.0,
+              "allocs/op": 29755.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/updated",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 7078874.0,
+              "retained-B": 1603592.0,
+              "B/op": 3287496.0,
+              "allocs/op": 29760.0
+            }
+          },
+          {
+            "name": "BenchmarkSnapshotRetention/10000/one-survivor",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 16642121.0,
+              "retained-B": 416.0,
+              "B/op": 6949080.0,
+              "allocs/op": 29778.0
+            }
+          }
+        ]
+      }
+    },
+    "orders": [
+      [
+        "hybrid",
+        "flat"
+      ],
+      [
+        "flat",
+        "hybrid"
+      ],
+      [
+        "hybrid",
+        "flat"
+      ]
+    ],
+    "filesystem": "btrfs",
+    "raw_logs": {
+      "fixture-filesystem.txt": "btrfs\n",
+      "flat/0-memory.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t   1013215 ns/op\t    162696 retained-B\t  250584 B/op\t    2755 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t    929553 ns/op\t    162696 retained-B\t  332808 B/op\t    2760 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t   1156899 ns/op\t       936.0 retained-B\t  643864 B/op\t    2771 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t   5558438 ns/op\t   1603592 retained-B\t 2484376 B/op\t   29755 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t   5588226 ns/op\t   1603592 retained-B\t 3287496 B/op\t   29760 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t  13286898 ns/op\t       416.0 retained-B\t 6949192 B/op\t   29779 allocs/op\nPASS\n",
+      "flat/0-snapshot.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t   4284374 ns/op\t  368622 B/op\t     668 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t   4261129 ns/op\t  369668 B/op\t     669 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  25320144 ns/op\t 3310283 B/op\t   27363 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t   5985863 ns/op\t 1809825 B/op\t     667 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t   5610028 ns/op\t 1810107 B/op\t     667 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 197754530 ns/op\t32045131 B/op\t  261457 allocs/op\nPASS\n",
+      "flat/1-memory.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t   1035339 ns/op\t    162696 retained-B\t  250584 B/op\t    2755 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t    926666 ns/op\t    162696 retained-B\t  332808 B/op\t    2760 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t   1174264 ns/op\t       936.0 retained-B\t  643864 B/op\t    2771 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t   5674487 ns/op\t   1603592 retained-B\t 2484376 B/op\t   29755 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t   6034946 ns/op\t   1603592 retained-B\t 3287496 B/op\t   29760 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t  13102346 ns/op\t       416.0 retained-B\t 6949080 B/op\t   29778 allocs/op\nPASS\n",
+      "flat/1-snapshot.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t   4285210 ns/op\t  368945 B/op\t     669 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t   4319074 ns/op\t  368190 B/op\t     667 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  25231932 ns/op\t 3308585 B/op\t   27362 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t   5758483 ns/op\t 1809825 B/op\t     667 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t   5849143 ns/op\t 1810036 B/op\t     667 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 194751192 ns/op\t32041788 B/op\t  261457 allocs/op\nPASS\n",
+      "flat/2-memory.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t    959849 ns/op\t    162712 retained-B\t  250600 B/op\t    2756 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t    880582 ns/op\t    162696 retained-B\t  332808 B/op\t    2760 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t   1658741 ns/op\t       936.0 retained-B\t  643864 B/op\t    2771 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t   5844390 ns/op\t   1603592 retained-B\t 2484376 B/op\t   29755 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t   7078874 ns/op\t   1603592 retained-B\t 3287496 B/op\t   29760 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t  16642121 ns/op\t       416.0 retained-B\t 6949080 B/op\t   29778 allocs/op\nPASS\n",
+      "flat/2-snapshot.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t   4241538 ns/op\t  368052 B/op\t     667 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t   4219346 ns/op\t  368584 B/op\t     667 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  25279637 ns/op\t 3307064 B/op\t   27363 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t   5333474 ns/op\t 1809572 B/op\t     667 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t   5309860 ns/op\t 1810107 B/op\t     667 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 200297849 ns/op\t32040148 B/op\t  261456 allocs/op\nPASS\n",
+      "flat/build-memory.txt": "",
+      "flat/build-snapshot.txt": "",
+      "flat/tests.txt": "ok  \tgithub.com/lydakis/errand/internal/manifest\t0.281s\n",
+      "hybrid/0-memory.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t   2720303 ns/op\t    385192 retained-B\t  473584 B/op\t    2776 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t   3439639 ns/op\t    305160 retained-B\t  475752 B/op\t    2791 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t   5603556 ns/op\t      1080 retained-B\t 2167336 B/op\t    9047 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t  17280661 ns/op\t   3843072 retained-B\t 4724880 B/op\t   29808 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t  16373835 ns/op\t   3043480 retained-B\t 4728144 B/op\t   29826 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t  79027048 ns/op\t      1040 retained-B\t28460928 B/op\t  122483 allocs/op\nPASS\n",
+      "hybrid/0-snapshot.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t   4351191 ns/op\t  289529 B/op\t     680 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t   4314843 ns/op\t  288944 B/op\t     679 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  27238812 ns/op\t 3530510 B/op\t   27380 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t   5099868 ns/op\t 1009155 B/op\t     678 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t   5308486 ns/op\t 1009622 B/op\t     678 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 198377756 ns/op\t34279540 B/op\t  261507 allocs/op\nPASS\n",
+      "hybrid/1-memory.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t   2138830 ns/op\t    385080 retained-B\t  473472 B/op\t    2775 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t   2020805 ns/op\t    305160 retained-B\t  475752 B/op\t    2791 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t   5907647 ns/op\t      1080 retained-B\t 2167352 B/op\t    9048 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t  21791823 ns/op\t   3843072 retained-B\t 4724880 B/op\t   29808 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t  22494759 ns/op\t   3043000 retained-B\t 4727904 B/op\t   29827 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t  90499222 ns/op\t       560.0 retained-B\t28460208 B/op\t  122480 allocs/op\nPASS\n",
+      "hybrid/1-snapshot.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t   4316486 ns/op\t  289756 B/op\t     681 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t   4290636 ns/op\t  288976 B/op\t     678 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  27064865 ns/op\t 3530411 B/op\t   27379 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t   5840913 ns/op\t 1009347 B/op\t     678 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t   5409379 ns/op\t 1009619 B/op\t     678 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 200567839 ns/op\t34279580 B/op\t  261508 allocs/op\nPASS\n",
+      "hybrid/2-memory.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkSnapshotRetention\nBenchmarkSnapshotRetention/1000/prepared\nBenchmarkSnapshotRetention/1000/prepared-2         \t       1\t   2863191 ns/op\t    385080 retained-B\t  473472 B/op\t    2775 allocs/op\nBenchmarkSnapshotRetention/1000/updated\nBenchmarkSnapshotRetention/1000/updated-2          \t       1\t   2650340 ns/op\t    304920 retained-B\t  475512 B/op\t    2789 allocs/op\nBenchmarkSnapshotRetention/1000/one-survivor\nBenchmarkSnapshotRetention/1000/one-survivor-2     \t       1\t   6396596 ns/op\t      1560 retained-B\t 2167816 B/op\t    9048 allocs/op\nBenchmarkSnapshotRetention/10000/prepared\nBenchmarkSnapshotRetention/10000/prepared-2        \t       1\t  26717710 ns/op\t   3842960 retained-B\t 4724768 B/op\t   29807 allocs/op\nBenchmarkSnapshotRetention/10000/updated\nBenchmarkSnapshotRetention/10000/updated-2         \t       1\t  24514976 ns/op\t   3043000 retained-B\t 4727680 B/op\t   29826 allocs/op\nBenchmarkSnapshotRetention/10000/one-survivor\nBenchmarkSnapshotRetention/10000/one-survivor-2    \t       1\t  80560369 ns/op\t      1040 retained-B\t28460688 B/op\t  122481 allocs/op\nPASS\n",
+      "hybrid/2-snapshot.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/internal/snapshot\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkWatchPreparation\nBenchmarkWatchPreparation/1000/first-edit\nBenchmarkWatchPreparation/1000/first-edit-2         \t       5\t   4384498 ns/op\t  288646 B/op\t     678 allocs/op\nBenchmarkWatchPreparation/1000/retained-edit\nBenchmarkWatchPreparation/1000/retained-edit-2      \t       5\t   4240116 ns/op\t  288476 B/op\t     678 allocs/op\nBenchmarkWatchPreparation/1000/reconcile\nBenchmarkWatchPreparation/1000/reconcile-2          \t       5\t  27110509 ns/op\t 3525444 B/op\t   27378 allocs/op\nBenchmarkWatchPreparation/10000/first-edit\nBenchmarkWatchPreparation/10000/first-edit-2        \t       5\t   5467974 ns/op\t 1009340 B/op\t     678 allocs/op\nBenchmarkWatchPreparation/10000/retained-edit\nBenchmarkWatchPreparation/10000/retained-edit-2     \t       5\t   5240154 ns/op\t 1009491 B/op\t     678 allocs/op\nBenchmarkWatchPreparation/10000/reconcile\nBenchmarkWatchPreparation/10000/reconcile-2         \t       5\t 201552886 ns/op\t34283030 B/op\t  261509 allocs/op\nPASS\n",
+      "hybrid/build-memory.txt": "",
+      "hybrid/build-snapshot.txt": "",
+      "hybrid/tests.txt": "ok  \tgithub.com/lydakis/errand/internal/manifest\t0.405s\n"
+    }
+  }
+}

@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
@@ -498,41 +499,30 @@ func workspacePathsForBaselineContext(
 }
 
 func workspaceDelta(ctx context.Context, baseline, current proto.Manifest, maxBytes int64) (proto.ChangeBundle, error) {
-	if err := ctx.Err(); err != nil {
-		return proto.ChangeBundle{}, err
-	}
-	before, err := manifestEntriesByPath(ctx, baseline)
+	before, err := manifest.New(ctx, baseline)
 	if err != nil {
 		return proto.ChangeBundle{}, err
 	}
-	after, err := manifestEntriesByPath(ctx, current)
+	after, err := manifest.New(ctx, current)
 	if err != nil {
 		return proto.ChangeBundle{}, err
 	}
-	changed := make([]string, 0)
-	for name, entry := range before {
-		if err := ctx.Err(); err != nil {
-			return proto.ChangeBundle{}, err
-		}
-		if got, ok := after[name]; !ok || got != entry {
-			changed = append(changed, name)
-		}
+	return workspaceSnapshotDelta(ctx, before, after, maxBytes)
+}
+
+func workspaceSnapshotDelta(ctx context.Context, before, after *manifest.Snapshot, maxBytes int64) (proto.ChangeBundle, error) {
+	edits, err := before.Diff(ctx, after)
+	if err != nil {
+		return proto.ChangeBundle{}, err
 	}
-	for name, entry := range after {
-		if err := ctx.Err(); err != nil {
-			return proto.ChangeBundle{}, err
-		}
-		if got, ok := before[name]; !ok || got != entry {
-			if _, existed := before[name]; !existed {
-				changed = append(changed, name)
-			}
-		}
+	changed := make([]string, 0, len(edits))
+	for _, edit := range edits {
+		changed = append(changed, edit.Entry.Path)
 	}
-	sort.Strings(changed)
 	metadataOnly := make(map[string]struct{})
 	for _, candidate := range changed {
-		beforeEntry, beforeOK := before[candidate]
-		afterEntry, afterOK := after[candidate]
+		beforeEntry, beforeOK := before.Lookup(candidate)
+		afterEntry, afterOK := after.Lookup(candidate)
 		if !beforeOK || !afterOK || beforeEntry.Type != proto.EntryDir || afterEntry.Type != proto.EntryDir {
 			continue
 		}
@@ -566,9 +556,11 @@ func workspaceDelta(ctx context.Context, baseline, current proto.Manifest, maxBy
 		return proto.ChangeBundle{}, fmt.Errorf("%w: changes exceed %d paths", ErrEntryLimitExceeded, MaxChangeEntries)
 	}
 
-	bundle := proto.ChangeBundle{
-		V: BundleVersion, BaselineRoot: baseline.RootHash(), Paths: roots,
+	rootHash, err := before.RootHash(ctx)
+	if err != nil {
+		return proto.ChangeBundle{}, err
 	}
+	bundle := proto.ChangeBundle{V: BundleVersion, BaselineRoot: rootHash, Paths: roots}
 	baseSelected := make(map[string]proto.ManifestEntry)
 	remoteSelected := make(map[string]proto.ManifestEntry)
 	for _, root := range roots {
@@ -577,16 +569,22 @@ func workspaceDelta(ctx context.Context, baseline, current proto.Manifest, maxBy
 		}
 		if _, metadata := metadataOnly[root]; metadata {
 			bundle.MetadataPaths = append(bundle.MetadataPaths, root)
-			baseSelected[root] = before[root]
-			remoteSelected[root] = after[root]
+			baseSelected[root], _ = before.Lookup(root)
+			remoteSelected[root], _ = after.Lookup(root)
 		} else {
-			original := subtreeManifest(baseline, root)
-			final := subtreeManifest(current, root)
-			selectManifestEntries(baseSelected, before, original)
-			selectManifestEntries(remoteSelected, after, final)
+			if err := selectSnapshotSubtree(ctx, baseSelected, before, root); err != nil {
+				return proto.ChangeBundle{}, err
+			}
+			if err := selectSnapshotSubtree(ctx, remoteSelected, after, root); err != nil {
+				return proto.ChangeBundle{}, err
+			}
 		}
-		selectManifestAncestors(baseSelected, before, root)
-		selectManifestAncestors(remoteSelected, after, root)
+		if err := selectSnapshotAncestors(ctx, baseSelected, before, root); err != nil {
+			return proto.ChangeBundle{}, err
+		}
+		if err := selectSnapshotAncestors(ctx, remoteSelected, after, root); err != nil {
+			return proto.ChangeBundle{}, err
+		}
 	}
 	bundle.BaseManifest, bundle.Bytes, err = selectedManifest(ctx, baseSelected, maxBytes, bundle.Bytes)
 	if err != nil {
@@ -599,31 +597,27 @@ func workspaceDelta(ctx context.Context, baseline, current proto.Manifest, maxBy
 	return bundle, nil
 }
 
-func selectManifestAncestors(
-	selected map[string]proto.ManifestEntry,
-	all map[string]proto.ManifestEntry,
-	entryPath string,
-) {
+func selectSnapshotAncestors(ctx context.Context, selected map[string]proto.ManifestEntry, all *manifest.Snapshot, entryPath string) error {
 	for parent := path.Dir(entryPath); parent != "."; parent = path.Dir(parent) {
-		if ancestor, ok := all[parent]; ok {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if _, ok := selected[parent]; ok {
+			continue
+		}
+		if ancestor, ok := all.Lookup(parent); ok {
 			selected[parent] = ancestor
 		}
 	}
+	return nil
 }
-
-func selectManifestEntries(
-	selected map[string]proto.ManifestEntry,
-	all map[string]proto.ManifestEntry,
-	subtree proto.Manifest,
-) {
-	for _, entry := range subtree.Entries {
-		selected[entry.Path] = entry
-		for parent := path.Dir(entry.Path); parent != "."; parent = path.Dir(parent) {
-			if ancestor, ok := all[parent]; ok {
-				selected[parent] = ancestor
-			}
-		}
-	}
+func selectSnapshotSubtree(ctx context.Context, selected map[string]proto.ManifestEntry, all *manifest.Snapshot, root string) error {
+	// Explicit ancestors within the subtree are visited here; ancestors above
+	// the root are selected once by workspaceSnapshotDelta.
+	return all.Subtree(ctx, root, func(e proto.ManifestEntry) bool {
+		selected[e.Path] = e
+		return true
+	})
 }
 
 func selectedManifest(
@@ -656,17 +650,6 @@ func selectedManifest(
 		}
 	}
 	return manifest, bytes, nil
-}
-
-func manifestEntriesByPath(ctx context.Context, manifest proto.Manifest) (map[string]proto.ManifestEntry, error) {
-	entries := make(map[string]proto.ManifestEntry, len(manifest.Entries))
-	for _, entry := range manifest.Entries {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		entries[entry.Path] = entry
-	}
-	return entries, nil
 }
 
 func subtreeManifest(manifest proto.Manifest, root string) proto.Manifest {

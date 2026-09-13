@@ -1,0 +1,82 @@
+{
+  "scope": "Focused fetch follow-up; fixtures on Btrfs workspace volume; five alternating pairs of three operations",
+  "binaries": {
+    "baseline": "fdaf5e865a4fc8d22f3e5513503a3912d8a6f910e5159046c3ab19cc78a7c504",
+    "candidate": "d9c2d370a00f6ae23b7e82cff87c05e37fa9a1f262278ca74fda4341f9bcc264"
+  },
+  "samples": [
+    {
+      "version": "baseline",
+      "round": 0,
+      "iterations": 3,
+      "ns_per_op": 84869563.0
+    },
+    {
+      "version": "candidate",
+      "round": 0,
+      "iterations": 3,
+      "ns_per_op": 133179438.0
+    },
+    {
+      "version": "candidate",
+      "round": 1,
+      "iterations": 3,
+      "ns_per_op": 86826836.0
+    },
+    {
+      "version": "baseline",
+      "round": 1,
+      "iterations": 3,
+      "ns_per_op": 115102269.0
+    },
+    {
+      "version": "baseline",
+      "round": 2,
+      "iterations": 3,
+      "ns_per_op": 95014386.0
+    },
+    {
+      "version": "candidate",
+      "round": 2,
+      "iterations": 3,
+      "ns_per_op": 87743759.0
+    },
+    {
+      "version": "candidate",
+      "round": 3,
+      "iterations": 3,
+      "ns_per_op": 126443593.0
+    },
+    {
+      "version": "baseline",
+      "round": 3,
+      "iterations": 3,
+      "ns_per_op": 110489826.0
+    },
+    {
+      "version": "baseline",
+      "round": 4,
+      "iterations": 3,
+      "ns_per_op": 90324112.0
+    },
+    {
+      "version": "candidate",
+      "round": 4,
+      "iterations": 3,
+      "ns_per_op": 84677643.0
+    }
+  ],
+  "script": "import json, os, re, subprocess, hashlib\nfrom pathlib import Path\nout = (Path.cwd().parent / \"results\").resolve()\nout.mkdir(exist_ok=False)\nfixtures = out / \"fixtures\"\nfixtures.mkdir()\nenv = dict(os.environ, GOMAXPROCS=\"2\", CGO_ENABLED=\"0\", TMPDIR=str(fixtures))\nroots = {\"baseline\": Path.cwd().parent / \"baseline\", \"candidate\": Path.cwd()}\nreport = {\"scope\": \"Focused fetch follow-up; fixtures on Btrfs workspace volume; five alternating pairs of three operations\", \"binaries\": {}, \"samples\": []}\nfor name, root in roots.items():\n    binary = out / (name + \".test\")\n    subprocess.run([\"go\", \"test\", \"-c\", \"-o\", str(binary), \"./cmd/errand\"], cwd=root, env=env, check=True)\n    report[\"binaries\"][name] = hashlib.sha256(binary.read_bytes()).hexdigest()\nfor round_number in range(5):\n    order = list(roots) if round_number % 2 == 0 else list(reversed(roots))\n    for name in order:\n        p = subprocess.run([str(out / (name + \".test\")), \"-test.v\", \"-test.run=^$\", \"-test.bench=^BenchmarkFetchCompletion$/^persistent=false$\", \"-test.benchtime=3x\", \"-test.benchmem\", \"-test.timeout=5m\"], cwd=roots[name], env=env, text=True, capture_output=True)\n        (out / f\"{round_number}-{name}.txt\").write_text(p.stdout + p.stderr)\n        p.check_returncode()\n        match = re.search(r\"^BenchmarkFetchCompletion/persistent=false-\\d+\\s+(\\d+)\\s+([\\d.]+) ns/op\", p.stdout, re.M)\n        if match is None: raise RuntimeError(\"Missing benchmark result\")\n        report[\"samples\"].append(dict(version=name, round=round_number, iterations=int(match[1]), ns_per_op=float(match[2])))\n    print(f\"Completed pair {round_number + 1}/5\", flush=True)\n    (out / \"report.json\").write_text(json.dumps(report, indent=2) + \"\\n\")\nfor name in roots: (out / (name + \".test\")).unlink()\n",
+  "raw_logs": {
+    "1-baseline.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkFetchCompletion\nBenchmarkFetchCompletion/persistent=false\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.092116873,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.161780383,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":1,\"seconds\":0.093046272,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":2,\"seconds\":0.090478464,\"transferred_bytes\":5074}\nBenchmarkFetchCompletion/persistent=false-2         \t       3\t 115102269 ns/op\t       115.1 fetch-ms/op\t 2317826 B/op\t    8494 allocs/op\nPASS\n",
+    "0-baseline.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkFetchCompletion\nBenchmarkFetchCompletion/persistent=false\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.092442932,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.091868796,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":1,\"seconds\":0.080912002,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":2,\"seconds\":0.08182623,\"transferred_bytes\":5074}\nBenchmarkFetchCompletion/persistent=false-2         \t       3\t  84869563 ns/op\t        84.87 fetch-ms/op\t 2310213 B/op\t    8485 allocs/op\nPASS\n",
+    "1-candidate.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkFetchCompletion\nBenchmarkFetchCompletion/persistent=false\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.091250292,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.09558999,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":1,\"seconds\":0.082112614,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":2,\"seconds\":0.082776059,\"transferred_bytes\":5074}\nBenchmarkFetchCompletion/persistent=false-2         \t       3\t  86826836 ns/op\t        86.83 fetch-ms/op\t 2309466 B/op\t    8472 allocs/op\nPASS\n",
+    "2-candidate.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkFetchCompletion\nBenchmarkFetchCompletion/persistent=false\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.103279862,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.095535166,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":1,\"seconds\":0.084647118,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":2,\"seconds\":0.083047425,\"transferred_bytes\":5074}\nBenchmarkFetchCompletion/persistent=false-2         \t       3\t  87743759 ns/op\t        87.74 fetch-ms/op\t 2305605 B/op\t    8464 allocs/op\nPASS\n",
+    "3-candidate.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkFetchCompletion\nBenchmarkFetchCompletion/persistent=false\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.096410235,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.153655872,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":1,\"seconds\":0.134635436,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":2,\"seconds\":0.091037527,\"transferred_bytes\":5074}\nBenchmarkFetchCompletion/persistent=false-2         \t       3\t 126443593 ns/op\t       126.4 fetch-ms/op\t 2317888 B/op\t    8479 allocs/op\nPASS\n",
+    "4-candidate.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkFetchCompletion\nBenchmarkFetchCompletion/persistent=false\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.107180134,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.091591153,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":1,\"seconds\":0.08091261,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":2,\"seconds\":0.081527368,\"transferred_bytes\":5074}\nBenchmarkFetchCompletion/persistent=false-2         \t       3\t  84677643 ns/op\t        84.68 fetch-ms/op\t 2313442 B/op\t    8474 allocs/op\nPASS\n",
+    "0-candidate.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkFetchCompletion\nBenchmarkFetchCompletion/persistent=false\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.101704674,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.226318467,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":1,\"seconds\":0.089860682,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":2,\"seconds\":0.083357583,\"transferred_bytes\":5074}\nBenchmarkFetchCompletion/persistent=false-2         \t       3\t 133179438 ns/op\t       133.2 fetch-ms/op\t 2318802 B/op\t    8468 allocs/op\nPASS\n",
+    "2-baseline.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkFetchCompletion\nBenchmarkFetchCompletion/persistent=false\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.102744896,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.099920086,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":1,\"seconds\":0.09482368,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":2,\"seconds\":0.090297876,\"transferred_bytes\":5074}\nBenchmarkFetchCompletion/persistent=false-2         \t       3\t  95014386 ns/op\t        95.01 fetch-ms/op\t 2320384 B/op\t    8493 allocs/op\nPASS\n",
+    "4-baseline.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkFetchCompletion\nBenchmarkFetchCompletion/persistent=false\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.094121422,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.101501745,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":1,\"seconds\":0.085994201,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":2,\"seconds\":0.083474727,\"transferred_bytes\":5074}\nBenchmarkFetchCompletion/persistent=false-2         \t       3\t  90324112 ns/op\t        90.32 fetch-ms/op\t 2313317 B/op\t    8488 allocs/op\nPASS\n",
+    "3-baseline.txt": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkFetchCompletion\nBenchmarkFetchCompletion/persistent=false\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.102117594,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":0,\"seconds\":0.101272465,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":1,\"seconds\":0.083237551,\"transferred_bytes\":5074}\nEVALUATION {\"mode\":\"fetch\",\"persistent\":false,\"sample\":2,\"seconds\":0.146957774,\"transferred_bytes\":5074}\nBenchmarkFetchCompletion/persistent=false-2         \t       3\t 110489826 ns/op\t       110.5 fetch-ms/op\t 2305250 B/op\t    8479 allocs/op\nPASS\n"
+  }
+}

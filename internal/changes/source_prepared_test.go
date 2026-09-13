@@ -47,6 +47,22 @@ func TestSourceDeltaValidationPrecedesExpansionAndHonorsContext(t *testing.T) {
 	}
 }
 
+func TestReconstructedSourcePreservesCheckpointPathRules(t *testing.T) {
+	for _, name := range []string{".git/config", "nested/.GiT/config", ".errand-change-" + proto.NewULID() + "/file"} {
+		base := observationManifest(map[string]string{name: "body"})
+		delta, err := PrepareSourceDelta(t.Context(), base, base, 1<<20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ExpandTransferSource(t.Context(), base, delta, base.RootHash(), 1<<20); err == nil {
+			t.Fatalf("expanded reserved source path %q", name)
+		}
+		if _, err := acceptedSourceManifestContext(t.Context(), base, delta, transferOutcome{Refused: true}); err == nil {
+			t.Fatalf("accepted reserved checkpoint path %q", name)
+		}
+	}
+}
+
 func TestPreparedSourceOwnsMetadataAndBindsStage(t *testing.T) {
 	root, b, staged := applyFixture(t, "before\n", "after\n")
 	target := transferTarget(t, root)

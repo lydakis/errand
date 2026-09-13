@@ -1,0 +1,18 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/lydakis/errand/internal/manifest
+cpu: Apple M1 Max
+BenchmarkSnapshotRetention/1000/one-survivor=false-2         	       1	    936666 ns/op	    303176 retained-B
+BenchmarkSnapshotRetention/1000/one-survivor=false-2         	       1	    806875 ns/op	    302456 retained-B
+BenchmarkSnapshotRetention/1000/one-survivor=false-2         	       1	   1162625 ns/op	    302568 retained-B
+BenchmarkSnapshotRetention/1000/one-survivor=true-2          	       1	   2288459 ns/op	      1560 retained-B
+BenchmarkSnapshotRetention/1000/one-survivor=true-2          	       1	   1832334 ns/op	      1560 retained-B
+BenchmarkSnapshotRetention/1000/one-survivor=true-2          	       1	   1761459 ns/op	      1688 retained-B
+BenchmarkSnapshotRetention/10000/one-survivor=false-2        	       1	   7013042 ns/op	   3040736 retained-B
+BenchmarkSnapshotRetention/10000/one-survivor=false-2        	       1	   6727542 ns/op	   3040144 retained-B
+BenchmarkSnapshotRetention/10000/one-survivor=false-2        	       1	   6306459 ns/op	   3040144 retained-B
+BenchmarkSnapshotRetention/10000/one-survivor=true-2         	       1	  23113041 ns/op	      1152 retained-B
+BenchmarkSnapshotRetention/10000/one-survivor=true-2         	       1	  21933666 ns/op	      1264 retained-B
+BenchmarkSnapshotRetention/10000/one-survivor=true-2         	       1	  22742333 ns/op	       560.0 retained-B
+PASS
+ok  	github.com/lydakis/errand/internal/manifest	0.317s

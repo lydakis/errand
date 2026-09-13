@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -23,38 +24,58 @@ func ExpandSourceDelta(base proto.Manifest, delta proto.ChangeBundle, root strin
 // ExpandSourceDeltaContext rejects malformed roots before reconstructing source
 // metadata and honors cancellation throughout validation and reconstruction.
 func ExpandSourceDeltaContext(ctx context.Context, base proto.Manifest, delta proto.ChangeBundle, root string, maxBytes int64) (proto.Manifest, error) {
-	if err := ValidateBundleContext(ctx, delta); err != nil {
+	state, err := expandSourceSnapshot(ctx, base, delta, root, maxBytes)
+	if err != nil {
 		return proto.Manifest{}, err
 	}
+	return state.Manifest(ctx)
+}
+
+func expandSourceSnapshot(ctx context.Context, base proto.Manifest, delta proto.ChangeBundle, root string, maxBytes int64) (*manifest.Snapshot, error) {
+	if err := ValidateBundleContext(ctx, delta); err != nil {
+		return nil, err
+	}
 	if maxBytes >= 0 && delta.Bytes > maxBytes {
-		return proto.Manifest{}, ErrByteLimitExceeded
+		return nil, ErrByteLimitExceeded
 	}
 
-	if base.RootHash() != delta.BaselineRoot {
-		return proto.Manifest{}, ErrCheckpointChanged
+	before, err := manifest.New(ctx, base)
+	if err != nil {
+		return nil, err
+	}
+	baselineRoot, err := before.RootHash(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if baselineRoot != delta.BaselineRoot {
+		return nil, ErrCheckpointChanged
 	}
 	states := make(map[string]string)
 	for _, p := range delta.Paths {
 		if err := ctx.Err(); err != nil {
-			return proto.Manifest{}, err
+			return nil, err
 		}
 		states[p] = "accepted"
 	}
-	current, err := acceptedSourceManifestContext(ctx, base, delta, transferOutcome{States: states})
+	state, err := acceptedSourceSnapshotContext(ctx, base, delta, transferOutcome{States: states})
 	if err != nil {
-		return proto.Manifest{}, err
+		return nil, err
 	}
-	if current.RootHash() != root {
-		return proto.Manifest{}, fmt.Errorf("source delta does not reconstruct the declared manifest")
-	}
-	expected, err := workspaceDelta(ctx, base, current, maxBytes)
+	sourceRoot, err := state.RootHash(ctx)
 	if err != nil {
-		return proto.Manifest{}, err
+		return nil, err
+	}
+	if sourceRoot != root {
+		return nil, fmt.Errorf("source delta does not reconstruct the declared manifest")
+	}
+	expected, err := workspaceSnapshotDelta(ctx, before, state, maxBytes)
+	if err != nil {
+		return nil, err
 	}
 	if expected.RootHash() != delta.RootHash() {
-		return proto.Manifest{}, fmt.Errorf("source delta differs from checkpoint changes")
+		return nil, fmt.Errorf("source delta differs from checkpoint changes")
 	}
-	return current, nil
+	return state, nil
 }
 
 // AcceptedSource mirrors checkpoint advancement after a successful receipt.

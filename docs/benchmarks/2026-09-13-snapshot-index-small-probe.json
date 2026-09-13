@@ -1,0 +1,977 @@
+{
+  "samples": [
+    {
+      "round": 0,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1110158.0
+    },
+    {
+      "round": 0,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1728849.0
+    },
+    {
+      "round": 0,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1009343.0
+    },
+    {
+      "round": 0,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1548359.0
+    },
+    {
+      "round": 0,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 9991839.0
+    },
+    {
+      "round": 0,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 15427982.0
+    },
+    {
+      "round": 0,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1325684.0
+    },
+    {
+      "round": 0,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 9639915.0
+    },
+    {
+      "round": 0,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1075861.0
+    },
+    {
+      "round": 0,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1569949.0
+    },
+    {
+      "round": 0,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 900665.0
+    },
+    {
+      "round": 0,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1092292.0
+    },
+    {
+      "round": 0,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 9483784.0
+    },
+    {
+      "round": 0,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 14104511.0
+    },
+    {
+      "round": 0,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1161828.0
+    },
+    {
+      "round": 0,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10344253.0
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1029322.0
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1805814.0
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1211638.0
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1452454.0
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 10153849.0
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 16121043.0
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1140965.0
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 9995530.0
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1230626.0
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1588901.0
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1163006.0
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1310227.0
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 10849584.0
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 15798953.0
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1250281.0
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10610564.0
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1228051.0
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1844386.0
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1218948.0
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1279512.0
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 11191053.0
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 15915499.0
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1312323.0
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10376476.0
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1230439.0
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1502002.0
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1257007.0
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1204047.0
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 10329616.0
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 16148868.0
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1119242.0
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10110587.0
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1244036.0
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1870324.0
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1201598.0
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1393941.0
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 9854476.0
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 14300457.0
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1213107.0
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10580015.0
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1058713.0
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 2223875.0
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1172903.0
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1087172.0
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 9640678.0
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 15124524.0
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1254363.0
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10607668.0
+    },
+    {
+      "round": 4,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1056546.0
+    },
+    {
+      "round": 4,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1995752.0
+    },
+    {
+      "round": 4,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 961818.0
+    },
+    {
+      "round": 4,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1191432.0
+    },
+    {
+      "round": 4,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 10582421.0
+    },
+    {
+      "round": 4,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 15367878.0
+    },
+    {
+      "round": 4,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1307225.0
+    },
+    {
+      "round": 4,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10909568.0
+    },
+    {
+      "round": 4,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1172270.0
+    },
+    {
+      "round": 4,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 2099971.0
+    },
+    {
+      "round": 4,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1232465.0
+    },
+    {
+      "round": 4,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1148934.0
+    },
+    {
+      "round": 4,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 10529364.0
+    },
+    {
+      "round": 4,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 16615906.0
+    },
+    {
+      "round": 4,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1304904.0
+    },
+    {
+      "round": 4,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10554336.0
+    },
+    {
+      "round": 5,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 923881.0
+    },
+    {
+      "round": 5,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1886265.0
+    },
+    {
+      "round": 5,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1022565.0
+    },
+    {
+      "round": 5,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1032832.0
+    },
+    {
+      "round": 5,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 11957790.0
+    },
+    {
+      "round": 5,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 16990169.0
+    },
+    {
+      "round": 5,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1352434.0
+    },
+    {
+      "round": 5,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 11030465.0
+    },
+    {
+      "round": 5,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 969420.0
+    },
+    {
+      "round": 5,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1754642.0
+    },
+    {
+      "round": 5,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1143347.0
+    },
+    {
+      "round": 5,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1192765.0
+    },
+    {
+      "round": 5,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 10445040.0
+    },
+    {
+      "round": 5,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 15649062.0
+    },
+    {
+      "round": 5,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1265647.0
+    },
+    {
+      "round": 5,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10705003.0
+    },
+    {
+      "round": 6,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1079114.0
+    },
+    {
+      "round": 6,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 1986274.0
+    },
+    {
+      "round": 6,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1066409.0
+    },
+    {
+      "round": 6,
+      "variant": "baseline",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 954739.0
+    },
+    {
+      "round": 6,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 10936728.0
+    },
+    {
+      "round": 6,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 16430076.0
+    },
+    {
+      "round": 6,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1306684.0
+    },
+    {
+      "round": 6,
+      "variant": "baseline",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10288923.0
+    },
+    {
+      "round": 6,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 1182420.0
+    },
+    {
+      "round": 6,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 2123967.0
+    },
+    {
+      "round": 6,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1329070.0
+    },
+    {
+      "round": 6,
+      "variant": "candidate",
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 1434742.0
+    },
+    {
+      "round": 6,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "ns_per_op": 11396689.0
+    },
+    {
+      "round": 6,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "ns_per_op": 16007277.0
+    },
+    {
+      "round": 6,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "ns_per_op": 1216553.0
+    },
+    {
+      "round": 6,
+      "variant": "candidate",
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "ns_per_op": 10426302.0
+    }
+  ],
+  "summary": [
+    {
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit100",
+      "baseline_ms": 1.079114,
+      "candidate_ms": 1.17227,
+      "paired_median_ratio": 1.0019445446483901
+    },
+    {
+      "entries": 1000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "baseline_ms": 1.844386,
+      "candidate_ms": 1.870324,
+      "paired_median_ratio": 1.0522204161639321
+    },
+    {
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit100",
+      "baseline_ms": 1.143347,
+      "candidate_ms": 1.211638,
+      "paired_median_ratio": 1.0312228249277247
+    },
+    {
+      "entries": 1000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "baseline_ms": 1.192765,
+      "candidate_ms": 1.204047,
+      "paired_median_ratio": 0.9643303184739037
+    },
+    {
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit100",
+      "baseline_ms": 10.582421,
+      "candidate_ms": 10.329616,
+      "paired_median_ratio": 0.9949863079535392
+    },
+    {
+      "entries": 10000,
+      "representation": "flat",
+      "operation": "edit1_export",
+      "baseline_ms": 15.649062,
+      "candidate_ms": 16.121043,
+      "paired_median_ratio": 1.0146630023978513
+    },
+    {
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit100",
+      "baseline_ms": 1.306684,
+      "candidate_ms": 1.213107,
+      "paired_median_ratio": 0.9310231088771271
+    },
+    {
+      "entries": 10000,
+      "representation": "tree",
+      "operation": "edit1_export",
+      "baseline_ms": 10.607668,
+      "candidate_ms": 10.426302,
+      "paired_median_ratio": 0.9973931122278714
+    }
+  ],
+  "regression_threshold": 1.15,
+  "source_sha256": {
+    "baseline": "2e49bcdea59b0a97d4bed225a87ba03a5e7baaae3eb9e2a081fcda7f7d66bdcc",
+    "candidate": "a64de9c4497f920bab662c2387feff43268d9d2288f0120ad03b30aac964e1e7"
+  },
+  "go_version": "go version go1.27.1 linux/amd64",
+  "gomaxprocs": 2,
+  "benchtime": "500ms",
+  "count": 7,
+  "scope": "Focused in-memory microbenchmarks, not end-to-end latency.",
+  "probe_source": "import json,os,re,statistics,subprocess\nfrom pathlib import Path\nout=Path('probe-results').resolve();out.mkdir()\nenv=dict(os.environ,GOMAXPROCS='2',CGO_ENABLED='0')\nroots={'baseline':Path('baseline').resolve(),'candidate':Path.cwd()}\nbinaries={}\nfor name,root in roots.items():\n binary=out/(name+'.test')\n subprocess.run(['go','test','-c','-o',str(binary),'./experiments/snapshotindex'],cwd=root,env=env,check=True)\n binaries[name]=binary\nrows=[]\nfor repeat in range(7):\n for name in (['baseline','candidate'] if repeat%2==0 else ['candidate','baseline']):\n  result=subprocess.run([str(binaries[name]),'-test.run=^$','-test.bench=^BenchmarkIndex$/^(1000|10000)$/^(flat|tree)$/^(edit100|edit1_export)$','-test.benchtime=500ms','-test.count=1','-test.benchmem'],env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,check=True)\n  (out/f'{repeat}-{name}.txt').write_text(result.stdout)\n  matches=re.findall(r'^BenchmarkIndex/(\\d+)/(\\w+)/(\\w+)-\\d+\\s+\\d+\\s+([\\d.]+) ns/op',result.stdout,re.M)\n  assert len(matches)==8\n  rows.extend(dict(round=repeat,variant=name,entries=int(count),representation=rep,operation=op,ns_per_op=float(ns)) for count,rep,op,ns in matches)\n print('Completed focused round',repeat+1,flush=True)\nsummary=[]\nfor count in [1000,10000]:\n for rep in ['flat','tree']:\n  for op in ['edit100','edit1_export']:\n   samples={name:[r['ns_per_op'] for r in rows if r['entries']==count and r['representation']==rep and r['operation']==op and r['variant']==name] for name in roots}\n   ratios=[b/a for a,b in zip(samples['baseline'],samples['candidate'])]\n   summary.append(dict(entries=count,representation=rep,operation=op,baseline_ms=statistics.median(samples['baseline'])/1e6,candidate_ms=statistics.median(samples['candidate'])/1e6,paired_median_ratio=statistics.median(ratios)))\nreport=dict(samples=rows,summary=summary,regression_threshold=1.15)\n(out/'report.json').write_text(json.dumps(report,indent=2)+'\\n')\nfor binary in binaries.values():binary.unlink()\nprint(json.dumps(summary,indent=2),flush=True)\nassert all(r['paired_median_ratio']<=1.15 for r in summary if r['representation']=='tree'),'REPRODUCED: isolated candidate tree slowdown exceeds 15%'\n"
+}

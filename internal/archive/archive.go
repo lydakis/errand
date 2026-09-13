@@ -6,6 +6,7 @@ package archive
 
 import (
 	"archive/tar"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -24,8 +25,20 @@ import (
 // clean relative paths only, no duplicates, no entry routed through a
 // symlink, and symlink targets that resolve inside the workspace.
 func Validate(m proto.Manifest) error {
+	return ValidateContext(context.Background(), m)
+}
+
+// ValidateContext applies the same archive invariants and permits cancellation
+// during large metadata scans, including long ancestor chains.
+func ValidateContext(ctx context.Context, m proto.Manifest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	seen := make(map[string]string, len(m.Entries)) // path -> type
 	for _, e := range m.Entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := checkRelPath(e.Path); err != nil {
 			return err
 		}
@@ -38,7 +51,13 @@ func Validate(m proto.Manifest) error {
 		seen[e.Path] = e.Type
 	}
 	for _, e := range m.Entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		for dir := path.Dir(e.Path); dir != "." && dir != "/"; dir = path.Dir(dir) {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if parentType, explicit := seen[dir]; explicit && parentType != proto.EntryDir {
 				return fmt.Errorf("archive: %q passes through non-directory %q", e.Path, dir)
 			}
@@ -47,6 +66,55 @@ func Validate(m proto.Manifest) error {
 			if err := checkSymlinkTarget(e.Path, e.Target); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// ValidateSortedContext checks the same invariants plus strict ordering. Parent
+// paths precede children, so binary lookup avoids building a full path map for
+// already ordered snapshots. Unsorted archive callers still use ValidateContext.
+func ValidateSortedContext(ctx context.Context, m proto.Manifest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// Cache only ancestor paths, not every file. A validated ancestor chain
+	// cannot change later in a strictly ordered manifest, including implicit
+	// directories. Siblings therefore share one hierarchy check.
+	var parents map[string]struct{}
+	for i, e := range m.Entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if i > 0 && m.Entries[i-1].Path >= e.Path {
+			return fmt.Errorf("archive: paths must be strictly sorted")
+		}
+		if err := checkRelPath(e.Path); err != nil {
+			return err
+		}
+		if err := validateEntry(e); err != nil {
+			return err
+		}
+		if e.Type == proto.EntrySymlink {
+			if err := checkSymlinkTarget(e.Path, e.Target); err != nil {
+				return err
+			}
+		}
+		for parent := path.Dir(e.Path); parent != "." && parent != "/"; parent = path.Dir(parent) {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if _, checked := parents[parent]; checked {
+				break
+			}
+			j := sort.Search(i, func(j int) bool { return m.Entries[j].Path >= parent })
+			if j < i && m.Entries[j].Path == parent && m.Entries[j].Type != proto.EntryDir {
+				return fmt.Errorf("archive: %q passes through non-directory %q", e.Path, parent)
+			}
+			if parents == nil {
+				parents = make(map[string]struct{})
+			}
+			parents[parent] = struct{}{}
 		}
 	}
 	return nil
@@ -61,7 +129,8 @@ func validateEntry(e proto.ManifestEntry) error {
 		if len(e.SHA256) != sha256.Size*2 {
 			return fmt.Errorf("archive: file %q has invalid sha256", e.Path)
 		}
-		if _, err := hex.DecodeString(e.SHA256); err != nil {
+		var digest [sha256.Size]byte
+		if _, err := hex.Decode(digest[:], []byte(e.SHA256)); err != nil {
 			return fmt.Errorf("archive: file %q has invalid sha256", e.Path)
 		}
 		if e.Target != "" {

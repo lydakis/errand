@@ -47,3 +47,11 @@ func smallPushDelta(manifest proto.Manifest) bool {
 	}
 	return true
 }
+
+// SourceRoot is bound to the complete manifest when a delta is prepared.
+func pushManifestRoot(request proto.PushRequest) string {
+	if request.Delta != nil {
+		return request.SourceRoot
+	}
+	return request.Manifest.RootHash()
+}

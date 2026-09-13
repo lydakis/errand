@@ -1,0 +1,3678 @@
+{
+  "cabal": {
+    "revision": "9f3708a8a2b5ff7b9e7a84df3bd48809101e9d58",
+    "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+    "machine": "x86_64",
+    "gomaxprocs": 2,
+    "rounds": 5,
+    "versions": {
+      "baseline": {
+        "source_sha256": "3071e35be09c00961b0cb4745b77952e7284b35802364d4270a175db2f57e2b5",
+        "source_files": [
+          "cmd/errand/access.go",
+          "cmd/errand/access_test.go",
+          "cmd/errand/apply_reporting.go",
+          "cmd/errand/apply_reporting_test.go",
+          "cmd/errand/artifacts_test.go",
+          "cmd/errand/automatic_apply.go",
+          "cmd/errand/cache_groups_test.go",
+          "cmd/errand/caches_test.go",
+          "cmd/errand/df_cache_test.go",
+          "cmd/errand/df_details.go",
+          "cmd/errand/df_inventory.go",
+          "cmd/errand/df_inventory_test.go",
+          "cmd/errand/df_render.go",
+          "cmd/errand/doctor.go",
+          "cmd/errand/doctor_local_test.go",
+          "cmd/errand/doctor_test.go",
+          "cmd/errand/environment_files_test.go",
+          "cmd/errand/fetch.go",
+          "cmd/errand/forward_test.go",
+          "cmd/errand/gc.go",
+          "cmd/errand/gc_test.go",
+          "cmd/errand/help.go",
+          "cmd/errand/local_transport_test.go",
+          "cmd/errand/main.go",
+          "cmd/errand/main_test.go",
+          "cmd/errand/offline_test.go",
+          "cmd/errand/peers.go",
+          "cmd/errand/peers_list.go",
+          "cmd/errand/peers_render.go",
+          "cmd/errand/peers_render_test.go",
+          "cmd/errand/peers_test.go",
+          "cmd/errand/persistent_config_test.go",
+          "cmd/errand/placement.go",
+          "cmd/errand/placement_integration_test.go",
+          "cmd/errand/placement_test.go",
+          "cmd/errand/profile_integration_test.go",
+          "cmd/errand/ps_render.go",
+          "cmd/errand/ps_render_test.go",
+          "cmd/errand/push.go",
+          "cmd/errand/push_batch_test.go",
+          "cmd/errand/push_benchmark_test.go",
+          "cmd/errand/push_test.go",
+          "cmd/errand/push_watch.go",
+          "cmd/errand/push_watch_burst_test.go",
+          "cmd/errand/push_watch_delta_test.go",
+          "cmd/errand/push_watch_test.go",
+          "cmd/errand/run.go",
+          "cmd/errand/run_config.go",
+          "cmd/errand/run_config_test.go",
+          "cmd/errand/run_environment_test.go",
+          "cmd/errand/run_output.go",
+          "cmd/errand/session.go",
+          "cmd/errand/session_test.go",
+          "cmd/errand/setup.go",
+          "cmd/errand/setup_ssh_test.go",
+          "cmd/errand/shared_paths_benchmark_test.go",
+          "cmd/errand/ssh_transport_test.go",
+          "cmd/errand/status.go",
+          "cmd/errand/status_test.go",
+          "cmd/errand/terminal_width_darwin.go",
+          "cmd/errand/terminal_width_linux.go",
+          "cmd/errand/terminal_width_other.go",
+          "cmd/errand/test_main_test.go",
+          "cmd/errand/transfer_output.go",
+          "cmd/errand/transfer_reporting_test.go",
+          "cmd/errand/version_advisory_test.go",
+          "cmd/errand/version_discovery_test.go",
+          "cmd/errand/version_warning.go",
+          "cmd/errand/version_warning_test.go",
+          "cmd/errand/workspace_defaults_test.go",
+          "cmd/errand/workspaces.go",
+          "cmd/errand/workspaces_test.go",
+          "go.mod",
+          "go.sum",
+          "internal/archive/archive.go",
+          "internal/archive/archive_test.go",
+          "internal/changes/access.go",
+          "internal/changes/apply.go",
+          "internal/changes/artifacts_test.go",
+          "internal/changes/base.go",
+          "internal/changes/base_benchmark_test.go",
+          "internal/changes/base_test.go",
+          "internal/changes/bundle.go",
+          "internal/changes/caches_test.go",
+          "internal/changes/changes.go",
+          "internal/changes/changes_test.go",
+          "internal/changes/checkpoint.go",
+          "internal/changes/checkpoint_regression_test.go",
+          "internal/changes/checkpoint_test.go",
+          "internal/changes/clone_darwin.go",
+          "internal/changes/clone_linux.go",
+          "internal/changes/clone_other.go",
+          "internal/changes/cumulative_apply_test.go",
+          "internal/changes/export.go",
+          "internal/changes/export_test.go",
+          "internal/changes/journal.go",
+          "internal/changes/manifest_index_test.go",
+          "internal/changes/merge.go",
+          "internal/changes/prepared_benchmark_test.go",
+          "internal/changes/rename_noreplace_darwin.go",
+          "internal/changes/rename_noreplace_linux.go",
+          "internal/changes/rename_noreplace_other.go",
+          "internal/changes/selection.go",
+          "internal/changes/source_delta.go",
+          "internal/changes/source_delta_test.go",
+          "internal/changes/source_metadata_benchmark_test.go",
+          "internal/changes/source_prepared.go",
+          "internal/changes/source_prepared_test.go",
+          "internal/changes/staging_parallel_test.go",
+          "internal/changes/staging_paths.go",
+          "internal/changes/staging_sync.go",
+          "internal/changes/staging_sync_darwin.go",
+          "internal/changes/staging_sync_other.go",
+          "internal/changes/staging_sync_test.go",
+          "internal/changes/staging_tasks.go",
+          "internal/changes/transfer.go",
+          "internal/changes/transfer_benchmark_test.go",
+          "internal/changes/transfer_blob_base.go",
+          "internal/changes/transfer_blobs.go",
+          "internal/changes/transfer_blobs_retry_test.go",
+          "internal/changes/transfer_blobs_test.go",
+          "internal/changes/transfer_observation_test.go",
+          "internal/changes/transfer_recovery_test.go",
+          "internal/changes/transfer_selection.go",
+          "internal/changes/transfer_session.go",
+          "internal/changes/transfer_session_test.go",
+          "internal/changes/transfer_snapshot.go",
+          "internal/changes/transfer_storage.go",
+          "internal/changes/transfer_test.go",
+          "internal/client/automatic_apply.go",
+          "internal/client/automatic_apply_inspect.go",
+          "internal/client/automatic_apply_inspect_test.go",
+          "internal/client/caches.go",
+          "internal/client/caches_test.go",
+          "internal/client/change_download.go",
+          "internal/client/change_gc.go",
+          "internal/client/change_state.go",
+          "internal/client/changes.go",
+          "internal/client/changes_test.go",
+          "internal/client/client.go",
+          "internal/client/client_test.go",
+          "internal/client/forward.go",
+          "internal/client/forward_test.go",
+          "internal/client/interrupts.go",
+          "internal/client/job_details.go",
+          "internal/client/job_details_test.go",
+          "internal/client/local.go",
+          "internal/client/local_test.go",
+          "internal/client/placement.go",
+          "internal/client/placement_test.go",
+          "internal/client/probe.go",
+          "internal/client/probe_test.go",
+          "internal/client/push.go",
+          "internal/client/push_delta.go",
+          "internal/client/push_generation.go",
+          "internal/client/push_watch.go",
+          "internal/client/push_watch_retry_test.go",
+          "internal/client/result.go",
+          "internal/client/snapshot_transfer.go",
+          "internal/client/snapshot_transfer_test.go",
+          "internal/client/ssh.go",
+          "internal/client/ssh_diagnostic.go",
+          "internal/client/ssh_diagnostic_test.go",
+          "internal/client/storage.go",
+          "internal/client/storage_contract_test.go",
+          "internal/client/storage_test.go",
+          "internal/client/terminal_darwin.go",
+          "internal/client/terminal_linux.go",
+          "internal/client/terminal_other.go",
+          "internal/client/transfer_stats.go",
+          "internal/client/upload_deadline_test.go",
+          "internal/client/workspace_descriptor_test.go",
+          "internal/client/workspace_fetch.go",
+          "internal/client/workspace_selection_test.go",
+          "internal/client/workspace_transfer_failure_test.go",
+          "internal/client/workspace_transfer_state.go",
+          "internal/client/workspace_transfer_storage.go",
+          "internal/client/workspaces.go",
+          "internal/client/workspaces_test.go",
+          "internal/config/access.go",
+          "internal/config/access_test.go",
+          "internal/config/artifacts.go",
+          "internal/config/artifacts_test.go",
+          "internal/config/cache_groups_test.go",
+          "internal/config/caches.go",
+          "internal/config/caches_test.go",
+          "internal/config/config.go",
+          "internal/config/config_test.go",
+          "internal/config/environment.go",
+          "internal/config/environment_file.go",
+          "internal/config/environment_files_test.go",
+          "internal/config/environment_test.go",
+          "internal/config/execution.go",
+          "internal/config/local.go",
+          "internal/config/local_test.go",
+          "internal/config/placement.go",
+          "internal/config/placement_test.go",
+          "internal/config/profiles_test.go",
+          "internal/config/run.go",
+          "internal/config/run_test.go",
+          "internal/config/session.go",
+          "internal/config/session_test.go",
+          "internal/config/strict_test.go",
+          "internal/config/transport_test.go",
+          "internal/daemon/admission_clock.go",
+          "internal/daemon/admission_persistence_test.go",
+          "internal/daemon/admission_regression_test.go",
+          "internal/daemon/artifacts_test.go",
+          "internal/daemon/auth_test.go",
+          "internal/daemon/cache.go",
+          "internal/daemon/cache_build_tools_test.go",
+          "internal/daemon/cache_materialize_benchmark_test.go",
+          "internal/daemon/cache_native_test.go",
+          "internal/daemon/cache_policy_test.go",
+          "internal/daemon/cache_preparation_test.go",
+          "internal/daemon/cache_settlement_test.go",
+          "internal/daemon/cache_test.go",
+          "internal/daemon/cache_tools_test.go",
+          "internal/daemon/cache_trees.go",
+          "internal/daemon/cache_trees_test.go",
+          "internal/daemon/daemon_test.go",
+          "internal/daemon/deny_test.go",
+          "internal/daemon/facts.go",
+          "internal/daemon/forward.go",
+          "internal/daemon/forward_test.go",
+          "internal/daemon/job.go",
+          "internal/daemon/job_gc.go",
+          "internal/daemon/job_gc_test.go",
+          "internal/daemon/job_preview_test.go",
+          "internal/daemon/local_identity_test.go",
+          "internal/daemon/local_mode_test.go",
+          "internal/daemon/milestone2_test.go",
+          "internal/daemon/milestone35_test.go",
+          "internal/daemon/milestone3_test.go",
+          "internal/daemon/milestone4_test.go",
+          "internal/daemon/named_caches.go",
+          "internal/daemon/named_caches_test.go",
+          "internal/daemon/peercred.go",
+          "internal/daemon/peercred_uid_test.go",
+          "internal/daemon/placement.go",
+          "internal/daemon/placement_test.go",
+          "internal/daemon/process_group.go",
+          "internal/daemon/process_group_darwin.go",
+          "internal/daemon/process_group_linux.go",
+          "internal/daemon/process_group_linux_test.go",
+          "internal/daemon/process_group_test.go",
+          "internal/daemon/process_scope.go",
+          "internal/daemon/process_scope_test.go",
+          "internal/daemon/server.go",
+          "internal/daemon/setup_quiesce_test.go",
+          "internal/daemon/storage.go",
+          "internal/daemon/storage_test.go",
+          "internal/daemon/whois.go",
+          "internal/daemon/workspace_concurrency_test.go",
+          "internal/daemon/workspace_concurrent_recovery_test.go",
+          "internal/daemon/workspace_create_snapshot_test.go",
+          "internal/daemon/workspace_descriptor_test.go",
+          "internal/daemon/workspace_fetch_test.go",
+          "internal/daemon/workspace_format_test.go",
+          "internal/daemon/workspace_isolation_test.go",
+          "internal/daemon/workspace_leases.go",
+          "internal/daemon/workspace_push.go",
+          "internal/daemon/workspace_push_cache_test.go",
+          "internal/daemon/workspace_push_delta.go",
+          "internal/daemon/workspace_push_delta_test.go",
+          "internal/daemon/workspace_push_snapshot_test.go",
+          "internal/daemon/workspace_recovery_test.go",
+          "internal/daemon/workspace_scope_failure_test.go",
+          "internal/daemon/workspace_snapshot_benchmark_test.go",
+          "internal/daemon/workspace_snapshot_cache.go",
+          "internal/daemon/workspace_storage.go",
+          "internal/daemon/workspace_storage_test.go",
+          "internal/daemon/workspace_transfer_gc.go",
+          "internal/daemon/workspace_transfer_gc_test.go",
+          "internal/daemon/workspace_transfer_test.go",
+          "internal/daemon/workspace_upload.go",
+          "internal/daemon/workspace_upload_admission_test.go",
+          "internal/daemon/workspace_upload_test.go",
+          "internal/daemon/workspaces.go",
+          "internal/daemon/workspaces_http.go",
+          "internal/daemon/workspaces_test.go",
+          "internal/fsidentity/identity.go",
+          "internal/logio/logio.go",
+          "internal/logio/logio_test.go",
+          "internal/namedcache/gc.go",
+          "internal/namedcache/gc_pressure_test.go",
+          "internal/namedcache/holders.go",
+          "internal/namedcache/leases.go",
+          "internal/namedcache/leases_test.go",
+          "internal/namedcache/store.go",
+          "internal/namedcache/store_test.go",
+          "internal/namedcache/tree_cleanup.go",
+          "internal/namedcache/tree_clone_darwin.go",
+          "internal/namedcache/tree_clone_linux.go",
+          "internal/namedcache/tree_clone_other.go",
+          "internal/namedcache/tree_files.go",
+          "internal/namedcache/tree_filesystem_linux_test.go",
+          "internal/namedcache/tree_holders.go",
+          "internal/namedcache/tree_holders_test.go",
+          "internal/namedcache/tree_publication_test.go",
+          "internal/namedcache/tree_recovery_test.go",
+          "internal/namedcache/trees.go",
+          "internal/namedcache/trees_test.go",
+          "internal/pathpolicy/artifacts.go",
+          "internal/pathpolicy/artifacts_test.go",
+          "internal/pathpolicy/caches.go",
+          "internal/pathpolicy/caches_test.go",
+          "internal/pathpolicy/policy.go",
+          "internal/pathpolicy/policy_test.go",
+          "internal/placement/requirements.go",
+          "internal/placement/requirements_test.go",
+          "internal/proto/proto.go",
+          "internal/proto/spec_test.go",
+          "internal/proto/storage.go",
+          "internal/proto/transfer.go",
+          "internal/proto/ulid.go",
+          "internal/proto/ulid_test.go",
+          "internal/proto/workspace.go",
+          "internal/serviceruntime/runtime.go",
+          "internal/serviceruntime/runtime_test.go",
+          "internal/setup/config_path_test.go",
+          "internal/setup/config_plan.go",
+          "internal/setup/config_plan_test.go",
+          "internal/setup/diagnose.go",
+          "internal/setup/diagnose_test.go",
+          "internal/setup/executable_test.go",
+          "internal/setup/local_service.go",
+          "internal/setup/local_test.go",
+          "internal/setup/render.go",
+          "internal/setup/service_identity.go",
+          "internal/setup/service_identity_test.go",
+          "internal/setup/service_live_cleanup_test.go",
+          "internal/setup/service_live_network_test.go",
+          "internal/setup/service_live_test.go",
+          "internal/setup/setup.go",
+          "internal/setup/setup_test.go",
+          "internal/setup/ssh_test.go",
+          "internal/setup/system.go",
+          "internal/setup/transport_test.go",
+          "internal/setup/upgrade_test.go",
+          "internal/snapshot/benchmark_test.go",
+          "internal/snapshot/builder.go",
+          "internal/snapshot/builder_test.go",
+          "internal/snapshot/caches.go",
+          "internal/snapshot/caches_test.go",
+          "internal/snapshot/git_info_test.go",
+          "internal/snapshot/snapshot.go",
+          "internal/snapshot/snapshot_test.go",
+          "internal/snapshot/stamp_darwin.go",
+          "internal/snapshot/stamp_linux.go",
+          "internal/snapshot/stamp_other.go",
+          "internal/snapshot/watch.go",
+          "internal/snapshot/watch_prepare.go",
+          "internal/snapshot/watch_prepare_benchmark_test.go",
+          "internal/snapshot/watch_prepare_test.go",
+          "internal/snapshot/watch_test.go",
+          "internal/tailnet/self_test.go",
+          "internal/tailnet/tailnet.go",
+          "internal/tailnet/tailnet_test.go",
+          "internal/tomlconfig/decode.go",
+          "internal/unixpeer/credentials_darwin.go",
+          "internal/unixpeer/credentials_linux.go",
+          "internal/unixpeer/credentials_other.go",
+          "internal/unixpeer/dial.go",
+          "internal/unixpeer/dial_test.go",
+          "internal/unixpeer/pid_darwin.go",
+          "internal/unixpeer/pid_linux.go",
+          "internal/unixpeer/pid_other.go",
+          "internal/workspace/artifacts.go",
+          "internal/workspace/cache_discovery.go",
+          "internal/workspace/cache_discovery_test.go",
+          "internal/workspace/cache_groups.go",
+          "internal/workspace/caches.go",
+          "internal/workspace/environment.go",
+          "internal/workspace/profile.go",
+          "internal/workspace/session.go",
+          "internal/workspace/strict_test.go",
+          "internal/workspace/trust_other.go",
+          "internal/workspace/trust_unix.go",
+          "internal/workspace/workspace.go",
+          "internal/workspace/workspace_test.go"
+        ],
+        "binaries": {
+          "changes": "b431d6d0216a925a7c5cb14aa7a59da5fe85e2b867e303b8a8e93b0c31b2070b",
+          "snapshot": "9feb3deb45707bbb24c5588bbb1c81c8f92f28445a9b797295c720048c84b574",
+          "commands": "fe5e3c46d24c32c8ffda4e7f0aae283456b8ec68adcf374e3d356d9fd0c97462"
+        },
+        "samples": [
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 67,
+            "round": 0,
+            "metrics": {
+              "ns/op": 2486194.0,
+              "B/op": 1020201.0,
+              "allocs/op": 2044.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 49,
+            "round": 0,
+            "metrics": {
+              "ns/op": 3898956.0,
+              "B/op": 1267055.0,
+              "allocs/op": 2063.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 6,
+            "round": 0,
+            "metrics": {
+              "ns/op": 28382162.0,
+              "B/op": 11374140.0,
+              "allocs/op": 20146.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 4,
+            "round": 0,
+            "metrics": {
+              "ns/op": 41440254.0,
+              "B/op": 20173714.0,
+              "allocs/op": 20203.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 42,
+            "round": 0,
+            "metrics": {
+              "ns/op": 4409247.0,
+              "B/op": 503307.0,
+              "allocs/op": 611.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 39,
+            "round": 0,
+            "metrics": {
+              "ns/op": 4385529.0,
+              "B/op": 503064.0,
+              "allocs/op": 611.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 7,
+            "round": 0,
+            "metrics": {
+              "ns/op": 22430596.0,
+              "B/op": 2855518.0,
+              "allocs/op": 27254.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 24,
+            "round": 0,
+            "metrics": {
+              "ns/op": 7642027.0,
+              "B/op": 2977569.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 25,
+            "round": 0,
+            "metrics": {
+              "ns/op": 7263306.0,
+              "B/op": 2977598.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 179762005.0,
+              "B/op": 27661984.0,
+              "allocs/op": 261381.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 730368574.0,
+              "apply-ms/op": 104.7,
+              "client-ms/op": 432.9,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 192.8,
+              "B/op": 280151000.0,
+              "allocs/op": 701581.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 370027661.0,
+              "apply-ms/op": 90.13,
+              "client-ms/op": 111.5,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 168.0,
+              "B/op": 187693192.0,
+              "allocs/op": 380063.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 291877052.0,
+              "B/op": 73607002.0,
+              "allocs/op": 281599.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 212362246.0,
+              "B/op": 70557693.0,
+              "allocs/op": 200189.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5678939.0,
+              "fetch-ms/op": 5.678,
+              "B/op": 2157832.0,
+              "allocs/op": 7427.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 40224407.0,
+              "fetch-ms/op": 40.22,
+              "B/op": 14317330.0,
+              "allocs/op": 55937.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 78,
+            "round": 1,
+            "metrics": {
+              "ns/op": 2578576.0,
+              "B/op": 979301.0,
+              "allocs/op": 2043.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 48,
+            "round": 1,
+            "metrics": {
+              "ns/op": 4074577.0,
+              "B/op": 1169437.0,
+              "allocs/op": 2059.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 30777385.0,
+              "B/op": 13367014.0,
+              "allocs/op": 20157.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 4,
+            "round": 1,
+            "metrics": {
+              "ns/op": 45733522.0,
+              "B/op": 16852322.0,
+              "allocs/op": 20184.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 40,
+            "round": 1,
+            "metrics": {
+              "ns/op": 4474965.0,
+              "B/op": 503222.0,
+              "allocs/op": 611.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 43,
+            "round": 1,
+            "metrics": {
+              "ns/op": 4372728.0,
+              "B/op": 503071.0,
+              "allocs/op": 611.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 8,
+            "round": 1,
+            "metrics": {
+              "ns/op": 21411577.0,
+              "B/op": 2857294.0,
+              "allocs/op": 27254.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 26,
+            "round": 1,
+            "metrics": {
+              "ns/op": 7447243.0,
+              "B/op": 2977566.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 26,
+            "round": 1,
+            "metrics": {
+              "ns/op": 7375934.0,
+              "B/op": 2977596.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 169848628.0,
+              "B/op": 27653488.0,
+              "allocs/op": 261377.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 709799581.0,
+              "apply-ms/op": 98.57,
+              "client-ms/op": 418.0,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 193.2,
+              "B/op": 282829064.0,
+              "allocs/op": 701571.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 383029181.0,
+              "apply-ms/op": 89.83,
+              "client-ms/op": 109.7,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 183.4,
+              "B/op": 181039714.0,
+              "allocs/op": 380015.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 293433903.0,
+              "B/op": 73732826.0,
+              "allocs/op": 281584.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 212872870.0,
+              "B/op": 71003040.0,
+              "allocs/op": 200191.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 5529880.0,
+              "fetch-ms/op": 5.529,
+              "B/op": 2165896.0,
+              "allocs/op": 7431.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 39979337.0,
+              "fetch-ms/op": 39.98,
+              "B/op": 15460149.0,
+              "allocs/op": 55982.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 74,
+            "round": 2,
+            "metrics": {
+              "ns/op": 4006701.0,
+              "B/op": 1075509.0,
+              "allocs/op": 2047.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 27,
+            "round": 2,
+            "metrics": {
+              "ns/op": 7296400.0,
+              "B/op": 1344577.0,
+              "allocs/op": 2068.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 32777184.0,
+              "B/op": 12038408.0,
+              "allocs/op": 20149.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 36676732.0,
+              "B/op": 15523704.0,
+              "allocs/op": 20176.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 38,
+            "round": 2,
+            "metrics": {
+              "ns/op": 4486283.0,
+              "B/op": 503370.0,
+              "allocs/op": 611.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 40,
+            "round": 2,
+            "metrics": {
+              "ns/op": 4369909.0,
+              "B/op": 503199.0,
+              "allocs/op": 611.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 7,
+            "round": 2,
+            "metrics": {
+              "ns/op": 21997141.0,
+              "B/op": 2858960.0,
+              "allocs/op": 27254.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 25,
+            "round": 2,
+            "metrics": {
+              "ns/op": 7782431.0,
+              "B/op": 2977572.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 24,
+            "round": 2,
+            "metrics": {
+              "ns/op": 7298074.0,
+              "B/op": 2977608.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 152417857.0,
+              "B/op": 27653520.0,
+              "allocs/op": 261377.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 716871664.0,
+              "apply-ms/op": 97.27,
+              "client-ms/op": 431.4,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 188.2,
+              "B/op": 282350418.0,
+              "allocs/op": 701591.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 354186610.0,
+              "apply-ms/op": 88.56,
+              "client-ms/op": 108.9,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 156.2,
+              "B/op": 172185840.0,
+              "allocs/op": 379972.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 283766619.0,
+              "B/op": 72911477.0,
+              "allocs/op": 281566.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 207217933.0,
+              "B/op": 70668893.0,
+              "allocs/op": 200139.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 5567515.0,
+              "fetch-ms/op": 5.567,
+              "B/op": 2154805.0,
+              "allocs/op": 7429.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 44732762.0,
+              "fetch-ms/op": 44.73,
+              "B/op": 15455909.0,
+              "allocs/op": 55962.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 80,
+            "round": 3,
+            "metrics": {
+              "ns/op": 2627454.0,
+              "B/op": 1055146.0,
+              "allocs/op": 2046.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 31,
+            "round": 3,
+            "metrics": {
+              "ns/op": 5561957.0,
+              "B/op": 1273890.0,
+              "allocs/op": 2064.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 4,
+            "round": 3,
+            "metrics": {
+              "ns/op": 40662327.0,
+              "B/op": 11374118.0,
+              "allocs/op": 20146.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 4,
+            "round": 3,
+            "metrics": {
+              "ns/op": 42071862.0,
+              "B/op": 18513088.0,
+              "allocs/op": 20194.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 43,
+            "round": 3,
+            "metrics": {
+              "ns/op": 4415087.0,
+              "B/op": 503177.0,
+              "allocs/op": 611.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 42,
+            "round": 3,
+            "metrics": {
+              "ns/op": 4420034.0,
+              "B/op": 503059.0,
+              "allocs/op": 611.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 8,
+            "round": 3,
+            "metrics": {
+              "ns/op": 22170867.0,
+              "B/op": 2856227.0,
+              "allocs/op": 27254.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 26,
+            "round": 3,
+            "metrics": {
+              "ns/op": 7849730.0,
+              "B/op": 2977568.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 24,
+            "round": 3,
+            "metrics": {
+              "ns/op": 7483554.0,
+              "B/op": 2977603.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 3,
+            "metrics": {
+              "ns/op": 169186426.0,
+              "B/op": 27653784.0,
+              "allocs/op": 261379.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 732581409.0,
+              "apply-ms/op": 113.1,
+              "client-ms/op": 440.1,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 179.3,
+              "B/op": 280141642.0,
+              "allocs/op": 701584.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 362678839.0,
+              "apply-ms/op": 88.48,
+              "client-ms/op": 111.2,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 163.0,
+              "B/op": 172189448.0,
+              "allocs/op": 379974.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 278476905.0,
+              "B/op": 73158576.0,
+              "allocs/op": 281584.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 206284507.0,
+              "B/op": 70766088.0,
+              "allocs/op": 200213.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 5514965.0,
+              "fetch-ms/op": 5.515,
+              "B/op": 2156122.0,
+              "allocs/op": 7429.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 42023651.0,
+              "fetch-ms/op": 42.02,
+              "B/op": 15457946.0,
+              "allocs/op": 55976.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 76,
+            "round": 4,
+            "metrics": {
+              "ns/op": 2865372.0,
+              "B/op": 1035181.0,
+              "allocs/op": 2045.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 45,
+            "round": 4,
+            "metrics": {
+              "ns/op": 4301007.0,
+              "B/op": 1232454.0,
+              "allocs/op": 2062.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 5,
+            "round": 4,
+            "metrics": {
+              "ns/op": 30949677.0,
+              "B/op": 13367014.0,
+              "allocs/op": 20157.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 4,
+            "round": 4,
+            "metrics": {
+              "ns/op": 40790938.0,
+              "B/op": 20175196.0,
+              "allocs/op": 20205.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 42,
+            "round": 4,
+            "metrics": {
+              "ns/op": 4440334.0,
+              "B/op": 503109.0,
+              "allocs/op": 611.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 43,
+            "round": 4,
+            "metrics": {
+              "ns/op": 4301238.0,
+              "B/op": 503058.0,
+              "allocs/op": 611.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 8,
+            "round": 4,
+            "metrics": {
+              "ns/op": 21462912.0,
+              "B/op": 2858299.0,
+              "allocs/op": 27254.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 22,
+            "round": 4,
+            "metrics": {
+              "ns/op": 7785268.0,
+              "B/op": 2977568.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 24,
+            "round": 4,
+            "metrics": {
+              "ns/op": 7587113.0,
+              "B/op": 2977602.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 4,
+            "metrics": {
+              "ns/op": 154657448.0,
+              "B/op": 27653520.0,
+              "allocs/op": 261377.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 740886514.0,
+              "apply-ms/op": 89.2,
+              "client-ms/op": 434.9,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 216.8,
+              "B/op": 282823685.0,
+              "allocs/op": 701587.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 359019530.0,
+              "apply-ms/op": 86.99,
+              "client-ms/op": 109.1,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 162.9,
+              "B/op": 185474874.0,
+              "allocs/op": 380051.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 290660430.0,
+              "B/op": 73529909.0,
+              "allocs/op": 281600.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 217286368.0,
+              "B/op": 71215965.0,
+              "allocs/op": 200226.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 5762735.0,
+              "fetch-ms/op": 5.762,
+              "B/op": 2161629.0,
+              "allocs/op": 7431.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 41433279.0,
+              "fetch-ms/op": 41.43,
+              "B/op": 15008642.0,
+              "allocs/op": 55981.0
+            }
+          }
+        ]
+      },
+      "candidate": {
+        "source_sha256": "37956f514f3bf864b8c4054c8802c157cbc24739b4b3ff580c9d886177c12fb5",
+        "source_files": [
+          "cmd/errand/access.go",
+          "cmd/errand/access_test.go",
+          "cmd/errand/apply_reporting.go",
+          "cmd/errand/apply_reporting_test.go",
+          "cmd/errand/artifacts_test.go",
+          "cmd/errand/automatic_apply.go",
+          "cmd/errand/cache_groups_test.go",
+          "cmd/errand/caches_test.go",
+          "cmd/errand/df_cache_test.go",
+          "cmd/errand/df_details.go",
+          "cmd/errand/df_inventory.go",
+          "cmd/errand/df_inventory_test.go",
+          "cmd/errand/df_render.go",
+          "cmd/errand/doctor.go",
+          "cmd/errand/doctor_local_test.go",
+          "cmd/errand/doctor_test.go",
+          "cmd/errand/environment_files_test.go",
+          "cmd/errand/fetch.go",
+          "cmd/errand/forward_test.go",
+          "cmd/errand/gc.go",
+          "cmd/errand/gc_test.go",
+          "cmd/errand/help.go",
+          "cmd/errand/local_transport_test.go",
+          "cmd/errand/main.go",
+          "cmd/errand/main_test.go",
+          "cmd/errand/offline_test.go",
+          "cmd/errand/peers.go",
+          "cmd/errand/peers_list.go",
+          "cmd/errand/peers_render.go",
+          "cmd/errand/peers_render_test.go",
+          "cmd/errand/peers_test.go",
+          "cmd/errand/persistent_config_test.go",
+          "cmd/errand/placement.go",
+          "cmd/errand/placement_integration_test.go",
+          "cmd/errand/placement_test.go",
+          "cmd/errand/profile_integration_test.go",
+          "cmd/errand/ps_render.go",
+          "cmd/errand/ps_render_test.go",
+          "cmd/errand/push.go",
+          "cmd/errand/push_batch_test.go",
+          "cmd/errand/push_benchmark_test.go",
+          "cmd/errand/push_test.go",
+          "cmd/errand/push_watch.go",
+          "cmd/errand/push_watch_burst_test.go",
+          "cmd/errand/push_watch_delta_test.go",
+          "cmd/errand/push_watch_test.go",
+          "cmd/errand/run.go",
+          "cmd/errand/run_config.go",
+          "cmd/errand/run_config_test.go",
+          "cmd/errand/run_environment_test.go",
+          "cmd/errand/run_output.go",
+          "cmd/errand/session.go",
+          "cmd/errand/session_test.go",
+          "cmd/errand/setup.go",
+          "cmd/errand/setup_ssh_test.go",
+          "cmd/errand/shared_paths_benchmark_test.go",
+          "cmd/errand/ssh_transport_test.go",
+          "cmd/errand/status.go",
+          "cmd/errand/status_test.go",
+          "cmd/errand/terminal_width_darwin.go",
+          "cmd/errand/terminal_width_linux.go",
+          "cmd/errand/terminal_width_other.go",
+          "cmd/errand/test_main_test.go",
+          "cmd/errand/transfer_output.go",
+          "cmd/errand/transfer_reporting_test.go",
+          "cmd/errand/version_advisory_test.go",
+          "cmd/errand/version_discovery_test.go",
+          "cmd/errand/version_warning.go",
+          "cmd/errand/version_warning_test.go",
+          "cmd/errand/workspace_defaults_test.go",
+          "cmd/errand/workspaces.go",
+          "cmd/errand/workspaces_test.go",
+          "go.mod",
+          "go.sum",
+          "internal/archive/archive.go",
+          "internal/archive/archive_test.go",
+          "internal/changes/access.go",
+          "internal/changes/apply.go",
+          "internal/changes/artifacts_test.go",
+          "internal/changes/base.go",
+          "internal/changes/base_benchmark_test.go",
+          "internal/changes/base_test.go",
+          "internal/changes/bundle.go",
+          "internal/changes/caches_test.go",
+          "internal/changes/changes.go",
+          "internal/changes/changes_test.go",
+          "internal/changes/checkpoint.go",
+          "internal/changes/checkpoint_regression_test.go",
+          "internal/changes/checkpoint_test.go",
+          "internal/changes/clone_darwin.go",
+          "internal/changes/clone_linux.go",
+          "internal/changes/clone_other.go",
+          "internal/changes/cumulative_apply_test.go",
+          "internal/changes/export.go",
+          "internal/changes/export_test.go",
+          "internal/changes/journal.go",
+          "internal/changes/manifest_index_test.go",
+          "internal/changes/merge.go",
+          "internal/changes/prepared_benchmark_test.go",
+          "internal/changes/rename_noreplace_darwin.go",
+          "internal/changes/rename_noreplace_linux.go",
+          "internal/changes/rename_noreplace_other.go",
+          "internal/changes/selection.go",
+          "internal/changes/source_delta.go",
+          "internal/changes/source_delta_test.go",
+          "internal/changes/source_metadata_benchmark_test.go",
+          "internal/changes/source_prepared.go",
+          "internal/changes/source_prepared_test.go",
+          "internal/changes/staging_parallel_test.go",
+          "internal/changes/staging_paths.go",
+          "internal/changes/staging_sync.go",
+          "internal/changes/staging_sync_darwin.go",
+          "internal/changes/staging_sync_other.go",
+          "internal/changes/staging_sync_test.go",
+          "internal/changes/staging_tasks.go",
+          "internal/changes/transfer.go",
+          "internal/changes/transfer_benchmark_test.go",
+          "internal/changes/transfer_blob_base.go",
+          "internal/changes/transfer_blobs.go",
+          "internal/changes/transfer_blobs_retry_test.go",
+          "internal/changes/transfer_blobs_test.go",
+          "internal/changes/transfer_observation_test.go",
+          "internal/changes/transfer_recovery_test.go",
+          "internal/changes/transfer_selection.go",
+          "internal/changes/transfer_session.go",
+          "internal/changes/transfer_session_test.go",
+          "internal/changes/transfer_snapshot.go",
+          "internal/changes/transfer_storage.go",
+          "internal/changes/transfer_test.go",
+          "internal/client/automatic_apply.go",
+          "internal/client/automatic_apply_inspect.go",
+          "internal/client/automatic_apply_inspect_test.go",
+          "internal/client/caches.go",
+          "internal/client/caches_test.go",
+          "internal/client/change_download.go",
+          "internal/client/change_gc.go",
+          "internal/client/change_state.go",
+          "internal/client/changes.go",
+          "internal/client/changes_test.go",
+          "internal/client/client.go",
+          "internal/client/client_test.go",
+          "internal/client/forward.go",
+          "internal/client/forward_test.go",
+          "internal/client/interrupts.go",
+          "internal/client/job_details.go",
+          "internal/client/job_details_test.go",
+          "internal/client/local.go",
+          "internal/client/local_test.go",
+          "internal/client/placement.go",
+          "internal/client/placement_test.go",
+          "internal/client/probe.go",
+          "internal/client/probe_test.go",
+          "internal/client/push.go",
+          "internal/client/push_delta.go",
+          "internal/client/push_generation.go",
+          "internal/client/push_watch.go",
+          "internal/client/push_watch_retry_test.go",
+          "internal/client/result.go",
+          "internal/client/snapshot_transfer.go",
+          "internal/client/snapshot_transfer_test.go",
+          "internal/client/ssh.go",
+          "internal/client/ssh_diagnostic.go",
+          "internal/client/ssh_diagnostic_test.go",
+          "internal/client/storage.go",
+          "internal/client/storage_contract_test.go",
+          "internal/client/storage_test.go",
+          "internal/client/terminal_darwin.go",
+          "internal/client/terminal_linux.go",
+          "internal/client/terminal_other.go",
+          "internal/client/transfer_stats.go",
+          "internal/client/upload_deadline_test.go",
+          "internal/client/workspace_descriptor_test.go",
+          "internal/client/workspace_fetch.go",
+          "internal/client/workspace_selection_test.go",
+          "internal/client/workspace_transfer_failure_test.go",
+          "internal/client/workspace_transfer_state.go",
+          "internal/client/workspace_transfer_storage.go",
+          "internal/client/workspaces.go",
+          "internal/client/workspaces_test.go",
+          "internal/config/access.go",
+          "internal/config/access_test.go",
+          "internal/config/artifacts.go",
+          "internal/config/artifacts_test.go",
+          "internal/config/cache_groups_test.go",
+          "internal/config/caches.go",
+          "internal/config/caches_test.go",
+          "internal/config/config.go",
+          "internal/config/config_test.go",
+          "internal/config/environment.go",
+          "internal/config/environment_file.go",
+          "internal/config/environment_files_test.go",
+          "internal/config/environment_test.go",
+          "internal/config/execution.go",
+          "internal/config/local.go",
+          "internal/config/local_test.go",
+          "internal/config/placement.go",
+          "internal/config/placement_test.go",
+          "internal/config/profiles_test.go",
+          "internal/config/run.go",
+          "internal/config/run_test.go",
+          "internal/config/session.go",
+          "internal/config/session_test.go",
+          "internal/config/strict_test.go",
+          "internal/config/transport_test.go",
+          "internal/daemon/admission_clock.go",
+          "internal/daemon/admission_persistence_test.go",
+          "internal/daemon/admission_regression_test.go",
+          "internal/daemon/artifacts_test.go",
+          "internal/daemon/auth_test.go",
+          "internal/daemon/cache.go",
+          "internal/daemon/cache_build_tools_test.go",
+          "internal/daemon/cache_materialize_benchmark_test.go",
+          "internal/daemon/cache_native_test.go",
+          "internal/daemon/cache_policy_test.go",
+          "internal/daemon/cache_preparation_test.go",
+          "internal/daemon/cache_settlement_test.go",
+          "internal/daemon/cache_test.go",
+          "internal/daemon/cache_tools_test.go",
+          "internal/daemon/cache_trees.go",
+          "internal/daemon/cache_trees_test.go",
+          "internal/daemon/daemon_test.go",
+          "internal/daemon/deny_test.go",
+          "internal/daemon/facts.go",
+          "internal/daemon/forward.go",
+          "internal/daemon/forward_test.go",
+          "internal/daemon/job.go",
+          "internal/daemon/job_gc.go",
+          "internal/daemon/job_gc_test.go",
+          "internal/daemon/job_preview_test.go",
+          "internal/daemon/local_identity_test.go",
+          "internal/daemon/local_mode_test.go",
+          "internal/daemon/milestone2_test.go",
+          "internal/daemon/milestone35_test.go",
+          "internal/daemon/milestone3_test.go",
+          "internal/daemon/milestone4_test.go",
+          "internal/daemon/named_caches.go",
+          "internal/daemon/named_caches_test.go",
+          "internal/daemon/peercred.go",
+          "internal/daemon/peercred_uid_test.go",
+          "internal/daemon/placement.go",
+          "internal/daemon/placement_test.go",
+          "internal/daemon/process_group.go",
+          "internal/daemon/process_group_darwin.go",
+          "internal/daemon/process_group_linux.go",
+          "internal/daemon/process_group_linux_test.go",
+          "internal/daemon/process_group_test.go",
+          "internal/daemon/process_scope.go",
+          "internal/daemon/process_scope_test.go",
+          "internal/daemon/server.go",
+          "internal/daemon/setup_quiesce_test.go",
+          "internal/daemon/storage.go",
+          "internal/daemon/storage_test.go",
+          "internal/daemon/whois.go",
+          "internal/daemon/workspace_concurrency_test.go",
+          "internal/daemon/workspace_concurrent_recovery_test.go",
+          "internal/daemon/workspace_create_snapshot_test.go",
+          "internal/daemon/workspace_descriptor_test.go",
+          "internal/daemon/workspace_fetch_test.go",
+          "internal/daemon/workspace_format_test.go",
+          "internal/daemon/workspace_isolation_test.go",
+          "internal/daemon/workspace_leases.go",
+          "internal/daemon/workspace_push.go",
+          "internal/daemon/workspace_push_cache_test.go",
+          "internal/daemon/workspace_push_delta.go",
+          "internal/daemon/workspace_push_delta_test.go",
+          "internal/daemon/workspace_push_snapshot_test.go",
+          "internal/daemon/workspace_recovery_test.go",
+          "internal/daemon/workspace_scope_failure_test.go",
+          "internal/daemon/workspace_snapshot_benchmark_test.go",
+          "internal/daemon/workspace_snapshot_cache.go",
+          "internal/daemon/workspace_storage.go",
+          "internal/daemon/workspace_storage_test.go",
+          "internal/daemon/workspace_transfer_gc.go",
+          "internal/daemon/workspace_transfer_gc_test.go",
+          "internal/daemon/workspace_transfer_test.go",
+          "internal/daemon/workspace_upload.go",
+          "internal/daemon/workspace_upload_admission_test.go",
+          "internal/daemon/workspace_upload_test.go",
+          "internal/daemon/workspaces.go",
+          "internal/daemon/workspaces_http.go",
+          "internal/daemon/workspaces_test.go",
+          "internal/fsidentity/identity.go",
+          "internal/logio/logio.go",
+          "internal/logio/logio_test.go",
+          "internal/manifest/hash.go",
+          "internal/manifest/snapshot.go",
+          "internal/manifest/snapshot_test.go",
+          "internal/manifest/tree.go",
+          "internal/namedcache/gc.go",
+          "internal/namedcache/gc_pressure_test.go",
+          "internal/namedcache/holders.go",
+          "internal/namedcache/leases.go",
+          "internal/namedcache/leases_test.go",
+          "internal/namedcache/store.go",
+          "internal/namedcache/store_test.go",
+          "internal/namedcache/tree_cleanup.go",
+          "internal/namedcache/tree_clone_darwin.go",
+          "internal/namedcache/tree_clone_linux.go",
+          "internal/namedcache/tree_clone_other.go",
+          "internal/namedcache/tree_files.go",
+          "internal/namedcache/tree_filesystem_linux_test.go",
+          "internal/namedcache/tree_holders.go",
+          "internal/namedcache/tree_holders_test.go",
+          "internal/namedcache/tree_publication_test.go",
+          "internal/namedcache/tree_recovery_test.go",
+          "internal/namedcache/trees.go",
+          "internal/namedcache/trees_test.go",
+          "internal/pathpolicy/artifacts.go",
+          "internal/pathpolicy/artifacts_test.go",
+          "internal/pathpolicy/caches.go",
+          "internal/pathpolicy/caches_test.go",
+          "internal/pathpolicy/policy.go",
+          "internal/pathpolicy/policy_test.go",
+          "internal/placement/requirements.go",
+          "internal/placement/requirements_test.go",
+          "internal/proto/proto.go",
+          "internal/proto/spec_test.go",
+          "internal/proto/storage.go",
+          "internal/proto/transfer.go",
+          "internal/proto/ulid.go",
+          "internal/proto/ulid_test.go",
+          "internal/proto/workspace.go",
+          "internal/serviceruntime/runtime.go",
+          "internal/serviceruntime/runtime_test.go",
+          "internal/setup/config_path_test.go",
+          "internal/setup/config_plan.go",
+          "internal/setup/config_plan_test.go",
+          "internal/setup/diagnose.go",
+          "internal/setup/diagnose_test.go",
+          "internal/setup/executable_test.go",
+          "internal/setup/local_service.go",
+          "internal/setup/local_test.go",
+          "internal/setup/render.go",
+          "internal/setup/service_identity.go",
+          "internal/setup/service_identity_test.go",
+          "internal/setup/service_live_cleanup_test.go",
+          "internal/setup/service_live_network_test.go",
+          "internal/setup/service_live_test.go",
+          "internal/setup/setup.go",
+          "internal/setup/setup_test.go",
+          "internal/setup/ssh_test.go",
+          "internal/setup/system.go",
+          "internal/setup/transport_test.go",
+          "internal/setup/upgrade_test.go",
+          "internal/snapshot/benchmark_test.go",
+          "internal/snapshot/builder.go",
+          "internal/snapshot/builder_test.go",
+          "internal/snapshot/caches.go",
+          "internal/snapshot/caches_test.go",
+          "internal/snapshot/git_info_test.go",
+          "internal/snapshot/snapshot.go",
+          "internal/snapshot/snapshot_test.go",
+          "internal/snapshot/stamp_darwin.go",
+          "internal/snapshot/stamp_linux.go",
+          "internal/snapshot/stamp_other.go",
+          "internal/snapshot/watch.go",
+          "internal/snapshot/watch_prepare.go",
+          "internal/snapshot/watch_prepare_benchmark_test.go",
+          "internal/snapshot/watch_prepare_test.go",
+          "internal/snapshot/watch_test.go",
+          "internal/tailnet/self_test.go",
+          "internal/tailnet/tailnet.go",
+          "internal/tailnet/tailnet_test.go",
+          "internal/tomlconfig/decode.go",
+          "internal/unixpeer/credentials_darwin.go",
+          "internal/unixpeer/credentials_linux.go",
+          "internal/unixpeer/credentials_other.go",
+          "internal/unixpeer/dial.go",
+          "internal/unixpeer/dial_test.go",
+          "internal/unixpeer/pid_darwin.go",
+          "internal/unixpeer/pid_linux.go",
+          "internal/unixpeer/pid_other.go",
+          "internal/workspace/artifacts.go",
+          "internal/workspace/cache_discovery.go",
+          "internal/workspace/cache_discovery_test.go",
+          "internal/workspace/cache_groups.go",
+          "internal/workspace/caches.go",
+          "internal/workspace/environment.go",
+          "internal/workspace/profile.go",
+          "internal/workspace/session.go",
+          "internal/workspace/strict_test.go",
+          "internal/workspace/trust_other.go",
+          "internal/workspace/trust_unix.go",
+          "internal/workspace/workspace.go",
+          "internal/workspace/workspace_test.go"
+        ],
+        "binaries": {
+          "changes": "3273890ebfe15b144c75599af3a1e4a8ccc8727809a8a244fe9b401c326b99ab",
+          "snapshot": "6660920752ebfb98799b05d570f3d2f8edeb034fbdf4821fc26497d9b118cb5f",
+          "commands": "ad5a332b180b25cd090feb01a4a413eea3876bee2a1ae8a71efa59ce1ccff38a"
+        },
+        "samples": [
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 73,
+            "round": 0,
+            "metrics": {
+              "ns/op": 3327563.0,
+              "B/op": 781680.0,
+              "allocs/op": 3041.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 39,
+            "round": 0,
+            "metrics": {
+              "ns/op": 4064052.0,
+              "B/op": 973412.0,
+              "allocs/op": 4058.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 37977950.0,
+              "B/op": 11736808.0,
+              "allocs/op": 30126.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 4,
+            "round": 0,
+            "metrics": {
+              "ns/op": 39569478.0,
+              "B/op": 18167616.0,
+              "allocs/op": 40199.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 31,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5570111.0,
+              "B/op": 507055.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 42,
+            "round": 0,
+            "metrics": {
+              "ns/op": 4170481.0,
+              "B/op": 277035.0,
+              "allocs/op": 623.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 7,
+            "round": 0,
+            "metrics": {
+              "ns/op": 22185347.0,
+              "B/op": 2914945.0,
+              "allocs/op": 28254.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 8,
+            "round": 0,
+            "metrics": {
+              "ns/op": 18920313.0,
+              "B/op": 3238920.0,
+              "allocs/op": 675.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 36,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5274353.0,
+              "B/op": 997931.0,
+              "allocs/op": 623.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 167544620.0,
+              "B/op": 28201184.0,
+              "allocs/op": 271382.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 732301375.0,
+              "apply-ms/op": 108.4,
+              "client-ms/op": 439.5,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 184.5,
+              "B/op": 278756624.0,
+              "allocs/op": 741571.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 346034560.0,
+              "apply-ms/op": 80.32,
+              "client-ms/op": 99.8,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 164.9,
+              "B/op": 162459685.0,
+              "allocs/op": 419933.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 292953976.0,
+              "B/op": 73982176.0,
+              "allocs/op": 281616.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 224791765.0,
+              "B/op": 71554213.0,
+              "allocs/op": 202235.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 5964683.0,
+              "fetch-ms/op": 5.964,
+              "B/op": 2163098.0,
+              "allocs/op": 7424.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 44984498.0,
+              "fetch-ms/op": 44.98,
+              "B/op": 15694360.0,
+              "allocs/op": 57019.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 75,
+            "round": 1,
+            "metrics": {
+              "ns/op": 2768233.0,
+              "B/op": 770009.0,
+              "allocs/op": 3040.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 49,
+            "round": 1,
+            "metrics": {
+              "ns/op": 3784319.0,
+              "B/op": 927356.0,
+              "allocs/op": 4056.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 5,
+            "round": 1,
+            "metrics": {
+              "ns/op": 35059792.0,
+              "B/op": 11736838.0,
+              "allocs/op": 30126.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 4,
+            "round": 1,
+            "metrics": {
+              "ns/op": 38425795.0,
+              "B/op": 11524568.0,
+              "allocs/op": 40160.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 31,
+            "round": 1,
+            "metrics": {
+              "ns/op": 5690990.0,
+              "B/op": 507172.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 44,
+            "round": 1,
+            "metrics": {
+              "ns/op": 4123599.0,
+              "B/op": 277031.0,
+              "allocs/op": 623.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 7,
+            "round": 1,
+            "metrics": {
+              "ns/op": 22044807.0,
+              "B/op": 2920868.0,
+              "allocs/op": 28256.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 10,
+            "round": 1,
+            "metrics": {
+              "ns/op": 20594652.0,
+              "B/op": 3238918.0,
+              "allocs/op": 675.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 37,
+            "round": 1,
+            "metrics": {
+              "ns/op": 5122296.0,
+              "B/op": 997927.0,
+              "allocs/op": 623.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 1,
+            "metrics": {
+              "ns/op": 155716870.0,
+              "B/op": 28192688.0,
+              "allocs/op": 271378.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 750334205.0,
+              "apply-ms/op": 94.02,
+              "client-ms/op": 464.9,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 191.4,
+              "B/op": 276062026.0,
+              "allocs/op": 741551.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 359958390.0,
+              "apply-ms/op": 91.62,
+              "client-ms/op": 109.3,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 158.6,
+              "B/op": 175730392.0,
+              "allocs/op": 419998.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 289228918.0,
+              "B/op": 73830016.0,
+              "allocs/op": 281600.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 214718071.0,
+              "B/op": 70663037.0,
+              "allocs/op": 202234.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 6091053.0,
+              "fetch-ms/op": 6.091,
+              "B/op": 2163648.0,
+              "allocs/op": 7427.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 1,
+            "metrics": {
+              "ns/op": 41680109.0,
+              "fetch-ms/op": 41.68,
+              "B/op": 14995962.0,
+              "allocs/op": 56959.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 79,
+            "round": 2,
+            "metrics": {
+              "ns/op": 3443466.0,
+              "B/op": 783229.0,
+              "allocs/op": 3041.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 45,
+            "round": 2,
+            "metrics": {
+              "ns/op": 3923826.0,
+              "B/op": 961653.0,
+              "allocs/op": 4058.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 4,
+            "round": 2,
+            "metrics": {
+              "ns/op": 38297148.0,
+              "B/op": 14726150.0,
+              "allocs/op": 30143.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 5,
+            "round": 2,
+            "metrics": {
+              "ns/op": 34809812.0,
+              "B/op": 14846067.0,
+              "allocs/op": 40179.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 30,
+            "round": 2,
+            "metrics": {
+              "ns/op": 5637278.0,
+              "B/op": 507198.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 44,
+            "round": 2,
+            "metrics": {
+              "ns/op": 4076039.0,
+              "B/op": 277034.0,
+              "allocs/op": 623.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 7,
+            "round": 2,
+            "metrics": {
+              "ns/op": 22226678.0,
+              "B/op": 2918468.0,
+              "allocs/op": 28255.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 8,
+            "round": 2,
+            "metrics": {
+              "ns/op": 19068464.0,
+              "B/op": 3238920.0,
+              "allocs/op": 675.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 37,
+            "round": 2,
+            "metrics": {
+              "ns/op": 5240752.0,
+              "B/op": 997929.0,
+              "allocs/op": 623.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 2,
+            "metrics": {
+              "ns/op": 182214787.0,
+              "B/op": 28192688.0,
+              "allocs/op": 271378.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 709326407.0,
+              "apply-ms/op": 98.8,
+              "client-ms/op": 432.9,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 177.7,
+              "B/op": 269899733.0,
+              "allocs/op": 741523.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 369448588.0,
+              "apply-ms/op": 92.26,
+              "client-ms/op": 114.9,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 161.3,
+              "B/op": 171306056.0,
+              "allocs/op": 419962.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 283295895.0,
+              "B/op": 73749192.0,
+              "allocs/op": 281602.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 211609179.0,
+              "B/op": 70728037.0,
+              "allocs/op": 202184.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 5567863.0,
+              "fetch-ms/op": 5.567,
+              "B/op": 2155133.0,
+              "allocs/op": 7427.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 2,
+            "metrics": {
+              "ns/op": 44513344.0,
+              "fetch-ms/op": 44.51,
+              "B/op": 15466738.0,
+              "allocs/op": 57022.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 72,
+            "round": 3,
+            "metrics": {
+              "ns/op": 2396093.0,
+              "B/op": 763899.0,
+              "allocs/op": 3040.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 73,
+            "round": 3,
+            "metrics": {
+              "ns/op": 3115710.0,
+              "B/op": 979400.0,
+              "allocs/op": 4058.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 5,
+            "round": 3,
+            "metrics": {
+              "ns/op": 32822025.0,
+              "B/op": 9079625.0,
+              "allocs/op": 30111.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 4,
+            "round": 3,
+            "metrics": {
+              "ns/op": 39110924.0,
+              "B/op": 14846018.0,
+              "allocs/op": 40179.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 33,
+            "round": 3,
+            "metrics": {
+              "ns/op": 5678389.0,
+              "B/op": 507029.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 42,
+            "round": 3,
+            "metrics": {
+              "ns/op": 4070990.0,
+              "B/op": 277052.0,
+              "allocs/op": 623.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 7,
+            "round": 3,
+            "metrics": {
+              "ns/op": 22703065.0,
+              "B/op": 2917329.0,
+              "allocs/op": 28255.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 7,
+            "round": 3,
+            "metrics": {
+              "ns/op": 21558937.0,
+              "B/op": 3238929.0,
+              "allocs/op": 675.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 36,
+            "round": 3,
+            "metrics": {
+              "ns/op": 5298017.0,
+              "B/op": 997929.0,
+              "allocs/op": 623.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 3,
+            "metrics": {
+              "ns/op": 168166835.0,
+              "B/op": 28200920.0,
+              "allocs/op": 271380.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 730098909.0,
+              "apply-ms/op": 103.5,
+              "client-ms/op": 435.7,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 190.9,
+              "B/op": 283178064.0,
+              "allocs/op": 741587.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 349640032.0,
+              "apply-ms/op": 87.06,
+              "client-ms/op": 107.8,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 154.6,
+              "B/op": 175733669.0,
+              "allocs/op": 420003.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 295156710.0,
+              "B/op": 73064445.0,
+              "allocs/op": 281589.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 216567426.0,
+              "B/op": 70967256.0,
+              "allocs/op": 202199.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 5794565.0,
+              "fetch-ms/op": 5.794,
+              "B/op": 2163789.0,
+              "allocs/op": 7422.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 3,
+            "metrics": {
+              "ns/op": 41084065.0,
+              "fetch-ms/op": 41.08,
+              "B/op": 14550109.0,
+              "allocs/op": 56959.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 79,
+            "round": 4,
+            "metrics": {
+              "ns/op": 3089958.0,
+              "B/op": 757127.0,
+              "allocs/op": 3040.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 48,
+            "round": 4,
+            "metrics": {
+              "ns/op": 4036966.0,
+              "B/op": 985518.0,
+              "allocs/op": 4059.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 5,
+            "round": 4,
+            "metrics": {
+              "ns/op": 33520206.0,
+              "B/op": 9079678.0,
+              "allocs/op": 30111.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 4,
+            "round": 4,
+            "metrics": {
+              "ns/op": 39600352.0,
+              "B/op": 18167542.0,
+              "allocs/op": 40198.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 32,
+            "round": 4,
+            "metrics": {
+              "ns/op": 5633176.0,
+              "B/op": 507305.0,
+              "allocs/op": 639.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 43,
+            "round": 4,
+            "metrics": {
+              "ns/op": 4149398.0,
+              "B/op": 277033.0,
+              "allocs/op": 623.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 8,
+            "round": 4,
+            "metrics": {
+              "ns/op": 22243401.0,
+              "B/op": 2916696.0,
+              "allocs/op": 28255.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 8,
+            "round": 4,
+            "metrics": {
+              "ns/op": 23294307.0,
+              "B/op": 3238932.0,
+              "allocs/op": 675.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 34,
+            "round": 4,
+            "metrics": {
+              "ns/op": 5132753.0,
+              "B/op": 997929.0,
+              "allocs/op": 623.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 4,
+            "metrics": {
+              "ns/op": 166248333.0,
+              "B/op": 28200904.0,
+              "allocs/op": 271380.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 694768240.0,
+              "apply-ms/op": 99.31,
+              "client-ms/op": 410.6,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 184.9,
+              "B/op": 276542053.0,
+              "allocs/op": 741557.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 350951497.0,
+              "apply-ms/op": 85.68,
+              "client-ms/op": 102.8,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 162.5,
+              "B/op": 173524274.0,
+              "allocs/op": 419992.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 288022799.0,
+              "B/op": 73602525.0,
+              "allocs/op": 281598.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 218408354.0,
+              "B/op": 70493722.0,
+              "allocs/op": 202196.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 6186092.0,
+              "fetch-ms/op": 6.186,
+              "B/op": 2164434.0,
+              "allocs/op": 7428.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 4,
+            "metrics": {
+              "ns/op": 42495838.0,
+              "fetch-ms/op": 42.5,
+              "B/op": 15228733.0,
+              "allocs/op": 56968.0
+            }
+          }
+        ]
+      }
+    },
+    "orders": [
+      [
+        "baseline",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "baseline"
+      ],
+      [
+        "baseline",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "baseline"
+      ],
+      [
+        "baseline",
+        "candidate"
+      ]
+    ],
+    "scope": "Native-host metadata/preparation and loopback HTTP command paths; no cross-host network latency.",
+    "harness_sha256": "c07baef01490a8fd9ebf3e5477ad60b26dad8bbba4ed0981c937828843bd5c70",
+    "go": "go version go1.27.1 linux/amd64",
+    "filesystem": "btrfs",
+    "status": "complete"
+  },
+  "mac-mini": {
+    "revision": "9f3708a8a2b5ff7b9e7a84df3bd48809101e9d58",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "gomaxprocs": 2,
+    "rounds": 5,
+    "versions": {
+      "baseline": {
+        "source_sha256": "3071e35be09c00961b0cb4745b77952e7284b35802364d4270a175db2f57e2b5",
+        "source_files": [
+          "cmd/errand/access.go",
+          "cmd/errand/access_test.go",
+          "cmd/errand/apply_reporting.go",
+          "cmd/errand/apply_reporting_test.go",
+          "cmd/errand/artifacts_test.go",
+          "cmd/errand/automatic_apply.go",
+          "cmd/errand/cache_groups_test.go",
+          "cmd/errand/caches_test.go",
+          "cmd/errand/df_cache_test.go",
+          "cmd/errand/df_details.go",
+          "cmd/errand/df_inventory.go",
+          "cmd/errand/df_inventory_test.go",
+          "cmd/errand/df_render.go",
+          "cmd/errand/doctor.go",
+          "cmd/errand/doctor_local_test.go",
+          "cmd/errand/doctor_test.go",
+          "cmd/errand/environment_files_test.go",
+          "cmd/errand/fetch.go",
+          "cmd/errand/forward_test.go",
+          "cmd/errand/gc.go",
+          "cmd/errand/gc_test.go",
+          "cmd/errand/help.go",
+          "cmd/errand/local_transport_test.go",
+          "cmd/errand/main.go",
+          "cmd/errand/main_test.go",
+          "cmd/errand/offline_test.go",
+          "cmd/errand/peers.go",
+          "cmd/errand/peers_list.go",
+          "cmd/errand/peers_render.go",
+          "cmd/errand/peers_render_test.go",
+          "cmd/errand/peers_test.go",
+          "cmd/errand/persistent_config_test.go",
+          "cmd/errand/placement.go",
+          "cmd/errand/placement_integration_test.go",
+          "cmd/errand/placement_test.go",
+          "cmd/errand/profile_integration_test.go",
+          "cmd/errand/ps_render.go",
+          "cmd/errand/ps_render_test.go",
+          "cmd/errand/push.go",
+          "cmd/errand/push_batch_test.go",
+          "cmd/errand/push_benchmark_test.go",
+          "cmd/errand/push_test.go",
+          "cmd/errand/push_watch.go",
+          "cmd/errand/push_watch_burst_test.go",
+          "cmd/errand/push_watch_delta_test.go",
+          "cmd/errand/push_watch_test.go",
+          "cmd/errand/run.go",
+          "cmd/errand/run_config.go",
+          "cmd/errand/run_config_test.go",
+          "cmd/errand/run_environment_test.go",
+          "cmd/errand/run_output.go",
+          "cmd/errand/session.go",
+          "cmd/errand/session_test.go",
+          "cmd/errand/setup.go",
+          "cmd/errand/setup_ssh_test.go",
+          "cmd/errand/shared_paths_benchmark_test.go",
+          "cmd/errand/ssh_transport_test.go",
+          "cmd/errand/status.go",
+          "cmd/errand/status_test.go",
+          "cmd/errand/terminal_width_darwin.go",
+          "cmd/errand/terminal_width_linux.go",
+          "cmd/errand/terminal_width_other.go",
+          "cmd/errand/test_main_test.go",
+          "cmd/errand/transfer_output.go",
+          "cmd/errand/transfer_reporting_test.go",
+          "cmd/errand/version_advisory_test.go",
+          "cmd/errand/version_discovery_test.go",
+          "cmd/errand/version_warning.go",
+          "cmd/errand/version_warning_test.go",
+          "cmd/errand/workspace_defaults_test.go",
+          "cmd/errand/workspaces.go",
+          "cmd/errand/workspaces_test.go",
+          "go.mod",
+          "go.sum",
+          "internal/archive/archive.go",
+          "internal/archive/archive_test.go",
+          "internal/changes/access.go",
+          "internal/changes/apply.go",
+          "internal/changes/artifacts_test.go",
+          "internal/changes/base.go",
+          "internal/changes/base_benchmark_test.go",
+          "internal/changes/base_test.go",
+          "internal/changes/bundle.go",
+          "internal/changes/caches_test.go",
+          "internal/changes/changes.go",
+          "internal/changes/changes_test.go",
+          "internal/changes/checkpoint.go",
+          "internal/changes/checkpoint_regression_test.go",
+          "internal/changes/checkpoint_test.go",
+          "internal/changes/clone_darwin.go",
+          "internal/changes/clone_linux.go",
+          "internal/changes/clone_other.go",
+          "internal/changes/cumulative_apply_test.go",
+          "internal/changes/export.go",
+          "internal/changes/export_test.go",
+          "internal/changes/journal.go",
+          "internal/changes/manifest_index_test.go",
+          "internal/changes/merge.go",
+          "internal/changes/prepared_benchmark_test.go",
+          "internal/changes/rename_noreplace_darwin.go",
+          "internal/changes/rename_noreplace_linux.go",
+          "internal/changes/rename_noreplace_other.go",
+          "internal/changes/selection.go",
+          "internal/changes/source_delta.go",
+          "internal/changes/source_delta_test.go",
+          "internal/changes/source_metadata_benchmark_test.go",
+          "internal/changes/source_prepared.go",
+          "internal/changes/source_prepared_test.go",
+          "internal/changes/staging_parallel_test.go",
+          "internal/changes/staging_paths.go",
+          "internal/changes/staging_sync.go",
+          "internal/changes/staging_sync_darwin.go",
+          "internal/changes/staging_sync_other.go",
+          "internal/changes/staging_sync_test.go",
+          "internal/changes/staging_tasks.go",
+          "internal/changes/transfer.go",
+          "internal/changes/transfer_benchmark_test.go",
+          "internal/changes/transfer_blob_base.go",
+          "internal/changes/transfer_blobs.go",
+          "internal/changes/transfer_blobs_retry_test.go",
+          "internal/changes/transfer_blobs_test.go",
+          "internal/changes/transfer_observation_test.go",
+          "internal/changes/transfer_recovery_test.go",
+          "internal/changes/transfer_selection.go",
+          "internal/changes/transfer_session.go",
+          "internal/changes/transfer_session_test.go",
+          "internal/changes/transfer_snapshot.go",
+          "internal/changes/transfer_storage.go",
+          "internal/changes/transfer_test.go",
+          "internal/client/automatic_apply.go",
+          "internal/client/automatic_apply_inspect.go",
+          "internal/client/automatic_apply_inspect_test.go",
+          "internal/client/caches.go",
+          "internal/client/caches_test.go",
+          "internal/client/change_download.go",
+          "internal/client/change_gc.go",
+          "internal/client/change_state.go",
+          "internal/client/changes.go",
+          "internal/client/changes_test.go",
+          "internal/client/client.go",
+          "internal/client/client_test.go",
+          "internal/client/forward.go",
+          "internal/client/forward_test.go",
+          "internal/client/interrupts.go",
+          "internal/client/job_details.go",
+          "internal/client/job_details_test.go",
+          "internal/client/local.go",
+          "internal/client/local_test.go",
+          "internal/client/placement.go",
+          "internal/client/placement_test.go",
+          "internal/client/probe.go",
+          "internal/client/probe_test.go",
+          "internal/client/push.go",
+          "internal/client/push_delta.go",
+          "internal/client/push_generation.go",
+          "internal/client/push_watch.go",
+          "internal/client/push_watch_retry_test.go",
+          "internal/client/result.go",
+          "internal/client/snapshot_transfer.go",
+          "internal/client/snapshot_transfer_test.go",
+          "internal/client/ssh.go",
+          "internal/client/ssh_diagnostic.go",
+          "internal/client/ssh_diagnostic_test.go",
+          "internal/client/storage.go",
+          "internal/client/storage_contract_test.go",
+          "internal/client/storage_test.go",
+          "internal/client/terminal_darwin.go",
+          "internal/client/terminal_linux.go",
+          "internal/client/terminal_other.go",
+          "internal/client/transfer_stats.go",
+          "internal/client/upload_deadline_test.go",
+          "internal/client/workspace_descriptor_test.go",
+          "internal/client/workspace_fetch.go",
+          "internal/client/workspace_selection_test.go",
+          "internal/client/workspace_transfer_failure_test.go",
+          "internal/client/workspace_transfer_state.go",
+          "internal/client/workspace_transfer_storage.go",
+          "internal/client/workspaces.go",
+          "internal/client/workspaces_test.go",
+          "internal/config/access.go",
+          "internal/config/access_test.go",
+          "internal/config/artifacts.go",
+          "internal/config/artifacts_test.go",
+          "internal/config/cache_groups_test.go",
+          "internal/config/caches.go",
+          "internal/config/caches_test.go",
+          "internal/config/config.go",
+          "internal/config/config_test.go",
+          "internal/config/environment.go",
+          "internal/config/environment_file.go",
+          "internal/config/environment_files_test.go",
+          "internal/config/environment_test.go",
+          "internal/config/execution.go",
+          "internal/config/local.go",
+          "internal/config/local_test.go",
+          "internal/config/placement.go",
+          "internal/config/placement_test.go",
+          "internal/config/profiles_test.go",
+          "internal/config/run.go",
+          "internal/config/run_test.go",
+          "internal/config/session.go",
+          "internal/config/session_test.go",
+          "internal/config/strict_test.go",
+          "internal/config/transport_test.go",
+          "internal/daemon/admission_clock.go",
+          "internal/daemon/admission_persistence_test.go",
+          "internal/daemon/admission_regression_test.go",
+          "internal/daemon/artifacts_test.go",
+          "internal/daemon/auth_test.go",
+          "internal/daemon/cache.go",
+          "internal/daemon/cache_build_tools_test.go",
+          "internal/daemon/cache_materialize_benchmark_test.go",
+          "internal/daemon/cache_native_test.go",
+          "internal/daemon/cache_policy_test.go",
+          "internal/daemon/cache_preparation_test.go",
+          "internal/daemon/cache_settlement_test.go",
+          "internal/daemon/cache_test.go",
+          "internal/daemon/cache_tools_test.go",
+          "internal/daemon/cache_trees.go",
+          "internal/daemon/cache_trees_test.go",
+          "internal/daemon/daemon_test.go",
+          "internal/daemon/deny_test.go",
+          "internal/daemon/facts.go",
+          "internal/daemon/forward.go",
+          "internal/daemon/forward_test.go",
+          "internal/daemon/job.go",
+          "internal/daemon/job_gc.go",
+          "internal/daemon/job_gc_test.go",
+          "internal/daemon/job_preview_test.go",
+          "internal/daemon/local_identity_test.go",
+          "internal/daemon/local_mode_test.go",
+          "internal/daemon/milestone2_test.go",
+          "internal/daemon/milestone35_test.go",
+          "internal/daemon/milestone3_test.go",
+          "internal/daemon/milestone4_test.go",
+          "internal/daemon/named_caches.go",
+          "internal/daemon/named_caches_test.go",
+          "internal/daemon/peercred.go",
+          "internal/daemon/peercred_uid_test.go",
+          "internal/daemon/placement.go",
+          "internal/daemon/placement_test.go",
+          "internal/daemon/process_group.go",
+          "internal/daemon/process_group_darwin.go",
+          "internal/daemon/process_group_linux.go",
+          "internal/daemon/process_group_linux_test.go",
+          "internal/daemon/process_group_test.go",
+          "internal/daemon/process_scope.go",
+          "internal/daemon/process_scope_test.go",
+          "internal/daemon/server.go",
+          "internal/daemon/setup_quiesce_test.go",
+          "internal/daemon/storage.go",
+          "internal/daemon/storage_test.go",
+          "internal/daemon/whois.go",
+          "internal/daemon/workspace_concurrency_test.go",
+          "internal/daemon/workspace_concurrent_recovery_test.go",
+          "internal/daemon/workspace_create_snapshot_test.go",
+          "internal/daemon/workspace_descriptor_test.go",
+          "internal/daemon/workspace_fetch_test.go",
+          "internal/daemon/workspace_format_test.go",
+          "internal/daemon/workspace_isolation_test.go",
+          "internal/daemon/workspace_leases.go",
+          "internal/daemon/workspace_push.go",
+          "internal/daemon/workspace_push_cache_test.go",
+          "internal/daemon/workspace_push_delta.go",
+          "internal/daemon/workspace_push_delta_test.go",
+          "internal/daemon/workspace_push_snapshot_test.go",
+          "internal/daemon/workspace_recovery_test.go",
+          "internal/daemon/workspace_scope_failure_test.go",
+          "internal/daemon/workspace_snapshot_benchmark_test.go",
+          "internal/daemon/workspace_snapshot_cache.go",
+          "internal/daemon/workspace_storage.go",
+          "internal/daemon/workspace_storage_test.go",
+          "internal/daemon/workspace_transfer_gc.go",
+          "internal/daemon/workspace_transfer_gc_test.go",
+          "internal/daemon/workspace_transfer_test.go",
+          "internal/daemon/workspace_upload.go",
+          "internal/daemon/workspace_upload_admission_test.go",
+          "internal/daemon/workspace_upload_test.go",
+          "internal/daemon/workspaces.go",
+          "internal/daemon/workspaces_http.go",
+          "internal/daemon/workspaces_test.go",
+          "internal/fsidentity/identity.go",
+          "internal/logio/logio.go",
+          "internal/logio/logio_test.go",
+          "internal/namedcache/gc.go",
+          "internal/namedcache/gc_pressure_test.go",
+          "internal/namedcache/holders.go",
+          "internal/namedcache/leases.go",
+          "internal/namedcache/leases_test.go",
+          "internal/namedcache/store.go",
+          "internal/namedcache/store_test.go",
+          "internal/namedcache/tree_cleanup.go",
+          "internal/namedcache/tree_clone_darwin.go",
+          "internal/namedcache/tree_clone_linux.go",
+          "internal/namedcache/tree_clone_other.go",
+          "internal/namedcache/tree_files.go",
+          "internal/namedcache/tree_filesystem_linux_test.go",
+          "internal/namedcache/tree_holders.go",
+          "internal/namedcache/tree_holders_test.go",
+          "internal/namedcache/tree_publication_test.go",
+          "internal/namedcache/tree_recovery_test.go",
+          "internal/namedcache/trees.go",
+          "internal/namedcache/trees_test.go",
+          "internal/pathpolicy/artifacts.go",
+          "internal/pathpolicy/artifacts_test.go",
+          "internal/pathpolicy/caches.go",
+          "internal/pathpolicy/caches_test.go",
+          "internal/pathpolicy/policy.go",
+          "internal/pathpolicy/policy_test.go",
+          "internal/placement/requirements.go",
+          "internal/placement/requirements_test.go",
+          "internal/proto/proto.go",
+          "internal/proto/spec_test.go",
+          "internal/proto/storage.go",
+          "internal/proto/transfer.go",
+          "internal/proto/ulid.go",
+          "internal/proto/ulid_test.go",
+          "internal/proto/workspace.go",
+          "internal/serviceruntime/runtime.go",
+          "internal/serviceruntime/runtime_test.go",
+          "internal/setup/config_path_test.go",
+          "internal/setup/config_plan.go",
+          "internal/setup/config_plan_test.go",
+          "internal/setup/diagnose.go",
+          "internal/setup/diagnose_test.go",
+          "internal/setup/executable_test.go",
+          "internal/setup/local_service.go",
+          "internal/setup/local_test.go",
+          "internal/setup/render.go",
+          "internal/setup/service_identity.go",
+          "internal/setup/service_identity_test.go",
+          "internal/setup/service_live_cleanup_test.go",
+          "internal/setup/service_live_network_test.go",
+          "internal/setup/service_live_test.go",
+          "internal/setup/setup.go",
+          "internal/setup/setup_test.go",
+          "internal/setup/ssh_test.go",
+          "internal/setup/system.go",
+          "internal/setup/transport_test.go",
+          "internal/setup/upgrade_test.go",
+          "internal/snapshot/benchmark_test.go",
+          "internal/snapshot/builder.go",
+          "internal/snapshot/builder_test.go",
+          "internal/snapshot/caches.go",
+          "internal/snapshot/caches_test.go",
+          "internal/snapshot/git_info_test.go",
+          "internal/snapshot/snapshot.go",
+          "internal/snapshot/snapshot_test.go",
+          "internal/snapshot/stamp_darwin.go",
+          "internal/snapshot/stamp_linux.go",
+          "internal/snapshot/stamp_other.go",
+          "internal/snapshot/watch.go",
+          "internal/snapshot/watch_prepare.go",
+          "internal/snapshot/watch_prepare_benchmark_test.go",
+          "internal/snapshot/watch_prepare_test.go",
+          "internal/snapshot/watch_test.go",
+          "internal/tailnet/self_test.go",
+          "internal/tailnet/tailnet.go",
+          "internal/tailnet/tailnet_test.go",
+          "internal/tomlconfig/decode.go",
+          "internal/unixpeer/credentials_darwin.go",
+          "internal/unixpeer/credentials_linux.go",
+          "internal/unixpeer/credentials_other.go",
+          "internal/unixpeer/dial.go",
+          "internal/unixpeer/dial_test.go",
+          "internal/unixpeer/pid_darwin.go",
+          "internal/unixpeer/pid_linux.go",
+          "internal/unixpeer/pid_other.go",
+          "internal/workspace/artifacts.go",
+          "internal/workspace/cache_discovery.go",
+          "internal/workspace/cache_discovery_test.go",
+          "internal/workspace/cache_groups.go",
+          "internal/workspace/caches.go",
+          "internal/workspace/environment.go",
+          "internal/workspace/profile.go",
+          "internal/workspace/session.go",
+          "internal/workspace/strict_test.go",
+          "internal/workspace/trust_other.go",
+          "internal/workspace/trust_unix.go",
+          "internal/workspace/workspace.go",
+          "internal/workspace/workspace_test.go"
+        ],
+        "binaries": {
+          "changes": "94e0b57197f2b7fe5397bc8e323fe41dd572e9b759bbe8b472942a9542163820",
+          "snapshot": "8648a7bfa5e7ca33a2be86ea54f2f3d801a51af01f8e61f9e22d89dd4d4f62a5",
+          "commands": "3894b561c32bb7dd91fdb0226692500c121ecb5c31d1ddefd30a8e38dc68ae8f"
+        },
+        "samples": [
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 286,
+            "round": 0,
+            "metrics": {
+              "ns/op": 629196.0,
+              "B/op": 1044986.0,
+              "allocs/op": 2045.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 204,
+            "round": 0,
+            "metrics": {
+              "ns/op": 881534.0,
+              "B/op": 1275525.0,
+              "allocs/op": 2063.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 26,
+            "round": 0,
+            "metrics": {
+              "ns/op": 6631279.0,
+              "B/op": 11885115.0,
+              "allocs/op": 20148.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 20,
+            "round": 0,
+            "metrics": {
+              "ns/op": 9047192.0,
+              "B/op": 14195010.0,
+              "allocs/op": 20167.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 6,
+            "round": 0,
+            "metrics": {
+              "ns/op": 30721584.0,
+              "B/op": 496113.0,
+              "allocs/op": 507.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 6,
+            "round": 0,
+            "metrics": {
+              "ns/op": 26739313.0,
+              "B/op": 493853.0,
+              "allocs/op": 503.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 65992083.0,
+              "B/op": 3076165.0,
+              "allocs/op": 27039.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 6,
+            "round": 0,
+            "metrics": {
+              "ns/op": 32402833.0,
+              "B/op": 2968373.0,
+              "allocs/op": 531.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 6,
+            "round": 0,
+            "metrics": {
+              "ns/op": 28826771.0,
+              "B/op": 2968378.0,
+              "allocs/op": 531.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 216535042.0,
+              "B/op": 30028176.0,
+              "allocs/op": 261160.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 536698431.0,
+              "apply-ms/op": 171.0,
+              "client-ms/op": 273.7,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 91.99,
+              "B/op": 289152120.0,
+              "allocs/op": 702866.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 382294597.0,
+              "apply-ms/op": 165.7,
+              "client-ms/op": 123.7,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 92.84,
+              "B/op": 176998117.0,
+              "allocs/op": 381206.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 1373919250.0,
+              "B/op": 42086592.0,
+              "allocs/op": 271715.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 2204751056.0,
+              "B/op": 33719381.0,
+              "allocs/op": 183887.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 104754083.0,
+              "fetch-ms/op": 104.8,
+              "B/op": 2376464.0,
+              "allocs/op": 8383.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 216263639.0,
+              "fetch-ms/op": 216.3,
+              "B/op": 15076602.0,
+              "allocs/op": 57426.0
+            }
+          }
+        ]
+      },
+      "candidate": {
+        "source_sha256": "37956f514f3bf864b8c4054c8802c157cbc24739b4b3ff580c9d886177c12fb5",
+        "source_files": [
+          "cmd/errand/access.go",
+          "cmd/errand/access_test.go",
+          "cmd/errand/apply_reporting.go",
+          "cmd/errand/apply_reporting_test.go",
+          "cmd/errand/artifacts_test.go",
+          "cmd/errand/automatic_apply.go",
+          "cmd/errand/cache_groups_test.go",
+          "cmd/errand/caches_test.go",
+          "cmd/errand/df_cache_test.go",
+          "cmd/errand/df_details.go",
+          "cmd/errand/df_inventory.go",
+          "cmd/errand/df_inventory_test.go",
+          "cmd/errand/df_render.go",
+          "cmd/errand/doctor.go",
+          "cmd/errand/doctor_local_test.go",
+          "cmd/errand/doctor_test.go",
+          "cmd/errand/environment_files_test.go",
+          "cmd/errand/fetch.go",
+          "cmd/errand/forward_test.go",
+          "cmd/errand/gc.go",
+          "cmd/errand/gc_test.go",
+          "cmd/errand/help.go",
+          "cmd/errand/local_transport_test.go",
+          "cmd/errand/main.go",
+          "cmd/errand/main_test.go",
+          "cmd/errand/offline_test.go",
+          "cmd/errand/peers.go",
+          "cmd/errand/peers_list.go",
+          "cmd/errand/peers_render.go",
+          "cmd/errand/peers_render_test.go",
+          "cmd/errand/peers_test.go",
+          "cmd/errand/persistent_config_test.go",
+          "cmd/errand/placement.go",
+          "cmd/errand/placement_integration_test.go",
+          "cmd/errand/placement_test.go",
+          "cmd/errand/profile_integration_test.go",
+          "cmd/errand/ps_render.go",
+          "cmd/errand/ps_render_test.go",
+          "cmd/errand/push.go",
+          "cmd/errand/push_batch_test.go",
+          "cmd/errand/push_benchmark_test.go",
+          "cmd/errand/push_test.go",
+          "cmd/errand/push_watch.go",
+          "cmd/errand/push_watch_burst_test.go",
+          "cmd/errand/push_watch_delta_test.go",
+          "cmd/errand/push_watch_test.go",
+          "cmd/errand/run.go",
+          "cmd/errand/run_config.go",
+          "cmd/errand/run_config_test.go",
+          "cmd/errand/run_environment_test.go",
+          "cmd/errand/run_output.go",
+          "cmd/errand/session.go",
+          "cmd/errand/session_test.go",
+          "cmd/errand/setup.go",
+          "cmd/errand/setup_ssh_test.go",
+          "cmd/errand/shared_paths_benchmark_test.go",
+          "cmd/errand/ssh_transport_test.go",
+          "cmd/errand/status.go",
+          "cmd/errand/status_test.go",
+          "cmd/errand/terminal_width_darwin.go",
+          "cmd/errand/terminal_width_linux.go",
+          "cmd/errand/terminal_width_other.go",
+          "cmd/errand/test_main_test.go",
+          "cmd/errand/transfer_output.go",
+          "cmd/errand/transfer_reporting_test.go",
+          "cmd/errand/version_advisory_test.go",
+          "cmd/errand/version_discovery_test.go",
+          "cmd/errand/version_warning.go",
+          "cmd/errand/version_warning_test.go",
+          "cmd/errand/workspace_defaults_test.go",
+          "cmd/errand/workspaces.go",
+          "cmd/errand/workspaces_test.go",
+          "go.mod",
+          "go.sum",
+          "internal/archive/archive.go",
+          "internal/archive/archive_test.go",
+          "internal/changes/access.go",
+          "internal/changes/apply.go",
+          "internal/changes/artifacts_test.go",
+          "internal/changes/base.go",
+          "internal/changes/base_benchmark_test.go",
+          "internal/changes/base_test.go",
+          "internal/changes/bundle.go",
+          "internal/changes/caches_test.go",
+          "internal/changes/changes.go",
+          "internal/changes/changes_test.go",
+          "internal/changes/checkpoint.go",
+          "internal/changes/checkpoint_regression_test.go",
+          "internal/changes/checkpoint_test.go",
+          "internal/changes/clone_darwin.go",
+          "internal/changes/clone_linux.go",
+          "internal/changes/clone_other.go",
+          "internal/changes/cumulative_apply_test.go",
+          "internal/changes/export.go",
+          "internal/changes/export_test.go",
+          "internal/changes/journal.go",
+          "internal/changes/manifest_index_test.go",
+          "internal/changes/merge.go",
+          "internal/changes/prepared_benchmark_test.go",
+          "internal/changes/rename_noreplace_darwin.go",
+          "internal/changes/rename_noreplace_linux.go",
+          "internal/changes/rename_noreplace_other.go",
+          "internal/changes/selection.go",
+          "internal/changes/source_delta.go",
+          "internal/changes/source_delta_test.go",
+          "internal/changes/source_metadata_benchmark_test.go",
+          "internal/changes/source_prepared.go",
+          "internal/changes/source_prepared_test.go",
+          "internal/changes/staging_parallel_test.go",
+          "internal/changes/staging_paths.go",
+          "internal/changes/staging_sync.go",
+          "internal/changes/staging_sync_darwin.go",
+          "internal/changes/staging_sync_other.go",
+          "internal/changes/staging_sync_test.go",
+          "internal/changes/staging_tasks.go",
+          "internal/changes/transfer.go",
+          "internal/changes/transfer_benchmark_test.go",
+          "internal/changes/transfer_blob_base.go",
+          "internal/changes/transfer_blobs.go",
+          "internal/changes/transfer_blobs_retry_test.go",
+          "internal/changes/transfer_blobs_test.go",
+          "internal/changes/transfer_observation_test.go",
+          "internal/changes/transfer_recovery_test.go",
+          "internal/changes/transfer_selection.go",
+          "internal/changes/transfer_session.go",
+          "internal/changes/transfer_session_test.go",
+          "internal/changes/transfer_snapshot.go",
+          "internal/changes/transfer_storage.go",
+          "internal/changes/transfer_test.go",
+          "internal/client/automatic_apply.go",
+          "internal/client/automatic_apply_inspect.go",
+          "internal/client/automatic_apply_inspect_test.go",
+          "internal/client/caches.go",
+          "internal/client/caches_test.go",
+          "internal/client/change_download.go",
+          "internal/client/change_gc.go",
+          "internal/client/change_state.go",
+          "internal/client/changes.go",
+          "internal/client/changes_test.go",
+          "internal/client/client.go",
+          "internal/client/client_test.go",
+          "internal/client/forward.go",
+          "internal/client/forward_test.go",
+          "internal/client/interrupts.go",
+          "internal/client/job_details.go",
+          "internal/client/job_details_test.go",
+          "internal/client/local.go",
+          "internal/client/local_test.go",
+          "internal/client/placement.go",
+          "internal/client/placement_test.go",
+          "internal/client/probe.go",
+          "internal/client/probe_test.go",
+          "internal/client/push.go",
+          "internal/client/push_delta.go",
+          "internal/client/push_generation.go",
+          "internal/client/push_watch.go",
+          "internal/client/push_watch_retry_test.go",
+          "internal/client/result.go",
+          "internal/client/snapshot_transfer.go",
+          "internal/client/snapshot_transfer_test.go",
+          "internal/client/ssh.go",
+          "internal/client/ssh_diagnostic.go",
+          "internal/client/ssh_diagnostic_test.go",
+          "internal/client/storage.go",
+          "internal/client/storage_contract_test.go",
+          "internal/client/storage_test.go",
+          "internal/client/terminal_darwin.go",
+          "internal/client/terminal_linux.go",
+          "internal/client/terminal_other.go",
+          "internal/client/transfer_stats.go",
+          "internal/client/upload_deadline_test.go",
+          "internal/client/workspace_descriptor_test.go",
+          "internal/client/workspace_fetch.go",
+          "internal/client/workspace_selection_test.go",
+          "internal/client/workspace_transfer_failure_test.go",
+          "internal/client/workspace_transfer_state.go",
+          "internal/client/workspace_transfer_storage.go",
+          "internal/client/workspaces.go",
+          "internal/client/workspaces_test.go",
+          "internal/config/access.go",
+          "internal/config/access_test.go",
+          "internal/config/artifacts.go",
+          "internal/config/artifacts_test.go",
+          "internal/config/cache_groups_test.go",
+          "internal/config/caches.go",
+          "internal/config/caches_test.go",
+          "internal/config/config.go",
+          "internal/config/config_test.go",
+          "internal/config/environment.go",
+          "internal/config/environment_file.go",
+          "internal/config/environment_files_test.go",
+          "internal/config/environment_test.go",
+          "internal/config/execution.go",
+          "internal/config/local.go",
+          "internal/config/local_test.go",
+          "internal/config/placement.go",
+          "internal/config/placement_test.go",
+          "internal/config/profiles_test.go",
+          "internal/config/run.go",
+          "internal/config/run_test.go",
+          "internal/config/session.go",
+          "internal/config/session_test.go",
+          "internal/config/strict_test.go",
+          "internal/config/transport_test.go",
+          "internal/daemon/admission_clock.go",
+          "internal/daemon/admission_persistence_test.go",
+          "internal/daemon/admission_regression_test.go",
+          "internal/daemon/artifacts_test.go",
+          "internal/daemon/auth_test.go",
+          "internal/daemon/cache.go",
+          "internal/daemon/cache_build_tools_test.go",
+          "internal/daemon/cache_materialize_benchmark_test.go",
+          "internal/daemon/cache_native_test.go",
+          "internal/daemon/cache_policy_test.go",
+          "internal/daemon/cache_preparation_test.go",
+          "internal/daemon/cache_settlement_test.go",
+          "internal/daemon/cache_test.go",
+          "internal/daemon/cache_tools_test.go",
+          "internal/daemon/cache_trees.go",
+          "internal/daemon/cache_trees_test.go",
+          "internal/daemon/daemon_test.go",
+          "internal/daemon/deny_test.go",
+          "internal/daemon/facts.go",
+          "internal/daemon/forward.go",
+          "internal/daemon/forward_test.go",
+          "internal/daemon/job.go",
+          "internal/daemon/job_gc.go",
+          "internal/daemon/job_gc_test.go",
+          "internal/daemon/job_preview_test.go",
+          "internal/daemon/local_identity_test.go",
+          "internal/daemon/local_mode_test.go",
+          "internal/daemon/milestone2_test.go",
+          "internal/daemon/milestone35_test.go",
+          "internal/daemon/milestone3_test.go",
+          "internal/daemon/milestone4_test.go",
+          "internal/daemon/named_caches.go",
+          "internal/daemon/named_caches_test.go",
+          "internal/daemon/peercred.go",
+          "internal/daemon/peercred_uid_test.go",
+          "internal/daemon/placement.go",
+          "internal/daemon/placement_test.go",
+          "internal/daemon/process_group.go",
+          "internal/daemon/process_group_darwin.go",
+          "internal/daemon/process_group_linux.go",
+          "internal/daemon/process_group_linux_test.go",
+          "internal/daemon/process_group_test.go",
+          "internal/daemon/process_scope.go",
+          "internal/daemon/process_scope_test.go",
+          "internal/daemon/server.go",
+          "internal/daemon/setup_quiesce_test.go",
+          "internal/daemon/storage.go",
+          "internal/daemon/storage_test.go",
+          "internal/daemon/whois.go",
+          "internal/daemon/workspace_concurrency_test.go",
+          "internal/daemon/workspace_concurrent_recovery_test.go",
+          "internal/daemon/workspace_create_snapshot_test.go",
+          "internal/daemon/workspace_descriptor_test.go",
+          "internal/daemon/workspace_fetch_test.go",
+          "internal/daemon/workspace_format_test.go",
+          "internal/daemon/workspace_isolation_test.go",
+          "internal/daemon/workspace_leases.go",
+          "internal/daemon/workspace_push.go",
+          "internal/daemon/workspace_push_cache_test.go",
+          "internal/daemon/workspace_push_delta.go",
+          "internal/daemon/workspace_push_delta_test.go",
+          "internal/daemon/workspace_push_snapshot_test.go",
+          "internal/daemon/workspace_recovery_test.go",
+          "internal/daemon/workspace_scope_failure_test.go",
+          "internal/daemon/workspace_snapshot_benchmark_test.go",
+          "internal/daemon/workspace_snapshot_cache.go",
+          "internal/daemon/workspace_storage.go",
+          "internal/daemon/workspace_storage_test.go",
+          "internal/daemon/workspace_transfer_gc.go",
+          "internal/daemon/workspace_transfer_gc_test.go",
+          "internal/daemon/workspace_transfer_test.go",
+          "internal/daemon/workspace_upload.go",
+          "internal/daemon/workspace_upload_admission_test.go",
+          "internal/daemon/workspace_upload_test.go",
+          "internal/daemon/workspaces.go",
+          "internal/daemon/workspaces_http.go",
+          "internal/daemon/workspaces_test.go",
+          "internal/fsidentity/identity.go",
+          "internal/logio/logio.go",
+          "internal/logio/logio_test.go",
+          "internal/manifest/hash.go",
+          "internal/manifest/snapshot.go",
+          "internal/manifest/snapshot_test.go",
+          "internal/manifest/tree.go",
+          "internal/namedcache/gc.go",
+          "internal/namedcache/gc_pressure_test.go",
+          "internal/namedcache/holders.go",
+          "internal/namedcache/leases.go",
+          "internal/namedcache/leases_test.go",
+          "internal/namedcache/store.go",
+          "internal/namedcache/store_test.go",
+          "internal/namedcache/tree_cleanup.go",
+          "internal/namedcache/tree_clone_darwin.go",
+          "internal/namedcache/tree_clone_linux.go",
+          "internal/namedcache/tree_clone_other.go",
+          "internal/namedcache/tree_files.go",
+          "internal/namedcache/tree_filesystem_linux_test.go",
+          "internal/namedcache/tree_holders.go",
+          "internal/namedcache/tree_holders_test.go",
+          "internal/namedcache/tree_publication_test.go",
+          "internal/namedcache/tree_recovery_test.go",
+          "internal/namedcache/trees.go",
+          "internal/namedcache/trees_test.go",
+          "internal/pathpolicy/artifacts.go",
+          "internal/pathpolicy/artifacts_test.go",
+          "internal/pathpolicy/caches.go",
+          "internal/pathpolicy/caches_test.go",
+          "internal/pathpolicy/policy.go",
+          "internal/pathpolicy/policy_test.go",
+          "internal/placement/requirements.go",
+          "internal/placement/requirements_test.go",
+          "internal/proto/proto.go",
+          "internal/proto/spec_test.go",
+          "internal/proto/storage.go",
+          "internal/proto/transfer.go",
+          "internal/proto/ulid.go",
+          "internal/proto/ulid_test.go",
+          "internal/proto/workspace.go",
+          "internal/serviceruntime/runtime.go",
+          "internal/serviceruntime/runtime_test.go",
+          "internal/setup/config_path_test.go",
+          "internal/setup/config_plan.go",
+          "internal/setup/config_plan_test.go",
+          "internal/setup/diagnose.go",
+          "internal/setup/diagnose_test.go",
+          "internal/setup/executable_test.go",
+          "internal/setup/local_service.go",
+          "internal/setup/local_test.go",
+          "internal/setup/render.go",
+          "internal/setup/service_identity.go",
+          "internal/setup/service_identity_test.go",
+          "internal/setup/service_live_cleanup_test.go",
+          "internal/setup/service_live_network_test.go",
+          "internal/setup/service_live_test.go",
+          "internal/setup/setup.go",
+          "internal/setup/setup_test.go",
+          "internal/setup/ssh_test.go",
+          "internal/setup/system.go",
+          "internal/setup/transport_test.go",
+          "internal/setup/upgrade_test.go",
+          "internal/snapshot/benchmark_test.go",
+          "internal/snapshot/builder.go",
+          "internal/snapshot/builder_test.go",
+          "internal/snapshot/caches.go",
+          "internal/snapshot/caches_test.go",
+          "internal/snapshot/git_info_test.go",
+          "internal/snapshot/snapshot.go",
+          "internal/snapshot/snapshot_test.go",
+          "internal/snapshot/stamp_darwin.go",
+          "internal/snapshot/stamp_linux.go",
+          "internal/snapshot/stamp_other.go",
+          "internal/snapshot/watch.go",
+          "internal/snapshot/watch_prepare.go",
+          "internal/snapshot/watch_prepare_benchmark_test.go",
+          "internal/snapshot/watch_prepare_test.go",
+          "internal/snapshot/watch_test.go",
+          "internal/tailnet/self_test.go",
+          "internal/tailnet/tailnet.go",
+          "internal/tailnet/tailnet_test.go",
+          "internal/tomlconfig/decode.go",
+          "internal/unixpeer/credentials_darwin.go",
+          "internal/unixpeer/credentials_linux.go",
+          "internal/unixpeer/credentials_other.go",
+          "internal/unixpeer/dial.go",
+          "internal/unixpeer/dial_test.go",
+          "internal/unixpeer/pid_darwin.go",
+          "internal/unixpeer/pid_linux.go",
+          "internal/unixpeer/pid_other.go",
+          "internal/workspace/artifacts.go",
+          "internal/workspace/cache_discovery.go",
+          "internal/workspace/cache_discovery_test.go",
+          "internal/workspace/cache_groups.go",
+          "internal/workspace/caches.go",
+          "internal/workspace/environment.go",
+          "internal/workspace/profile.go",
+          "internal/workspace/session.go",
+          "internal/workspace/strict_test.go",
+          "internal/workspace/trust_other.go",
+          "internal/workspace/trust_unix.go",
+          "internal/workspace/workspace.go",
+          "internal/workspace/workspace_test.go"
+        ],
+        "binaries": {
+          "changes": "63b59693c4bc2036a85aafaae559f7811610bd3f2c868d94bb35310b786fc09d",
+          "snapshot": "288e0356cba6c8153fe08cdb73eb2600501e5a23affdd923df0207a09495d9c7",
+          "commands": "5d043c6ee1ddaa5f71154db72de0c8ec03ae073b2eb85cb4e777b7555225d207"
+        },
+        "samples": [
+          {
+            "name": "BenchmarkPreparedMetadata/1000/prepare",
+            "iterations": 277,
+            "round": 0,
+            "metrics": {
+              "ns/op": 656228.0,
+              "B/op": 761972.0,
+              "allocs/op": 3040.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/1000/expand",
+            "iterations": 248,
+            "round": 0,
+            "metrics": {
+              "ns/op": 726315.0,
+              "B/op": 962813.0,
+              "allocs/op": 4057.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/prepare",
+            "iterations": 25,
+            "round": 0,
+            "metrics": {
+              "ns/op": 6877460.0,
+              "B/op": 11471100.0,
+              "allocs/op": 30124.0
+            }
+          },
+          {
+            "name": "BenchmarkPreparedMetadata/10000/expand",
+            "iterations": 22,
+            "round": 0,
+            "metrics": {
+              "ns/op": 7683013.0,
+              "B/op": 15147981.0,
+              "allocs/op": 40181.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/first-edit",
+            "iterations": 6,
+            "round": 0,
+            "metrics": {
+              "ns/op": 27458299.0,
+              "B/op": 498338.0,
+              "allocs/op": 532.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/retained-edit",
+            "iterations": 6,
+            "round": 0,
+            "metrics": {
+              "ns/op": 26856090.0,
+              "B/op": 267778.0,
+              "allocs/op": 515.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/1000/reconcile",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 78030945.0,
+              "B/op": 3135568.0,
+              "allocs/op": 28040.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/first-edit",
+            "iterations": 5,
+            "round": 0,
+            "metrics": {
+              "ns/op": 35104733.0,
+              "B/op": 3229700.0,
+              "allocs/op": 567.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/retained-edit",
+            "iterations": 6,
+            "round": 0,
+            "metrics": {
+              "ns/op": 27519250.0,
+              "B/op": 988709.0,
+              "allocs/op": 515.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPreparation/10000/reconcile",
+            "iterations": 1,
+            "round": 0,
+            "metrics": {
+              "ns/op": 215165457.0,
+              "B/op": 31047232.0,
+              "allocs/op": 271160.0
+            }
+          },
+          {
+            "name": "BenchmarkPushPhases",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 558873195.0,
+              "apply-ms/op": 157.0,
+              "client-ms/op": 301.9,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 99.97,
+              "B/op": 282868632.0,
+              "allocs/op": 742842.0
+            }
+          },
+          {
+            "name": "BenchmarkWatchPhases",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 381638667.0,
+              "apply-ms/op": 167.1,
+              "client-ms/op": 124.3,
+              "negotiate-ms/op": 0.0,
+              "stage-ms/op": 90.18,
+              "B/op": 169482093.0,
+              "allocs/op": 421191.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 636413014.0,
+              "B/op": 41722301.0,
+              "allocs/op": 271703.0
+            }
+          },
+          {
+            "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 735617445.0,
+              "B/op": 33594085.0,
+              "allocs/op": 185876.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=false",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 137436431.0,
+              "fetch-ms/op": 137.4,
+              "B/op": 2379565.0,
+              "allocs/op": 8390.0
+            }
+          },
+          {
+            "name": "BenchmarkFetchCompletion/persistent=true",
+            "iterations": 3,
+            "round": 0,
+            "metrics": {
+              "ns/op": 229410541.0,
+              "fetch-ms/op": 229.4,
+              "B/op": 15074661.0,
+              "allocs/op": 58446.0
+            }
+          }
+        ]
+      }
+    },
+    "orders": [
+      [
+        "baseline",
+        "candidate"
+      ]
+    ],
+    "scope": "Native-host metadata/preparation and loopback HTTP command paths; no cross-host network latency.",
+    "harness_sha256": "c07baef01490a8fd9ebf3e5477ad60b26dad8bbba4ed0981c937828843bd5c70",
+    "go": "go version go1.27.1 darwin/arm64",
+    "filesystem": "apfs",
+    "status": "interrupted after round one; diagnostic only"
+  }
+}

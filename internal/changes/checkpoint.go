@@ -15,6 +15,7 @@ import (
 
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -194,6 +195,24 @@ func acceptedSourceManifest(base proto.Manifest, bundle proto.ChangeBundle, outc
 	return acceptedSourceManifestContext(context.Background(), base, bundle, outcome)
 }
 func acceptedSourceManifestContext(ctx context.Context, base proto.Manifest, bundle proto.ChangeBundle, outcome transferOutcome) (proto.Manifest, error) {
+	next, err := mergeAcceptedSourceContext(ctx, base, bundle, outcome)
+	if err != nil {
+		return proto.Manifest{}, err
+	}
+	return next, validateCheckpointManifestContext(ctx, next)
+}
+
+func acceptedSourceSnapshotContext(ctx context.Context, base proto.Manifest, bundle proto.ChangeBundle, outcome transferOutcome) (*manifest.Snapshot, error) {
+	next, err := mergeAcceptedSourceContext(ctx, base, bundle, outcome)
+	if err != nil {
+		return nil, err
+	}
+	return newSourceSnapshot(ctx, next)
+}
+
+// mergeAcceptedSourceContext only assembles metadata. Its two callers validate
+// the result once at their boundary, as a checkpoint or an owned snapshot.
+func mergeAcceptedSourceContext(ctx context.Context, base proto.Manifest, bundle proto.ChangeBundle, outcome transferOutcome) (proto.Manifest, error) {
 	if err := ctx.Err(); err != nil {
 		return proto.Manifest{}, err
 	}
@@ -269,7 +288,7 @@ func acceptedSourceManifestContext(ctx context.Context, base proto.Manifest, bun
 	if len(next.Entries) == 0 {
 		next.Entries = nil
 	}
-	return next, validateCheckpointManifestContext(ctx, next)
+	return next, nil
 }
 
 func (c TransferCheckpoint) open(statePath string) (*applyDestination, *applyDestination, string, error) {
@@ -336,18 +355,15 @@ func validateCheckpointManifestContext(ctx context.Context, manifest proto.Manif
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := archive.Validate(manifest); err != nil {
+	if err := archive.ValidateSortedContext(ctx, manifest); err != nil {
 		return err
 	}
-	for i, entry := range manifest.Entries {
+	for _, entry := range manifest.Entries {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := validatePath(entry.Path); err != nil {
+		if err := validateSourcePath(entry.Path); err != nil {
 			return err
-		}
-		if pathUsesApplyTransaction(entry.Path) || i > 0 && manifest.Entries[i-1].Path >= entry.Path {
-			return fmt.Errorf("invalid checkpoint manifest path %q", entry.Path)
 		}
 	}
 	return nil

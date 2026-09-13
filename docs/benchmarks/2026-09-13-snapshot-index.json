@@ -1,0 +1,6559 @@
+{
+  "experiment": "immutable snapshot metadata representations",
+  "reports": {
+    "mac-mini": {
+      "parent_revision": "9f3708a8a2b5ff7b9e7a84df3bd48809101e9d58",
+      "source_sha256": "bcb849dc7c8d50420b7595e57be1af45d3bd7693eee811930a9905e135aba481",
+      "source_files": [
+        "experiments/snapshotindex/benchmark_test.go",
+        "experiments/snapshotindex/flat.go",
+        "experiments/snapshotindex/index.go",
+        "experiments/snapshotindex/index_test.go",
+        "experiments/snapshotindex/partition.go",
+        "experiments/snapshotindex/tree.go",
+        "go.mod",
+        "go.sum",
+        "internal/proto/proto.go",
+        "internal/proto/spec_test.go",
+        "internal/proto/storage.go",
+        "internal/proto/transfer.go",
+        "internal/proto/ulid.go",
+        "internal/proto/ulid_test.go",
+        "internal/proto/workspace.go"
+      ],
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "filesystem": "apfs",
+      "go_version": "go version go1.27.1 darwin/arm64",
+      "gomaxprocs": 2,
+      "cgo_enabled": false,
+      "count": 5,
+      "benchtime": "150ms",
+      "build_seconds": 6.729747666977346,
+      "test_seconds": 0.2622998340521008,
+      "benchmark_seconds": 66.56701783300377,
+      "binary_sha256": "6de630956717a1b2209da95e22fec44d3d5767572e9b99fca2d971003318952e",
+      "samples": [
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 840,
+          "ns_per_op": 210069.0,
+          "bytes_per_op": 222132,
+          "allocations_per_op": 5
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 846,
+          "ns_per_op": 209421.0,
+          "bytes_per_op": 223751,
+          "allocations_per_op": 5
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 830,
+          "ns_per_op": 210066.0,
+          "bytes_per_op": 227111,
+          "allocations_per_op": 5
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 856,
+          "ns_per_op": 216859.0,
+          "bytes_per_op": 224526,
+          "allocations_per_op": 5
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 812,
+          "ns_per_op": 226355.0,
+          "bytes_per_op": 228094,
+          "allocations_per_op": 5
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 770,
+          "ns_per_op": 243420.0,
+          "bytes_per_op": 228672,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 745,
+          "ns_per_op": 245202.0,
+          "bytes_per_op": 226143,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 730,
+          "ns_per_op": 252675.0,
+          "bytes_per_op": 224355,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 771,
+          "ns_per_op": 241801.0,
+          "bytes_per_op": 230445,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 776,
+          "ns_per_op": 251576.0,
+          "bytes_per_op": 225073,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 566,
+          "ns_per_op": 325801.0,
+          "bytes_per_op": 285443,
+          "allocations_per_op": 18
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 676,
+          "ns_per_op": 320390.0,
+          "bytes_per_op": 271718,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 600,
+          "ns_per_op": 284801.0,
+          "bytes_per_op": 263582,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 708,
+          "ns_per_op": 261641.0,
+          "bytes_per_op": 283001,
+          "allocations_per_op": 18
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 704,
+          "ns_per_op": 256155.0,
+          "bytes_per_op": 286041,
+          "allocations_per_op": 18
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 741,
+          "ns_per_op": 238603.0,
+          "bytes_per_op": 226168,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 787,
+          "ns_per_op": 224322.0,
+          "bytes_per_op": 226770,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 816,
+          "ns_per_op": 221591.0,
+          "bytes_per_op": 222372,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 801,
+          "ns_per_op": 224976.0,
+          "bytes_per_op": 230112,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 784,
+          "ns_per_op": 225619.0,
+          "bytes_per_op": 230298,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 783,
+          "ns_per_op": 224574.0,
+          "bytes_per_op": 232942,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 800,
+          "ns_per_op": 222528.0,
+          "bytes_per_op": 229263,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 817,
+          "ns_per_op": 219400.0,
+          "bytes_per_op": 224053,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 811,
+          "ns_per_op": 221300.0,
+          "bytes_per_op": 231702,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 831,
+          "ns_per_op": 216680.0,
+          "bytes_per_op": 221531,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 458,
+          "ns_per_op": 396884.0,
+          "bytes_per_op": 478806,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 447,
+          "ns_per_op": 398475.0,
+          "bytes_per_op": 475081,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 452,
+          "ns_per_op": 398481.0,
+          "bytes_per_op": 473202,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 458,
+          "ns_per_op": 392547.0,
+          "bytes_per_op": 486305,
+          "allocations_per_op": 14
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 457,
+          "ns_per_op": 394257.0,
+          "bytes_per_op": 481894,
+          "allocations_per_op": 14
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 783,
+          "ns_per_op": 220462.0,
+          "bytes_per_op": 224923,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 800,
+          "ns_per_op": 224859.0,
+          "bytes_per_op": 228286,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 828,
+          "ns_per_op": 220236.0,
+          "bytes_per_op": 221411,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 812,
+          "ns_per_op": 221157.0,
+          "bytes_per_op": 221411,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 808,
+          "ns_per_op": 221336.0,
+          "bytes_per_op": 221410,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.808,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.787,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.789,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.778,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.782,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 464,
+          "ns_per_op": 437724.0,
+          "bytes_per_op": 591304,
+          "allocations_per_op": 5110
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 448,
+          "ns_per_op": 397504.0,
+          "bytes_per_op": 591305,
+          "allocations_per_op": 5110
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 454,
+          "ns_per_op": 393626.0,
+          "bytes_per_op": 591307,
+          "allocations_per_op": 5110
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 450,
+          "ns_per_op": 440334.0,
+          "bytes_per_op": 591301,
+          "allocations_per_op": 5110
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 442,
+          "ns_per_op": 454310.0,
+          "bytes_per_op": 591313,
+          "allocations_per_op": 5110
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 37029,
+          "ns_per_op": 4324.0,
+          "bytes_per_op": 3728,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 43855,
+          "ns_per_op": 4071.0,
+          "bytes_per_op": 3728,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 44593,
+          "ns_per_op": 4258.0,
+          "bytes_per_op": 3728,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 43807,
+          "ns_per_op": 4126.0,
+          "bytes_per_op": 3728,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 44416,
+          "ns_per_op": 4055.0,
+          "bytes_per_op": 3728,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 2403,
+          "ns_per_op": 75679.0,
+          "bytes_per_op": 157012,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 2442,
+          "ns_per_op": 76193.0,
+          "bytes_per_op": 157012,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 2394,
+          "ns_per_op": 74912.0,
+          "bytes_per_op": 157009,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 2384,
+          "ns_per_op": 76805.0,
+          "bytes_per_op": 157010,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 2358,
+          "ns_per_op": 76504.0,
+          "bytes_per_op": 157010,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 45536,
+          "ns_per_op": 4023.0,
+          "bytes_per_op": 3520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 44641,
+          "ns_per_op": 4049.0,
+          "bytes_per_op": 3520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 44814,
+          "ns_per_op": 4127.0,
+          "bytes_per_op": 3520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 45408,
+          "ns_per_op": 4052.0,
+          "bytes_per_op": 3520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 45114,
+          "ns_per_op": 4028.0,
+          "bytes_per_op": 3520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 43930,
+          "ns_per_op": 3965.0,
+          "bytes_per_op": 3392,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 45230,
+          "ns_per_op": 4114.0,
+          "bytes_per_op": 3392,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 44995,
+          "ns_per_op": 4018.0,
+          "bytes_per_op": 3392,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 43027,
+          "ns_per_op": 4216.0,
+          "bytes_per_op": 3392,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 42916,
+          "ns_per_op": 4008.0,
+          "bytes_per_op": 3392,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 565,
+          "ns_per_op": 328012.0,
+          "bytes_per_op": 247027,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 553,
+          "ns_per_op": 341605.0,
+          "bytes_per_op": 249988,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 475,
+          "ns_per_op": 343191.0,
+          "bytes_per_op": 249729,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 483,
+          "ns_per_op": 334855.0,
+          "bytes_per_op": 245053,
+          "allocations_per_op": 22
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 505,
+          "ns_per_op": 335782.0,
+          "bytes_per_op": 268681,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 424,
+          "ns_per_op": 438080.0,
+          "bytes_per_op": 591530,
+          "allocations_per_op": 5113
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 411,
+          "ns_per_op": 430238.0,
+          "bytes_per_op": 591537,
+          "allocations_per_op": 5113
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 456,
+          "ns_per_op": 394075.0,
+          "bytes_per_op": 591533,
+          "allocations_per_op": 5113
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 378,
+          "ns_per_op": 507050.0,
+          "bytes_per_op": 591541,
+          "allocations_per_op": 5113
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 434,
+          "ns_per_op": 493622.0,
+          "bytes_per_op": 591538,
+          "allocations_per_op": 5113
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 94803354,
+          "ns_per_op": 1.818,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.805,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.808,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.789,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.798,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 378,
+          "ns_per_op": 471172.0,
+          "bytes_per_op": 512299,
+          "allocations_per_op": 4003
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 385,
+          "ns_per_op": 469004.0,
+          "bytes_per_op": 512296,
+          "allocations_per_op": 4003
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 375,
+          "ns_per_op": 470898.0,
+          "bytes_per_op": 512305,
+          "allocations_per_op": 4003
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 387,
+          "ns_per_op": 464072.0,
+          "bytes_per_op": 512294,
+          "allocations_per_op": 4003
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 388,
+          "ns_per_op": 463638.0,
+          "bytes_per_op": 512295,
+          "allocations_per_op": 4003
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 97264,
+          "ns_per_op": 1842.0,
+          "bytes_per_op": 3528,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 96588,
+          "ns_per_op": 1846.0,
+          "bytes_per_op": 3528,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 99136,
+          "ns_per_op": 1823.0,
+          "bytes_per_op": 3528,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 98359,
+          "ns_per_op": 1828.0,
+          "bytes_per_op": 3528,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 98696,
+          "ns_per_op": 1830.0,
+          "bytes_per_op": 3528,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 1183,
+          "ns_per_op": 155326.0,
+          "bytes_per_op": 310940,
+          "allocations_per_op": 1540
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 1186,
+          "ns_per_op": 151699.0,
+          "bytes_per_op": 310935,
+          "allocations_per_op": 1540
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 1191,
+          "ns_per_op": 151139.0,
+          "bytes_per_op": 310933,
+          "allocations_per_op": 1540
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 1186,
+          "ns_per_op": 151598.0,
+          "bytes_per_op": 310940,
+          "allocations_per_op": 1540
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 1195,
+          "ns_per_op": 152053.0,
+          "bytes_per_op": 310936,
+          "allocations_per_op": 1540
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 96003,
+          "ns_per_op": 1777.0,
+          "bytes_per_op": 3768,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 95997,
+          "ns_per_op": 1879.0,
+          "bytes_per_op": 3768,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 100118,
+          "ns_per_op": 1795.0,
+          "bytes_per_op": 3768,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 103659,
+          "ns_per_op": 1832.0,
+          "bytes_per_op": 3768,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 92578,
+          "ns_per_op": 1800.0,
+          "bytes_per_op": 3768,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 6456,
+          "ns_per_op": 29128.0,
+          "bytes_per_op": 166120,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 6469,
+          "ns_per_op": 28109.0,
+          "bytes_per_op": 166120,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 6823,
+          "ns_per_op": 33628.0,
+          "bytes_per_op": 166120,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 4714,
+          "ns_per_op": 33966.0,
+          "bytes_per_op": 166120,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 6778,
+          "ns_per_op": 34380.0,
+          "bytes_per_op": 166120,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 795,
+          "ns_per_op": 222951.0,
+          "bytes_per_op": 240343,
+          "allocations_per_op": 24
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 832,
+          "ns_per_op": 217997.0,
+          "bytes_per_op": 240477,
+          "allocations_per_op": 24
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 826,
+          "ns_per_op": 217572.0,
+          "bytes_per_op": 242257,
+          "allocations_per_op": 24
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 829,
+          "ns_per_op": 217335.0,
+          "bytes_per_op": 243024,
+          "allocations_per_op": 24
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 831,
+          "ns_per_op": 217097.0,
+          "bytes_per_op": 241326,
+          "allocations_per_op": 24
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 386,
+          "ns_per_op": 464442.0,
+          "bytes_per_op": 512400,
+          "allocations_per_op": 4004
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 382,
+          "ns_per_op": 464792.0,
+          "bytes_per_op": 512408,
+          "allocations_per_op": 4004
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 387,
+          "ns_per_op": 464030.0,
+          "bytes_per_op": 512405,
+          "allocations_per_op": 4004
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 388,
+          "ns_per_op": 498914.0,
+          "bytes_per_op": 512397,
+          "allocations_per_op": 4004
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 378,
+          "ns_per_op": 471553.0,
+          "bytes_per_op": 512402,
+          "allocations_per_op": 4004
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 56577085,
+          "ns_per_op": 3.363,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 55178044,
+          "ns_per_op": 3.404,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 53528938,
+          "ns_per_op": 3.4,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 54798690,
+          "ns_per_op": 3.402,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 48078933,
+          "ns_per_op": 3.583,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 82,
+          "ns_per_op": 2427464.0,
+          "bytes_per_op": 3062227,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 81,
+          "ns_per_op": 2590079.0,
+          "bytes_per_op": 3319264,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 62,
+          "ns_per_op": 2581370.0,
+          "bytes_per_op": 3349683,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 78,
+          "ns_per_op": 2537897.0,
+          "bytes_per_op": 3704094,
+          "allocations_per_op": 14
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 61,
+          "ns_per_op": 2485409.0,
+          "bytes_per_op": 3151206,
+          "allocations_per_op": 11
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 74,
+          "ns_per_op": 2716645.0,
+          "bytes_per_op": 3966718,
+          "allocations_per_op": 19
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 72,
+          "ns_per_op": 2475658.0,
+          "bytes_per_op": 4016582,
+          "allocations_per_op": 19
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 85,
+          "ns_per_op": 2379309.0,
+          "bytes_per_op": 3421757,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 74,
+          "ns_per_op": 2394211.0,
+          "bytes_per_op": 3607639,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 74,
+          "ns_per_op": 2382025.0,
+          "bytes_per_op": 3697399,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 82,
+          "ns_per_op": 2416447.0,
+          "bytes_per_op": 3752588,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 64,
+          "ns_per_op": 2508264.0,
+          "bytes_per_op": 3977906,
+          "allocations_per_op": 28
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 66,
+          "ns_per_op": 2916716.0,
+          "bytes_per_op": 3622480,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 64,
+          "ns_per_op": 2964999.0,
+          "bytes_per_op": 3458923,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 79,
+          "ns_per_op": 2448110.0,
+          "bytes_per_op": 3558773,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 68,
+          "ns_per_op": 2442871.0,
+          "bytes_per_op": 3832063,
+          "allocations_per_op": 18
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 74,
+          "ns_per_op": 2410958.0,
+          "bytes_per_op": 3787176,
+          "allocations_per_op": 18
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 74,
+          "ns_per_op": 2398454.0,
+          "bytes_per_op": 3517861,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 73,
+          "ns_per_op": 2425916.0,
+          "bytes_per_op": 3809313,
+          "allocations_per_op": 18
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 84,
+          "ns_per_op": 2419512.0,
+          "bytes_per_op": 3911147,
+          "allocations_per_op": 18
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 84,
+          "ns_per_op": 2385784.0,
+          "bytes_per_op": 3515725,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 85,
+          "ns_per_op": 2343998.0,
+          "bytes_per_op": 3265447,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 84,
+          "ns_per_op": 2357469.0,
+          "bytes_per_op": 3436635,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 67,
+          "ns_per_op": 2367368.0,
+          "bytes_per_op": 3658548,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 84,
+          "ns_per_op": 2405985.0,
+          "bytes_per_op": 3594812,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 38,
+          "ns_per_op": 4175805.0,
+          "bytes_per_op": 6090462,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 37,
+          "ns_per_op": 4181155.0,
+          "bytes_per_op": 6317241,
+          "allocations_per_op": 24
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 38,
+          "ns_per_op": 4161318.0,
+          "bytes_per_op": 6090455,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 42,
+          "ns_per_op": 4177082.0,
+          "bytes_per_op": 5923973,
+          "allocations_per_op": 22
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 45,
+          "ns_per_op": 4220636.0,
+          "bytes_per_op": 6851872,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 78,
+          "ns_per_op": 2293653.0,
+          "bytes_per_op": 3107986,
+          "allocations_per_op": 11
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 76,
+          "ns_per_op": 2312866.0,
+          "bytes_per_op": 3569690,
+          "allocations_per_op": 14
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 78,
+          "ns_per_op": 2312711.0,
+          "bytes_per_op": 3193157,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 78,
+          "ns_per_op": 2308361.0,
+          "bytes_per_op": 3448658,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 76,
+          "ns_per_op": 2329476.0,
+          "bytes_per_op": 3569687,
+          "allocations_per_op": 14
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.817,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.96,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 87086266,
+          "ns_per_op": 1.818,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 98495211,
+          "ns_per_op": 1.812,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.81,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 45,
+          "ns_per_op": 3886807.0,
+          "bytes_per_op": 6368850,
+          "allocations_per_op": 33970
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 44,
+          "ns_per_op": 4289713.0,
+          "bytes_per_op": 6368819,
+          "allocations_per_op": 33970
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 37,
+          "ns_per_op": 4661621.0,
+          "bytes_per_op": 6368832,
+          "allocations_per_op": 33970
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 44,
+          "ns_per_op": 4781574.0,
+          "bytes_per_op": 6368837,
+          "allocations_per_op": 33970
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 43,
+          "ns_per_op": 3902593.0,
+          "bytes_per_op": 6368760,
+          "allocations_per_op": 33969
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 32740,
+          "ns_per_op": 5424.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 33450,
+          "ns_per_op": 5403.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 33140,
+          "ns_per_op": 5405.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 30654,
+          "ns_per_op": 5592.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 33315,
+          "ns_per_op": 5418.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 896,
+          "ns_per_op": 220553.0,
+          "bytes_per_op": 512465,
+          "allocations_per_op": 869
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 814,
+          "ns_per_op": 230770.0,
+          "bytes_per_op": 512464,
+          "allocations_per_op": 869
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 800,
+          "ns_per_op": 228508.0,
+          "bytes_per_op": 512465,
+          "allocations_per_op": 869
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 807,
+          "ns_per_op": 227773.0,
+          "bytes_per_op": 512473,
+          "allocations_per_op": 869
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 735,
+          "ns_per_op": 242262.0,
+          "bytes_per_op": 512470,
+          "allocations_per_op": 869
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 28886,
+          "ns_per_op": 6145.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 29209,
+          "ns_per_op": 6195.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 26005,
+          "ns_per_op": 6509.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 27849,
+          "ns_per_op": 6299.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 29842,
+          "ns_per_op": 6196.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 30972,
+          "ns_per_op": 5840.0,
+          "bytes_per_op": 8384,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 30513,
+          "ns_per_op": 5671.0,
+          "bytes_per_op": 8384,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 33955,
+          "ns_per_op": 5271.0,
+          "bytes_per_op": 8384,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 34304,
+          "ns_per_op": 5266.0,
+          "bytes_per_op": 8384,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 34184,
+          "ns_per_op": 5251.0,
+          "bytes_per_op": 8384,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 48,
+          "ns_per_op": 3308898.0,
+          "bytes_per_op": 2732401,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 57,
+          "ns_per_op": 3300835.0,
+          "bytes_per_op": 2994615,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 50,
+          "ns_per_op": 3252845.0,
+          "bytes_per_op": 2843110,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 57,
+          "ns_per_op": 3226017.0,
+          "bytes_per_op": 2411902,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 50,
+          "ns_per_op": 3285700.0,
+          "bytes_per_op": 3108831,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 44,
+          "ns_per_op": 3821544.0,
+          "bytes_per_op": 6369088,
+          "allocations_per_op": 33973
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 43,
+          "ns_per_op": 3872299.0,
+          "bytes_per_op": 6369013,
+          "allocations_per_op": 33973
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 31,
+          "ns_per_op": 5242386.0,
+          "bytes_per_op": 6369037,
+          "allocations_per_op": 33973
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 43,
+          "ns_per_op": 4598775.0,
+          "bytes_per_op": 6369021,
+          "allocations_per_op": 33973
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 39,
+          "ns_per_op": 3973818.0,
+          "bytes_per_op": 6369027,
+          "allocations_per_op": 33973
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.814,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.808,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 87154746,
+          "ns_per_op": 1.811,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.81,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.806,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 34,
+          "ns_per_op": 4968496.0,
+          "bytes_per_op": 5120878,
+          "allocations_per_op": 40007
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 37,
+          "ns_per_op": 4913578.0,
+          "bytes_per_op": 5120849,
+          "allocations_per_op": 40007
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 39,
+          "ns_per_op": 4884232.0,
+          "bytes_per_op": 5120822,
+          "allocations_per_op": 40006
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 39,
+          "ns_per_op": 4883794.0,
+          "bytes_per_op": 5120806,
+          "allocations_per_op": 40006
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 39,
+          "ns_per_op": 4898096.0,
+          "bytes_per_op": 5120820,
+          "allocations_per_op": 40006
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 69447,
+          "ns_per_op": 2617.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 69751,
+          "ns_per_op": 2597.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 68614,
+          "ns_per_op": 2597.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 69073,
+          "ns_per_op": 2599.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 68595,
+          "ns_per_op": 2601.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 823,
+          "ns_per_op": 218409.0,
+          "bytes_per_op": 407015,
+          "allocations_per_op": 2002
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 812,
+          "ns_per_op": 218149.0,
+          "bytes_per_op": 407013,
+          "allocations_per_op": 2002
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 836,
+          "ns_per_op": 231879.0,
+          "bytes_per_op": 407017,
+          "allocations_per_op": 2002
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 840,
+          "ns_per_op": 216944.0,
+          "bytes_per_op": 407014,
+          "allocations_per_op": 2002
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 835,
+          "ns_per_op": 217494.0,
+          "bytes_per_op": 407018,
+          "allocations_per_op": 2002
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 68974,
+          "ns_per_op": 2611.0,
+          "bytes_per_op": 6728,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 68176,
+          "ns_per_op": 2618.0,
+          "bytes_per_op": 6728,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 69046,
+          "ns_per_op": 2607.0,
+          "bytes_per_op": 6728,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 63607,
+          "ns_per_op": 2796.0,
+          "bytes_per_op": 6728,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 68487,
+          "ns_per_op": 2620.0,
+          "bytes_per_op": 6728,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 495,
+          "ns_per_op": 345885.0,
+          "bytes_per_op": 1609160,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 549,
+          "ns_per_op": 330122.0,
+          "bytes_per_op": 1609160,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 404,
+          "ns_per_op": 440681.0,
+          "bytes_per_op": 1609160,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 519,
+          "ns_per_op": 413675.0,
+          "bytes_per_op": 1609160,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 518,
+          "ns_per_op": 341222.0,
+          "bytes_per_op": 1609160,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 78,
+          "ns_per_op": 2291017.0,
+          "bytes_per_op": 3453288,
+          "allocations_per_op": 38
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 87,
+          "ns_per_op": 2439382.0,
+          "bytes_per_op": 3244773,
+          "allocations_per_op": 36
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 79,
+          "ns_per_op": 2575989.0,
+          "bytes_per_op": 3353023,
+          "allocations_per_op": 37
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 82,
+          "ns_per_op": 2539571.0,
+          "bytes_per_op": 3228954,
+          "allocations_per_op": 36
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 72,
+          "ns_per_op": 2582186.0,
+          "bytes_per_op": 3282949,
+          "allocations_per_op": 37
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 32,
+          "ns_per_op": 5565822.0,
+          "bytes_per_op": 5120992,
+          "allocations_per_op": 40008
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 31,
+          "ns_per_op": 5539863.0,
+          "bytes_per_op": 5120975,
+          "allocations_per_op": 40008
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 31,
+          "ns_per_op": 5752413.0,
+          "bytes_per_op": 5120975,
+          "allocations_per_op": 40008
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 27,
+          "ns_per_op": 5592418.0,
+          "bytes_per_op": 5120931,
+          "allocations_per_op": 40007
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 31,
+          "ns_per_op": 5546337.0,
+          "bytes_per_op": 5120975,
+          "allocations_per_op": 40008
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 53341234,
+          "ns_per_op": 3.403,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 54832076,
+          "ns_per_op": 3.49,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 54769510,
+          "ns_per_op": 3.297,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 55628524,
+          "ns_per_op": 3.28,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 54892692,
+          "ns_per_op": 3.294,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 7,
+          "ns_per_op": 23957292.0,
+          "bytes_per_op": 56747125,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 8,
+          "ns_per_op": 22734662.0,
+          "bytes_per_op": 31858847,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 7,
+          "ns_per_op": 23359518.0,
+          "bytes_per_op": 56747088,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 7,
+          "ns_per_op": 23277244.0,
+          "bytes_per_op": 45034965,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 7,
+          "ns_per_op": 24190601.0,
+          "bytes_per_op": 68459210,
+          "allocations_per_op": 34
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 7,
+          "ns_per_op": 23136048.0,
+          "bytes_per_op": 33323059,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 7,
+          "ns_per_op": 24152464.0,
+          "bytes_per_op": 45035181,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 7,
+          "ns_per_op": 23159065.0,
+          "bytes_per_op": 21610974,
+          "allocations_per_op": 9
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 7,
+          "ns_per_op": 23681524.0,
+          "bytes_per_op": 45035181,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 7,
+          "ns_per_op": 23961905.0,
+          "bytes_per_op": 45035219,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 7,
+          "ns_per_op": 23607226.0,
+          "bytes_per_op": 33365145,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 7,
+          "ns_per_op": 25376030.0,
+          "bytes_per_op": 33365145,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 7,
+          "ns_per_op": 25067560.0,
+          "bytes_per_op": 21652985,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 7,
+          "ns_per_op": 26754292.0,
+          "bytes_per_op": 33365107,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 7,
+          "ns_per_op": 22688435.0,
+          "bytes_per_op": 21652985,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 7,
+          "ns_per_op": 23461220.0,
+          "bytes_per_op": 33323059,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 7,
+          "ns_per_op": 23613310.0,
+          "bytes_per_op": 33323097,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 7,
+          "ns_per_op": 22483714.0,
+          "bytes_per_op": 21610937,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 7,
+          "ns_per_op": 22835030.0,
+          "bytes_per_op": 33323097,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 6,
+          "ns_per_op": 25154430.0,
+          "bytes_per_op": 62603384,
+          "allocations_per_op": 34
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 7,
+          "ns_per_op": 24696690.0,
+          "bytes_per_op": 56747341,
+          "allocations_per_op": 30
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 7,
+          "ns_per_op": 23457250.0,
+          "bytes_per_op": 33323059,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 7,
+          "ns_per_op": 23275381.0,
+          "bytes_per_op": 21610974,
+          "allocations_per_op": 9
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 7,
+          "ns_per_op": 23666661.0,
+          "bytes_per_op": 33323097,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 7,
+          "ns_per_op": 23992476.0,
+          "bytes_per_op": 45035181,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 4,
+          "ns_per_op": 42772135.0,
+          "bytes_per_op": 63717846,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 4,
+          "ns_per_op": 44040740.0,
+          "bytes_per_op": 84214060,
+          "allocations_per_op": 39
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 4,
+          "ns_per_op": 45780479.0,
+          "bytes_per_op": 84214060,
+          "allocations_per_op": 39
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 4,
+          "ns_per_op": 46629386.0,
+          "bytes_per_op": 63717780,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 4,
+          "ns_per_op": 43144760.0,
+          "bytes_per_op": 84214060,
+          "allocations_per_op": 39
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 7,
+          "ns_per_op": 23936506.0,
+          "bytes_per_op": 45035061,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 7,
+          "ns_per_op": 23753232.0,
+          "bytes_per_op": 45035061,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 7,
+          "ns_per_op": 23484042.0,
+          "bytes_per_op": 33322939,
+          "allocations_per_op": 14
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 7,
+          "ns_per_op": 23774875.0,
+          "bytes_per_op": 45035061,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 7,
+          "ns_per_op": 23750208.0,
+          "bytes_per_op": 33322939,
+          "allocations_per_op": 14
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.806,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.814,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 98907891,
+          "ns_per_op": 1.813,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.821,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 99725311,
+          "ns_per_op": 1.812,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 4,
+          "ns_per_op": 39576354.0,
+          "bytes_per_op": 63875570,
+          "allocations_per_op": 305639
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 4,
+          "ns_per_op": 47932573.0,
+          "bytes_per_op": 63875418,
+          "allocations_per_op": 305638
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 3,
+          "ns_per_op": 53672306.0,
+          "bytes_per_op": 63875461,
+          "allocations_per_op": 305638
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 3,
+          "ns_per_op": 55424305.0,
+          "bytes_per_op": 63875781,
+          "allocations_per_op": 305641
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 4,
+          "ns_per_op": 47569698.0,
+          "bytes_per_op": 63875418,
+          "allocations_per_op": 305638
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 9194,
+          "ns_per_op": 21850.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 9256,
+          "ns_per_op": 20984.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 9396,
+          "ns_per_op": 21174.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 9511,
+          "ns_per_op": 22946.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 9385,
+          "ns_per_op": 21124.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 87,
+          "ns_per_op": 1856531.0,
+          "bytes_per_op": 4709261,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 100,
+          "ns_per_op": 1796525.0,
+          "bytes_per_op": 4709252,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 100,
+          "ns_per_op": 1902446.0,
+          "bytes_per_op": 4709292,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 100,
+          "ns_per_op": 1668654.0,
+          "bytes_per_op": 4709260,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 100,
+          "ns_per_op": 1641588.0,
+          "bytes_per_op": 4709268,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 9896,
+          "ns_per_op": 19937.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 9960,
+          "ns_per_op": 20118.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 10000,
+          "ns_per_op": 19703.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 10000,
+          "ns_per_op": 19665.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 9470,
+          "ns_per_op": 19787.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 10000,
+          "ns_per_op": 19300.0,
+          "bytes_per_op": 49216,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 10000,
+          "ns_per_op": 19301.0,
+          "bytes_per_op": 49216,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 9960,
+          "ns_per_op": 19293.0,
+          "bytes_per_op": 49216,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 9957,
+          "ns_per_op": 19354.0,
+          "bytes_per_op": 49216,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 10000,
+          "ns_per_op": 19415.0,
+          "bytes_per_op": 49216,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 4,
+          "ns_per_op": 38089073.0,
+          "bytes_per_op": 62652710,
+          "allocations_per_op": 47
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 5,
+          "ns_per_op": 36221508.0,
+          "bytes_per_op": 38057292,
+          "allocations_per_op": 32
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 5,
+          "ns_per_op": 36061125.0,
+          "bytes_per_op": 38057292,
+          "allocations_per_op": 32
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 5,
+          "ns_per_op": 35135975.0,
+          "bytes_per_op": 21660321,
+          "allocations_per_op": 22
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 5,
+          "ns_per_op": 36120792.0,
+          "bytes_per_op": 38057292,
+          "allocations_per_op": 32
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 4,
+          "ns_per_op": 44266260.0,
+          "bytes_per_op": 63875874,
+          "allocations_per_op": 305643
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 4,
+          "ns_per_op": 44545260.0,
+          "bytes_per_op": 63875830,
+          "allocations_per_op": 305643
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 3,
+          "ns_per_op": 50433736.0,
+          "bytes_per_op": 63875736,
+          "allocations_per_op": 305642
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 4,
+          "ns_per_op": 43371281.0,
+          "bytes_per_op": 63875634,
+          "allocations_per_op": 305641
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 4,
+          "ns_per_op": 40070833.0,
+          "bytes_per_op": 63875786,
+          "allocations_per_op": 305642
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.797,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.801,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.801,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.798,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 100000000,
+          "ns_per_op": 1.898,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 3,
+          "ns_per_op": 52221597.0,
+          "bytes_per_op": 51201040,
+          "allocations_per_op": 400008
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 3,
+          "ns_per_op": 52500806.0,
+          "bytes_per_op": 51201104,
+          "allocations_per_op": 400009
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 3,
+          "ns_per_op": 52328028.0,
+          "bytes_per_op": 51201040,
+          "allocations_per_op": 400008
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 3,
+          "ns_per_op": 51715042.0,
+          "bytes_per_op": 51200981,
+          "allocations_per_op": 400008
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 3,
+          "ns_per_op": 51948431.0,
+          "bytes_per_op": 51201301,
+          "allocations_per_op": 400010
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 73611,
+          "ns_per_op": 2647.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 66843,
+          "ns_per_op": 2662.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 67428,
+          "ns_per_op": 2660.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 67616,
+          "ns_per_op": 2651.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 66400,
+          "ns_per_op": 2662.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 634,
+          "ns_per_op": 293748.0,
+          "bytes_per_op": 502044,
+          "allocations_per_op": 2459
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 633,
+          "ns_per_op": 286573.0,
+          "bytes_per_op": 502047,
+          "allocations_per_op": 2459
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 637,
+          "ns_per_op": 284334.0,
+          "bytes_per_op": 502044,
+          "allocations_per_op": 2459
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 636,
+          "ns_per_op": 287684.0,
+          "bytes_per_op": 502045,
+          "allocations_per_op": 2459
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 618,
+          "ns_per_op": 286387.0,
+          "bytes_per_op": 502044,
+          "allocations_per_op": 2459
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 66841,
+          "ns_per_op": 2672.0,
+          "bytes_per_op": 4856,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 64406,
+          "ns_per_op": 2778.0,
+          "bytes_per_op": 4856,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 66958,
+          "ns_per_op": 2680.0,
+          "bytes_per_op": 4856,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 62895,
+          "ns_per_op": 2803.0,
+          "bytes_per_op": 4856,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 55945,
+          "ns_per_op": 3193.0,
+          "bytes_per_op": 4856,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 42,
+          "ns_per_op": 4674968.0,
+          "bytes_per_op": 16009864,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 49,
+          "ns_per_op": 4761720.0,
+          "bytes_per_op": 16009864,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 55,
+          "ns_per_op": 5299652.0,
+          "bytes_per_op": 16009864,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 48,
+          "ns_per_op": 5825786.0,
+          "bytes_per_op": 16009864,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 38,
+          "ns_per_op": 4347247.0,
+          "bytes_per_op": 16009864,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 6,
+          "ns_per_op": 25037826.0,
+          "bytes_per_op": 48943649,
+          "allocations_per_op": 47
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 7,
+          "ns_per_op": 23827911.0,
+          "bytes_per_op": 33327667,
+          "allocations_per_op": 38
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 7,
+          "ns_per_op": 23959702.0,
+          "bytes_per_op": 33327555,
+          "allocations_per_op": 38
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 7,
+          "ns_per_op": 26391018.0,
+          "bytes_per_op": 56751837,
+          "allocations_per_op": 52
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 7,
+          "ns_per_op": 23356518.0,
+          "bytes_per_op": 33327555,
+          "allocations_per_op": 38
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 3,
+          "ns_per_op": 54264417.0,
+          "bytes_per_op": 51201746,
+          "allocations_per_op": 400014
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 3,
+          "ns_per_op": 52956139.0,
+          "bytes_per_op": 51201136,
+          "allocations_per_op": 400009
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 3,
+          "ns_per_op": 52320889.0,
+          "bytes_per_op": 51201338,
+          "allocations_per_op": 400011
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 3,
+          "ns_per_op": 52180417.0,
+          "bytes_per_op": 51201077,
+          "allocations_per_op": 400009
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 3,
+          "ns_per_op": 51548361.0,
+          "bytes_per_op": 51200816,
+          "allocations_per_op": 400007
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 55310872,
+          "ns_per_op": 3.319,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 56135238,
+          "ns_per_op": 3.305,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 55175930,
+          "ns_per_op": 3.315,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 54592321,
+          "ns_per_op": 3.315,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 54463626,
+          "ns_per_op": 3.315,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        }
+      ],
+      "scope": "In-memory metadata only. No filesystem inventory, transport, durable staging, or application latency.",
+      "contract_test_output": "=== RUN   TestIndexContract\n=== RUN   TestIndexContract/flat\n=== RUN   TestIndexContract/partitioned\n=== RUN   TestIndexContract/tree\n--- PASS: TestIndexContract (0.26s)\n    --- PASS: TestIndexContract/flat (0.08s)\n    --- PASS: TestIndexContract/partitioned (0.09s)\n    --- PASS: TestIndexContract/tree (0.08s)\n=== RUN   TestIndexOwnershipAndStructuralChanges\n=== RUN   TestIndexOwnershipAndStructuralChanges/flat\n=== RUN   TestIndexOwnershipAndStructuralChanges/partitioned\n=== RUN   TestIndexOwnershipAndStructuralChanges/tree\n--- PASS: TestIndexOwnershipAndStructuralChanges (0.00s)\n    --- PASS: TestIndexOwnershipAndStructuralChanges/flat (0.00s)\n    --- PASS: TestIndexOwnershipAndStructuralChanges/partitioned (0.00s)\n    --- PASS: TestIndexOwnershipAndStructuralChanges/tree (0.00s)\n=== RUN   TestIndexMetadataIdentity\n=== RUN   TestIndexMetadataIdentity/flat\n=== RUN   TestIndexMetadataIdentity/partitioned\n=== RUN   TestIndexMetadataIdentity/tree\n--- PASS: TestIndexMetadataIdentity (0.00s)\n    --- PASS: TestIndexMetadataIdentity/flat (0.00s)\n    --- PASS: TestIndexMetadataIdentity/partitioned (0.00s)\n    --- PASS: TestIndexMetadataIdentity/tree (0.00s)\nPASS\n"
+    },
+    "cabal": {
+      "parent_revision": "9f3708a8a2b5ff7b9e7a84df3bd48809101e9d58",
+      "source_sha256": "bcb849dc7c8d50420b7595e57be1af45d3bd7693eee811930a9905e135aba481",
+      "source_files": [
+        "experiments/snapshotindex/benchmark_test.go",
+        "experiments/snapshotindex/flat.go",
+        "experiments/snapshotindex/index.go",
+        "experiments/snapshotindex/index_test.go",
+        "experiments/snapshotindex/partition.go",
+        "experiments/snapshotindex/tree.go",
+        "go.mod",
+        "go.sum",
+        "internal/proto/proto.go",
+        "internal/proto/spec_test.go",
+        "internal/proto/storage.go",
+        "internal/proto/transfer.go",
+        "internal/proto/ulid.go",
+        "internal/proto/ulid_test.go",
+        "internal/proto/workspace.go"
+      ],
+      "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+      "machine": "x86_64",
+      "filesystem": "btrfs",
+      "go_version": "go version go1.27.1 linux/amd64",
+      "gomaxprocs": 2,
+      "cgo_enabled": false,
+      "count": 5,
+      "benchtime": "150ms",
+      "build_seconds": 0.4718397590331733,
+      "test_seconds": 1.6418072889791802,
+      "benchmark_seconds": 72.17021284997463,
+      "binary_sha256": "350d89db2467c35b5adb5d1117fc57cadc753b55a42f7f4274e079b6335f5d1c",
+      "samples": [
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 187,
+          "ns_per_op": 922310.0,
+          "bytes_per_op": 224990,
+          "allocations_per_op": 5
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 171,
+          "ns_per_op": 1131407.0,
+          "bytes_per_op": 241445,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 152,
+          "ns_per_op": 1148555.0,
+          "bytes_per_op": 221316,
+          "allocations_per_op": 5
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 152,
+          "ns_per_op": 1120463.0,
+          "bytes_per_op": 230357,
+          "allocations_per_op": 5
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 186,
+          "ns_per_op": 1070172.0,
+          "bytes_per_op": 232400,
+          "allocations_per_op": 5
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 140,
+          "ns_per_op": 1285652.0,
+          "bytes_per_op": 246078,
+          "allocations_per_op": 9
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 127,
+          "ns_per_op": 1319952.0,
+          "bytes_per_op": 221530,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 100,
+          "ns_per_op": 1529568.0,
+          "bytes_per_op": 235276,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 116,
+          "ns_per_op": 1377086.0,
+          "bytes_per_op": 227456,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 159,
+          "ns_per_op": 1086324.0,
+          "bytes_per_op": 221530,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 174,
+          "ns_per_op": 1130164.0,
+          "bytes_per_op": 263582,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 100,
+          "ns_per_op": 1760907.0,
+          "bytes_per_op": 263583,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 92,
+          "ns_per_op": 1733447.0,
+          "bytes_per_op": 271055,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 128,
+          "ns_per_op": 1403085.0,
+          "bytes_per_op": 263582,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 111,
+          "ns_per_op": 1620911.0,
+          "bytes_per_op": 275966,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 90,
+          "ns_per_op": 1719123.0,
+          "bytes_per_op": 229169,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 142,
+          "ns_per_op": 1260859.0,
+          "bytes_per_op": 221530,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 145,
+          "ns_per_op": 1275437.0,
+          "bytes_per_op": 235749,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 133,
+          "ns_per_op": 1290798.0,
+          "bytes_per_op": 221529,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 133,
+          "ns_per_op": 1314381.0,
+          "bytes_per_op": 237034,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 130,
+          "ns_per_op": 1263228.0,
+          "bytes_per_op": 226818,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 187,
+          "ns_per_op": 950192.0,
+          "bytes_per_op": 228882,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 180,
+          "ns_per_op": 1021368.0,
+          "bytes_per_op": 221529,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 172,
+          "ns_per_op": 1028223.0,
+          "bytes_per_op": 229522,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 163,
+          "ns_per_op": 1114137.0,
+          "bytes_per_op": 238396,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 79,
+          "ns_per_op": 2172852.0,
+          "bytes_per_op": 486296,
+          "allocations_per_op": 14
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 91,
+          "ns_per_op": 1945194.0,
+          "bytes_per_op": 465449,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 99,
+          "ns_per_op": 2269735.0,
+          "bytes_per_op": 470557,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 91,
+          "ns_per_op": 2045806.0,
+          "bytes_per_op": 472996,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 84,
+          "ns_per_op": 1927510.0,
+          "bytes_per_op": 467330,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 130,
+          "ns_per_op": 1347923.0,
+          "bytes_per_op": 231986,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 120,
+          "ns_per_op": 1498268.0,
+          "bytes_per_op": 227140,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 130,
+          "ns_per_op": 1375766.0,
+          "bytes_per_op": 221412,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 122,
+          "ns_per_op": 1493663.0,
+          "bytes_per_op": 221411,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 121,
+          "ns_per_op": 1467503.0,
+          "bytes_per_op": 221411,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 22087654,
+          "ns_per_op": 7.802,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 24404426,
+          "ns_per_op": 7.433,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 24942748,
+          "ns_per_op": 7.457,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 25523554,
+          "ns_per_op": 7.276,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 24584796,
+          "ns_per_op": 7.195,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 100,
+          "ns_per_op": 2235800.0,
+          "bytes_per_op": 591306,
+          "allocations_per_op": 5110
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 97,
+          "ns_per_op": 2373605.0,
+          "bytes_per_op": 591296,
+          "allocations_per_op": 5110
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 55,
+          "ns_per_op": 3179143.0,
+          "bytes_per_op": 591306,
+          "allocations_per_op": 5110
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 56,
+          "ns_per_op": 2691255.0,
+          "bytes_per_op": 591312,
+          "allocations_per_op": 5110
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 69,
+          "ns_per_op": 2275963.0,
+          "bytes_per_op": 591319,
+          "allocations_per_op": 5110
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 3784,
+          "ns_per_op": 40451.0,
+          "bytes_per_op": 3728,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 4952,
+          "ns_per_op": 40143.0,
+          "bytes_per_op": 3728,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 4994,
+          "ns_per_op": 40035.0,
+          "bytes_per_op": 3728,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 5432,
+          "ns_per_op": 34887.0,
+          "bytes_per_op": 3728,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 4383,
+          "ns_per_op": 34432.0,
+          "bytes_per_op": 3728,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 513,
+          "ns_per_op": 395151.0,
+          "bytes_per_op": 157006,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 494,
+          "ns_per_op": 440113.0,
+          "bytes_per_op": 157005,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 312,
+          "ns_per_op": 571430.0,
+          "bytes_per_op": 157003,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 303,
+          "ns_per_op": 583243.0,
+          "bytes_per_op": 157014,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 394,
+          "ns_per_op": 479009.0,
+          "bytes_per_op": 157006,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 5744,
+          "ns_per_op": 42420.0,
+          "bytes_per_op": 3520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 3396,
+          "ns_per_op": 44962.0,
+          "bytes_per_op": 3520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 5329,
+          "ns_per_op": 34934.0,
+          "bytes_per_op": 3520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 5082,
+          "ns_per_op": 35190.0,
+          "bytes_per_op": 3520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 4138,
+          "ns_per_op": 39242.0,
+          "bytes_per_op": 3520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 4744,
+          "ns_per_op": 36963.0,
+          "bytes_per_op": 3392,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 5394,
+          "ns_per_op": 32964.0,
+          "bytes_per_op": 3392,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 4472,
+          "ns_per_op": 33811.0,
+          "bytes_per_op": 3392,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 4764,
+          "ns_per_op": 34952.0,
+          "bytes_per_op": 3392,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 5684,
+          "ns_per_op": 31540.0,
+          "bytes_per_op": 3392,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 100,
+          "ns_per_op": 1514793.0,
+          "bytes_per_op": 266370,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 106,
+          "ns_per_op": 1716182.0,
+          "bytes_per_op": 264034,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 94,
+          "ns_per_op": 1652175.0,
+          "bytes_per_op": 254379,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 100,
+          "ns_per_op": 1530352.0,
+          "bytes_per_op": 266369,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 120,
+          "ns_per_op": 1456861.0,
+          "bytes_per_op": 248040,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 80,
+          "ns_per_op": 2577072.0,
+          "bytes_per_op": 591517,
+          "allocations_per_op": 5113
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 64,
+          "ns_per_op": 2594231.0,
+          "bytes_per_op": 591559,
+          "allocations_per_op": 5114
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 73,
+          "ns_per_op": 2609480.0,
+          "bytes_per_op": 591516,
+          "allocations_per_op": 5113
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 61,
+          "ns_per_op": 2700301.0,
+          "bytes_per_op": 591533,
+          "allocations_per_op": 5113
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 81,
+          "ns_per_op": 2176314.0,
+          "bytes_per_op": 591554,
+          "allocations_per_op": 5114
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 21136928,
+          "ns_per_op": 8.365,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22109124,
+          "ns_per_op": 8.581,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22169712,
+          "ns_per_op": 8.075,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22165425,
+          "ns_per_op": 8.062,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22626504,
+          "ns_per_op": 8.26,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 84,
+          "ns_per_op": 2295239.0,
+          "bytes_per_op": 512321,
+          "allocations_per_op": 4003
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 81,
+          "ns_per_op": 2290847.0,
+          "bytes_per_op": 512301,
+          "allocations_per_op": 4003
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 81,
+          "ns_per_op": 2591834.0,
+          "bytes_per_op": 512309,
+          "allocations_per_op": 4003
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 63,
+          "ns_per_op": 2740860.0,
+          "bytes_per_op": 512349,
+          "allocations_per_op": 4004
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 79,
+          "ns_per_op": 2828108.0,
+          "bytes_per_op": 512294,
+          "allocations_per_op": 4003
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 12801,
+          "ns_per_op": 13245.0,
+          "bytes_per_op": 3528,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 14865,
+          "ns_per_op": 11488.0,
+          "bytes_per_op": 3528,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 16164,
+          "ns_per_op": 10817.0,
+          "bytes_per_op": 3528,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 16902,
+          "ns_per_op": 11521.0,
+          "bytes_per_op": 3528,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 14668,
+          "ns_per_op": 12162.0,
+          "bytes_per_op": 3528,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 169,
+          "ns_per_op": 1010565.0,
+          "bytes_per_op": 310928,
+          "allocations_per_op": 1540
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 178,
+          "ns_per_op": 1117271.0,
+          "bytes_per_op": 310935,
+          "allocations_per_op": 1540
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 122,
+          "ns_per_op": 1479509.0,
+          "bytes_per_op": 310944,
+          "allocations_per_op": 1540
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 121,
+          "ns_per_op": 1478497.0,
+          "bytes_per_op": 310931,
+          "allocations_per_op": 1540
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 100,
+          "ns_per_op": 1521330.0,
+          "bytes_per_op": 310932,
+          "allocations_per_op": 1540
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 11992,
+          "ns_per_op": 14031.0,
+          "bytes_per_op": 3768,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 18405,
+          "ns_per_op": 9875.0,
+          "bytes_per_op": 3768,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 14762,
+          "ns_per_op": 11348.0,
+          "bytes_per_op": 3768,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 17078,
+          "ns_per_op": 10099.0,
+          "bytes_per_op": 3768,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 19105,
+          "ns_per_op": 10846.0,
+          "bytes_per_op": 3768,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 1152,
+          "ns_per_op": 164540.0,
+          "bytes_per_op": 166120,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 1249,
+          "ns_per_op": 153827.0,
+          "bytes_per_op": 166120,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 1455,
+          "ns_per_op": 125272.0,
+          "bytes_per_op": 166120,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 1719,
+          "ns_per_op": 108057.0,
+          "bytes_per_op": 166120,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 2014,
+          "ns_per_op": 132822.0,
+          "bytes_per_op": 166120,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 129,
+          "ns_per_op": 1377297.0,
+          "bytes_per_op": 246092,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 130,
+          "ns_per_op": 1466188.0,
+          "bytes_per_op": 261790,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 142,
+          "ns_per_op": 1169869.0,
+          "bytes_per_op": 234461,
+          "allocations_per_op": 24
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 154,
+          "ns_per_op": 1124026.0,
+          "bytes_per_op": 233705,
+          "allocations_per_op": 24
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 138,
+          "ns_per_op": 1278962.0,
+          "bytes_per_op": 229760,
+          "allocations_per_op": 24
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 63,
+          "ns_per_op": 2749004.0,
+          "bytes_per_op": 512432,
+          "allocations_per_op": 4005
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 68,
+          "ns_per_op": 2367403.0,
+          "bytes_per_op": 512377,
+          "allocations_per_op": 4004
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 76,
+          "ns_per_op": 2836138.0,
+          "bytes_per_op": 512402,
+          "allocations_per_op": 4004
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 68,
+          "ns_per_op": 2284834.0,
+          "bytes_per_op": 512422,
+          "allocations_per_op": 4004
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 81,
+          "ns_per_op": 3019579.0,
+          "bytes_per_op": 512389,
+          "allocations_per_op": 4004
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 15198319,
+          "ns_per_op": 11.03,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 18300904,
+          "ns_per_op": 9.811,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 18159073,
+          "ns_per_op": 10.06,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 18310838,
+          "ns_per_op": 10.01,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 1000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 18805255,
+          "ns_per_op": 10.17,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 14,
+          "ns_per_op": 11060399.0,
+          "bytes_per_op": 4069095,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 16,
+          "ns_per_op": 10320508.0,
+          "bytes_per_op": 3831865,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 16,
+          "ns_per_op": 10317503.0,
+          "bytes_per_op": 2171121,
+          "allocations_per_op": 6
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 16,
+          "ns_per_op": 10384197.0,
+          "bytes_per_op": 3831849,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 14,
+          "ns_per_op": 11254538.0,
+          "bytes_per_op": 3120152,
+          "allocations_per_op": 11
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 19,
+          "ns_per_op": 10551023.0,
+          "bytes_per_op": 3569838,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 16,
+          "ns_per_op": 10565094.0,
+          "bytes_per_op": 4247254,
+          "allocations_per_op": 20
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 18,
+          "ns_per_op": 10725258.0,
+          "bytes_per_op": 2909425,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 16,
+          "ns_per_op": 10187128.0,
+          "bytes_per_op": 2586503,
+          "allocations_per_op": 11
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 19,
+          "ns_per_op": 9455831.0,
+          "bytes_per_op": 2520950,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 20,
+          "ns_per_op": 10466329.0,
+          "bytes_per_op": 3209842,
+          "allocations_per_op": 23
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 16,
+          "ns_per_op": 10589304.0,
+          "bytes_per_op": 3458923,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 16,
+          "ns_per_op": 10673380.0,
+          "bytes_per_op": 2213355,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 14,
+          "ns_per_op": 10832360.0,
+          "bytes_per_op": 4111359,
+          "allocations_per_op": 28
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 18,
+          "ns_per_op": 9466348.0,
+          "bytes_per_op": 2951473,
+          "allocations_per_op": 22
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 16,
+          "ns_per_op": 10255594.0,
+          "bytes_per_op": 3416875,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 19,
+          "ns_per_op": 9781079.0,
+          "bytes_per_op": 2870583,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 15,
+          "ns_per_op": 10710538.0,
+          "bytes_per_op": 3057051,
+          "allocations_per_op": 14
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 18,
+          "ns_per_op": 11156557.0,
+          "bytes_per_op": 2909425,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 16,
+          "ns_per_op": 9911300.0,
+          "bytes_per_op": 3001686,
+          "allocations_per_op": 13
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 18,
+          "ns_per_op": 9515680.0,
+          "bytes_per_op": 2171310,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 16,
+          "ns_per_op": 10212397.0,
+          "bytes_per_op": 3416875,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 16,
+          "ns_per_op": 10503912.0,
+          "bytes_per_op": 3416875,
+          "allocations_per_op": 16
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 18,
+          "ns_per_op": 10112212.0,
+          "bytes_per_op": 2540368,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 19,
+          "ns_per_op": 11395556.0,
+          "bytes_per_op": 2870585,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 8,
+          "ns_per_op": 19773038.0,
+          "bytes_per_op": 6833438,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 8,
+          "ns_per_op": 19438388.0,
+          "bytes_per_op": 6833438,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 9,
+          "ns_per_op": 17489275.0,
+          "bytes_per_op": 5818541,
+          "allocations_per_op": 22
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 10,
+          "ns_per_op": 16790106.0,
+          "bytes_per_op": 6335230,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 10,
+          "ns_per_op": 16237103.0,
+          "bytes_per_op": 7663810,
+          "allocations_per_op": 32
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 15,
+          "ns_per_op": 10429643.0,
+          "bytes_per_op": 3499782,
+          "allocations_per_op": 14
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 16,
+          "ns_per_op": 10155477.0,
+          "bytes_per_op": 3001549,
+          "allocations_per_op": 11
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 15,
+          "ns_per_op": 10275877.0,
+          "bytes_per_op": 2614052,
+          "allocations_per_op": 9
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 15,
+          "ns_per_op": 10374690.0,
+          "bytes_per_op": 3056913,
+          "allocations_per_op": 11
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 15,
+          "ns_per_op": 10737054.0,
+          "bytes_per_op": 3056913,
+          "allocations_per_op": 11
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 22914058,
+          "ns_per_op": 7.294,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 24917049,
+          "ns_per_op": 7.59,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 25092986,
+          "ns_per_op": 7.398,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 25219956,
+          "ns_per_op": 7.39,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 25378534,
+          "ns_per_op": 7.173,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 9,
+          "ns_per_op": 21507375.0,
+          "bytes_per_op": 6368968,
+          "allocations_per_op": 33971
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 7,
+          "ns_per_op": 24743424.0,
+          "bytes_per_op": 6368826,
+          "allocations_per_op": 33970
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 8,
+          "ns_per_op": 21579587.0,
+          "bytes_per_op": 6368988,
+          "allocations_per_op": 33971
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 8,
+          "ns_per_op": 18883579.0,
+          "bytes_per_op": 6368792,
+          "allocations_per_op": 33970
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 8,
+          "ns_per_op": 22578519.0,
+          "bytes_per_op": 6368890,
+          "allocations_per_op": 33970
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 2631,
+          "ns_per_op": 62111.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 3050,
+          "ns_per_op": 59345.0,
+          "bytes_per_op": 7665,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 3627,
+          "ns_per_op": 48343.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 4078,
+          "ns_per_op": 48043.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 4711,
+          "ns_per_op": 44359.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 144,
+          "ns_per_op": 1235154.0,
+          "bytes_per_op": 512461,
+          "allocations_per_op": 869
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 147,
+          "ns_per_op": 1265500.0,
+          "bytes_per_op": 512458,
+          "allocations_per_op": 869
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 127,
+          "ns_per_op": 1319922.0,
+          "bytes_per_op": 512454,
+          "allocations_per_op": 869
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 170,
+          "ns_per_op": 1106465.0,
+          "bytes_per_op": 512475,
+          "allocations_per_op": 869
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 148,
+          "ns_per_op": 1205316.0,
+          "bytes_per_op": 512462,
+          "allocations_per_op": 869
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 4268,
+          "ns_per_op": 43688.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 4666,
+          "ns_per_op": 42819.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 4777,
+          "ns_per_op": 46584.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 4528,
+          "ns_per_op": 46451.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 2864,
+          "ns_per_op": 53442.0,
+          "bytes_per_op": 7664,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 3920,
+          "ns_per_op": 45649.0,
+          "bytes_per_op": 8384,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 2991,
+          "ns_per_op": 52110.0,
+          "bytes_per_op": 8384,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 3441,
+          "ns_per_op": 56172.0,
+          "bytes_per_op": 8384,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 3202,
+          "ns_per_op": 55038.0,
+          "bytes_per_op": 8384,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 3733,
+          "ns_per_op": 54828.0,
+          "bytes_per_op": 8384,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 12,
+          "ns_per_op": 13698364.0,
+          "bytes_per_op": 3839590,
+          "allocations_per_op": 32
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 13,
+          "ns_per_op": 13328220.0,
+          "bytes_per_op": 3200830,
+          "allocations_per_op": 28
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 13,
+          "ns_per_op": 12735016.0,
+          "bytes_per_op": 2689827,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 13,
+          "ns_per_op": 13042516.0,
+          "bytes_per_op": 2178825,
+          "allocations_per_op": 22
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 12,
+          "ns_per_op": 14252494.0,
+          "bytes_per_op": 2732418,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 8,
+          "ns_per_op": 19134097.0,
+          "bytes_per_op": 6369128,
+          "allocations_per_op": 33974
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 9,
+          "ns_per_op": 17880235.0,
+          "bytes_per_op": 6369000,
+          "allocations_per_op": 33973
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 9,
+          "ns_per_op": 19642871.0,
+          "bytes_per_op": 6369059,
+          "allocations_per_op": 33973
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 8,
+          "ns_per_op": 19904808.0,
+          "bytes_per_op": 6369008,
+          "allocations_per_op": 33973
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 9,
+          "ns_per_op": 17927782.0,
+          "bytes_per_op": 6368961,
+          "allocations_per_op": 33972
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22119788,
+          "ns_per_op": 8.22,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22325342,
+          "ns_per_op": 8.322,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 19733676,
+          "ns_per_op": 8.383,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22755549,
+          "ns_per_op": 8.103,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22424624,
+          "ns_per_op": 8.206,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 7,
+          "ns_per_op": 25893667.0,
+          "bytes_per_op": 5121068,
+          "allocations_per_op": 40008
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 7,
+          "ns_per_op": 23660132.0,
+          "bytes_per_op": 5120868,
+          "allocations_per_op": 40007
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 7,
+          "ns_per_op": 23084282.0,
+          "bytes_per_op": 5120806,
+          "allocations_per_op": 40006
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 7,
+          "ns_per_op": 23215689.0,
+          "bytes_per_op": 5120868,
+          "allocations_per_op": 40007
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 7,
+          "ns_per_op": 26451677.0,
+          "bytes_per_op": 5120906,
+          "allocations_per_op": 40007
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 10000,
+          "ns_per_op": 15470.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 12400,
+          "ns_per_op": 14502.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 12114,
+          "ns_per_op": 15077.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 10000,
+          "ns_per_op": 15893.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 10000,
+          "ns_per_op": 15260.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 148,
+          "ns_per_op": 1208939.0,
+          "bytes_per_op": 407014,
+          "allocations_per_op": 2002
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 135,
+          "ns_per_op": 1325536.0,
+          "bytes_per_op": 407013,
+          "allocations_per_op": 2002
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 136,
+          "ns_per_op": 1322664.0,
+          "bytes_per_op": 407024,
+          "allocations_per_op": 2002
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 127,
+          "ns_per_op": 1392993.0,
+          "bytes_per_op": 407014,
+          "allocations_per_op": 2002
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 134,
+          "ns_per_op": 1367169.0,
+          "bytes_per_op": 407020,
+          "allocations_per_op": 2002
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 12346,
+          "ns_per_op": 14413.0,
+          "bytes_per_op": 6728,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 12945,
+          "ns_per_op": 13906.0,
+          "bytes_per_op": 6728,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 13147,
+          "ns_per_op": 13813.0,
+          "bytes_per_op": 6728,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 13299,
+          "ns_per_op": 13983.0,
+          "bytes_per_op": 6728,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 13369,
+          "ns_per_op": 13450.0,
+          "bytes_per_op": 6728,
+          "allocations_per_op": 25
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 122,
+          "ns_per_op": 1493780.0,
+          "bytes_per_op": 1609160,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 120,
+          "ns_per_op": 1501267.0,
+          "bytes_per_op": 1609160,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 124,
+          "ns_per_op": 1406261.0,
+          "bytes_per_op": 1609160,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 134,
+          "ns_per_op": 1323631.0,
+          "bytes_per_op": 1609160,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 100,
+          "ns_per_op": 1510400.0,
+          "bytes_per_op": 1609160,
+          "allocations_per_op": 21
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 14,
+          "ns_per_op": 12159955.0,
+          "bytes_per_op": 3599305,
+          "allocations_per_op": 39
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 16,
+          "ns_per_op": 11232104.0,
+          "bytes_per_op": 3421371,
+          "allocations_per_op": 38
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 19,
+          "ns_per_op": 9811009.0,
+          "bytes_per_op": 2875067,
+          "allocations_per_op": 34
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 19,
+          "ns_per_op": 10232848.0,
+          "bytes_per_op": 3574320,
+          "allocations_per_op": 38
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 14,
+          "ns_per_op": 11583862.0,
+          "bytes_per_op": 3599305,
+          "allocations_per_op": 39
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 6,
+          "ns_per_op": 26512631.0,
+          "bytes_per_op": 5121105,
+          "allocations_per_op": 40009
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 6,
+          "ns_per_op": 25779963.0,
+          "bytes_per_op": 5121033,
+          "allocations_per_op": 40008
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 6,
+          "ns_per_op": 28102517.0,
+          "bytes_per_op": 5121121,
+          "allocations_per_op": 40009
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 7,
+          "ns_per_op": 24371965.0,
+          "bytes_per_op": 5120890,
+          "allocations_per_op": 40007
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 6,
+          "ns_per_op": 26149646.0,
+          "bytes_per_op": 5121062,
+          "allocations_per_op": 40009
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 17212314,
+          "ns_per_op": 9.807,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 18515822,
+          "ns_per_op": 9.675,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 18697974,
+          "ns_per_op": 9.726,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 15138620,
+          "ns_per_op": 10.09,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 10000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 15627830,
+          "ns_per_op": 10.69,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 2,
+          "ns_per_op": 99216732.0,
+          "bytes_per_op": 62603168,
+          "allocations_per_op": 31
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 2,
+          "ns_per_op": 92738744.0,
+          "bytes_per_op": 21610872,
+          "allocations_per_op": 7
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 2,
+          "ns_per_op": 104608583.0,
+          "bytes_per_op": 62603168,
+          "allocations_per_op": 31
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 2,
+          "ns_per_op": 103869474.0,
+          "bytes_per_op": 103595596,
+          "allocations_per_op": 56
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "build",
+          "iterations": 2,
+          "ns_per_op": 86499597.0,
+          "bytes_per_op": 21610872,
+          "allocations_per_op": 7
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 2,
+          "ns_per_op": 88582986.0,
+          "bytes_per_op": 21611088,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 2,
+          "ns_per_op": 95022486.0,
+          "bytes_per_op": 21611088,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 2,
+          "ns_per_op": 102798132.0,
+          "bytes_per_op": 62603384,
+          "allocations_per_op": 34
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 2,
+          "ns_per_op": 109847304.0,
+          "bytes_per_op": 62603384,
+          "allocations_per_op": 34
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1",
+          "iterations": 2,
+          "ns_per_op": 89138152.0,
+          "bytes_per_op": 21611088,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 2,
+          "ns_per_op": 97874119.0,
+          "bytes_per_op": 62645432,
+          "allocations_per_op": 43
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 2,
+          "ns_per_op": 90011204.0,
+          "bytes_per_op": 21653136,
+          "allocations_per_op": 19
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 2,
+          "ns_per_op": 101427070.0,
+          "bytes_per_op": 62645432,
+          "allocations_per_op": 43
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 2,
+          "ns_per_op": 100697536.0,
+          "bytes_per_op": 62645432,
+          "allocations_per_op": 43
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit100",
+          "iterations": 2,
+          "ns_per_op": 91593822.0,
+          "bytes_per_op": 21653136,
+          "allocations_per_op": 19
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 2,
+          "ns_per_op": 88459267.0,
+          "bytes_per_op": 21611088,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 2,
+          "ns_per_op": 92334592.0,
+          "bytes_per_op": 21611088,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 2,
+          "ns_per_op": 102959840.0,
+          "bytes_per_op": 62603384,
+          "allocations_per_op": 34
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 2,
+          "ns_per_op": 91812097.0,
+          "bytes_per_op": 21611088,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "add1",
+          "iterations": 2,
+          "ns_per_op": 90360540.0,
+          "bytes_per_op": 21611088,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 2,
+          "ns_per_op": 98317490.0,
+          "bytes_per_op": 62603384,
+          "allocations_per_op": 34
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 2,
+          "ns_per_op": 89192244.0,
+          "bytes_per_op": 21611088,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 2,
+          "ns_per_op": 100003334.0,
+          "bytes_per_op": 62603384,
+          "allocations_per_op": 34
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 2,
+          "ns_per_op": 89229548.0,
+          "bytes_per_op": 21611088,
+          "allocations_per_op": 10
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "delete_root",
+          "iterations": 2,
+          "ns_per_op": 107864996.0,
+          "bytes_per_op": 103595812,
+          "allocations_per_op": 59
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 2,
+          "ns_per_op": 161590374.0,
+          "bytes_per_op": 84214060,
+          "allocations_per_op": 39
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 2,
+          "ns_per_op": 149454475.0,
+          "bytes_per_op": 84214060,
+          "allocations_per_op": 39
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 1,
+          "ns_per_op": 161350072.0,
+          "bytes_per_op": 125206752,
+          "allocations_per_op": 66
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 1,
+          "ns_per_op": 162138689.0,
+          "bytes_per_op": 125206752,
+          "allocations_per_op": 66
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "edit1_export",
+          "iterations": 1,
+          "ns_per_op": 169619423.0,
+          "bytes_per_op": 125206752,
+          "allocations_per_op": 66
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 2,
+          "ns_per_op": 91141860.0,
+          "bytes_per_op": 21610968,
+          "allocations_per_op": 8
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 2,
+          "ns_per_op": 105386370.0,
+          "bytes_per_op": 62603264,
+          "allocations_per_op": 32
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 2,
+          "ns_per_op": 103713988.0,
+          "bytes_per_op": 62603264,
+          "allocations_per_op": 32
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 2,
+          "ns_per_op": 102216208.0,
+          "bytes_per_op": 62603264,
+          "allocations_per_op": 32
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "rebuild_diff",
+          "iterations": 2,
+          "ns_per_op": 110623662.0,
+          "bytes_per_op": 62603264,
+          "allocations_per_op": 32
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 24030085,
+          "ns_per_op": 7.763,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 25276251,
+          "ns_per_op": 7.147,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 25097149,
+          "ns_per_op": 7.559,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 24768180,
+          "ns_per_op": 7.182,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "flat",
+          "operation": "equal_diff",
+          "iterations": 23934978,
+          "ns_per_op": 7.48,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 1,
+          "ns_per_op": 168169894.0,
+          "bytes_per_op": 63876336,
+          "allocations_per_op": 305646
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 1,
+          "ns_per_op": 174617806.0,
+          "bytes_per_op": 63875376,
+          "allocations_per_op": 305638
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 1,
+          "ns_per_op": 174802045.0,
+          "bytes_per_op": 63876160,
+          "allocations_per_op": 305644
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 1,
+          "ns_per_op": 182360704.0,
+          "bytes_per_op": 63875376,
+          "allocations_per_op": 305638
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "build",
+          "iterations": 1,
+          "ns_per_op": 183816730.0,
+          "bytes_per_op": 63876160,
+          "allocations_per_op": 305644
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 1669,
+          "ns_per_op": 105426.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 1674,
+          "ns_per_op": 109933.0,
+          "bytes_per_op": 49521,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 1750,
+          "ns_per_op": 107943.0,
+          "bytes_per_op": 49521,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 1722,
+          "ns_per_op": 106332.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1",
+          "iterations": 1750,
+          "ns_per_op": 106447.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 18,
+          "ns_per_op": 9780920.0,
+          "bytes_per_op": 4709288,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 19,
+          "ns_per_op": 9914802.0,
+          "bytes_per_op": 4709285,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 19,
+          "ns_per_op": 10103528.0,
+          "bytes_per_op": 4709298,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 18,
+          "ns_per_op": 9877780.0,
+          "bytes_per_op": 4709288,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit100",
+          "iterations": 19,
+          "ns_per_op": 9411397.0,
+          "bytes_per_op": 4709298,
+          "allocations_per_op": 917
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 1747,
+          "ns_per_op": 107423.0,
+          "bytes_per_op": 49521,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 1753,
+          "ns_per_op": 115346.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 1746,
+          "ns_per_op": 108211.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 1707,
+          "ns_per_op": 106464.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "add1",
+          "iterations": 1604,
+          "ns_per_op": 105755.0,
+          "bytes_per_op": 49520,
+          "allocations_per_op": 15
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 1806,
+          "ns_per_op": 105906.0,
+          "bytes_per_op": 49216,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 1849,
+          "ns_per_op": 105261.0,
+          "bytes_per_op": 49216,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 1570,
+          "ns_per_op": 101682.0,
+          "bytes_per_op": 49216,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 1894,
+          "ns_per_op": 101176.0,
+          "bytes_per_op": 49216,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "delete_root",
+          "iterations": 1788,
+          "ns_per_op": 104912.0,
+          "bytes_per_op": 49216,
+          "allocations_per_op": 12
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 1,
+          "ns_per_op": 159686439.0,
+          "bytes_per_op": 103645336,
+          "allocations_per_op": 74
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 1,
+          "ns_per_op": 157234961.0,
+          "bytes_per_op": 103645336,
+          "allocations_per_op": 74
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 1,
+          "ns_per_op": 152172685.0,
+          "bytes_per_op": 103645336,
+          "allocations_per_op": 74
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 1,
+          "ns_per_op": 151530073.0,
+          "bytes_per_op": 103645336,
+          "allocations_per_op": 74
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "edit1_export",
+          "iterations": 1,
+          "ns_per_op": 155628528.0,
+          "bytes_per_op": 103645336,
+          "allocations_per_op": 74
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 1,
+          "ns_per_op": 179075435.0,
+          "bytes_per_op": 63877424,
+          "allocations_per_op": 305655
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 1,
+          "ns_per_op": 172783676.0,
+          "bytes_per_op": 63876376,
+          "allocations_per_op": 305647
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 1,
+          "ns_per_op": 165482579.0,
+          "bytes_per_op": 63875592,
+          "allocations_per_op": 305641
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 1,
+          "ns_per_op": 167029495.0,
+          "bytes_per_op": 63876376,
+          "allocations_per_op": 305647
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "rebuild_diff",
+          "iterations": 1,
+          "ns_per_op": 176842811.0,
+          "bytes_per_op": 63877160,
+          "allocations_per_op": 305653
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 21905788,
+          "ns_per_op": 8.126,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22195160,
+          "ns_per_op": 8.264,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22802997,
+          "ns_per_op": 8.046,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22545950,
+          "ns_per_op": 8.274,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "partitioned",
+          "operation": "equal_diff",
+          "iterations": 22527175,
+          "ns_per_op": 8.534,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 1,
+          "ns_per_op": 245590353.0,
+          "bytes_per_op": 51201768,
+          "allocations_per_op": 400014
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 1,
+          "ns_per_op": 236259034.0,
+          "bytes_per_op": 51200984,
+          "allocations_per_op": 400008
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 1,
+          "ns_per_op": 241729787.0,
+          "bytes_per_op": 51201768,
+          "allocations_per_op": 400014
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 1,
+          "ns_per_op": 249578815.0,
+          "bytes_per_op": 51200984,
+          "allocations_per_op": 400008
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "build",
+          "iterations": 1,
+          "ns_per_op": 229341436.0,
+          "bytes_per_op": 51201504,
+          "allocations_per_op": 400012
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 13166,
+          "ns_per_op": 13810.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 13083,
+          "ns_per_op": 13740.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 10000,
+          "ns_per_op": 15127.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 12721,
+          "ns_per_op": 14125.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1",
+          "iterations": 12535,
+          "ns_per_op": 14345.0,
+          "bytes_per_op": 4776,
+          "allocations_per_op": 26
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 100,
+          "ns_per_op": 1552984.0,
+          "bytes_per_op": 502053,
+          "allocations_per_op": 2459
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 100,
+          "ns_per_op": 1540929.0,
+          "bytes_per_op": 502053,
+          "allocations_per_op": 2459
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 108,
+          "ns_per_op": 1672951.0,
+          "bytes_per_op": 502052,
+          "allocations_per_op": 2459
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 99,
+          "ns_per_op": 1658209.0,
+          "bytes_per_op": 502053,
+          "allocations_per_op": 2459
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit100",
+          "iterations": 99,
+          "ns_per_op": 1609923.0,
+          "bytes_per_op": 502053,
+          "allocations_per_op": 2459
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 13351,
+          "ns_per_op": 13231.0,
+          "bytes_per_op": 4856,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 13586,
+          "ns_per_op": 13097.0,
+          "bytes_per_op": 4856,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 13406,
+          "ns_per_op": 13196.0,
+          "bytes_per_op": 4856,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 13730,
+          "ns_per_op": 12841.0,
+          "bytes_per_op": 4856,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "add1",
+          "iterations": 13834,
+          "ns_per_op": 12813.0,
+          "bytes_per_op": 4856,
+          "allocations_per_op": 27
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 13,
+          "ns_per_op": 15988720.0,
+          "bytes_per_op": 16009864,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 15,
+          "ns_per_op": 14025348.0,
+          "bytes_per_op": 16009864,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 15,
+          "ns_per_op": 14452030.0,
+          "bytes_per_op": 16009864,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 15,
+          "ns_per_op": 14477895.0,
+          "bytes_per_op": 16009864,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "delete_root",
+          "iterations": 15,
+          "ns_per_op": 13973757.0,
+          "bytes_per_op": 16009864,
+          "allocations_per_op": 17
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 2,
+          "ns_per_op": 112662446.0,
+          "bytes_per_op": 62608012,
+          "allocations_per_op": 57
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 2,
+          "ns_per_op": 102349488.0,
+          "bytes_per_op": 62607880,
+          "allocations_per_op": 56
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 2,
+          "ns_per_op": 95296112.0,
+          "bytes_per_op": 21615452,
+          "allocations_per_op": 31
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 2,
+          "ns_per_op": 90670979.0,
+          "bytes_per_op": 21615452,
+          "allocations_per_op": 31
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "edit1_export",
+          "iterations": 2,
+          "ns_per_op": 102871792.0,
+          "bytes_per_op": 62608012,
+          "allocations_per_op": 57
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 1,
+          "ns_per_op": 263881356.0,
+          "bytes_per_op": 51202824,
+          "allocations_per_op": 400023
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 1,
+          "ns_per_op": 255319567.0,
+          "bytes_per_op": 51201864,
+          "allocations_per_op": 400015
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 1,
+          "ns_per_op": 237354017.0,
+          "bytes_per_op": 51202040,
+          "allocations_per_op": 400017
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 1,
+          "ns_per_op": 234239176.0,
+          "bytes_per_op": 51201864,
+          "allocations_per_op": 400015
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "rebuild_diff",
+          "iterations": 1,
+          "ns_per_op": 235643714.0,
+          "bytes_per_op": 51201080,
+          "allocations_per_op": 400009
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 17494938,
+          "ns_per_op": 10.64,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 17152827,
+          "ns_per_op": 10.94,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 17399764,
+          "ns_per_op": 10.57,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 16023864,
+          "ns_per_op": 11.04,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "entries": 100000,
+          "representation": "tree",
+          "operation": "equal_diff",
+          "iterations": 16982599,
+          "ns_per_op": 11.15,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        }
+      ],
+      "scope": "In-memory metadata only. No filesystem inventory, transport, durable staging, or application latency.",
+      "contract_test_output": "=== RUN   TestIndexContract\n=== RUN   TestIndexContract/flat\n=== RUN   TestIndexContract/partitioned\n=== RUN   TestIndexContract/tree\n--- PASS: TestIndexContract (1.64s)\n    --- PASS: TestIndexContract/flat (0.42s)\n    --- PASS: TestIndexContract/partitioned (0.61s)\n    --- PASS: TestIndexContract/tree (0.62s)\n=== RUN   TestIndexOwnershipAndStructuralChanges\n=== RUN   TestIndexOwnershipAndStructuralChanges/flat\n=== RUN   TestIndexOwnershipAndStructuralChanges/partitioned\n=== RUN   TestIndexOwnershipAndStructuralChanges/tree\n--- PASS: TestIndexOwnershipAndStructuralChanges (0.00s)\n    --- PASS: TestIndexOwnershipAndStructuralChanges/flat (0.00s)\n    --- PASS: TestIndexOwnershipAndStructuralChanges/partitioned (0.00s)\n    --- PASS: TestIndexOwnershipAndStructuralChanges/tree (0.00s)\n=== RUN   TestIndexMetadataIdentity\n=== RUN   TestIndexMetadataIdentity/flat\n=== RUN   TestIndexMetadataIdentity/partitioned\n=== RUN   TestIndexMetadataIdentity/tree\n--- PASS: TestIndexMetadataIdentity (0.00s)\n    --- PASS: TestIndexMetadataIdentity/flat (0.00s)\n    --- PASS: TestIndexMetadataIdentity/partitioned (0.00s)\n    --- PASS: TestIndexMetadataIdentity/tree (0.00s)\nPASS\n"
+    }
+  }
+}

@@ -3,6 +3,7 @@ package archive
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -56,17 +57,24 @@ func TestValidateRejectsUnsafePaths(t *testing.T) {
 		if err := Validate(m); err == nil {
 			t.Errorf("case %d: expected rejection, got nil", i)
 		}
+		if err := ValidateSortedContext(t.Context(), m); err == nil {
+			t.Errorf("case %d: sorted validator accepted unsafe paths", i)
+		}
 	}
 }
 
 func TestValidateAcceptsInternalSymlink(t *testing.T) {
 	m := proto.Manifest{Entries: []proto.ManifestEntry{
 		{Path: "dir", Type: proto.EntryDir, Mode: 0o755},
+		entryFile("dir-sibling", "hi"),
 		{Path: "dir/link", Type: proto.EntrySymlink, Target: "../real.txt"},
 		entryFile("real.txt", "hi"),
 	}}
 	if err := Validate(m); err != nil {
 		t.Fatalf("internal symlink should validate: %v", err)
+	}
+	if err := ValidateSortedContext(t.Context(), m); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -76,11 +84,29 @@ func TestValidateRejectsMalformedEntries(t *testing.T) {
 		{Entries: []proto.ManifestEntry{{Path: "file", Type: proto.EntryFile, Size: -1, SHA256: strings.Repeat("0", 64)}}},
 		{Entries: []proto.ManifestEntry{{Path: "file", Type: proto.EntryFile, SHA256: "not-a-digest"}}},
 		{Entries: []proto.ManifestEntry{entryFile("parent", "x"), entryFile("parent/child", "y")}},
+		{Entries: []proto.ManifestEntry{entryFile("parent", "x"), entryFile("parent-sibling", "x"), entryFile("parent/child", "y")}},
+		{Entries: []proto.ManifestEntry{{Path: "file", Type: proto.EntryFile, SHA256: strings.Repeat("z", 64)}}},
 	}
 	for i, m := range cases {
 		if err := Validate(m); err == nil {
 			t.Errorf("case %d: malformed manifest passed validation", i)
 		}
+		if err := ValidateSortedContext(t.Context(), m); err == nil {
+			t.Errorf("case %d: sorted validator accepted malformed entries", i)
+		}
+	}
+}
+
+func TestValidateSortedOrderingAndContext(t *testing.T) {
+	for _, entries := range [][]proto.ManifestEntry{{entryFile("b", ""), entryFile("a", "")}, {entryFile("a", ""), entryFile("a", "")}} {
+		if err := ValidateSortedContext(t.Context(), proto.Manifest{Entries: entries}); err == nil {
+			t.Fatal("accepted unordered or duplicate entries")
+		}
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := ValidateSortedContext(ctx, proto.Manifest{}); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
 	}
 }
 
