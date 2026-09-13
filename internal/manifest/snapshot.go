@@ -276,24 +276,34 @@ func (s *Snapshot) Update(ctx context.Context, edits []Edit) (*Snapshot, error) 
 		}
 		size += e.Size
 	}
-	if s.noIndex.Load() {
-		return s.updateFlat(ctx, ordered)
-	}
-	if s.index.Load() == nil && s.count < minIndexedEntries && count < minIndexedEntries {
-		m, err := editedView(ctx, s.entries, ordered, count)
+	// Both small inventories and height-limited trees use the same validated
+	// array update. Internal reads borrow immutable views instead of cloning.
+	flatUpdate := func(noIndex bool) (*Snapshot, error) {
+		base, err := s.materialized(ctx)
+		if err != nil {
+			return nil, err
+		}
+		m, err := editedView(ctx, base.Entries, ordered, count)
 		if err != nil {
 			return nil, err
 		}
 		next := &Snapshot{entries: m.Entries, size: size, count: count}
+		next.noIndex.Store(noIndex)
 		if err := next.validateReplacements(ctx, replacements.Entries); err != nil {
 			return nil, err
 		}
 		return next, ctx.Err()
 	}
+	if s.noIndex.Load() {
+		return flatUpdate(true)
+	}
+	if s.index.Load() == nil && s.count < minIndexedEntries && count < minIndexedEntries {
+		return flatUpdate(false)
+	}
 	root, err := s.tree(ctx)
 	if errors.Is(err, errTreeHeight) {
 		s.noIndex.Store(true)
-		return s.updateFlat(ctx, ordered)
+		return flatUpdate(true)
 	}
 	if err != nil {
 		return nil, err
@@ -310,7 +320,7 @@ func (s *Snapshot) Update(ctx context.Context, edits []Edit) (*Snapshot, error) 
 				return nil, err
 			}
 			if root != nil && root.height > maxHeight {
-				return s.updateFlat(ctx, ordered)
+				return flatUpdate(true)
 			}
 		}
 	}
@@ -373,13 +383,13 @@ func (s *Snapshot) Diff(ctx context.Context, next *Snapshot) ([]Edit, error) {
 	before, after := proto.Manifest{Entries: s.entries}, proto.Manifest{Entries: next.entries}
 	var err error
 	if s.entries == nil {
-		before, err = s.Manifest(ctx)
+		before, err = s.materialized(ctx)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if next.entries == nil {
-		after, err = next.Manifest(ctx)
+		after, err = next.materialized(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -406,41 +416,4 @@ func (s *Snapshot) Diff(ctx context.Context, next *Snapshot) ([]Edit, error) {
 		}
 	}
 	return result, nil
-}
-
-// Path priorities may be adversarial. A bounded flat fallback preserves valid
-// snapshots instead of allowing recursive work to grow with crafted tree height.
-func (s *Snapshot) updateFlat(ctx context.Context, edits []Edit) (*Snapshot, error) {
-	m, err := s.Manifest(ctx)
-	if err != nil {
-		return nil, err
-	}
-	entries := make([]proto.ManifestEntry, 0, len(m.Entries)+len(edits))
-	i, j := 0, 0
-	for i < len(m.Entries) || j < len(edits) {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if j == len(edits) || i < len(m.Entries) && m.Entries[i].Path < edits[j].Entry.Path {
-			entries = append(entries, m.Entries[i])
-			i++
-			continue
-		}
-		if i < len(m.Entries) && m.Entries[i].Path == edits[j].Entry.Path {
-			i++
-		}
-		if !edits[j].Delete {
-			entries = append(entries, edits[j].Entry)
-		}
-		j++
-	}
-	if len(entries) == 0 {
-		entries = nil
-	}
-	next, err := New(ctx, proto.Manifest{Entries: entries})
-	if err != nil {
-		return nil, err
-	}
-	next.noIndex.Store(true)
-	return next, nil
 }

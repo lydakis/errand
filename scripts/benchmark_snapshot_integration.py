@@ -12,13 +12,47 @@ import re
 import subprocess
 
 
-CASES = {
-    "changes": ("./internal/changes", "^BenchmarkPreparedMetadata$", "150ms", 8),
-    "retained-small": ("./internal/changes", "^BenchmarkRetainedTransferMetadata$/^(1000|10000)$/", "100x", 4),
-    "retained-large": ("./internal/changes", "^BenchmarkRetainedTransferMetadata$/^100000$/", "20x", 2),
-    "snapshot": ("./internal/snapshot", "^BenchmarkWatchPreparation$", "10x", 6),
-    "commands": ("./cmd/errand", "^Benchmark(PushPhases|WatchPhases|WorkspaceCreationAndSubmission|FetchCompletion)$", "3x", 6),
-}
+def benchmark_order(variants, number):
+    names = list(variants)
+    offset = number % len(names)
+    order = names[offset:] + names[:offset]
+    # Rotation alone alternates two variants; reversal would cancel it out.
+    # With three variants, reversal covers all six permutations.
+    if len(names) > 2 and number % 2:
+        order.reverse()
+    return order
+
+
+def benchmark_cases(scope):
+    # One leaf workload per process makes corresponding variants adjacent.
+    cases = {}
+    def add(name, package, pattern, benchtime):
+        cases[name] = (package, pattern, benchtime)
+    for count in (1000, 10000):
+        for nested in ("false", "true"):
+            for phase in ("prepare", "expand"):
+                add(f"metadata-{count}-{nested}-{phase}", "./internal/changes",
+                    f"^BenchmarkPreparedMetadata$/^{count}$/^nested={nested}$/^{phase}$", "500ms")
+    for count in (1000, 10000, 100000):
+        for edits in (1, 100):
+            add(f"retained-{count}-{edits}", "./internal/changes",
+                f"^BenchmarkRetainedTransferMetadata$/^{count}$/^edit{edits}$", "500ms")
+    if scope == "metadata":
+        return cases
+    for count in (1000, 10000):
+        for phase in ("first-edit", "retained-edit", "reconcile"):
+            add(f"preparation-{count}-{phase}", "./internal/snapshot",
+                f"^BenchmarkWatchPreparation$/^{count}$/^{phase}$", "10x")
+    add("watch", "./cmd/errand", "^BenchmarkWatchPhases$", "10x")
+    for scenario in ("small", "git-atomic", "nested-atomic", "structural"):
+        add(f"watch-{scenario}", "./cmd/errand", f"^BenchmarkWatchWorkloads$/^{scenario}$", "5x")
+    if scope == "full":
+        add("push", "./cmd/errand", "^BenchmarkPushPhases$", "5x")
+        for kind in ("workspace-create", "ephemeral-job"):
+            add(kind, "./cmd/errand", f"^BenchmarkWorkspaceCreationAndSubmission$/^{kind}$", "3x")
+        for persistent in ("false", "true"):
+            add(f"fetch-{persistent}", "./cmd/errand", f"^BenchmarkFetchCompletion$/^persistent={persistent}$", "3x")
+    return cases
 
 
 def run(command, root, env, log):
@@ -41,42 +75,47 @@ def filesystem(root, env, output, name):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline", type=Path, required=True)
+    parser.add_argument("--flat-control", type=Path, help="Optional matched flat engine with the same caller optimizations")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--revision", required=True)
-    parser.add_argument("--rounds", type=int, default=5)
-    parser.add_argument("--scope", choices=("full", "retained"), default="full",
+    parser.add_argument("--rounds", type=int, default=7)
+    parser.add_argument("--scope", choices=("full", "retained", "metadata"), default="full",
                         help="Use retained for metadata/preparation and complete watch cycles only")
+    parser.add_argument("--gomaxprocs", type=int, default=2)
     args = parser.parse_args()
-    if args.rounds < 1:
-        parser.error("rounds must be positive")
-    cases = dict(CASES)
-    if args.scope == "retained":
-        cases["commands"] = ("./cmd/errand", "^BenchmarkWatchPhases$", "5x", 1)
+    if args.rounds < 1 or args.gomaxprocs < 1:
+        parser.error("rounds and gomaxprocs must be positive")
+    cases = benchmark_cases(args.scope)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
-    env = dict(os.environ, GOMAXPROCS="2", CGO_ENABLED="0")
+    env = dict(os.environ, GOMAXPROCS=str(args.gomaxprocs), CGO_ENABLED="0")
     roots = {"baseline": args.baseline.resolve(), "candidate": Path.cwd()}
+    if args.flat_control:
+        roots["flat-control"] = args.flat_control.resolve()
     report = dict(revision=args.revision, platform=platform.platform(), machine=platform.machine(),
-                  gomaxprocs=2, rounds=args.rounds, versions={}, orders=[], cases=cases,
+                  gomaxprocs=args.gomaxprocs, rounds=args.rounds, versions={}, orders=[], cases=cases,
                   scope="Native-host metadata/preparation and loopback HTTP command paths; no cross-host network latency.",
                   harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
     report["go"] = run(["go", "version"], Path.cwd(), env, output / "go.txt").strip()
     report["filesystem"] = filesystem(Path.cwd(), env, output, "filesystem")
-    run(["go", "test", "-timeout=10m", "./..."], Path.cwd(), env, output / "tests.txt")
-    run(["go", "vet", "./..."], Path.cwd(), env, output / "vet.txt")
-    run(["go", "test", "-race", "-timeout=10m", "./internal/manifest", "./internal/snapshot", "./internal/changes", "./internal/archive", "./internal/client"],
-        Path.cwd(), dict(env, CGO_ENABLED="1"), output / "race.txt")
-    print("Candidate tests, vet and race checks passed", flush=True)
     for name, root in roots.items():
         directory = output / name
         directory.mkdir()
+        # Validate each frozen tree, including the control, on this host.
+        run(["go", "test", "-timeout=10m", "./..."], root, env, directory / "tests.txt")
+        run(["go", "vet", "./..."], root, env, directory / "vet.txt")
+        run(["go", "test", "-race", "-timeout=10m", "./internal/manifest", "./internal/snapshot",
+             "./internal/changes", "./internal/archive", "./internal/client", "./cmd/errand"],
+            root, dict(env, CGO_ENABLED="1"), directory / "race.txt")
+        print(f"{name}: tests, vet and race passed", flush=True)
         files = sorted([*root.rglob("*.go"), root / "go.mod", root / "go.sum"])
         digest = hashlib.sha256()
         for path in files:
             digest.update(str(path.relative_to(root)).encode() + b"\0" + path.read_bytes() + b"\0")
         version = dict(source_sha256=digest.hexdigest(), source_files=[str(p.relative_to(root)) for p in files], binaries={}, samples=[])
         report["versions"][name] = version
-        for key, (package, _, _, _) in cases.items():
+        for package in sorted({case[0] for case in cases.values()}):
+            key = package.removeprefix("./").replace("/", "-")
             binary = directory / f"{key}.test"
             run(["go", "test", "-c", "-o", str(binary), package], root, env, directory / f"build-{key}.txt")
             version["binaries"][key] = hashlib.sha256(binary.read_bytes()).hexdigest()
@@ -89,14 +128,13 @@ def main():
     report["fixture_root"] = str(fixtures)
     report["fixture_filesystem"] = filesystem(fixtures, env, output, "fixture-filesystem")
     for number in range(args.rounds):
-        order = list(roots) if number % 2 == 0 else list(reversed(roots))
+        order = benchmark_order(roots, number)
         report["orders"].append(order)
-        for name in order:
-            for key, (_, pattern, benchtime, expected) in cases.items():
+        for key, (package, pattern, benchtime) in cases.items():
+            binary_key = package.removeprefix("./").replace("/", "-")
+            for name in order:
                 directory = output / name
-                # Verbose mode prints complete result lines after benchmark
-                # output, even when a benchmark emits EVALUATION records.
-                raw = run([str(directory / f"{key}.test"), "-test.v", "-test.run=^$", f"-test.bench={pattern}",
+                raw = run([str(directory / f"{binary_key}.test"), "-test.v", "-test.run=^$", f"-test.bench={pattern}",
                            f"-test.benchtime={benchtime}", "-test.benchmem", "-test.timeout=10m"],
                           roots[name], env, directory / f"{number}-{key}.txt")
                 samples = []
@@ -109,13 +147,13 @@ def main():
                         raise RuntimeError(f"Malformed benchmark line: {line}")
                     samples.append(dict(name=match[1], iterations=int(match[2]), round=number,
                                         metrics={metrics[i+1]: float(metrics[i]) for i in range(0, len(metrics), 2)}))
-                if len(samples) != expected:
-                    raise RuntimeError(f"Expected {expected} {key} samples, got {len(samples)}")
+                if len(samples) != 1:
+                    raise RuntimeError(f"Expected one {key} sample, got {len(samples)}")
                 report["versions"][name]["samples"].extend(samples)
-            (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-            print(f"Round {number+1}/{args.rounds}: {name} complete", flush=True)
+                (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+            print(f"Pair {number+1}/{args.rounds}: {key}", flush=True)
     for name in roots:
-        for key in cases:
+        for key in report["versions"][name]["binaries"]:
             (output / name / f"{key}.test").unlink()
 
 

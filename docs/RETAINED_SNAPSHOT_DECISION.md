@@ -1,5 +1,9 @@
 # Retained snapshot performance decision
 
+The [review follow-up](SNAPSHOT_REVIEW_FIXES.md) removes redundant delta-record
+serialization and internal copies, and defines a stricter three-variant native
+comparison. The results below describe `9ee7cbd`, not that follow-up patch.
+
 ## Fixed objective
 
 Choose by transfer latency while preserving source selection, conflict handling,

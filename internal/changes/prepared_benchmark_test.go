@@ -1,6 +1,7 @@
 package changes
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -23,7 +24,7 @@ func BenchmarkPreparedMetadata(b *testing.B) {
 				}
 				current := proto.Manifest{Entries: slices.Clone(base.Entries)}
 				current.Entries[0].SHA256 = fmt.Sprintf("%064x", count)
-				prepared, err := PrepareTransferSource(b.Context(), base, current, 1<<30)
+				prepared, err := PrepareTransferSource(context.Background(), base, current, 1<<30)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -31,7 +32,7 @@ func BenchmarkPreparedMetadata(b *testing.B) {
 				b.Run("prepare", func(b *testing.B) {
 					b.ReportAllocs()
 					for b.Loop() {
-						if _, err := PrepareTransferSource(b.Context(), base, current, 1<<30); err != nil {
+						if _, err := PrepareTransferSource(context.Background(), base, current, 1<<30); err != nil {
 							b.Fatal(err)
 						}
 					}
@@ -39,7 +40,7 @@ func BenchmarkPreparedMetadata(b *testing.B) {
 				b.Run("expand", func(b *testing.B) {
 					b.ReportAllocs()
 					for b.Loop() {
-						if _, err := ExpandTransferSource(b.Context(), base, delta, root, 1<<30); err != nil {
+						if _, err := ExpandTransferSource(context.Background(), base, delta, root, 1<<30); err != nil {
 							b.Fatal(err)
 						}
 					}

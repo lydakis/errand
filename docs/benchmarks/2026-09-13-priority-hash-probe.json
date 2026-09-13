@@ -1,0 +1,313 @@
+{
+  "scope": "Local M1 Max CPU probe, GOMAXPROCS=2. Not a native-runner or complete delivery measurement. Keyed priorities were not adopted.",
+  "summary": [
+    {
+      "case": "BenchmarkIndexPreparation/10000",
+      "baseline_ms": 7.01318,
+      "candidate_ms": 6.407283,
+      "ratio": 0.9158443799412782,
+      "range": [
+        0.889975452639571,
+        0.9522918276730384
+      ],
+      "wins": 7,
+      "samples_ns": {
+        "baseline": [
+          7036775.0,
+          6977262.0,
+          7051781.0,
+          7022751.0,
+          6996039.0,
+          7004812.0,
+          7013180.0
+        ],
+        "candidate": [
+          6526928.0,
+          6382153.0,
+          6461373.0,
+          6250076.0,
+          6407283.0,
+          6399675.0,
+          6678594.0
+        ]
+      }
+    },
+    {
+      "case": "BenchmarkIndexPreparation/100000",
+      "baseline_ms": 66.984271,
+      "candidate_ms": 62.690948,
+      "ratio": 0.9427029369327614,
+      "range": [
+        0.9065527866974206,
+        0.9746141655714454
+      ],
+      "wins": 7,
+      "samples_ns": {
+        "baseline": [
+          66333000.0,
+          70545797.0,
+          67541229.0,
+          66045745.0,
+          65510354.0,
+          66984271.0,
+          67316469.0
+        ],
+        "candidate": [
+          60134366.0,
+          67380236.0,
+          61393032.0,
+          62690948.0,
+          63847319.0,
+          63146269.0,
+          62327153.0
+        ]
+      }
+    },
+    {
+      "case": "BenchmarkRetainedTransferMetadata/10000/edit1",
+      "baseline_ms": 6.362707,
+      "candidate_ms": 6.344389,
+      "ratio": 0.9971210366908299,
+      "range": [
+        0.9678745023098781,
+        1.1182409772951964
+      ],
+      "wins": 4,
+      "samples_ns": {
+        "baseline": [
+          6362707.0,
+          6479598.0,
+          6442764.0,
+          6275557.0,
+          6337714.0,
+          6423353.0,
+          6336757.0
+        ],
+        "candidate": [
+          6344389.0,
+          7245752.0,
+          6235787.0,
+          6433248.0,
+          6309089.0,
+          6309606.0,
+          6360715.0
+        ]
+      }
+    },
+    {
+      "case": "BenchmarkRetainedTransferMetadata/10000/edit100",
+      "baseline_ms": 6.848519,
+      "candidate_ms": 6.842129,
+      "ratio": 0.9955946679858814,
+      "range": [
+        0.9533065936126282,
+        1.0208693193452691
+      ],
+      "wins": 4,
+      "samples_ns": {
+        "baseline": [
+          6762356.0,
+          7001237.0,
+          6783307.0,
+          6719750.0,
+          6855096.0,
+          6848519.0,
+          7632341.0
+        ],
+        "candidate": [
+          6866623.0,
+          6739822.0,
+          6924870.0,
+          6842129.0,
+          6749009.0,
+          6818349.0,
+          7275961.0
+        ]
+      }
+    },
+    {
+      "case": "BenchmarkRetainedTransferMetadata/100000/edit1",
+      "baseline_ms": 62.595349,
+      "candidate_ms": 61.529986,
+      "ratio": 0.9884620670145425,
+      "range": [
+        0.9345203045938583,
+        1.0404489317568946
+      ],
+      "wins": 5,
+      "samples_ns": {
+        "baseline": [
+          60432843.0,
+          62595349.0,
+          64093250.0,
+          64012856.0,
+          61786977.0,
+          63125370.0,
+          60968134.0
+        ],
+        "candidate": [
+          59840935.0,
+          65127264.0,
+          62619094.0,
+          61529986.0,
+          61074083.0,
+          58991940.0,
+          62909182.0
+        ]
+      }
+    },
+    {
+      "case": "BenchmarkRetainedTransferMetadata/100000/edit100",
+      "baseline_ms": 61.419051,
+      "candidate_ms": 63.054491,
+      "ratio": 1.0280918056049366,
+      "range": [
+        0.9490169363187317,
+        1.0824196578938237
+      ],
+      "wins": 1,
+      "samples_ns": {
+        "baseline": [
+          61419051.0,
+          60650676.0,
+          60769847.0,
+          63391875.0,
+          62171523.0,
+          61642097.0,
+          59853898.0
+        ],
+        "candidate": [
+          63814546.0,
+          62354463.0,
+          65778477.0,
+          60159963.0,
+          63290651.0,
+          62637484.0,
+          63054491.0
+        ]
+      }
+    }
+  ],
+  "provenance": {
+    "gomaxprocs": 2,
+    "variants": {
+      "baseline": {
+        "internal/manifest/adaptive_test.go": "6d01a95cb57a33071fae807ad87ddca565898bee68b76d7a55274a00b56409d7",
+        "internal/manifest/export.go": "27946163e9bdf854dd4b5a01628efba6cfaa0833cbe82e35852b12629a590572",
+        "internal/manifest/export_test.go": "ab474a173c64599ea9027376a2a1be2ebd0e31cdbc33508ead2fbac002b5fc1b",
+        "internal/manifest/hash.go": "5c8008e3ead6bff82d634ba153bf4a73079d1288a814aab0b405cf0950d879ea",
+        "internal/manifest/memory_benchmark_test.go": "717ce101a2ec07ea1462213246d2213b7494e21f46131988a3d9f7758be11e79",
+        "internal/manifest/priority_benchmark_test.go": "ed81db6b0b34a5d4c0380e205823c74b360c5b139325157e787186dbd89c55c2",
+        "internal/manifest/snapshot.go": "0f947066166565adce7f47fa48367d862dfc4579988f009d012fc13b15b825e6",
+        "internal/manifest/snapshot_test.go": "f28a33a9da2028e263557ab81b6c485c08b8939f5a53e64358ceb8c6eaf1684f",
+        "internal/manifest/tree.go": "3ae64d01d87e29df28d7f7e5fa6728769a5fd8b95b172d6542c519b125210575"
+      },
+      "candidate": {
+        "internal/manifest/adaptive_test.go": "6d01a95cb57a33071fae807ad87ddca565898bee68b76d7a55274a00b56409d7",
+        "internal/manifest/export.go": "27946163e9bdf854dd4b5a01628efba6cfaa0833cbe82e35852b12629a590572",
+        "internal/manifest/export_test.go": "ab474a173c64599ea9027376a2a1be2ebd0e31cdbc33508ead2fbac002b5fc1b",
+        "internal/manifest/hash.go": "5c8008e3ead6bff82d634ba153bf4a73079d1288a814aab0b405cf0950d879ea",
+        "internal/manifest/memory_benchmark_test.go": "717ce101a2ec07ea1462213246d2213b7494e21f46131988a3d9f7758be11e79",
+        "internal/manifest/priority_benchmark_test.go": "ed81db6b0b34a5d4c0380e205823c74b360c5b139325157e787186dbd89c55c2",
+        "internal/manifest/snapshot.go": "0f947066166565adce7f47fa48367d862dfc4579988f009d012fc13b15b825e6",
+        "internal/manifest/snapshot_test.go": "0ac2cad9202b92aaf1de12057505299e301c768f2e6fb5bea9939090f82490a2",
+        "internal/manifest/tree.go": "26524ceea2214fb9d23e0e0e3458e7c4170c2eca608b2119e6cec7f6d9110d9e"
+      }
+    }
+  },
+  "logs": {
+    "5-1-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       8\t  66984271 ns/op\t84804555 B/op\t     437 allocs/op\nPASS\n",
+    "3-0-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      84\t   7022751 ns/op\t 7946239 B/op\t      82 allocs/op\nPASS\n",
+    "candidate-manifest-build.txt": "",
+    "0-3-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      74\t   6866623 ns/op\t       364.3 accept-ns/op\t    250557 compare-ns/op\t    326237 update-ns/op\t   6288783 wire-ns/op\t 7646911 B/op\t    1107 allocs/op\nPASS\n",
+    "4-0-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      75\t   6996039 ns/op\t 7930445 B/op\t      82 allocs/op\nPASS\n",
+    "2-1-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       8\t  67541229 ns/op\t84805401 B/op\t     439 allocs/op\nPASS\n",
+    "2-5-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  65778477 ns/op\t       356.4 accept-ns/op\t    220222 compare-ns/op\t    521736 update-ns/op\t  65034014 wire-ns/op\t98327031 B/op\t    1637 allocs/op\nPASS\n",
+    "5-2-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      91\t   6309606 ns/op\t        79.16 accept-ns/op\t      8902 compare-ns/op\t     32510 update-ns/op\t   6267334 wire-ns/op\t 5805550 B/op\t      47 allocs/op\nPASS\n",
+    "2-1-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       9\t  61393032 ns/op\t89359241 B/op\t     440 allocs/op\nPASS\n",
+    "baseline-fmt.txt": "",
+    "5-1-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       9\t  63146269 ns/op\t98468861 B/op\t     446 allocs/op\nPASS\n",
+    "3-1-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       8\t  66045745 ns/op\t64308832 B/op\t     427 allocs/op\nPASS\n",
+    "2-2-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      91\t   6235787 ns/op\t        44.91 accept-ns/op\t     10439 compare-ns/op\t     32297 update-ns/op\t   6192193 wire-ns/op\t 5586530 B/op\t      45 allocs/op\nPASS\n",
+    "5-0-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      73\t   7004812 ns/op\t 7481669 B/op\t      80 allocs/op\nPASS\n",
+    "5-5-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       8\t  62637484 ns/op\t       359.6 accept-ns/op\t    278771 compare-ns/op\t    666281 update-ns/op\t  61690542 wire-ns/op\t74414852 B/op\t    1622 allocs/op\nPASS\n",
+    "0-4-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  59840935 ns/op\t        46.11 accept-ns/op\t     11014 compare-ns/op\t     34306 update-ns/op\t  59794532 wire-ns/op\t61443771 B/op\t      50 allocs/op\nPASS\n",
+    "baseline-changes-build.txt": "",
+    "2-0-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      85\t   7051781 ns/op\t 8138840 B/op\t      83 allocs/op\nPASS\n",
+    "4-1-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       8\t  65510354 ns/op\t84804530 B/op\t     437 allocs/op\nPASS\n",
+    "baseline-manifest-build.txt": "",
+    "0-0-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      92\t   6526928 ns/op\t 7997645 B/op\t      81 allocs/op\nPASS\n",
+    "4-1-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       9\t  63847319 ns/op\t107578004 B/op\t     451 allocs/op\nPASS\n",
+    "4-5-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       8\t  63290651 ns/op\t       307.2 accept-ns/op\t    214005 compare-ns/op\t    513406 update-ns/op\t  62561755 wire-ns/op\t74408546 B/op\t    1592 allocs/op\nPASS\n",
+    "baseline-tests.txt": "ok  \tgithub.com/lydakis/errand/internal/manifest\t3.839s\nok  \tgithub.com/lydakis/errand/internal/changes\t18.027s\n",
+    "6-1-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       8\t  67316469 ns/op\t95052656 B/op\t     443 allocs/op\nPASS\n",
+    "3-2-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      86\t   6433248 ns/op\t        83.83 accept-ns/op\t      9954 compare-ns/op\t     34504 update-ns/op\t   6387903 wire-ns/op\t 6508400 B/op\t      51 allocs/op\nPASS\n",
+    "0-0-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      85\t   7036775 ns/op\t 7669955 B/op\t      80 allocs/op\nPASS\n",
+    "1-4-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  65127264 ns/op\t        41.56 accept-ns/op\t     16083 compare-ns/op\t     70167 update-ns/op\t  65039750 wire-ns/op\t97881332 B/op\t      70 allocs/op\nPASS\n",
+    "6-3-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      87\t   7275961 ns/op\t       306.0 accept-ns/op\t    291636 compare-ns/op\t    334271 update-ns/op\t   6648939 wire-ns/op\t 6907425 B/op\t    1144 allocs/op\nPASS\n",
+    "1-0-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      92\t   6382153 ns/op\t 7636555 B/op\t      79 allocs/op\nPASS\n",
+    "1-1-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       8\t  70545797 ns/op\t105300968 B/op\t     451 allocs/op\nPASS\n",
+    "0-1-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       8\t  66333000 ns/op\t84804604 B/op\t     437 allocs/op\nPASS\n",
+    "6-0-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      76\t   6678594 ns/op\t 8408286 B/op\t      85 allocs/op\nPASS\n",
+    "6-0-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      86\t   7013180 ns/op\t 7863516 B/op\t      82 allocs/op\nPASS\n",
+    "1-3-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      88\t   6739822 ns/op\t       297.8 accept-ns/op\t    250996 compare-ns/op\t    327945 update-ns/op\t   6159594 wire-ns/op\t 7107053 B/op\t    1137 allocs/op\nPASS\n",
+    "6-4-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       8\t  62909182 ns/op\t        46.88 accept-ns/op\t     20688 compare-ns/op\t     22969 update-ns/op\t  62863771 wire-ns/op\t84218034 B/op\t      68 allocs/op\nPASS\n",
+    "4-2-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      92\t   6309089 ns/op\t        75.20 accept-ns/op\t     11520 compare-ns/op\t     31197 update-ns/op\t   6265636 wire-ns/op\t 6005941 B/op\t      46 allocs/op\nPASS\n",
+    "1-0-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      85\t   6977262 ns/op\t 7591764 B/op\t      80 allocs/op\nPASS\n",
+    "3-5-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  60159963 ns/op\t       328.8 accept-ns/op\t    240343 compare-ns/op\t    605069 update-ns/op\t  59312634 wire-ns/op\t52768068 B/op\t    1552 allocs/op\nPASS\n",
+    "3-1-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       8\t  62690948 ns/op\t84804985 B/op\t     439 allocs/op\nPASS\n",
+    "6-2-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      92\t   6336757 ns/op\t        57.12 accept-ns/op\t     14856 compare-ns/op\t     29491 update-ns/op\t   6291583 wire-ns/op\t 5717309 B/op\t      45 allocs/op\nPASS\n",
+    "0-4-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  60432843 ns/op\t        69.33 accept-ns/op\t     12111 compare-ns/op\t     20028 update-ns/op\t  60399551 wire-ns/op\t61443833 B/op\t      51 allocs/op\nPASS\n",
+    "6-5-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  63054491 ns/op\t       342.7 accept-ns/op\t    214176 compare-ns/op\t    516065 update-ns/op\t  62322782 wire-ns/op\t80094899 B/op\t    1562 allocs/op\nPASS\n",
+    "6-5-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  59853898 ns/op\t       342.8 accept-ns/op\t    236671 compare-ns/op\t    577991 update-ns/op\t  59037768 wire-ns/op\t52775472 B/op\t    1587 allocs/op\nPASS\n",
+    "0-3-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      88\t   6762356 ns/op\t       316.3 accept-ns/op\t    245441 compare-ns/op\t    317536 update-ns/op\t   6198362 wire-ns/op\t 6802585 B/op\t    1123 allocs/op\nPASS\n",
+    "1-2-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      78\t   7245752 ns/op\t        51.86 accept-ns/op\t      9028 compare-ns/op\t    108471 update-ns/op\t   7127567 wire-ns/op\t 6135303 B/op\t      55 allocs/op\nPASS\n",
+    "6-1-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       9\t  62327153 ns/op\t98468575 B/op\t     445 allocs/op\nPASS\n",
+    "candidate-tests.txt": "ok  \tgithub.com/lydakis/errand/internal/manifest\t3.755s\nok  \tgithub.com/lydakis/errand/internal/changes\t17.887s\n",
+    "1-5-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  60650676 ns/op\t       342.3 accept-ns/op\t    229870 compare-ns/op\t    585866 update-ns/op\t  59833296 wire-ns/op\t52775499 B/op\t    1587 allocs/op\nPASS\n",
+    "3-0-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      92\t   6250076 ns/op\t 6409077 B/op\t      72 allocs/op\nPASS\n",
+    "1-2-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      94\t   6479598 ns/op\t        68.23 accept-ns/op\t      9632 compare-ns/op\t     38139 update-ns/op\t   6430958 wire-ns/op\t 6324124 B/op\t      49 allocs/op\nPASS\n",
+    "3-4-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  61529986 ns/op\t        69.56 accept-ns/op\t     13829 compare-ns/op\t     28273 update-ns/op\t  61486472 wire-ns/op\t70553178 B/op\t      56 allocs/op\nPASS\n",
+    "4-3-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      88\t   6749009 ns/op\t       453.5 accept-ns/op\t    240321 compare-ns/op\t    317215 update-ns/op\t   6190286 wire-ns/op\t 6799824 B/op\t    1110 allocs/op\nPASS\n",
+    "3-3-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      86\t   6842129 ns/op\t       312.9 accept-ns/op\t    273173 compare-ns/op\t    342855 update-ns/op\t   6224934 wire-ns/op\t 7403237 B/op\t    1179 allocs/op\nPASS\n",
+    "4-4-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  61074083 ns/op\t        37.22 accept-ns/op\t     12459 compare-ns/op\t     23514 update-ns/op\t  61036750 wire-ns/op\t70553560 B/op\t      58 allocs/op\nPASS\n",
+    "0-2-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      84\t   6362707 ns/op\t        64.57 accept-ns/op\t     13028 compare-ns/op\t     34377 update-ns/op\t   6314545 wire-ns/op\t 6085233 B/op\t      47 allocs/op\nPASS\n",
+    "6-4-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  60968134 ns/op\t        78.78 accept-ns/op\t     12954 compare-ns/op\t     17926 update-ns/op\t  60936260 wire-ns/op\t70553205 B/op\t      56 allocs/op\nPASS\n",
+    "0-5-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  61419051 ns/op\t       379.6 accept-ns/op\t    255621 compare-ns/op\t    615153 update-ns/op\t  60546310 wire-ns/op\t61885041 B/op\t    1594 allocs/op\nPASS\n",
+    "6-3-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      73\t   7632341 ns/op\t       331.6 accept-ns/op\t    270113 compare-ns/op\t    368213 update-ns/op\t   6992846 wire-ns/op\t 7418863 B/op\t    1127 allocs/op\nPASS\n",
+    "4-0-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      92\t   6407283 ns/op\t 7347818 B/op\t      78 allocs/op\nPASS\n",
+    "candidate-fmt.txt": "",
+    "1-1-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       9\t  67380236 ns/op\t107578226 B/op\t     451 allocs/op\nPASS\n",
+    "1-3-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      72\t   7001237 ns/op\t       328.7 accept-ns/op\t    275719 compare-ns/op\t    362590 update-ns/op\t   6361937 wire-ns/op\t 7918197 B/op\t    1130 allocs/op\nPASS\n",
+    "6-2-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      93\t   6360715 ns/op\t       110.7 accept-ns/op\t     10228 compare-ns/op\t     37117 update-ns/op\t   6312328 wire-ns/op\t 5917633 B/op\t      50 allocs/op\nPASS\n",
+    "1-4-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       8\t  62595349 ns/op\t        41.75 accept-ns/op\t     13422 compare-ns/op\t     25026 update-ns/op\t  62555849 wire-ns/op\t73969336 B/op\t      59 allocs/op\nPASS\n",
+    "1-5-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  62354463 ns/op\t       338.2 accept-ns/op\t    246801 compare-ns/op\t    613153 update-ns/op\t  61493009 wire-ns/op\t70993195 B/op\t    1593 allocs/op\nPASS\n",
+    "5-4-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  58991940 ns/op\t        46.11 accept-ns/op\t     10731 compare-ns/op\t     20889 update-ns/op\t  58958861 wire-ns/op\t52333688 B/op\t      42 allocs/op\nPASS\n",
+    "2-3-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      85\t   6924870 ns/op\t       987.7 accept-ns/op\t    244004 compare-ns/op\t    325251 update-ns/op\t   6353628 wire-ns/op\t 7573644 B/op\t    1095 allocs/op\nPASS\n",
+    "5-0-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      93\t   6399675 ns/op\t 7315875 B/op\t      77 allocs/op\nPASS\n",
+    "5-2-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      93\t   6423353 ns/op\t        55.16 accept-ns/op\t     12691 compare-ns/op\t     40965 update-ns/op\t   6368917 wire-ns/op\t 6202597 B/op\t      48 allocs/op\nPASS\n",
+    "3-4-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  64012856 ns/op\t        78.67 accept-ns/op\t     14320 compare-ns/op\t     19347 update-ns/op\t  63977856 wire-ns/op\t88772766 B/op\t      69 allocs/op\nPASS\n",
+    "5-5-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  61642097 ns/op\t       416.7 accept-ns/op\t    238908 compare-ns/op\t    567333 update-ns/op\t  60833787 wire-ns/op\t61885015 B/op\t    1594 allocs/op\nPASS\n",
+    "3-3-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      87\t   6719750 ns/op\t       335.7 accept-ns/op\t    227987 compare-ns/op\t    325834 update-ns/op\t   6164747 wire-ns/op\t 6597747 B/op\t    1122 allocs/op\nPASS\n",
+    "0-1-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/100000-2         \t       9\t  60134366 ns/op\t80249678 B/op\t     434 allocs/op\nPASS\n",
+    "candidate-changes-build.txt": "",
+    "0-5-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  63814546 ns/op\t       337.9 accept-ns/op\t    236310 compare-ns/op\t    514134 update-ns/op\t  63062583 wire-ns/op\t89201773 B/op\t    1555 allocs/op\nPASS\n",
+    "4-3-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      92\t   6855096 ns/op\t       314.8 accept-ns/op\t    250440 compare-ns/op\t    325279 update-ns/op\t   6278284 wire-ns/op\t 7143947 B/op\t    1125 allocs/op\nPASS\n",
+    "2-5-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  60769847 ns/op\t       356.3 accept-ns/op\t    243977 compare-ns/op\t    602297 update-ns/op\t  59921352 wire-ns/op\t52775531 B/op\t    1588 allocs/op\nPASS\n",
+    "4-4-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  61786977 ns/op\t        46.44 accept-ns/op\t     12630 compare-ns/op\t     23130 update-ns/op\t  61749704 wire-ns/op\t70553233 B/op\t      56 allocs/op\nPASS\n",
+    "2-2-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      88\t   6442764 ns/op\t        59.66 accept-ns/op\t     10457 compare-ns/op\t     40182 update-ns/op\t   6391367 wire-ns/op\t 6459038 B/op\t      50 allocs/op\nPASS\n",
+    "0-2-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      94\t   6344389 ns/op\t        43.88 accept-ns/op\t      5212 compare-ns/op\t     47098 update-ns/op\t   6290450 wire-ns/op\t 6184853 B/op\t      58 allocs/op\nPASS\n",
+    "3-2-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      82\t   6275557 ns/op\t        52.78 accept-ns/op\t      7812 compare-ns/op\t     25070 update-ns/op\t   6242069 wire-ns/op\t 5803563 B/op\t      46 allocs/op\nPASS\n",
+    "5-4-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  63125370 ns/op\t        55.56 accept-ns/op\t     11898 compare-ns/op\t     18440 update-ns/op\t  63093611 wire-ns/op\t88771970 B/op\t      66 allocs/op\nPASS\n",
+    "3-5-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       8\t  63391875 ns/op\t       354.0 accept-ns/op\t    233016 compare-ns/op\t    575058 update-ns/op\t  62582042 wire-ns/op\t74410510 B/op\t    1602 allocs/op\nPASS\n",
+    "5-3-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      87\t   6848519 ns/op\t       386.9 accept-ns/op\t    254120 compare-ns/op\t    338796 update-ns/op\t   6254405 wire-ns/op\t 7743133 B/op\t    1129 allocs/op\nPASS\n",
+    "2-3-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      78\t   6783307 ns/op\t       312.0 accept-ns/op\t    248256 compare-ns/op\t    326104 update-ns/op\t   6207887 wire-ns/op\t 6988344 B/op\t    1124 allocs/op\nPASS\n",
+    "4-5-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit100-2         \t       9\t  62171523 ns/op\t       342.7 accept-ns/op\t    248810 compare-ns/op\t    599241 update-ns/op\t  61321852 wire-ns/op\t70994470 B/op\t    1599 allocs/op\nPASS\n",
+    "2-4-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       9\t  64093250 ns/op\t        92.44 accept-ns/op\t     14222 compare-ns/op\t     21875 update-ns/op\t  64056250 wire-ns/op\t88772770 B/op\t      69 allocs/op\nPASS\n",
+    "2-0-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/manifest\ncpu: Apple M1 Max\nBenchmarkIndexPreparation/10000-2         \t      92\t   6461373 ns/op\t 7708720 B/op\t      80 allocs/op\nPASS\n",
+    "4-2-baseline.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit1-2         \t      80\t   6337714 ns/op\t        56.31 accept-ns/op\t     15972 compare-ns/op\t     39403 update-ns/op\t   6281373 wire-ns/op\t 5590947 B/op\t      44 allocs/op\nPASS\n",
+    "5-3-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/10000/edit100-2         \t      87\t   6818349 ns/op\t       310.3 accept-ns/op\t    252089 compare-ns/op\t    318868 update-ns/op\t   6246100 wire-ns/op\t 7363259 B/op\t    1135 allocs/op\nPASS\n",
+    "2-4-candidate.txt": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/internal/changes\ncpu: Apple M1 Max\nBenchmarkRetainedTransferMetadata/100000/edit1-2         \t       8\t  62619094 ns/op\t        93.88 accept-ns/op\t     18016 compare-ns/op\t     34490 update-ns/op\t  62564328 wire-ns/op\t84217899 B/op\t      67 allocs/op\nPASS\n"
+  },
+  "driver": "from pathlib import Path\nimport subprocess,os,json,hashlib\nroot=Path('/private/tmp/errand-priority-hash-7pup4nyh');out=root/'results'\nenv=dict(os.environ,GOMAXPROCS='2',CGO_ENABLED='1')\ndef run(args,cwd,log):\n p=subprocess.run(args,cwd=cwd,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)\n (out/log).write_text(p.stdout)\n if p.returncode: raise RuntimeError(str(args)+' failed: '+p.stdout[-2000:])\n return p.stdout\nfor name in ['baseline','candidate']:\n r=root/name\n run(['gofmt','-w','internal/manifest'],r,name+'-fmt.txt')\n run(['go','test','-race','./internal/manifest','./internal/changes'],r,name+'-tests.txt')\n for package in ['manifest','changes']:\n  run(['go','test','-c','-o',str(out/(name+'-'+package+'.test')),'./internal/'+package],r,name+'-'+package+'-build.txt')\ncases=[('manifest','^BenchmarkIndexPreparation$/^'+str(n)+'$') for n in [10000,100000]]+ [('changes','^BenchmarkRetainedTransferMetadata$/^'+str(n)+'$/^edit'+str(e)+'$') for n in [10000,100000] for e in [1,100]]\nfor number in range(7):\n for case,(package,pattern) in enumerate(cases):\n  for name in (['baseline','candidate'] if number%2==0 else ['candidate','baseline']):\n   run([str(out/(name+'-'+package+'.test')),'-test.run=^$','-test.bench='+pattern,'-test.benchtime=500ms','-test.benchmem'],root/name,f'{number}-{case}-{name}.txt')\n  print(f'pair {number+1}/7 case {case+1}/6 complete',flush=True)\n(out/'provenance.json').write_text(json.dumps({'gomaxprocs':2,'variants':{name:{str(p.relative_to(root/name)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((root/name/'internal/manifest').glob('*.go'))} for name in ['baseline','candidate']}},indent=2))\n"
+}

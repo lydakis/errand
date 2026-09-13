@@ -174,11 +174,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 		if err != nil {
 			return err
 		}
-		prep.manifest, err = sourceState.Manifest(context.Background())
-		if err != nil {
-			return err
-		}
-		pending = pendingPush{Request: proto.PushRequest{ID: proto.NewULID(), ClientID: clientID, Manifest: prep.manifest}}
+		pending = pendingPush{Request: proto.PushRequest{ID: proto.NewULID(), ClientID: clientID}}
 		{
 			// One-shot pushes negotiate a fresh accepted-source checkpoint. Watch
 			// may reuse its accepted checkpoint between successful batches.
@@ -214,6 +210,14 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 				delta := plan.Bundle()
 				pending.Request.Delta = &delta
 				pending.Request.SourceRoot = manifestHash
+			}
+		}
+		// Delta recovery uses its frozen changed bodies and SourceRoot. Keeping
+		// the full inventory here would encode and fsync it on every state write.
+		if pending.Request.Delta == nil {
+			pending.Request.Manifest, err = sourceState.Manifest(context.Background())
+			if err != nil {
+				return err
 			}
 		}
 		parent := filepath.Join(dir, "push-sources")

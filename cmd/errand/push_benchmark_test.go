@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -19,12 +20,63 @@ import (
 // Attribute end-to-end time without adding profiling fields to transfer receipts.
 func BenchmarkPushPhases(b *testing.B)  { benchmarkPushPhases(b, false) }
 func BenchmarkWatchPhases(b *testing.B) { benchmarkPushPhases(b, true) }
+
+type watchWorkload struct {
+	count       int
+	nested, git bool
+	edit        string
+}
+
+func BenchmarkWatchWorkloads(b *testing.B) {
+	for _, scenario := range []struct {
+		name     string
+		workload watchWorkload
+	}{
+		{"small", watchWorkload{count: 1000}},
+		{"git-atomic", watchWorkload{count: 10000, git: true, edit: "atomic"}},
+		{"nested-atomic", watchWorkload{count: 10000, nested: true, edit: "atomic"}},
+		{"structural", watchWorkload{count: 10000, edit: "rename"}},
+	} {
+		b.Run(scenario.name, func(b *testing.B) { benchmarkPushWorkload(b, true, scenario.workload) })
+	}
+}
+
 func benchmarkPushPhases(b *testing.B, watch bool) {
+	benchmarkPushWorkload(b, watch, watchWorkload{count: 10000})
+}
+
+func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 	b.Setenv("XDG_STATE_HOME", b.TempDir())
 	root := b.TempDir()
-	os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0600)
-	for i := range 10000 {
-		os.WriteFile(filepath.Join(root, fmt.Sprintf("file-%05d", i)), []byte(strings.Repeat("x", 1024)), 0600)
+	if !workload.git {
+		if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0600); err != nil {
+			b.Fatal(err)
+		}
+	}
+	nameFor := func(i int) string {
+		name := fmt.Sprintf("file-%05d", i)
+		if workload.nested {
+			name = fmt.Sprintf("packages/pkg-%03d/src/%s", i/100, name)
+		}
+		return name
+	}
+	for i := range workload.count {
+		name := filepath.Join(root, nameFor(i))
+		if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
+			b.Fatal(err)
+		}
+		if err := os.WriteFile(name, []byte(strings.Repeat("x", 1024)), 0600); err != nil {
+			b.Fatal(err)
+		}
+	}
+	if workload.git {
+		for _, args := range [][]string{{"init", "-q"}, {"add", "."}} {
+			cmd := exec.Command("git", args...)
+			cmd.Dir = root
+			if out, err := cmd.CombinedOutput(); err != nil {
+				b.Fatalf("git fixture: %v %s", err, out)
+			}
+		}
 	}
 	state := b.TempDir()
 	d, err := daemon.New(daemon.Config{StateDir: state, InsecureNoAuth: true})
@@ -60,6 +112,39 @@ func benchmarkPushPhases(b *testing.B, watch bool) {
 	apply.Store(0)
 	negotiation.Store(0)
 	var elapsed time.Duration
+	currentName, expectedBody := nameFor(0), ""
+	verify := func() {
+		if expectedBody == "" {
+			return
+		}
+		actual, err := os.ReadFile(filepath.Join(state, "workspaces", ws.ID, "data", currentName))
+		if err != nil || string(actual) != expectedBody {
+			b.Fatalf("delivery %s: %q %v", currentName, actual, err)
+		}
+	}
+	edit := func(count int) error {
+		if workload.edit == "rename" {
+			next := nameFor(0)
+			if count%2 == 0 {
+				next += "-moved"
+			}
+			if err := os.Rename(filepath.Join(root, currentName), filepath.Join(root, next)); err != nil {
+				return err
+			}
+			currentName, expectedBody = next, strings.Repeat("x", 1024)
+			return nil
+		}
+		expectedBody = fmt.Sprintf("edit-%d", count)
+		target := filepath.Join(root, currentName)
+		if workload.edit == "atomic" {
+			tmp := target + ".save"
+			if err := os.WriteFile(tmp, []byte(expectedBody), 0600); err != nil {
+				return err
+			}
+			return os.Rename(tmp, target)
+		}
+		return os.WriteFile(target, []byte(expectedBody), 0600)
+	}
 	if watch {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -74,6 +159,7 @@ func benchmarkPushPhases(b *testing.B, watch bool) {
 				return event.Err
 			}
 			if !started.IsZero() {
+				verify()
 				elapsed += time.Since(started)
 				count++
 			}
@@ -89,7 +175,7 @@ func benchmarkPushPhases(b *testing.B, watch bool) {
 				b.StartTimer()
 			}
 			started = time.Now()
-			return os.WriteFile(filepath.Join(root, "file-00000"), []byte(fmt.Sprintf("watch-%d", count)), 0600)
+			return edit(count)
 		})
 		if err != nil {
 			b.Fatal(err)
@@ -98,13 +184,18 @@ func benchmarkPushPhases(b *testing.B, watch bool) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
-			os.WriteFile(filepath.Join(root, "file-00000"), []byte(fmt.Sprintf("edit-%d", i)), 0600)
+			if err := edit(i); err != nil {
+				b.Fatal(err)
+			}
 			b.StartTimer()
 			started := time.Now()
 			if _, err := client.PushChanges(opts); err != nil {
 				b.Fatal(err)
 			}
 			elapsed += time.Since(started)
+			b.StopTimer()
+			verify()
+			b.StartTimer()
 		}
 
 	}
