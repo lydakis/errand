@@ -178,6 +178,20 @@ func TestWhereSkipsRuntimeProbeForQuiesceAndReplay(t *testing.T) {
 			t.Fatalf("submission: %s %s", resp.Status, body)
 		}
 	}
+	// Admission starts the job asynchronously. Its completion channel closes
+	// after the final receipt and event writes, before TempDir cleanup can run.
+	// Match the lifecycle wait used by TestSetupQuiesceBlocksAdmissionUntilReleased.
+	d.mu.Lock()
+	j := d.jobs[id]
+	d.mu.Unlock()
+	if j == nil {
+		t.Fatal("admitted job is missing")
+	}
+	select {
+	case <-j.done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("admitted job did not finish")
+	}
 	if data, err := os.ReadFile(marker); err != nil || string(data) != "x" {
 		t.Fatalf("replay executed probe: %q %v", data, err)
 	}

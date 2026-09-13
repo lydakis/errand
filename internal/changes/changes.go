@@ -677,13 +677,11 @@ func subtreeManifest(manifest proto.Manifest, root string) proto.Manifest {
 	start := sort.Search(len(manifest.Entries), func(i int) bool {
 		return manifest.Entries[i].Path >= prefix
 	})
-	end := start
-	for end < len(manifest.Entries) {
-		if !strings.HasPrefix(manifest.Entries[end].Path, prefix) {
-			break
-		}
-		end++
-	}
+	// Descendants occupy one sorted interval; locating its end does not
+	// require walking every member for each metadata/root lookup.
+	end := start + sort.Search(len(manifest.Entries)-start, func(i int) bool {
+		return !strings.HasPrefix(manifest.Entries[start+i].Path, prefix)
+	})
 	hasExact := exact < len(manifest.Entries) && manifest.Entries[exact].Path == root
 	if !hasExact {
 		return proto.Manifest{Entries: manifest.Entries[start:end]}

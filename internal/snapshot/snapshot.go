@@ -50,11 +50,13 @@ type SelectOptions struct {
 // used to build the manifest. It catches policy sources that change after
 // hashing, including ignored .gitignore files that are not themselves packed.
 type SelectionGuard struct {
-	root    string
-	opts    SelectOptions
-	paths   []string
-	gitInfo GitInfo
-	policy  proto.SelectionPolicy
+	root     string
+	opts     SelectOptions
+	paths    []string
+	gitInfo  GitInfo
+	policy   proto.SelectionPolicy
+	explicit *explicitSelectionEvidence
+	identity fs.FileInfo // watch pins the originating checkout across preparation
 }
 
 const localChangeTransactionPrefix = ".errand-change-"
@@ -126,9 +128,29 @@ func SelectFilesGuarded(root string, opts SelectOptions) ([]string, GitInfo, pro
 	return paths, gitInfo, policy, guard, nil
 }
 
-func (g *SelectionGuard) Verify() error {
+func (g *SelectionGuard) Verify() (err error) {
 	if g == nil {
 		return nil
+	}
+	if g.identity != nil {
+		checkRoot := func() error {
+			info, err := os.Lstat(g.root)
+			if err != nil || !os.SameFile(g.identity, info) {
+				return fmt.Errorf("snapshot: originating checkout was removed or replaced")
+			}
+			return nil
+		}
+		if err := checkRoot(); err != nil {
+			return err
+		}
+		defer func() {
+			if rootErr := checkRoot(); rootErr != nil {
+				err = rootErr
+			}
+		}()
+	}
+	if g.explicit != nil {
+		return g.explicit.verify()
 	}
 	paths, gitInfo, policy, err := SelectFilesWithOptions(g.root, g.opts)
 	if err != nil {
@@ -198,7 +220,7 @@ func validateSnapshotRoot(root string, opts SelectOptions) error {
 
 func gitInfo(root string) (GitInfo, error) {
 	// One machine-readable status reports both HEAD and dirty state.
-	out, err := exec.Command("git", "-C", root, "status", "--porcelain=v2", "--branch", "--no-ahead-behind", "-z").Output()
+	out, err := exec.Command("git", "--no-optional-locks", "-C", root, "status", "--porcelain=v2", "--branch", "--no-ahead-behind", "-z").Output()
 	if err != nil {
 		// A failed status can mean a broken repository, including one whose
 		// metadata lives outside the workspace through GIT_DIR. Distinguish
@@ -677,6 +699,10 @@ func BuildBounded(root string, paths []string, maxBytes int64, maxEntries int) (
 
 // BuildBoundedContext is BuildBounded with cancellation for long hashing work.
 func BuildBoundedContext(ctx context.Context, root string, paths []string, maxBytes int64, maxEntries int) (proto.Manifest, error) {
+	return buildBoundedContext(ctx, root, paths, maxBytes, maxEntries, nil)
+}
+
+func buildBoundedContext(ctx context.Context, root string, paths []string, maxBytes int64, maxEntries int, builder *Builder) (proto.Manifest, error) {
 	selected := make(map[string]struct{}, len(paths))
 	for _, rel := range paths {
 		selected[rel] = struct{}{}
@@ -721,7 +747,7 @@ func BuildBoundedContext(ctx context.Context, root string, paths []string, maxBy
 				return m, fmt.Errorf("snapshot: %w: files exceed %d bytes", ErrByteLimitExceeded, maxBytes)
 			}
 			bytes += e.Size
-			sum, err := hashFileSizedContext(ctx, abs, fi.Size(), fi.Mode())
+			sum, err := builder.hash(ctx, abs, fi)
 			if err != nil {
 				return m, err
 			}

@@ -250,6 +250,50 @@ Runs do not upload edits automatically. Plain `push` stages without applying;
 Push uses three-way merging and refuses conflicts by default. Use a separate
 workspace when you need independent files for another development session.
 
+### Watch local edits
+
+Keep the development server in its terminal, and run this in another:
+
+```sh
+errand push --watch --apply --profile dev
+```
+
+Watch performs an initial push and repeats it when selected local files change.
+`--watch` controls repetition; `--apply` still controls whether the running
+workspace is updated. `push --watch` continuously stages changes without applying
+them. All other push options retain their meanings, including a selected changed
+`PATH`, `--include-all`, workspace and peer overrides, and profiles. A selected
+path with no changes is reported as unchanged and watch keeps waiting.
+
+Save bursts are batched with a short quiet period. Only one push runs at a time;
+edits arriving during it are collected for the next pass. The display shows
+watching, sending, pending edits, and reconnecting, with the usual transfer
+receipts after each push. On a terminal the status line updates in place; redirected
+output uses plain lines. With `--json`, stdout contains newline-delimited push
+receipts using the existing fields, while status messages go to stderr. Idle
+watching produces no transfer receipts. Completion confirms file application,
+not a successful build or application readiness.
+
+Ctrl-C stops watching and waits for an in-flight push to finish. The remote
+application keeps running. A second interrupt forces exit; restarting push
+recovers any uncertain apply before sending new changes. Transient connection
+failures retry with backoff. Conflicts stop watch. `--apply --conflicts` first
+applies clean changes and eligible text conflict markers, then stops and reports
+the conflicts. Resolve the files explicitly before restarting watch.
+
+Watch pins the workspace ID and checkout identity. A removed or replaced checkout,
+changed selection policy, or removed workspace stops the session. Reusing a
+workspace name cannot redirect an existing watch. Concurrent commands remain
+caller-managed writers; watch does not fetch remote edits or resolve application
+build dependencies automatically.
+
+On a runner supporting incremental push, watch sends changed source entries and
+compact metadata against the retained source checkpoint. Unchanged running files
+are never used to reconstruct source. Older runners use normal full-snapshot
+staging and can be slower. Local native notifications use kqueue on macOS and
+inotify on Linux. Watch setup reports exhausted OS watch/file-descriptor limits
+as errors; it does not silently fall back to continuous full-tree polling.
+
 ### Send local edits into a persistent workspace
 
 Fetch addresses a job's fixed result. Push addresses the continuing workspace:
@@ -266,7 +310,7 @@ Plain push freezes and stages the selected local snapshot without changing the
 runner's working files. `--apply` merges it into the workspace. Both directions
 use clean-or-refuse three-way merging; `--apply --conflicts` explicitly permits
 conflict markers and clean sibling changes. Existing markers are ordinary file
-contents. There is no transfer `--force`, background synchronization, or implicit
+contents. There is no transfer `--force` or implicit
 fetch before push. Concurrent commands remain caller-managed writers.
 
 Push requires `--workspace NAME` or a selected profile's `run.workspace`, and the originating checkout on the machine that

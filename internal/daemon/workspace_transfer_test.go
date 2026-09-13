@@ -25,7 +25,7 @@ func TestPushRecoversCollectedStageFromFrozenSource(t *testing.T) {
 	var uploads atomic.Int32
 	var interrupted atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/push") {
+		if r.Method == "POST" && (strings.HasSuffix(r.URL.Path, "/push") || strings.HasSuffix(r.URL.Path, "/push/delta-v1")) {
 			uploads.Add(1)
 		}
 		if strings.HasSuffix(r.URL.Path, "/apply") && !interrupted.Swap(true) {
@@ -337,15 +337,15 @@ func TestWorkspacePushOwnershipAndImmutableTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	d.cfg.InsecureNoAuth = false
-	for _, handler := range []func(http.ResponseWriter, *http.Request, Identity){d.handleWorkspacePush, d.handleWorkspacePushApply} {
-		r := httptest.NewRequest("POST", "/", nil)
+	for _, handler := range []func(http.ResponseWriter, *http.Request, Identity){d.handleWorkspacePush, d.handleWorkspacePushApply, d.handleWorkspacePushBase} {
+		r := httptest.NewRequest("POST", "/?client=0123456789abcdef0123456789abcdef", nil)
 		r.SetPathValue("id", ws.ID)
 		w := httptest.NewRecorder()
 		handler(w, r, stranger)
 		if w.Code != 404 {
 			t.Fatalf("other owner reached push: %d %s", w.Code, w.Body.String())
 		}
-		r = httptest.NewRequest("POST", "/", nil)
+		r = httptest.NewRequest("POST", "/?client=0123456789abcdef0123456789abcdef", nil)
 		r.SetPathValue("id", ws.Name)
 		w = httptest.NewRecorder()
 		handler(w, r, owner)

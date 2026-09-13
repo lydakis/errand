@@ -1002,6 +1002,49 @@ direction. No conflict index, resolution lifecycle, or transfer `--force` is
 provided. Transfer checkpoints and retry handling cover partial conflict
 materialization as well as clean application.
 
+`push --watch` repeats this operation after local filesystem notifications;
+`--apply` remains explicit. The client installs native watches before its initial
+push, batches saves for 5 ms (at most 25 ms), and runs one transfer at a time. It reconciles edits made
+during a transfer afterward. Idle sessions do not scan or hash the tree.
+With an explicit `.errandignore`, ordinary content writes refresh hinted files.
+Fresh policy bytes and native directory identity, mode, mtime and ctime evidence
+revalidate selection without enumerating all files. Structural changes, atomic
+saves, watcher overflow, Git-driven selection and preparation expiry use
+full selection. Expiry is checked when preparation runs, without an idle scan
+timer. Events arriving during preparation stay queued. Frozen bodies
+are still verified against their manifests. Session-local hash reuse requires
+unchanged inode identity, size, mode, mtime and ctime.
+Cancellation drains the active transaction. A recovered apply is completed with
+its original identity before reconciling current files. Conflicts and policy or
+workspace identity changes stop the session; transient transport failures back off.
+
+`GET /v0/workspaces/<id>/push/base?client=<id>` negotiates incremental source
+uploads and returns that owner's retained directional source checkpoint. Both
+ordinary push and watch can send a `PushRequest.delta` with `source_root` instead
+of the full manifest through the versioned `/push/delta-v1` endpoint.
+The daemon reconstructs metadata from the retained checkpoint, verifies the full
+root and canonical delta, and checks the complete source against workspace limits.
+Only changed source bodies are frozen and uploaded. Small deltas (up to 64 KiB
+of file bodies) skip blob negotiation to save a round trip. The upload gate is
+released during network I/O; staging rechecks the checkpoint under the apply gate
+and rejects a stale baseline. Live runner contents never supply unchanged source
+entries or merge bases. Local retry state retains the full manifest and frozen
+delta bodies; publication and apply retain the existing durable receipts.
+Runners without the base endpoint receive ordinary full-manifest push requests.
+A runner that loses delta support after negotiation rejects the versioned upload;
+the client never sends that partial source to the legacy full-snapshot endpoint.
+A typed checkpoint rejection before staging permits one fresh-source retry.
+Uncertain apply replies retain the original request identity.
+
+Prepared source plans own validated metadata and canonical deltas. Staging
+reuses them only after recovery and a fresh checkpoint check, retaining normal
+body verification, source quotas and durable publication. Persistent fetch uses
+the same plan to materialize only changed remote bodies. Workspace descriptor
+requests may omit the creation manifest; full reads keep their existing contract.
+Creation uploads negotiate the shared verified body cache through separate
+snapshot routes, with a full-upload fallback for older runners or explicit cache
+misses. Long creation and job uploads use the admission timeout budget.
+
 An internal receiver-side apply receipt records each application.
 It binds one application to its owner, destination directory identity, immutable
 bundle, selected roots, and conflict option. The existing apply journal records

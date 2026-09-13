@@ -1,11 +1,14 @@
 package changes
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/lydakis/errand/internal/proto"
 )
+
+var ErrNoTransferChanges = errors.New("no changes in this transfer")
 
 // SelectTransferPaths selects complete change roots for application. A child of
 // a replaced directory must be applied using that root, just as with job fetch.
@@ -23,7 +26,7 @@ func SelectTransferPaths(b proto.ChangeBundle, requested string) (map[string]boo
 		}
 	}
 	if len(selected) == 0 {
-		return nil, fmt.Errorf("path %q has no changes in this transfer", requested)
+		return nil, fmt.Errorf("path %q has %w", requested, ErrNoTransferChanges)
 	}
 	return selected, nil
 }

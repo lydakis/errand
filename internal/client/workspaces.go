@@ -38,10 +38,24 @@ func ListWorkspace(peerURL, name string, activeOnly bool) ([]proto.JobListEntry,
 }
 
 func GetWorkspace(peerURL, name string) (proto.Workspace, error) {
+	return getWorkspace(peerURL, name, false)
+}
+
+// getWorkspaceDescriptor requests identity and selection metadata without the
+// creation manifest. Older runners may ignore the query and return the full row.
+func getWorkspaceDescriptor(peerURL, name string) (proto.Workspace, error) {
+	return getWorkspace(peerURL, name, true)
+}
+
+func getWorkspace(peerURL, name string, omitManifest bool) (proto.Workspace, error) {
 	var result proto.Workspace
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
-	err := getJSONContext(ctx, strings.TrimSuffix(peerURL, "/")+"/v0/workspaces/"+url.PathEscape(name), maxWorkspaceResponseBytes, "workspace", &result)
+	endpoint := strings.TrimSuffix(peerURL, "/") + "/v0/workspaces/" + url.PathEscape(name)
+	if omitManifest {
+		endpoint += "?manifest=omit"
+	}
+	err := getJSONContext(ctx, endpoint, maxWorkspaceResponseBytes, "workspace", &result)
 	if err == nil && (!proto.ValidULID(result.ID) || proto.ValidateWorkspaceName(result.Name) != nil) {
 		err = fmt.Errorf("runner returned an invalid workspace")
 	}
@@ -112,12 +126,35 @@ type workspaceCreation struct {
 }
 
 func createPreparedWorkspace(opts RunOptions, prep snapshotPreparation, request proto.Workspace) (proto.Workspace, error) {
+	if err := prep.guard.Verify(); err != nil {
+		return proto.Workspace{}, err
+	}
+	endpoint := strings.TrimSuffix(opts.PeerURL, "/") + "/v0/workspaces/" + request.ID + "/snapshot/diff"
+	plan, err := negotiateSnapshotAt(context.Background(), endpoint, prep.manifest)
+	if err != nil {
+		// Like job submission, cache negotiation is optional. A complete
+		// upload uses the original endpoint and is safe without capability.
+		plan = shipPlan{}
+	}
+	if err := prep.guard.Verify(); err != nil {
+		return proto.Workspace{}, err
+	}
+	if err := recordWorkspaceOrigin(opts, request.ID, prep.manifest); err != nil {
+		return proto.Workspace{}, fmt.Errorf("recording workspace origin: %w", err)
+	}
+	var result proto.Workspace
+	err = uploadWithSnapshotFallback(plan, func(attempt shipPlan) error {
+		var err error
+		result, err = createPreparedWorkspaceOnce(opts, prep, request, attempt)
+		return err
+	}, nil)
+	return result, err
+}
+
+func createPreparedWorkspaceOnce(opts RunOptions, prep snapshotPreparation, request proto.Workspace, plan shipPlan) (proto.Workspace, error) {
 	var result proto.Workspace
 	if err := prep.guard.Verify(); err != nil {
 		return result, err
-	}
-	if err := recordWorkspaceOrigin(opts, request.ID, prep.manifest); err != nil {
-		return result, fmt.Errorf("recording workspace origin: %w", err)
 	}
 	pr, pw := io.Pipe()
 	defer pr.Close()
@@ -142,7 +179,7 @@ func createPreparedWorkspace(opts RunOptions, prep snapshotPreparation, request 
 			if err != nil {
 				return err
 			}
-			if err := snapshot.PackPartial(part, opts.Root, prep.manifest, nil); err != nil {
+			if err := snapshot.PackPartial(part, opts.Root, prep.manifest, plan.ships); err != nil {
 				return err
 			}
 			if err := prep.guard.Verify(); err != nil {
@@ -154,18 +191,30 @@ func createPreparedWorkspace(opts RunOptions, prep snapshotPreparation, request 
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), submitRequestTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(opts.PeerURL, "/")+"/v0/workspaces/"+request.ID, pr)
+	endpoint := strings.TrimSuffix(opts.PeerURL, "/") + "/v0/workspaces/" + request.ID
+	if plan.partial {
+		endpoint += "/snapshot"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, pr)
 	if err != nil {
 		return result, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	resp, err := directHTTP.Do(req)
+	// Durable reconstruction and admission may outlast the control-request
+	// header budget. Keep the existing upload context and uncertainty handling.
+	resp, err := maintenanceHTTP.Do(req)
 	if err != nil {
 		return result, fmt.Errorf("creating workspace (check workspaces before retrying): %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		var payload proto.APIError
+		if resp.StatusCode == http.StatusConflict && json.Unmarshal(raw, &payload) == nil && payload.Code == proto.ErrorCodeSnapshotCacheMiss {
+			// The receiver has not published a workspace. Keep the origin and
+			// creation ID for the one permitted full-body retry.
+			return result, fmt.Errorf("creating workspace: %w: %s", errSnapshotCacheMiss, payload.Error)
+		}
 		var err error = fmt.Errorf("creating workspace: %s: %s", resp.Status, apiError(raw))
 		if resp.StatusCode == http.StatusPreconditionFailed {
 			err = &placementRefusal{err}

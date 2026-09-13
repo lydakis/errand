@@ -1,0 +1,1985 @@
+{
+  "date": "2026-09-12",
+  "gomaxprocs": 2,
+  "samples_per_comparison": 7,
+  "source_base_commit": "d6feb6a94c4a0dc6e2b9d07e742759d4bb845a2d",
+  "source_manifest_sha256": "87fe60dfa6022cf2acd2b817392172bb62b2f8cb1be0e19a942d9e62fa1b7df7",
+  "hosts": {
+    "mac-mini": {
+      "provenance": {
+        "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+        "mutagen_release": "v0.18.1",
+        "mutagen_archive_sha256": "6f810416d9e5fc4fd5e18431146f8b3c5a2056ba5a24f76c1e66da86eb3257e2",
+        "mutagen_url": "https://github.com/mutagen-io/mutagen/releases/download/v0.18.1/mutagen_darwin_arm64_v0.18.1.tar.gz",
+        "errand_sha256": "6ad7c615f32c3b5cc9093ebfed3bd302ed65ccfc0be5629e3ad9b932dcf639b3"
+      },
+      "reports": {
+        "explicit-1000": {
+          "complete": true,
+          "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+          "filesystem": {
+            "FilesystemType": "apfs",
+            "DeviceIdentifier": "disk3s5",
+            "SolidState": true
+          },
+          "binary_sha256": "6ad7c615f32c3b5cc9093ebfed3bd302ed65ccfc0be5629e3ad9b932dcf639b3",
+          "files": 1000,
+          "selection": "explicit",
+          "save_mode": "inplace",
+          "pause_seconds": 0,
+          "samples": [
+            {
+              "mode": "rsync-checksum",
+              "sample": 0,
+              "seconds": 0.10010204208083451
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 1,
+              "seconds": 0.060799208004027605
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 2,
+              "seconds": 0.06706458306871355
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 3,
+              "seconds": 0.05823904206044972
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 4,
+              "seconds": 0.05873874993994832
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 5,
+              "seconds": 0.05693700001575053
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 6,
+              "seconds": 0.05733337509445846
+            },
+            {
+              "mode": "mutagen",
+              "sample": 0,
+              "delivery_seconds": 0.03627420892007649
+            },
+            {
+              "mode": "mutagen",
+              "sample": 1,
+              "delivery_seconds": 0.03805904183536768
+            },
+            {
+              "mode": "mutagen",
+              "sample": 2,
+              "delivery_seconds": 0.030287166126072407
+            },
+            {
+              "mode": "mutagen",
+              "sample": 3,
+              "delivery_seconds": 0.04690391686744988
+            },
+            {
+              "mode": "mutagen",
+              "sample": 4,
+              "delivery_seconds": 0.051601249957457185
+            },
+            {
+              "mode": "mutagen",
+              "sample": 5,
+              "delivery_seconds": 0.04683404113166034
+            },
+            {
+              "mode": "mutagen",
+              "sample": 6,
+              "delivery_seconds": 0.04635195806622505
+            },
+            {
+              "mode": "once",
+              "sample": 0,
+              "seconds": 0.4458734579384327,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 437
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 1,
+              "seconds": 0.3251532909926027,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 312
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 2,
+              "seconds": 0.31984891602769494,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 306
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 3,
+              "seconds": 0.30391179118305445,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 295
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 4,
+              "seconds": 0.30779412505216897,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 300
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 5,
+              "seconds": 0.310791082913056,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 301
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 6,
+              "seconds": 0.3201602080371231,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 310
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 0,
+              "seconds": 0.2746011249255389,
+              "delivery_seconds": 0.2017835839651525,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 268
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 1,
+              "seconds": 0.32488337508402765,
+              "delivery_seconds": 0.24212433397769928,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 318
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 2,
+              "seconds": 0.33440012484788895,
+              "delivery_seconds": 0.23987766704522073,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 327
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 3,
+              "seconds": 0.34359358297660947,
+              "delivery_seconds": 0.2559758750721812,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 337
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 4,
+              "seconds": 0.3533892910927534,
+              "delivery_seconds": 0.26080924994312227,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 346
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 5,
+              "seconds": 0.3306337499525398,
+              "delivery_seconds": 0.24318033293820918,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 324
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 6,
+              "seconds": 0.3349563330411911,
+              "delivery_seconds": 0.2509332080371678,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 329
+              }
+            }
+          ],
+          "rsync": "openrsync: protocol version 29",
+          "mutagen": "0.18.1",
+          "watch_start_seconds": 0.22180112497881055,
+          "idle": {
+            "seconds": 3.166895000031218,
+            "cpu_seconds": 0.0,
+            "cpu_resolution_seconds": 0.01,
+            "unexpected_receipts": 0
+          },
+          "burst": {
+            "edits": 20,
+            "receipts": 1,
+            "seconds": 0.7022015829570591,
+            "delivery_seconds": 0.6200076669920236,
+            "transfer": {
+              "changed_paths": 1,
+              "transferred_bytes": 3060,
+              "elapsed_ms": 328
+            }
+          },
+          "watch_exit_code": 0,
+          "whole_tree_verified": true
+        },
+        "explicit-10000": {
+          "complete": true,
+          "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+          "filesystem": {
+            "FilesystemType": "apfs",
+            "DeviceIdentifier": "disk3s5",
+            "SolidState": true
+          },
+          "binary_sha256": "6ad7c615f32c3b5cc9093ebfed3bd302ed65ccfc0be5629e3ad9b932dcf639b3",
+          "files": 10000,
+          "selection": "explicit",
+          "save_mode": "inplace",
+          "pause_seconds": 0,
+          "samples": [
+            {
+              "mode": "rsync-checksum",
+              "sample": 0,
+              "seconds": 1.486483999993652
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 1,
+              "seconds": 0.576987958047539
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 2,
+              "seconds": 0.572011792100966
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 3,
+              "seconds": 0.5763241250533611
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 4,
+              "seconds": 0.5600737920030951
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 5,
+              "seconds": 0.567065249895677
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 6,
+              "seconds": 0.5678927921690047
+            },
+            {
+              "mode": "mutagen",
+              "sample": 0,
+              "delivery_seconds": 0.040272624930366874
+            },
+            {
+              "mode": "mutagen",
+              "sample": 1,
+              "delivery_seconds": 0.0405973750166595
+            },
+            {
+              "mode": "mutagen",
+              "sample": 2,
+              "delivery_seconds": 0.054358625086024404
+            },
+            {
+              "mode": "mutagen",
+              "sample": 3,
+              "delivery_seconds": 0.04129724996164441
+            },
+            {
+              "mode": "mutagen",
+              "sample": 4,
+              "delivery_seconds": 0.026314791990444064
+            },
+            {
+              "mode": "mutagen",
+              "sample": 5,
+              "delivery_seconds": 0.02342679211869836
+            },
+            {
+              "mode": "mutagen",
+              "sample": 6,
+              "delivery_seconds": 0.034600500017404556
+            },
+            {
+              "mode": "once",
+              "sample": 0,
+              "seconds": 1.5533989591058344,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1548
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 1,
+              "seconds": 0.5780802918598056,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 572
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 2,
+              "seconds": 0.591812290949747,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 584
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 3,
+              "seconds": 0.5937032501678914,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 587
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 4,
+              "seconds": 0.5815841669682413,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 574
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 5,
+              "seconds": 0.5780830408912152,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 571
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 6,
+              "seconds": 0.5491099171340466,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 542
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 0,
+              "seconds": 0.4086989997886121,
+              "delivery_seconds": 0.31167983380146325,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 402
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 1,
+              "seconds": 0.39173087500967085,
+              "delivery_seconds": 0.3054675830062479,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 385
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 2,
+              "seconds": 0.39842900005169213,
+              "delivery_seconds": 0.299741042079404,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 391
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 3,
+              "seconds": 0.40158404200337827,
+              "delivery_seconds": 0.3068419999908656,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 395
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 4,
+              "seconds": 0.41354837478138506,
+              "delivery_seconds": 0.3108422497753054,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 407
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 5,
+              "seconds": 0.4111524170730263,
+              "delivery_seconds": 0.30957816704176366,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 404
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 6,
+              "seconds": 0.3942487498279661,
+              "delivery_seconds": 0.31011724984273314,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 388
+              }
+            }
+          ],
+          "rsync": "openrsync: protocol version 29",
+          "mutagen": "0.18.1",
+          "watch_start_seconds": 0.5783234578557312,
+          "idle": {
+            "seconds": 3.052912292070687,
+            "cpu_seconds": 0.0,
+            "cpu_resolution_seconds": 0.01,
+            "unexpected_receipts": 0
+          },
+          "burst": {
+            "edits": 20,
+            "receipts": 1,
+            "seconds": 0.9867995001841336,
+            "delivery_seconds": 0.8996697920374572,
+            "transfer": {
+              "changed_paths": 1,
+              "transferred_bytes": 3060,
+              "elapsed_ms": 596
+            }
+          },
+          "watch_exit_code": 0,
+          "whole_tree_verified": true
+        },
+        "git-atomic-10000": {
+          "complete": true,
+          "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+          "filesystem": {
+            "FilesystemType": "apfs",
+            "DeviceIdentifier": "disk3s5",
+            "SolidState": true
+          },
+          "binary_sha256": "6ad7c615f32c3b5cc9093ebfed3bd302ed65ccfc0be5629e3ad9b932dcf639b3",
+          "files": 10000,
+          "selection": "git",
+          "save_mode": "atomic",
+          "pause_seconds": 0,
+          "samples": [
+            {
+              "mode": "rsync-checksum",
+              "sample": 0,
+              "seconds": 1.0624743751250207
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 1,
+              "seconds": 0.6563164580147713
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 2,
+              "seconds": 0.558331083972007
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 3,
+              "seconds": 0.5575312909204513
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 4,
+              "seconds": 0.552329707890749
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 5,
+              "seconds": 0.5748185000848025
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 6,
+              "seconds": 0.5611020419746637
+            },
+            {
+              "mode": "mutagen",
+              "sample": 0,
+              "delivery_seconds": 0.04080291697755456
+            },
+            {
+              "mode": "mutagen",
+              "sample": 1,
+              "delivery_seconds": 0.03056987514719367
+            },
+            {
+              "mode": "mutagen",
+              "sample": 2,
+              "delivery_seconds": 0.051260665990412235
+            },
+            {
+              "mode": "mutagen",
+              "sample": 3,
+              "delivery_seconds": 0.03844733280129731
+            },
+            {
+              "mode": "mutagen",
+              "sample": 4,
+              "delivery_seconds": 0.03337970795109868
+            },
+            {
+              "mode": "mutagen",
+              "sample": 5,
+              "delivery_seconds": 0.054439625004306436
+            },
+            {
+              "mode": "mutagen",
+              "sample": 6,
+              "delivery_seconds": 0.04038699995726347
+            },
+            {
+              "mode": "once",
+              "sample": 0,
+              "seconds": 1.9783642089460045,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1973
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 1,
+              "seconds": 0.7309092080686241,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 722
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 2,
+              "seconds": 0.6981834170874208,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 691
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 3,
+              "seconds": 0.710789083968848,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 703
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 4,
+              "seconds": 0.7568696669768542,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 750
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 5,
+              "seconds": 0.7743009580299258,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 767
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 6,
+              "seconds": 0.7481177921872586,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 741
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 0,
+              "seconds": 0.6966969999484718,
+              "delivery_seconds": 0.6132677500136197,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 689
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 1,
+              "seconds": 0.7078074591699988,
+              "delivery_seconds": 0.6189912501722574,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 700
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 2,
+              "seconds": 0.7010821248404682,
+              "delivery_seconds": 0.6093325829133391,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 694
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 3,
+              "seconds": 0.7583117501344532,
+              "delivery_seconds": 0.6684400420635939,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 751
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 4,
+              "seconds": 0.8514210828579962,
+              "delivery_seconds": 0.774180332897231,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 843
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 5,
+              "seconds": 0.8347927499562502,
+              "delivery_seconds": 0.7543902499601245,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 827
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 6,
+              "seconds": 0.8085046659689397,
+              "delivery_seconds": 0.6998225410934538,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 801
+              }
+            }
+          ],
+          "rsync": "openrsync: protocol version 29",
+          "mutagen": "0.18.1",
+          "watch_start_seconds": 1.0260779580567032,
+          "idle": {
+            "seconds": 3.0066959999967366,
+            "cpu_seconds": 0.0,
+            "cpu_resolution_seconds": 0.01,
+            "unexpected_receipts": 0
+          },
+          "burst": {
+            "edits": 20,
+            "receipts": 1,
+            "seconds": 1.3150512501597404,
+            "delivery_seconds": 1.2225824580527842,
+            "transfer": {
+              "changed_paths": 1,
+              "transferred_bytes": 3060,
+              "elapsed_ms": 855
+            }
+          },
+          "watch_exit_code": 0,
+          "whole_tree_verified": true
+        },
+        "expired-1000": {
+          "complete": true,
+          "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+          "filesystem": {
+            "FilesystemType": "apfs",
+            "DeviceIdentifier": "disk3s5",
+            "SolidState": true
+          },
+          "binary_sha256": "6ad7c615f32c3b5cc9093ebfed3bd302ed65ccfc0be5629e3ad9b932dcf639b3",
+          "files": 1000,
+          "selection": "explicit",
+          "save_mode": "inplace",
+          "pause_seconds": 31.0,
+          "samples": [
+            {
+              "mode": "rsync-checksum",
+              "sample": 0,
+              "seconds": 0.09625812503509223
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 1,
+              "seconds": 0.057948665926232934
+            },
+            {
+              "mode": "once",
+              "sample": 0,
+              "seconds": 0.4116629578638822,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 406
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 1,
+              "seconds": 0.3242822920437902,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 313
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 0,
+              "seconds": 0.3549373340792954,
+              "delivery_seconds": 0.2806141250766814,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 348
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 1,
+              "seconds": 0.33916791691444814,
+              "delivery_seconds": 0.26430454198271036,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 329
+              }
+            }
+          ],
+          "rsync": "openrsync: protocol version 29",
+          "watch_start_seconds": 0.22908841585740447,
+          "idle": {
+            "seconds": 3.1533592918422073,
+            "cpu_seconds": 0.0,
+            "cpu_resolution_seconds": 0.01,
+            "unexpected_receipts": 0
+          },
+          "burst": {
+            "edits": 20,
+            "receipts": 1,
+            "seconds": 0.5715835420414805,
+            "delivery_seconds": 0.48789691692218184,
+            "transfer": {
+              "changed_paths": 1,
+              "transferred_bytes": 3060,
+              "elapsed_ms": 316
+            }
+          },
+          "watch_exit_code": 0,
+          "whole_tree_verified": true
+        }
+      },
+      "shared_samples": {
+        "workspace-create": [
+          {
+            "mode": "workspace-create",
+            "sample": 0,
+            "seconds": 1.124634917
+          },
+          {
+            "mode": "workspace-create",
+            "sample": 1,
+            "seconds": 0.52168325
+          },
+          {
+            "mode": "workspace-create",
+            "sample": 2,
+            "seconds": 0.507763583
+          },
+          {
+            "mode": "workspace-create",
+            "sample": 3,
+            "seconds": 0.51367575
+          },
+          {
+            "mode": "workspace-create",
+            "sample": 4,
+            "seconds": 0.59550325
+          }
+        ],
+        "ephemeral-job": [
+          {
+            "mode": "ephemeral-job",
+            "sample": 0,
+            "seconds": 1.07232175
+          },
+          {
+            "mode": "ephemeral-job",
+            "sample": 1,
+            "seconds": 1.560828375
+          },
+          {
+            "mode": "ephemeral-job",
+            "sample": 2,
+            "seconds": 1.444471625
+          },
+          {
+            "mode": "ephemeral-job",
+            "sample": 3,
+            "seconds": 0.523527458
+          },
+          {
+            "mode": "ephemeral-job",
+            "sample": 4,
+            "seconds": 0.511353916
+          }
+        ],
+        "fixed-fetch": [
+          {
+            "mode": "fetch",
+            "persistent": false,
+            "sample": 0,
+            "seconds": 0.119455625,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": false,
+            "sample": 1,
+            "seconds": 0.107151125,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": false,
+            "sample": 2,
+            "seconds": 0.105664417,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": false,
+            "sample": 3,
+            "seconds": 0.109735375,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": false,
+            "sample": 4,
+            "seconds": 0.1119845,
+            "transferred_bytes": 5074
+          }
+        ],
+        "persistent-fetch": [
+          {
+            "mode": "fetch",
+            "persistent": true,
+            "sample": 0,
+            "seconds": 0.22671475,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": true,
+            "sample": 1,
+            "seconds": 0.221633625,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": true,
+            "sample": 2,
+            "seconds": 0.228786083,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": true,
+            "sample": 3,
+            "seconds": 0.217286958,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": true,
+            "sample": 4,
+            "seconds": 0.213311333,
+            "transferred_bytes": 5074
+          }
+        ]
+      },
+      "phases_log": "goos: darwin\ngoarch: arm64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Apple M4\nBenchmarkPushPhases-2    \t       5\t 535393975 ns/op\t       172.7 apply-ms/op\t       272.2 client-ms/op\t         0 negotiate-ms/op\t        90.47 stage-ms/op\nBenchmarkWatchPhases-2   \t       5\t 386498125 ns/op\t       171.0 apply-ms/op\t       124.3 client-ms/op\t         0 negotiate-ms/op\t        91.17 stage-ms/op\nPASS\nok  \tgithub.com/lydakis/errand/cmd/errand\t56.626s\n"
+    },
+    "cabal": {
+      "provenance": {
+        "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+        "mutagen_release": "v0.18.1",
+        "mutagen_archive_sha256": "7735286c778cc438418209f24d03a64f3a0151c8065ef0fe079cfaf093af6f8f",
+        "mutagen_url": "https://github.com/mutagen-io/mutagen/releases/download/v0.18.1/mutagen_linux_amd64_v0.18.1.tar.gz",
+        "errand_sha256": "78cb1f00f1edf45b4f35286ae99dcef08b5bd21dec8cd7766631f846713e6b91"
+      },
+      "reports": {
+        "explicit-1000": {
+          "complete": true,
+          "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+          "filesystem": "btrfs /dev/mapper/root[/@home] rw,relatime,compress=zstd:3,ssd,space_cache=v2,subvolid=257,subvol=/@home",
+          "binary_sha256": "78cb1f00f1edf45b4f35286ae99dcef08b5bd21dec8cd7766631f846713e6b91",
+          "files": 1000,
+          "selection": "explicit",
+          "save_mode": "inplace",
+          "pause_seconds": 0,
+          "samples": [
+            {
+              "mode": "rsync-checksum",
+              "sample": 0,
+              "seconds": 0.06854186998680234
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 1,
+              "seconds": 0.05876555398572236
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 2,
+              "seconds": 0.057017630024347454
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 3,
+              "seconds": 0.06126169103663415
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 4,
+              "seconds": 0.05739381100283936
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 5,
+              "seconds": 0.0574665570165962
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 6,
+              "seconds": 0.05745657498482615
+            },
+            {
+              "mode": "mutagen",
+              "sample": 0,
+              "delivery_seconds": 0.015173866006080061
+            },
+            {
+              "mode": "mutagen",
+              "sample": 1,
+              "delivery_seconds": 0.025834447995293885
+            },
+            {
+              "mode": "mutagen",
+              "sample": 2,
+              "delivery_seconds": 0.028486636001616716
+            },
+            {
+              "mode": "mutagen",
+              "sample": 3,
+              "delivery_seconds": 0.028150610043667257
+            },
+            {
+              "mode": "mutagen",
+              "sample": 4,
+              "delivery_seconds": 0.02401603397447616
+            },
+            {
+              "mode": "mutagen",
+              "sample": 5,
+              "delivery_seconds": 0.03268144000321627
+            },
+            {
+              "mode": "mutagen",
+              "sample": 6,
+              "delivery_seconds": 0.023863951966632158
+            },
+            {
+              "mode": "once",
+              "sample": 0,
+              "seconds": 0.9888977620285004,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 986
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 1,
+              "seconds": 0.2799980770214461,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 277
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 2,
+              "seconds": 0.2818289609858766,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 279
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 3,
+              "seconds": 0.28230198402889073,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 279
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 4,
+              "seconds": 0.269378405995667,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 266
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 5,
+              "seconds": 0.2836558370036073,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 280
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 6,
+              "seconds": 0.2856481359922327,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 282
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 0,
+              "seconds": 0.26477497996529564,
+              "delivery_seconds": 0.1931906290119514,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 259
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 1,
+              "seconds": 0.2547461270005442,
+              "delivery_seconds": 0.18664878199342638,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 249
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 2,
+              "seconds": 0.24671380798099563,
+              "delivery_seconds": 0.18263836594996974,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 241
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 3,
+              "seconds": 0.24624262901488692,
+              "delivery_seconds": 0.1822320949868299,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 240
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 4,
+              "seconds": 0.26247199496719986,
+              "delivery_seconds": 0.19381362095009536,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 257
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 5,
+              "seconds": 0.24599398800637573,
+              "delivery_seconds": 0.18420352303655818,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 240
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 6,
+              "seconds": 0.6080671930103563,
+              "delivery_seconds": 0.436726970016025,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 602
+              }
+            }
+          ],
+          "rsync": "rsync  version 3.5.0-g471e17dc  protocol version 32",
+          "mutagen": "0.18.1",
+          "watch_start_seconds": 0.15182412101421505,
+          "idle": {
+            "seconds": 3.007757331011817,
+            "cpu_seconds": 0.0,
+            "cpu_resolution_seconds": 0.01,
+            "unexpected_receipts": 0
+          },
+          "burst": {
+            "edits": 20,
+            "receipts": 1,
+            "seconds": 0.4391772760427557,
+            "delivery_seconds": 0.36899356701178476,
+            "transfer": {
+              "changed_paths": 1,
+              "transferred_bytes": 3060,
+              "elapsed_ms": 289
+            }
+          },
+          "watch_exit_code": 0,
+          "whole_tree_verified": true
+        },
+        "explicit-10000": {
+          "complete": true,
+          "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+          "filesystem": "btrfs /dev/mapper/root[/@home] rw,relatime,compress=zstd:3,ssd,space_cache=v2,subvolid=257,subvol=/@home",
+          "binary_sha256": "78cb1f00f1edf45b4f35286ae99dcef08b5bd21dec8cd7766631f846713e6b91",
+          "files": 10000,
+          "selection": "explicit",
+          "save_mode": "inplace",
+          "pause_seconds": 0,
+          "samples": [
+            {
+              "mode": "rsync-checksum",
+              "sample": 0,
+              "seconds": 0.16800015000626445
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 1,
+              "seconds": 0.1666314610047266
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 2,
+              "seconds": 0.17252493096748367
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 3,
+              "seconds": 0.15852990199346095
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 4,
+              "seconds": 0.16531295602908358
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 5,
+              "seconds": 0.1617714560125023
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 6,
+              "seconds": 0.1646061890060082
+            },
+            {
+              "mode": "mutagen",
+              "sample": 0,
+              "delivery_seconds": 0.11256439104909077
+            },
+            {
+              "mode": "mutagen",
+              "sample": 1,
+              "delivery_seconds": 0.10757088795071468
+            },
+            {
+              "mode": "mutagen",
+              "sample": 2,
+              "delivery_seconds": 0.11623067600885406
+            },
+            {
+              "mode": "mutagen",
+              "sample": 3,
+              "delivery_seconds": 0.11882459401385859
+            },
+            {
+              "mode": "mutagen",
+              "sample": 4,
+              "delivery_seconds": 0.11399432097095996
+            },
+            {
+              "mode": "mutagen",
+              "sample": 5,
+              "delivery_seconds": 0.12519281799905002
+            },
+            {
+              "mode": "mutagen",
+              "sample": 6,
+              "delivery_seconds": 0.11233498901128769
+            },
+            {
+              "mode": "once",
+              "sample": 0,
+              "seconds": 4.6795625039958395,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 4676
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 1,
+              "seconds": 1.3068362539634109,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1303
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 2,
+              "seconds": 1.2435883489670232,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1240
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 3,
+              "seconds": 1.0333917480311356,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1030
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 4,
+              "seconds": 1.0358544460032135,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1032
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 5,
+              "seconds": 1.0736638759844936,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1070
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 6,
+              "seconds": 1.1096365579869598,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1106
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 0,
+              "seconds": 0.7844897400354967,
+              "delivery_seconds": 0.6429324449854903,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 779
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 1,
+              "seconds": 0.7214964520535432,
+              "delivery_seconds": 0.5644119339995086,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 716
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 2,
+              "seconds": 0.7430504860240035,
+              "delivery_seconds": 0.5807166790473275,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 737
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 3,
+              "seconds": 0.7521146649960428,
+              "delivery_seconds": 0.6063759329845197,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 746
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 4,
+              "seconds": 0.710080761986319,
+              "delivery_seconds": 0.5682247579679824,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 704
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 5,
+              "seconds": 0.7304692549514584,
+              "delivery_seconds": 0.5766361039713956,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 725
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 6,
+              "seconds": 0.7580463589983992,
+              "delivery_seconds": 0.5687507120310329,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 752
+              }
+            }
+          ],
+          "rsync": "rsync  version 3.5.0-g471e17dc  protocol version 32",
+          "mutagen": "0.18.1",
+          "watch_start_seconds": 0.8272962640039623,
+          "idle": {
+            "seconds": 3.0083967950195074,
+            "cpu_seconds": 0.0,
+            "cpu_resolution_seconds": 0.01,
+            "unexpected_receipts": 0
+          },
+          "burst": {
+            "edits": 20,
+            "receipts": 1,
+            "seconds": 1.0943577259895392,
+            "delivery_seconds": 0.936014780018013,
+            "transfer": {
+              "changed_paths": 1,
+              "transferred_bytes": 3060,
+              "elapsed_ms": 981
+            }
+          },
+          "watch_exit_code": 0,
+          "whole_tree_verified": true
+        },
+        "git-atomic-10000": {
+          "complete": true,
+          "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+          "filesystem": "btrfs /dev/mapper/root[/@home] rw,relatime,compress=zstd:3,ssd,space_cache=v2,subvolid=257,subvol=/@home",
+          "binary_sha256": "78cb1f00f1edf45b4f35286ae99dcef08b5bd21dec8cd7766631f846713e6b91",
+          "files": 10000,
+          "selection": "git",
+          "save_mode": "atomic",
+          "pause_seconds": 0,
+          "samples": [
+            {
+              "mode": "rsync-checksum",
+              "sample": 0,
+              "seconds": 0.17052877799142152
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 1,
+              "seconds": 0.16631137405056506
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 2,
+              "seconds": 0.16337680199649185
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 3,
+              "seconds": 0.16136484796879813
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 4,
+              "seconds": 0.16633877996355295
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 5,
+              "seconds": 0.16482595400884748
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 6,
+              "seconds": 0.16615858097793534
+            },
+            {
+              "mode": "mutagen",
+              "sample": 0,
+              "delivery_seconds": 0.0955009309691377
+            },
+            {
+              "mode": "mutagen",
+              "sample": 1,
+              "delivery_seconds": 0.11225794604979455
+            },
+            {
+              "mode": "mutagen",
+              "sample": 2,
+              "delivery_seconds": 0.11454195796977729
+            },
+            {
+              "mode": "mutagen",
+              "sample": 3,
+              "delivery_seconds": 0.11034008295973763
+            },
+            {
+              "mode": "mutagen",
+              "sample": 4,
+              "delivery_seconds": 0.12363523797830567
+            },
+            {
+              "mode": "mutagen",
+              "sample": 5,
+              "delivery_seconds": 0.11500184098258615
+            },
+            {
+              "mode": "mutagen",
+              "sample": 6,
+              "delivery_seconds": 0.111893635999877
+            },
+            {
+              "mode": "once",
+              "sample": 0,
+              "seconds": 6.780312397982925,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 6777
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 1,
+              "seconds": 1.2044044029898942,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1201
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 2,
+              "seconds": 1.2238706999924034,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1221
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 3,
+              "seconds": 1.2298794019734487,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1226
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 4,
+              "seconds": 1.3036329299793579,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1300
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 5,
+              "seconds": 1.1353615800035186,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1132
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 6,
+              "seconds": 1.2148923220229335,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1211
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 0,
+              "seconds": 1.0263266729889438,
+              "delivery_seconds": 0.868890780955553,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1020
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 1,
+              "seconds": 1.1346234090160578,
+              "delivery_seconds": 0.9521778839989565,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1128
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 2,
+              "seconds": 1.276666488032788,
+              "delivery_seconds": 1.0345418410142884,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1271
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 3,
+              "seconds": 1.102648959029466,
+              "delivery_seconds": 0.9644512319937348,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1097
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 4,
+              "seconds": 1.0483532029902562,
+              "delivery_seconds": 0.8842467640060931,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1042
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 5,
+              "seconds": 1.0723619139753282,
+              "delivery_seconds": 0.9133512109983712,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 1066
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 6,
+              "seconds": 1.0031758020049892,
+              "delivery_seconds": 0.8664106100331992,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 997
+              }
+            }
+          ],
+          "rsync": "rsync  version 3.5.0-g471e17dc  protocol version 32",
+          "mutagen": "0.18.1",
+          "watch_start_seconds": 1.2273251239676028,
+          "idle": {
+            "seconds": 3.0108417280134745,
+            "cpu_seconds": 0.0,
+            "cpu_resolution_seconds": 0.01,
+            "unexpected_receipts": 0
+          },
+          "burst": {
+            "edits": 20,
+            "receipts": 1,
+            "seconds": 1.0746411610161886,
+            "delivery_seconds": 0.9042931630392559,
+            "transfer": {
+              "changed_paths": 1,
+              "transferred_bytes": 3060,
+              "elapsed_ms": 1068
+            }
+          },
+          "watch_exit_code": 0,
+          "whole_tree_verified": true
+        },
+        "expired-1000": {
+          "complete": true,
+          "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+          "filesystem": "btrfs /dev/mapper/root[/@home] rw,relatime,compress=zstd:3,ssd,space_cache=v2,subvolid=257,subvol=/@home",
+          "binary_sha256": "78cb1f00f1edf45b4f35286ae99dcef08b5bd21dec8cd7766631f846713e6b91",
+          "files": 1000,
+          "selection": "explicit",
+          "save_mode": "inplace",
+          "pause_seconds": 31.0,
+          "samples": [
+            {
+              "mode": "rsync-checksum",
+              "sample": 0,
+              "seconds": 0.05779525398975238
+            },
+            {
+              "mode": "rsync-checksum",
+              "sample": 1,
+              "seconds": 0.057724996004253626
+            },
+            {
+              "mode": "once",
+              "sample": 0,
+              "seconds": 0.7094123749993742,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 706
+              }
+            },
+            {
+              "mode": "once",
+              "sample": 1,
+              "seconds": 0.29007980303140357,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 287
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 0,
+              "seconds": 0.2768751750118099,
+              "delivery_seconds": 0.20542204700177535,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 270
+              }
+            },
+            {
+              "mode": "watch",
+              "sample": 1,
+              "seconds": 0.2747031850158237,
+              "delivery_seconds": 0.2029631640180014,
+              "transfer": {
+                "changed_paths": 1,
+                "transferred_bytes": 3060,
+                "elapsed_ms": 268
+              }
+            }
+          ],
+          "rsync": "rsync  version 3.5.0-g471e17dc  protocol version 32",
+          "watch_start_seconds": 0.1547907440108247,
+          "idle": {
+            "seconds": 3.007393673004117,
+            "cpu_seconds": 0.0,
+            "cpu_resolution_seconds": 0.01,
+            "unexpected_receipts": 0
+          },
+          "burst": {
+            "edits": 20,
+            "receipts": 1,
+            "seconds": 0.42390065296785906,
+            "delivery_seconds": 0.35903589497320354,
+            "transfer": {
+              "changed_paths": 1,
+              "transferred_bytes": 3060,
+              "elapsed_ms": 272
+            }
+          },
+          "watch_exit_code": 0,
+          "whole_tree_verified": true
+        }
+      },
+      "shared_samples": {
+        "workspace-create": [
+          {
+            "mode": "workspace-create",
+            "sample": 0,
+            "seconds": 0.307708097
+          },
+          {
+            "mode": "workspace-create",
+            "sample": 1,
+            "seconds": 0.254977774
+          },
+          {
+            "mode": "workspace-create",
+            "sample": 2,
+            "seconds": 0.276942925
+          },
+          {
+            "mode": "workspace-create",
+            "sample": 3,
+            "seconds": 0.259741904
+          },
+          {
+            "mode": "workspace-create",
+            "sample": 4,
+            "seconds": 0.267664571
+          }
+        ],
+        "ephemeral-job": [
+          {
+            "mode": "ephemeral-job",
+            "sample": 0,
+            "seconds": 0.212381961
+          },
+          {
+            "mode": "ephemeral-job",
+            "sample": 1,
+            "seconds": 0.193121668
+          },
+          {
+            "mode": "ephemeral-job",
+            "sample": 2,
+            "seconds": 0.186716371
+          },
+          {
+            "mode": "ephemeral-job",
+            "sample": 3,
+            "seconds": 0.190252494
+          },
+          {
+            "mode": "ephemeral-job",
+            "sample": 4,
+            "seconds": 0.193809195
+          }
+        ],
+        "fixed-fetch": [
+          {
+            "mode": "fetch",
+            "persistent": false,
+            "sample": 0,
+            "seconds": 0.004974621,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": false,
+            "sample": 1,
+            "seconds": 0.00499435,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": false,
+            "sample": 2,
+            "seconds": 0.004923572,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": false,
+            "sample": 3,
+            "seconds": 0.006699035,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": false,
+            "sample": 4,
+            "seconds": 0.006515011,
+            "transferred_bytes": 5074
+          }
+        ],
+        "persistent-fetch": [
+          {
+            "mode": "fetch",
+            "persistent": true,
+            "sample": 0,
+            "seconds": 0.042473727,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": true,
+            "sample": 1,
+            "seconds": 0.041213359,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": true,
+            "sample": 2,
+            "seconds": 0.036451356,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": true,
+            "sample": 3,
+            "seconds": 0.040203732,
+            "transferred_bytes": 5074
+          },
+          {
+            "mode": "fetch",
+            "persistent": true,
+            "sample": 4,
+            "seconds": 0.041397836,
+            "transferred_bytes": 5074
+          }
+        ]
+      },
+      "phases_log": "goos: linux\ngoarch: amd64\npkg: github.com/lydakis/errand/cmd/errand\ncpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz\nBenchmarkPushPhases-2    \t       5\t 727677776 ns/op\t        95.77 apply-ms/op\t       448.0 client-ms/op\t         0 negotiate-ms/op\t       183.9 stage-ms/op\nBenchmarkWatchPhases-2   \t       5\t 356868906 ns/op\t        85.64 apply-ms/op\t       108.6 client-ms/op\t         0 negotiate-ms/op\t       162.2 stage-ms/op\nPASS\nok  \tgithub.com/lydakis/errand/cmd/errand\t19.863s\n"
+    }
+  }
+}

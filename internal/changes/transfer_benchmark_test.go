@@ -3,6 +3,7 @@ package changes
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,34 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
 )
+
+func BenchmarkFreezeManyFiles(b *testing.B) {
+	source := b.TempDir()
+	var paths []string
+	for i := range 1000 {
+		name := fmt.Sprintf("file-%04d", i)
+		if err := os.WriteFile(filepath.Join(source, name), bytes.Repeat([]byte("x"), 1024), 0600); err != nil {
+			b.Fatal(err)
+		}
+		paths = append(paths, name)
+	}
+	m, err := snapshot.Build(source, paths)
+	if err != nil {
+		b.Fatal(err)
+	}
+	dest := filepath.Join(b.TempDir(), "source")
+	b.ResetTimer()
+	for b.Loop() {
+		if err := CopyTransferSource(context.Background(), source, dest, m, 2<<20); err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		if err := RemoveTree(dest); err != nil {
+			b.Fatal(err)
+		}
+		b.StartTimer()
+	}
+}
 
 // Compare freezing the full source with staging a small delta. This deliberately
 // keeps a large unchanged file: source reconstruction cost must remain visible.

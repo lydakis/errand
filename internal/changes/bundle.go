@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -82,7 +83,7 @@ func commitBundleWithPhysicalModesContext(
 	if err := packBundleArchive(ctx, tmp, remoteArchiveFile, remoteRoot, bundle.RemoteManifest, remotePhysical); err != nil {
 		return err
 	}
-	if err := writeRawJSONFile(filepath.Join(tmp, bundleFile), metadata); err != nil {
+	if err := writeRawJSONFileWithSync(filepath.Join(tmp, bundleFile), metadata, syncStagedData); err != nil {
 		return err
 	}
 	if err := syncDirectory(tmp); err != nil {
@@ -122,7 +123,9 @@ func packBundleArchive(ctx context.Context, dir, name, root string, manifest pro
 		f.Close()
 		return err
 	}
-	if err := f.Sync(); err != nil {
+	// This archive remains private until commitBundle flushes the containing
+	// tree. Batch the hardware-cache barrier with the other bundle members.
+	if err := syncStagedData(f); err != nil {
 		f.Close()
 		return err
 	}
@@ -205,6 +208,14 @@ func CleanupTemps(jobDir string) error {
 }
 
 func validateBundle(bundle proto.ChangeBundle) error {
+	return ValidateBundleContext(context.Background(), bundle)
+}
+
+func ValidateBundleContext(ctx context.Context, bundle proto.ChangeBundle) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	if bundle.V != BundleVersion {
 		return fmt.Errorf("unsupported change bundle version %d", bundle.V)
 	}
@@ -214,13 +225,16 @@ func validateBundle(bundle proto.ChangeBundle) error {
 	if _, err := hex.DecodeString(bundle.BaselineRoot); err != nil {
 		return fmt.Errorf("change bundle has an invalid baseline root")
 	}
-	if len(bundle.BaseManifest.Entries) > MaxChangeEntries || len(bundle.RemoteManifest.Entries) > MaxChangeEntries {
+	if len(bundle.Paths) > MaxChangeEntries || len(bundle.MetadataPaths) > MaxChangeEntries || len(bundle.BaseManifest.Entries) > MaxChangeEntries || len(bundle.RemoteManifest.Entries) > MaxChangeEntries {
 		return fmt.Errorf("%w: change bundle exceeds %d entries per tree", ErrEntryLimitExceeded, MaxChangeEntries)
 	}
 	rootSet := make(map[string]struct{}, len(bundle.Paths))
 	caseFoldedRoots := make(map[string]string, len(bundle.Paths))
 	metadataSet := make(map[string]struct{}, len(bundle.MetadataPaths))
 	for i, metadataPath := range bundle.MetadataPaths {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if i > 0 && bundle.MetadataPaths[i-1] >= metadataPath {
 			return fmt.Errorf("change bundle metadata paths are not sorted")
 		}
@@ -230,6 +244,9 @@ func validateBundle(bundle proto.ChangeBundle) error {
 		metadataSet[metadataPath] = struct{}{}
 	}
 	for i, changePath := range bundle.Paths {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := validatePath(changePath); err != nil {
 			return err
 		}
@@ -257,16 +274,38 @@ func validateBundle(bundle proto.ChangeBundle) error {
 		}
 		rootSet[changePath] = struct{}{}
 		caseFoldedRoots[folded] = changePath
-		base := subtreeManifest(bundle.BaseManifest, changePath)
-		remote := subtreeManifest(bundle.RemoteManifest, changePath)
+	}
+
+	if bundle.Bytes < 0 {
+		return fmt.Errorf("change bundle has a negative byte count")
+	}
+	baseBytes, err := validateBundleManifestContext(ctx, bundle.BaseManifest, bundle.Paths, "base")
+	if err != nil {
+		return err
+	}
+	remoteBytes, err := validateBundleManifestContext(ctx, bundle.RemoteManifest, bundle.Paths, "remote")
+	if err != nil {
+		return err
+	}
+	if baseBytes > bundle.Bytes || remoteBytes > bundle.Bytes-baseBytes || baseBytes+remoteBytes != bundle.Bytes {
+		return fmt.Errorf("change bundle byte count is inconsistent")
+	}
+	for _, changePath := range bundle.Paths {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var base, remote proto.Manifest
 		if _, metadata := metadataSet[changePath]; metadata {
 			base = exactManifestEntry(bundle.BaseManifest, changePath)
 			remote = exactManifestEntry(bundle.RemoteManifest, changePath)
+		} else {
+			base = subtreeManifest(bundle.BaseManifest, changePath)
+			remote = subtreeManifest(bundle.RemoteManifest, changePath)
 		}
 		if len(base.Entries) == 0 && len(remote.Entries) == 0 {
 			return fmt.Errorf("change bundle has no value for %q", changePath)
 		}
-		if base.RootHash() == remote.RootHash() {
+		if slices.Equal(base.Entries, remote.Entries) {
 			return fmt.Errorf("change bundle path %q is unchanged", changePath)
 		}
 		_, metadata := metadataSet[changePath]
@@ -276,20 +315,6 @@ func validateBundle(bundle proto.ChangeBundle) error {
 		if metadata != compactModeChange {
 			return fmt.Errorf("change bundle metadata classification for %q is inconsistent", changePath)
 		}
-	}
-	if bundle.Bytes < 0 {
-		return fmt.Errorf("change bundle has a negative byte count")
-	}
-	baseBytes, err := validateBundleManifest(bundle.BaseManifest, bundle.Paths, "base")
-	if err != nil {
-		return err
-	}
-	remoteBytes, err := validateBundleManifest(bundle.RemoteManifest, bundle.Paths, "remote")
-	if err != nil {
-		return err
-	}
-	if baseBytes > bundle.Bytes || remoteBytes > bundle.Bytes-baseBytes || baseBytes+remoteBytes != bundle.Bytes {
-		return fmt.Errorf("change bundle byte count is inconsistent")
 	}
 	return nil
 }
@@ -305,12 +330,21 @@ func exactManifestEntry(manifest proto.Manifest, entryPath string) proto.Manifes
 }
 
 func validateBundleManifest(manifest proto.Manifest, paths []string, label string) (int64, error) {
+	return validateBundleManifestContext(context.Background(), manifest, paths, label)
+}
+func validateBundleManifestContext(ctx context.Context, manifest proto.Manifest, paths []string, label string) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	if err := archive.Validate(manifest); err != nil {
 		return 0, err
 	}
 	var size int64
 	caseFolded := make(map[string]string, len(manifest.Entries))
 	for i, entry := range manifest.Entries {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
 		if i > 0 && manifest.Entries[i-1].Path >= entry.Path {
 			return 0, fmt.Errorf("change bundle %s manifest is not sorted", label)
 		}
@@ -450,6 +484,10 @@ func marshalBundle(bundle proto.ChangeBundle) ([]byte, error) {
 }
 
 func writeRawJSONFile(path string, raw []byte) error {
+	return writeRawJSONFileWithSync(path, raw, (*os.File).Sync)
+}
+
+func writeRawJSONFileWithSync(path string, raw []byte, syncFile func(*os.File) error) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
@@ -458,7 +496,7 @@ func writeRawJSONFile(path string, raw []byte) error {
 		f.Close()
 		return err
 	}
-	if err := f.Sync(); err != nil {
+	if err := syncFile(f); err != nil {
 		f.Close()
 		return err
 	}

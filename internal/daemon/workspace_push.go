@@ -64,25 +64,62 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		httpError(w, 400, "invalid push identity")
 		return
 	}
-	if err := archive.Validate(request.Manifest); err != nil {
-		httpError(w, 400, err.Error())
-		return
+	var prepared changeops.PreparedTransferSource
+	if request.Delta != nil {
+		unlock, err := d.workspaces.lockWorkspaceContext(r.Context(), row.ID)
+		if err != nil {
+			return
+		}
+		base, err := d.pushBase(row, request.ClientID)
+		unlock()
+		// Expansion uses immutable checkpoint metadata. Keep full-tree work
+		// outside the apply gate; StagePrepared rechecks the baseline under it.
+		if err == nil {
+			prepared, err = changeops.ExpandTransferSource(r.Context(), base, *request.Delta, request.SourceRoot, d.cfg.MaxLimits.MaxChangeBytes)
+			if err == nil {
+				request.Manifest = prepared.Manifest()
+			}
+		}
+		if err != nil {
+			if errors.Is(err, changeops.ErrCheckpointChanged) {
+				httpErrorCode(w, http.StatusConflict, proto.ErrorCodePushCheckpointChanged, err.Error())
+			} else {
+				httpError(w, 409, err.Error())
+			}
+			return
+		}
 	}
+	if request.Delta == nil {
+		if err := archive.Validate(request.Manifest); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+	}
+	var total int64
 	for _, e := range request.Manifest.Entries {
+		if e.Type == proto.EntryFile {
+			if e.Size > d.cfg.MaxLimits.MaxWorkspaceBytes-total {
+				httpError(w, 400, "workspace source exceeds byte limit")
+				return
+			}
+			total += e.Size
+		}
 		if pathpolicy.InCache(e.Path, row.Selection.Caches) {
 			httpError(w, 400, "push contains a named cache path")
 			return
 		}
 	}
-	// Upload outside the workspace gate and directory. Removal cannot delete
-	// the source mid-upload, and slow clients cannot block commands or cleanup.
+	sourceManifest := request.Manifest
+	if request.Delta != nil {
+		sourceManifest = request.Delta.RemoteManifest
+	}
 	part, err := nextPart(mr, "workspace")
 	if err != nil {
 		httpError(w, 400, err.Error())
 		return
 	}
 	extractOpts, restored := d.snapshotExtractOptions(r.Context())
-	if err := archive.ExtractWith(&contextReader{ctx: r.Context(), r: part}, source, request.Manifest, d.cfg.MaxLimits.MaxWorkspaceBytes, extractOpts); err != nil {
+	if err := archive.ExtractWith(&contextReader{ctx: r.Context(), r: part}, source, sourceManifest, d.cfg.MaxLimits.MaxWorkspaceBytes, extractOpts); err != nil {
 		if errors.Is(err, archive.ErrCacheMiss) {
 			httpErrorCode(w, http.StatusConflict, proto.ErrorCodeSnapshotCacheMiss, err.Error())
 			return
@@ -94,11 +131,11 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		httpError(w, 400, "unexpected push payload")
 		return
 	}
-	if err := changeops.SyncTransferSource(source, request.Manifest); err != nil {
+	if err := changeops.SyncTransferSource(source, sourceManifest); err != nil {
 		httpError(w, 500, err.Error())
 		return
 	}
-	d.cacheWorkspaceSource(r.Context(), source, request.Manifest, restored)
+	d.cacheWorkspaceSource(r.Context(), source, sourceManifest, restored)
 	unlock, err := d.workspaces.lockWorkspaceContext(r.Context(), row.ID)
 	if err != nil {
 		return
@@ -125,8 +162,17 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		httpError(w, 500, err.Error())
 		return
 	}
-	_, bundle, err := session.Stage(r.Context(), request.ID, source, request.Manifest)
+	var bundle proto.ChangeBundle
+	if request.Delta != nil {
+		_, bundle, err = session.StagePrepared(r.Context(), request.ID, source, prepared)
+	} else {
+		_, bundle, err = session.Stage(r.Context(), request.ID, source, request.Manifest)
+	}
 	if err != nil {
+		if errors.Is(err, changeops.ErrCheckpointChanged) {
+			httpErrorCode(w, http.StatusConflict, proto.ErrorCodePushCheckpointChanged, err.Error())
+			return
+		}
 		httpError(w, 409, err.Error())
 		return
 	}

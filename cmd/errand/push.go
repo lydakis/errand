@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
@@ -14,6 +17,10 @@ import (
 
 func cmdPush(args []string) int { return cmdPushTo(args, os.Stdout, os.Stderr) }
 func cmdPushTo(args []string, out, stderr io.Writer) int {
+	return cmdPushToContext(context.Background(), args, out, stderr)
+}
+
+func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer) int {
 	fs := flag.NewFlagSet("errand push", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var settings runConfigFlags
@@ -22,6 +29,7 @@ func cmdPushTo(args []string, out, stderr io.Writer) int {
 	fs.StringVar(&settings.profile, "profile", "", "use a named configuration profile")
 	fs.StringVar(&settings.root, "workspace-root", "", "snapshot root containing the current directory")
 	fs.StringVar(&settings.workspace, "workspace", "", "persistent workspace name (overrides the selected profile)")
+	watch := fs.Bool("watch", false, "repeat push when local source files change (Ctrl-C stops watching)")
 	apply := fs.Bool("apply", false, "merge staged local changes into the runner workspace")
 	conflicts := fs.Bool("conflicts", false, "materialize text conflicts and apply clean changes")
 	includeAll := fs.Bool("include-all", false, "allow a broad snapshot (never a filesystem root)")
@@ -71,37 +79,83 @@ func cmdPushTo(args []string, out, stderr io.Writer) int {
 	}
 	// Apply is always explicit for push. Run profiles' automatic-apply preference
 	// controls successful jobs, not remote workspace mutation.
-	var stats client.TransferStats
-	result, err := client.PushChanges(client.PushOptions{PeerURL: peer, Workspace: workspace, Root: effective.Root, Path: fs.Arg(0), Apply: *apply, MaterializeConflicts: *conflicts, IncludeAll: *includeAll, Stats: &stats})
-	action := "staged"
-	if *apply {
-		action = "applied"
-	}
-	if result.Recovered {
-		action = "recovered"
-	}
-	if *jsonOutput {
-		report := struct {
-			proto.PushResult
-			transferReport
-		}{result, newTransferReport(action, stats, err)}
-		if writeErr := json.NewEncoder(out).Encode(report); writeErr != nil {
-			fmt.Fprintln(stderr, "errand:", writeErr)
-			return 1
+	opts := client.PushOptions{PeerURL: peer, Workspace: workspace, Root: effective.Root, Path: fs.Arg(0), Apply: *apply, MaterializeConflicts: *conflicts, IncludeAll: *includeAll}
+	target := "to workspace " + workspace + " on " + cmpOr(effective.Peer, peer)
+	if *watch {
+		ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		go func() { <-ctx.Done(); stop() }() // a second interrupt can force exit
+		display := newPushWatchDisplay(stderr, *jsonOutput)
+		defer display.clear()
+		mode := "staging only; running files will not change"
+		if *apply {
+			mode = "applying changes; application readiness not checked"
 		}
+		fmt.Fprintf(stderr, "errand: watching %s %s · %s · Ctrl-C stops watching\n", terminalSafeField(effective.Root), terminalSafeField(target), mode)
+		err := client.WatchPush(ctx, opts, func(event client.PushWatchEvent) error {
+			if event.Result == nil {
+				display.status(event.State)
+				return nil
+			}
+			display.clear()
+			return reportPushResult(out, stderr, *event.Result, event.Stats, event.Err, *apply, *jsonOutput, event.State, target)
+		})
+		display.clear()
+		if err != nil {
+			fmt.Fprintln(stderr, "errand: watch stopped:", err)
+			return client.ExitTransaction
+		}
+		return 0
+	}
+	var stats client.TransferStats
+	opts.Stats = &stats
+	result, err := client.PushChanges(opts)
+	if writeErr := reportPushResult(out, stderr, result, stats, err, *apply, *jsonOutput, "", target); writeErr != nil {
+		fmt.Fprintln(stderr, "errand:", writeErr)
+		return 1
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, "errand:", err)
 		return client.ExitTransaction
 	}
-	if !*jsonOutput {
-		printTransferSummary(stderr, "push", action, "to workspace "+workspace+" on "+cmpOr(effective.Peer, peer), stats)
-		if result.Recovered {
-			fmt.Fprintf(stderr, "errand: completed earlier push %s to workspace %s on %s; run push again to send your current changes\n", result.ID, workspace, cmpOr(effective.Peer, peer))
-		} else if !*apply {
-			fmt.Fprintf(out, "%s\n", result.ID)
-			fmt.Fprintf(stderr, "errand: changes staged for workspace %s; repeat push with the same options and --apply to apply\n", workspace)
+	return 0
+}
+
+func reportPushResult(out, stderr io.Writer, result proto.PushResult, stats client.TransferStats, err error, apply, jsonOutput bool, watchState, target string) error {
+	action := "staged"
+	if apply {
+		action = "applied"
+	}
+	if result.Recovered {
+		action = "recovered"
+	}
+	if watchState == "unchanged" {
+		action = "unchanged"
+	}
+	if jsonOutput {
+		report := struct {
+			proto.PushResult
+			transferReport
+		}{result, newTransferReport(action, stats, err)}
+		if writeErr := json.NewEncoder(out).Encode(report); writeErr != nil {
+			return writeErr
 		}
 	}
-	return 0
+	if err != nil {
+		return nil
+	}
+	if !jsonOutput {
+		printTransferSummary(stderr, "push", action, target, stats)
+		if result.Recovered {
+			if watchState == "" {
+				fmt.Fprintf(stderr, "errand: completed earlier push %s %s; run push again to send your current changes\n", result.ID, terminalSafeField(target))
+			}
+		} else if !apply {
+			fmt.Fprintf(out, "%s\n", result.ID)
+			if watchState == "" {
+				fmt.Fprintf(stderr, "errand: changes staged %s; repeat push with the same options and --apply to apply\n", terminalSafeField(target))
+			}
+		}
+	}
+	return nil
 }

@@ -1,6 +1,7 @@
 package changes
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,7 +12,6 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
-	"sort"
 
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/fsidentity"
@@ -191,11 +191,22 @@ func (c TransferCheckpoint) Advance(expectedRevision uint64, receiptPath string,
 }
 
 func acceptedSourceManifest(base proto.Manifest, bundle proto.ChangeBundle, outcome transferOutcome) (proto.Manifest, error) {
+	return acceptedSourceManifestContext(context.Background(), base, bundle, outcome)
+}
+func acceptedSourceManifestContext(ctx context.Context, base proto.Manifest, bundle proto.ChangeBundle, outcome transferOutcome) (proto.Manifest, error) {
+	if err := ctx.Err(); err != nil {
+		return proto.Manifest{}, err
+	}
 	// BaselineRoot alone is a declaration; also compare the actual merge bases.
 	for _, root := range bundle.Paths {
-		left, right := subtreeManifest(base, root), subtreeManifest(bundle.BaseManifest, root)
+		if err := ctx.Err(); err != nil {
+			return proto.Manifest{}, err
+		}
+		var left, right proto.Manifest
 		if bundleHasMetadataPath(bundle, root) {
 			left, right = exactManifestEntry(base, root), exactManifestEntry(bundle.BaseManifest, root)
+		} else {
+			left, right = subtreeManifest(base, root), subtreeManifest(bundle.BaseManifest, root)
 		}
 		if !slices.Equal(left.Entries, right.Entries) {
 			return proto.Manifest{}, fmt.Errorf("bundle base for %q does not match checkpoint", root)
@@ -208,6 +219,9 @@ func acceptedSourceManifest(base proto.Manifest, bundle proto.ChangeBundle, outc
 	// States identify roots actually installed, including partially conflicted
 	// directories. Their hashes are destination values and are never copied here.
 	for root := range outcome.States {
+		if err := ctx.Err(); err != nil {
+			return proto.Manifest{}, err
+		}
 		if bundleHasMetadataPath(bundle, root) {
 			metadata[root] = true
 		} else {
@@ -230,19 +244,32 @@ func acceptedSourceManifest(base proto.Manifest, bundle proto.ChangeBundle, outc
 		}
 		return accepted
 	}
-	var next proto.Manifest
-	for _, entry := range base.Entries {
-		if !replaced(entry.Path) {
-			next.Entries = append(next.Entries, entry)
+	// Both inputs are sorted. Merge their accepted entries directly rather
+	// than sorting the complete source tree after every small update.
+	next := proto.Manifest{Entries: make([]proto.ManifestEntry, 0, len(base.Entries)+len(bundle.RemoteManifest.Entries))}
+	for i, j := 0, 0; i < len(base.Entries) || j < len(bundle.RemoteManifest.Entries); {
+		if err := ctx.Err(); err != nil {
+			return proto.Manifest{}, err
+		}
+		if i < len(base.Entries) && (j == len(bundle.RemoteManifest.Entries) || base.Entries[i].Path <= bundle.RemoteManifest.Entries[j].Path) {
+			entry := base.Entries[i]
+			i++
+			if !replaced(entry.Path) {
+				next.Entries = append(next.Entries, entry)
+			}
+		} else {
+			entry := bundle.RemoteManifest.Entries[j]
+			j++
+			if replaced(entry.Path) {
+				next.Entries = append(next.Entries, entry)
+			}
 		}
 	}
-	for _, entry := range bundle.RemoteManifest.Entries {
-		if replaced(entry.Path) {
-			next.Entries = append(next.Entries, entry)
-		}
+	// Preserve the existing canonical representation of an empty source.
+	if len(next.Entries) == 0 {
+		next.Entries = nil
 	}
-	sort.Slice(next.Entries, func(i, j int) bool { return next.Entries[i].Path < next.Entries[j].Path })
-	return next, validateCheckpointManifest(next)
+	return next, validateCheckpointManifestContext(ctx, next)
 }
 
 func (c TransferCheckpoint) open(statePath string) (*applyDestination, *applyDestination, string, error) {
@@ -303,10 +330,19 @@ func (c TransferCheckpoint) save(destination, storage *applyDestination, name st
 }
 
 func validateCheckpointManifest(manifest proto.Manifest) error {
+	return validateCheckpointManifestContext(context.Background(), manifest)
+}
+func validateCheckpointManifestContext(ctx context.Context, manifest proto.Manifest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := archive.Validate(manifest); err != nil {
 		return err
 	}
 	for i, entry := range manifest.Entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := validatePath(entry.Path); err != nil {
 			return err
 		}

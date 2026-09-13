@@ -23,7 +23,28 @@ type PushOptions struct {
 	Apply, MaterializeConflicts, IncludeAll bool
 	Stats                                   *TransferStats
 	meter                                   *transferMeter
+	workspace                               *proto.Workspace // pinned for the lifetime of a watch
+	origin                                  *workspaceOrigin
+	watchState                              *pushWatchState
+	retryCheckpoint                         bool
+	refreshSource                           bool
 }
+
+type pushWatchState struct {
+	manifest    string
+	base        *proto.Manifest
+	baseChecked bool
+	generation  string
+	builder     snapshot.Builder
+	watcher     *snapshot.Watch
+}
+
+var errWatchUnchanged = errors.New("watched source is unchanged")
+
+type pushSourceError struct{ error }
+
+func (e *pushSourceError) Unwrap() error { return e.error }
+
 type pendingPush struct {
 	Request  proto.PushRequest      `json:"request"`
 	Staged   *proto.PushResult      `json:"staged,omitempty"`
@@ -41,7 +62,13 @@ func PushChanges(opts PushOptions) (proto.PushResult, error) {
 	if opts.MaterializeConflicts && !opts.Apply {
 		return result, fmt.Errorf("--conflicts requires --apply")
 	}
-	ws, err := GetWorkspace(opts.PeerURL, opts.Workspace)
+	var ws proto.Workspace
+	var err error
+	if opts.workspace != nil {
+		ws = *opts.workspace
+	} else {
+		ws, err = getWorkspaceDescriptor(opts.PeerURL, opts.Workspace)
+	}
 	if err != nil {
 		return result, err
 	}
@@ -50,7 +77,12 @@ func PushChanges(opts PushOptions) (proto.PushResult, error) {
 	if err != nil {
 		return result, err
 	}
-	origin, err := readWorkspaceOrigin(dir)
+	var origin workspaceOrigin
+	if opts.origin != nil {
+		origin = *opts.origin
+	} else {
+		origin, err = readWorkspaceOrigin(dir)
+	}
 	if err != nil {
 		return result, fmt.Errorf("push requires this workspace's originating checkout: %w", err)
 	}
@@ -74,6 +106,11 @@ func PushChanges(opts PushOptions) (proto.PushResult, error) {
 	return result, err
 }
 func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOrigin, dir string, result *proto.PushResult) error {
+	if opts.watchState != nil {
+		if err := opts.watchState.observeGeneration(dir); err != nil {
+			return err
+		}
+	}
 	pendingPath := filepath.Join(dir, "push.json")
 	var pending pendingPush
 	raw, err := os.ReadFile(pendingPath)
@@ -89,11 +126,26 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 		// remote receipt makes a lost response safe to retry despite later job edits.
 		err := finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter)
 		result.Recovered = true
+		if opts.watchState != nil {
+			opts.watchState.manifest = ""
+			opts.watchState.base = nil
+			opts.watchState.baseChecked = false
+		}
 		return err
 	}
-	prep := prepareSnapshot(origin.Root, opts.IncludeAll, false, ws.Selection.Caches...)
+	var builder *snapshot.Builder
+	if opts.watchState != nil {
+		builder = &opts.watchState.builder
+	}
+	var prep snapshotPreparation
+	if opts.watchState != nil && opts.watchState.watcher != nil {
+		prep.manifest, prep.gitInfo, prep.selection, prep.guard, prep.err = opts.watchState.watcher.Prepare(builder)
+		prep.stage = "preparing watched source"
+	} else {
+		prep = prepareSnapshotWithBuilder(origin.Root, opts.IncludeAll, ws.Selection.Caches, builder)
+	}
 	if prep.err != nil {
-		return fmt.Errorf("%s: %w", prep.stage, prep.err)
+		return &pushSourceError{fmt.Errorf("%s: %w", prep.stage, prep.err)}
 	}
 	policy := prep.selection
 	policy.Artifacts = ws.Selection.Artifacts
@@ -101,26 +153,59 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if (proto.Spec{Selection: policy}).Digest() != (proto.Spec{Selection: ws.Selection}).Digest() {
 		return fmt.Errorf("push selection policy differs from workspace creation; create a new workspace for the new policy")
 	}
-	if pending.Request.ID == "" || pending.Request.Manifest.RootHash() != prep.manifest.RootHash() {
+	manifestHash := prep.manifest.RootHash()
+	if opts.watchState != nil && opts.watchState.manifest == manifestHash {
+		return errWatchUnchanged
+	}
+	if opts.refreshSource || pending.Request.ID == "" || pending.Request.Manifest.RootHash() != prep.manifest.RootHash() {
 		clientID, err := localChangeClientID()
 		if err != nil {
 			return err
 		}
 		pending = pendingPush{Request: proto.PushRequest{ID: proto.NewULID(), ClientID: clientID, Manifest: prep.manifest}}
+		{
+			// One-shot pushes negotiate a fresh accepted-source checkpoint. Watch
+			// may reuse its accepted checkpoint between successful batches.
+			state := opts.watchState
+			if state == nil {
+				state = &pushWatchState{}
+			}
+			if !state.baseChecked {
+				base, err := pushBase(opts.PeerURL, ws.ID, clientID)
+				if err != nil {
+					return err
+				}
+				state.base, state.baseChecked = base, true
+			}
+			base := state.base
+			if base != nil {
+				delta, err := changeops.PrepareSourceDelta(context.Background(), *base, prep.manifest, proto.DefaultLimits().MaxChangeBytes)
+				if err != nil {
+					return err
+				}
+				pending.Request.Delta = &delta
+				pending.Request.SourceRoot = manifestHash
+			}
+		}
 		parent := filepath.Join(dir, "push-sources")
 		if err := ensurePrivateLocalDirectory(parent); err != nil {
 			return err
 		}
 		source := filepath.Join(parent, pending.Request.ID)
-		if err := changeops.CopyTransferSource(context.Background(), origin.Root, source, prep.manifest, proto.DefaultLimits().MaxWorkspaceBytes); err != nil {
+		if err := changeops.CopyTransferSource(context.Background(), origin.Root, source, pushSourceManifest(pending.Request), proto.DefaultLimits().MaxWorkspaceBytes); err != nil {
 			changeops.RemoveTree(source)
-			return err
+			return &pushSourceError{err}
 		}
 		if err := prep.guard.Verify(); err != nil {
 			changeops.RemoveTree(source)
-			return err
+			return &pushSourceError{err}
 		}
 		if err := replaceTransferJSON(pendingPath, pending); err != nil {
+			return err
+		}
+		// A watch can supersede thousands of staged snapshots. The durable
+		// pending record now owns the new source; no older source can be retried.
+		if err := prunePushSources(parent, pending.Request.ID); err != nil {
 			return err
 		}
 	}
@@ -130,6 +215,17 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	} else {
 		response, err = uploadPush(opts.PeerURL, ws.ID, filepath.Join(dir, "push-sources", pending.Request.ID), pending.Request, opts.meter)
 		if err != nil {
+			// This typed rejection is emitted before the receiver stages anything.
+			// Never replace an uncertain apply or retry an arbitrary HTTP 409.
+			if errors.Is(err, errPushCheckpointChanged) && !opts.retryCheckpoint {
+				opts.retryCheckpoint, opts.refreshSource = true, true
+				if opts.watchState != nil {
+					opts.watchState.base = nil
+					opts.watchState.baseChecked = false
+					opts.watchState.manifest = ""
+				}
+				return pushChangesLocked(opts, ws, origin, dir, result)
+			}
 			return err
 		}
 		pending.Staged = &response
@@ -140,9 +236,15 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	*result = response
 	opts.meter.paths(response.Paths, nil)
 	if _, err := changeops.SelectTransferPaths(proto.ChangeBundle{Paths: response.Paths}, opts.Path); err != nil {
+		if opts.watchState != nil && errors.Is(err, changeops.ErrNoTransferChanges) {
+			opts.watchState.manifest = manifestHash
+		}
 		return err
 	}
 	if !opts.Apply {
+		if opts.watchState != nil {
+			opts.watchState.manifest = manifestHash
+		}
 		return nil
 	}
 	pending.Applying = true
@@ -150,11 +252,43 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if err := replaceTransferJSON(pendingPath, pending); err != nil {
 		return err
 	}
-	return finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter)
+	err = finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter)
+	if err == nil && opts.watchState != nil {
+		opts.watchState.generation = pending.Request.ID
+		if opts.watchState.base != nil && pending.Request.Delta != nil {
+			base, err := changeops.AcceptedSourceDelta(context.Background(), *opts.watchState.base, *pending.Request.Delta, result.Paths)
+			if err != nil {
+				return err
+			}
+			opts.watchState.base = &base
+		}
+		opts.watchState.manifest = manifestHash
+	}
+	return err
+}
+
+func prunePushSources(parent, keep string) error {
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.Name() != keep && proto.ValidULID(e.Name()) {
+			if err := changeops.RemoveTree(filepath.Join(parent, e.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 func uploadPush(peer, workspace, source string, request proto.PushRequest, meter *transferMeter) (proto.PushResult, error) {
+	// A small delta costs less to send directly than another network round trip
+	// to discover whether its bodies are cached. Larger deltas still negotiate.
+	if request.Delta != nil && smallPushDelta(request.Delta.RemoteManifest) {
+		return uploadPushOnce(peer, workspace, source, request, meter, shipPlan{})
+	}
 	endpoint := strings.TrimSuffix(peer, "/") + "/v0/workspaces/" + workspace + "/push/diff"
-	plan, err := negotiateSnapshotAt(context.Background(), endpoint, request.Manifest)
+	plan, err := negotiateSnapshotAt(context.Background(), endpoint, pushSourceManifest(request))
 	if err != nil {
 		return proto.PushResult{}, err
 	}
@@ -180,21 +314,31 @@ func uploadPushOnce(peer, workspace, source string, request proto.PushRequest, m
 			if err != nil {
 				return err
 			}
-			if err := json.NewEncoder(part).Encode(request); err != nil {
+			wire := request
+			if wire.Delta != nil {
+				wire.Manifest = proto.Manifest{}
+			}
+			if err := json.NewEncoder(part).Encode(wire); err != nil {
 				return err
 			}
 			part, err = mw.CreateFormFile("workspace", "workspace.tar")
 			if err != nil {
 				return err
 			}
-			if err := snapshot.PackPartialContext(ctx, part, source, request.Manifest, plan.ships); err != nil {
+			if err := snapshot.PackPartialContext(ctx, part, source, pushSourceManifest(request), plan.ships); err != nil {
 				return err
 			}
 			return mw.Close()
 		}()
 		pw.CloseWithError(err)
 	}()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(peer, "/")+"/v0/workspaces/"+workspace+"/push", meter.readCloser(pr))
+	endpoint := strings.TrimSuffix(peer, "/") + "/v0/workspaces/" + workspace + "/push"
+	if request.Delta != nil {
+		// Old decoders ignore unknown JSON fields, so capability negotiation
+		// alone cannot protect a long-running client from a daemon rollback.
+		endpoint += "/delta-v1"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, meter.readCloser(pr))
 	if err != nil {
 		return result, err
 	}
@@ -212,10 +356,13 @@ func uploadPushOnce(peer, workspace, source string, request proto.PushRequest, m
 	}
 	if resp.StatusCode != 201 {
 		var apiErr proto.APIError
+		if resp.StatusCode == http.StatusConflict && json.Unmarshal(raw, &apiErr) == nil && apiErr.Code == proto.ErrorCodePushCheckpointChanged {
+			return result, errPushCheckpointChanged
+		}
 		if resp.StatusCode == http.StatusConflict && json.Unmarshal(raw, &apiErr) == nil && apiErr.Code == proto.ErrorCodeSnapshotCacheMiss {
 			return result, fmt.Errorf("staging push: %w: %s", errSnapshotCacheMiss, apiErr.Error)
 		}
-		return result, fmt.Errorf("staging push: %s: %s", resp.Status, apiError(raw))
+		return result, &controlHTTPError{statusCode: resp.StatusCode, err: fmt.Errorf("staging push: %s: %s", resp.Status, apiError(raw))}
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return result, err
@@ -226,9 +373,14 @@ func uploadPushOnce(peer, workspace, source string, request proto.PushRequest, m
 	return result, nil
 }
 
+var errPushCheckpointChanged = errors.New("push checkpoint changed before staging")
+
 var errPushStageMissing = errors.New("push stage is missing")
 
 func finishPush(peer, workspace, dir string, pending pendingPush, result *proto.PushResult, meter *transferMeter) error {
+	if err := writePushGeneration(dir, pending.Request.ID); err != nil {
+		return err
+	}
 	defer func() { meter.paths(result.Paths, nil) }()
 	err := finishPushOnce(peer, workspace, dir, pending, result)
 	if !errors.Is(err, errPushStageMissing) {
@@ -279,7 +431,7 @@ func finishPushOnce(peer, workspace, dir string, pending pendingPush, result *pr
 	var receipt proto.PushResult
 	if json.Unmarshal(raw, &receipt) != nil || receipt.ID != pending.Request.ID || receipt.WorkspaceID != workspace ||
 		(resp.StatusCode != http.StatusOK && !(resp.StatusCode == http.StatusConflict && len(receipt.Conflicts) > 0)) {
-		return fmt.Errorf("push outcome unknown; repeat push to recover: applying push: %s: %s", resp.Status, apiError(raw))
+		return &controlHTTPError{statusCode: resp.StatusCode, err: fmt.Errorf("push outcome unknown; repeat push to recover: applying push: %s: %s", resp.Status, apiError(raw))}
 	}
 	*result = receipt
 	if err := os.Remove(filepath.Join(dir, "push.json")); err != nil {

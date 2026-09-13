@@ -1,5 +1,74 @@
 # Performance baseline
 
+The latest watch, push, fetch and creation comparison is in
+[the shared-transfer performance report](TRANSFER_PERFORMANCE.md). The measurements
+below are earlier baselines.
+
+## Persistent workspace watch (2026-09-12)
+
+The first watch implementation uses native notifications, a 50 ms save debounce,
+session-local content hash reuse, and checkpoint-based source deltas. A one-file
+edit transfers about 3 KiB at both 1,000 and 10,000 files. It still walks source
+selection and stats the selected files on each pass, validates complete manifest
+metadata, and publishes durable staging and apply records. These costs remain
+visible; this version does **not** reach Mutagen's latency.
+
+Warm, same-host measurements on the laptop's APFS volume, five samples per row:
+
+| Files | Errand watch: file visible | Errand watch: final receipt | Errand one-shot: receipt | rsync checksum scan | Mutagen: file visible |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1,000 | 317 ms | 428 ms | 1,043 ms | 130 ms | 37 ms |
+| 10,000 | 548 ms | 704 ms | 7,234 ms | 1,190 ms | 42 ms |
+
+Values are medians. Errand delivery includes the debounce; receipt time also
+includes completing durable recovery records and client cleanup. File visibility
+does not establish crash durability or application readiness. Mutagen is 0.18.1
+in one-way-safe mode. The installed rsync is Apple's openrsync (protocol 29),
+run with `--checksum` so rapid, same-size edits are detected reliably. It measures
+one-shot command completion, not an event watcher. These tools have different
+conflict and durability contracts; the table compares observed user-facing latency,
+not equivalent transaction guarantees. No build or test ran alongside this laptop
+comparison, but unrelated machine activity was not controlled.
+
+Native runner checks with 1,000 files also passed: Cabal (Linux/Btrfs) had median
+file visibility of 265 ms and final receipt of 337 ms; Mac mini (Darwin/APFS) had
+298 ms and 377 ms respectively. Cabal's sample predates skipping blob negotiation
+for small deltas. These runs use a client and disposable daemon on the **same**
+runner; they do not measure laptop-to-runner network latency. The initial target
+of sub-250 ms delivery remains unmet in the median on these fixtures.
+
+All measured Errand watch sessions used 0.00 CPU seconds at `ps` reporting
+precision over three idle seconds, emitted no receipts for ignored build churn,
+and coalesced a 20-save burst into one push. This is a short idle probe, not a
+long-duration power or resource test.
+
+Reproduce with a CGO-free build and an output directory on the filesystem of interest:
+
+```sh
+CGO_ENABLED=0 go build -trimpath -o dist/errand-watch ./cmd/errand
+python3 scripts/benchmark_watch.py --binary dist/errand-watch \
+  --files 10000 --samples 5 --output dist/watch-benchmark
+# Optionally add --mutagen /absolute/path/to/mutagen to compare an isolated session.
+```
+
+The harness generates 1 KiB files in subdirectories (80% unique contents), runs
+an isolated daemon, verifies destination contents, records both visible delivery
+and final receipts, and checks idle behavior, burst coalescing, and Ctrl-C.
+Mutagen uses its own temporary data directory and is stopped afterward. Reports
+include binary hashes and filesystem facts. Raw local evidence for this pass is
+in ignored `dist/watch-final-1000`, `dist/watch-final-10000`,
+`dist/watch-linux-final-results`, and `dist/watch-mini-final-results`.
+
+For phase attribution, `go test ./cmd/errand -run '^$' -bench
+'Benchmark(Push|Watch)Phases' -benchtime=5x -count=1` reports client, negotiation,
+staging and apply time against a real disposable daemon. Its separate 10,000-file
+fixture has identical bodies, so do not combine its timings with the table above.
+Further latency work should reduce whole-tree work and durable-record overhead
+while retaining conflict detection and exact retry semantics. Report file delivery
+separately from receipt completion when evaluating those changes.
+
+## Job submission baseline
+
 Measure the cost of sending a no-op job before choosing optimizations. The
 end-to-end harness uses generated data and explicitly selected configured
 peers. It never snapshots the developer's working tree.

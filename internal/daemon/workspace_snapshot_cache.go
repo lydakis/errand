@@ -21,6 +21,16 @@ func (d *Daemon) handleWorkspacePushDiff(w http.ResponseWriter, r *http.Request,
 	d.handleSnapshotDiff(w, r, id)
 }
 
+// Creation has a separate capability and upload endpoint: an older receiver
+// that supports job caching must never be sent a partial creation body.
+func (d *Daemon) handleWorkspaceCreateDiff(w http.ResponseWriter, r *http.Request, id Identity) {
+	if !proto.ValidULID(r.PathValue("id")) {
+		httpError(w, 400, "invalid workspace id")
+		return
+	}
+	d.handleSnapshotDiff(w, r, id)
+}
+
 // Cache only verified, private upload trees, before publication or execution.
 // This is the existing evictable snapshot cache, not the mutable workspace or
 // named dependency caches. Failure to retain an optimization is non-fatal.

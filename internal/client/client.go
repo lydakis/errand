@@ -463,11 +463,20 @@ func prepareSnapshot(root string, includeAll, noSnapshot bool, caches ...proto.C
 	if noSnapshot {
 		return snapshotPreparation{}
 	}
+	return prepareSnapshotWithBuilder(root, includeAll, caches, nil)
+}
+
+func prepareSnapshotWithBuilder(root string, includeAll bool, caches []proto.CacheBinding, builder *snapshot.Builder) snapshotPreparation {
 	paths, gitInfo, selection, guard, err := snapshot.SelectFilesGuarded(root, snapshot.SelectOptions{IncludeAll: includeAll, Caches: caches})
 	if err != nil {
 		return snapshotPreparation{stage: "selecting files", err: err}
 	}
-	manifest, err := snapshot.Build(root, paths)
+	var manifest proto.Manifest
+	if builder != nil {
+		manifest, err = builder.Build(root, paths)
+	} else {
+		manifest, err = snapshot.Build(root, paths)
+	}
 	if err != nil {
 		return snapshotPreparation{stage: "building manifest", err: err}
 	}
@@ -930,7 +939,9 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 			req.Header.Set("X-Errand-Project-Truncated", "1")
 		}
 	}
-	resp, err := directHTTP.Do(req)
+	// Durable reconstruction and admission may outlast the control-request
+	// header budget. Keep the existing upload context and uncertainty handling.
+	resp, err := maintenanceHTTP.Do(req)
 	if err != nil {
 		return status, true, fmt.Errorf("submitting to %s: %w", opts.PeerURL, err)
 	}

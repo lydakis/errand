@@ -71,7 +71,7 @@ func negotiateSnapshotAt(ctx context.Context, endpoint string, manifest proto.Ma
 	case http.StatusNotFound: // Snapshot caching is disabled on this runner.
 		return shipPlan{}, nil
 	default:
-		return shipPlan{}, fmt.Errorf("snapshot negotiation: %s: %s", resp.Status, apiError(raw))
+		return shipPlan{}, &controlHTTPError{statusCode: resp.StatusCode, err: fmt.Errorf("snapshot negotiation: %s: %s", resp.Status, apiError(raw))}
 	}
 	var diff proto.SnapshotDiffResponse
 	if err := json.Unmarshal(raw, &diff); err != nil {

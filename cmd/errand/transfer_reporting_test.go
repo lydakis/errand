@@ -28,7 +28,7 @@ func TestTransferReportingRoundTrip(t *testing.T) {
 	t.Cleanup(func() { _ = d.Close() })
 	var uploaded, downloaded atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/push") {
+		if strings.HasSuffix(r.URL.Path, "/push") || strings.HasSuffix(r.URL.Path, "/push/delta-v1") {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				t.Error(err)

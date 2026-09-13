@@ -18,6 +18,14 @@ import (
 )
 
 func (d *Daemon) handleWorkspaceCreate(w http.ResponseWriter, r *http.Request, id Identity) {
+	d.createWorkspaceUpload(w, r, id, false)
+}
+
+func (d *Daemon) handleWorkspaceCreateSnapshot(w http.ResponseWriter, r *http.Request, id Identity) {
+	d.createWorkspaceUpload(w, r, id, true)
+}
+
+func (d *Daemon) createWorkspaceUpload(w http.ResponseWriter, r *http.Request, id Identity, partial bool) {
 	var request proto.Workspace
 	key := r.PathValue("id")
 	if !proto.ValidULID(key) {
@@ -109,7 +117,16 @@ func (d *Daemon) handleWorkspaceCreate(w http.ResponseWriter, r *http.Request, i
 		httpError(w, 500, err.Error())
 		return
 	}
-	if err := archive.Extract(input, data, request.Manifest, d.cfg.MaxLimits.MaxWorkspaceBytes); err != nil {
+	var extractOptions archive.ExtractOptions
+	var restored map[string]bool
+	if partial {
+		extractOptions, restored = d.snapshotExtractOptions(r.Context())
+	}
+	if err := archive.ExtractWith(&contextReader{ctx: r.Context(), r: input}, data, request.Manifest, d.cfg.MaxLimits.MaxWorkspaceBytes, extractOptions); err != nil {
+		if partial && errors.Is(err, archive.ErrCacheMiss) {
+			httpErrorCode(w, http.StatusConflict, proto.ErrorCodeSnapshotCacheMiss, err.Error())
+			return
+		}
 		httpError(w, 400, err.Error())
 		return
 	}
@@ -117,7 +134,7 @@ func (d *Daemon) handleWorkspaceCreate(w http.ResponseWriter, r *http.Request, i
 		httpError(w, 500, err.Error())
 		return
 	}
-	d.cacheWorkspaceSource(r.Context(), data, request.Manifest, nil)
+	d.cacheWorkspaceSource(r.Context(), data, request.Manifest, restored)
 	identity, _, err := fsidentity.Lstat(data)
 	if err != nil {
 		httpError(w, 500, err.Error())
@@ -164,7 +181,13 @@ func (d *Daemon) handleWorkspaceGet(w http.ResponseWriter, r *http.Request, id I
 		workspaceHTTPError(w, err)
 		return
 	}
-	writeJSON(w, 200, row.Workspace)
+	workspace := row.Workspace
+	if r.URL.Query().Get("manifest") == "omit" {
+		// Push needs the descriptor, not the immutable creation snapshot. Only
+		// clear this response copy; full reads and stored state keep the manifest.
+		workspace.Manifest = proto.Manifest{}
+	}
+	writeJSON(w, 200, workspace)
 }
 
 func (d *Daemon) handleWorkspaceRemove(w http.ResponseWriter, r *http.Request, id Identity) {

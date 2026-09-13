@@ -135,8 +135,9 @@ For a server listening on port 3000, open `http://localhost:3000` on your
 laptop. The server runs on the mini; the port is available locally while
 you're attached.
 
-Each run uses the files sent when it starts; later local edits aren't
-continuously synced. See [port forwarding](docs/USAGE.md#attached-sessions-and-forwarding)
+Each run uses the files sent when it starts. For a persistent workspace,
+`errand push --workspace NAME --watch --apply` sends later local edits continuously.
+See [watching local edits](docs/USAGE.md#watch-local-edits) and [port forwarding](docs/USAGE.md#attached-sessions-and-forwarding)
 for multiple ports and reconnecting.
 
 ## Bring changed files back

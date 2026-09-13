@@ -76,6 +76,20 @@ func (s TransferSession) Initialize(ctx context.Context, source string, initial 
 // Stage takes a complete, immutable source snapshot and records a delta against
 // the last accepted source. Reusing an ID is allowed only for that same snapshot.
 func (s TransferSession) Stage(ctx context.Context, id, source string, manifest proto.Manifest) (string, proto.ChangeBundle, error) {
+	return s.stage(ctx, id, source, manifest, nil)
+}
+
+func (s TransferSession) stage(ctx context.Context, id, source string, manifest proto.Manifest, prepared *PreparedTransferSource) (string, proto.ChangeBundle, error) {
+	if err := ctx.Err(); err != nil {
+		return "", proto.ChangeBundle{}, err
+	}
+	sourceRoot := ""
+	if prepared != nil {
+		sourceRoot = prepared.sourceRoot
+	} else {
+		sourceRoot = manifest.RootHash()
+	}
+
 	if !proto.ValidULID(id) {
 		return "", proto.ChangeBundle{}, fmt.Errorf("invalid transfer ID")
 	}
@@ -84,13 +98,29 @@ func (s TransferSession) Stage(ctx context.Context, id, source string, manifest 
 	}
 	dest := filepath.Join(s.Directory, "attempts", id)
 	if a, err := s.Attempt(id); err == nil {
-		if a.SourceRoot != manifest.RootHash() {
+		if a.SourceRoot != sourceRoot {
 			return "", proto.ChangeBundle{}, fmt.Errorf("transfer ID reused with another snapshot")
 		}
 		b, err := ReadTransferBundle(dest)
+		if err == nil && prepared != nil && !a.Applying {
+			// Unstarted retries still need a current merge base. Once applying,
+			// the immutable attempt/receipt owns recovery across checkpoint changes.
+			v, readErr := s.Checkpoint().Read()
+			if readErr != nil {
+				return "", proto.ChangeBundle{}, readErr
+			}
+			if v.Revision != a.Revision || v.Manifest.RootHash() != b.BaselineRoot || b.BaselineRoot != prepared.delta.BaselineRoot {
+				return "", proto.ChangeBundle{}, ErrCheckpointChanged
+			}
+		}
 		return dest, b, err
 	} else if !os.IsNotExist(err) {
 		return "", proto.ChangeBundle{}, err
+	}
+	if prepared != nil {
+		if err := prepared.validateStageLimits(ctx, s); err != nil {
+			return "", proto.ChangeBundle{}, err
+		}
 	}
 	entries, err := os.ReadDir(filepath.Join(s.Directory, "attempts"))
 	if err != nil {
@@ -110,7 +140,15 @@ func (s TransferSession) Stage(ctx context.Context, id, source string, manifest 
 	if err != nil {
 		return "", proto.ChangeBundle{}, err
 	}
-	b, err := workspaceDelta(ctx, v.Manifest, manifest, s.MaxChangeBytes)
+	var b proto.ChangeBundle
+	if prepared != nil {
+		if v.Manifest.RootHash() != prepared.delta.BaselineRoot {
+			return "", proto.ChangeBundle{}, ErrCheckpointChanged
+		}
+		b = cloneSourceDelta(prepared.delta)
+	} else {
+		b, err = workspaceDelta(ctx, v.Manifest, manifest, s.MaxChangeBytes)
+	}
 	if err != nil {
 		if errors.Is(err, ErrByteLimitExceeded) {
 			err = fmt.Errorf("preparing transfer changes (limit %d bytes): %w", s.MaxChangeBytes, err)
@@ -144,7 +182,7 @@ func (s TransferSession) Stage(ctx context.Context, id, source string, manifest 
 	if err := RemoveTree(filepath.Join(tmp, BundleDirectory)); err != nil {
 		return "", b, err
 	}
-	a := TransferAttempt{ID: id, Revision: v.Revision, SourceRoot: manifest.RootHash(), BundleRoot: b.RootHash(), CreatedAt: time.Now().UTC()}
+	a := TransferAttempt{ID: id, Revision: v.Revision, SourceRoot: sourceRoot, BundleRoot: b.RootHash(), CreatedAt: time.Now().UTC()}
 	if err := writeTransferJSON(filepath.Join(tmp, "attempt.json"), a); err != nil {
 		return "", b, err
 	}

@@ -1,5 +1,7 @@
 package proto
 
+const ErrorCodePushCheckpointChanged = "push_checkpoint_changed"
+
 const ErrorCodePushStageMissing = "push_stage_missing"
 
 // PushRequest identifies an immutable source snapshot. Replaying its ID retries
@@ -8,6 +10,10 @@ type PushRequest struct {
 	ID       string   `json:"id"`
 	ClientID string   `json:"client_id"`
 	Manifest Manifest `json:"manifest"`
+	// Delta carries changed source entries against a retained checkpoint.
+	// When present, Manifest is omitted on the wire and reconstructed remotely.
+	Delta      *ChangeBundle `json:"delta,omitempty"`
+	SourceRoot string        `json:"source_root,omitempty"`
 }
 type PushApplyRequest struct {
 	Path      string `json:"path,omitempty"`

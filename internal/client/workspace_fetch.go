@@ -106,16 +106,20 @@ func applyWorkspaceJob(opts ChangeFetchOptions, details proto.JobDetails, origin
 			if err != nil {
 				return err
 			}
+			prepared, err := changeops.PrepareTransferSource(context.Background(), previous.Manifest, current, session.MaxChangeBytes)
+			if err != nil {
+				return err
+			}
 			tmp, err := os.MkdirTemp(dir, ".source-")
 			if err != nil {
 				return err
 			}
 			defer changeops.RemoveTree(tmp)
-			if err := session.Blobs().MaterializeBase(context.Background(), tmp, current, session.MaxSourceBytes); err != nil {
+			if err := session.Blobs().MaterializeBase(context.Background(), tmp, prepared.Delta().RemoteManifest, session.MaxSourceBytes); err != nil {
 				return err
 			}
 			index = workspaceFetchAttempt{ID: proto.NewULID(), Path: opts.Path, Conflicts: opts.MaterializeConflicts}
-			staged, _, err = session.Stage(context.Background(), index.ID, filepath.Join(tmp, "change-base"), current)
+			staged, _, err = session.StagePrepared(context.Background(), index.ID, filepath.Join(tmp, "change-base"), prepared)
 			if err != nil {
 				return err
 			}

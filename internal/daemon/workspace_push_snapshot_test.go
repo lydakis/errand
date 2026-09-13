@@ -88,6 +88,11 @@ func TestPushSnapshotFallback(t *testing.T) {
 			var bodies []int
 			var invalidate func()
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Keep coverage for full-snapshot cache fallback against legacy peers.
+				if strings.HasSuffix(r.URL.Path, "/push/base") {
+					http.NotFound(w, r)
+					return
+				}
 				if strings.HasSuffix(r.URL.Path, "/push/diff") && failure == "old-runner" {
 					http.NotFound(w, r)
 					return
