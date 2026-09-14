@@ -235,8 +235,22 @@ func TestTransferSessionRejectsChangedBaseBeforeApply(t *testing.T) {
 	if err := writeTransferJSON(filepath.Join(dir, "bundle.json"), delta); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Apply(id, nil, false); err == nil {
-		t.Fatal("accepted forged base")
+	if _, err := s.Apply(id, nil, false); err == nil || !strings.Contains(err.Error(), "staged bundle changed after publication") {
+		t.Fatalf("modified bundle did not reach the digest guard: %v", err)
+	}
+	assertTransferFile(t, root, "artifact", "initial\n")
+	// Keep the attempt internally consistent so the test reaches the actual
+	// merge-base check rather than stopping at the bundle digest guard.
+	attempt, err := s.Attempt(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt.BundleRoot = delta.RootHash()
+	if err := writeTransferJSON(filepath.Join(dir, "attempt.json"), attempt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Apply(id, nil, false); err == nil || !strings.Contains(err.Error(), "does not match checkpoint") {
+		t.Fatalf("forged base did not reach the merge-base guard: %v", err)
 	}
 	assertTransferFile(t, root, "artifact", "initial\n")
 }

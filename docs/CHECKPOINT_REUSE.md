@@ -1,5 +1,8 @@
 # Receiver checkpoint reuse
 
+This report records the request-local implementation committed as `de25693`.
+See [the follow-up comparison](CHECKPOINT_FOLLOWUP.md) for subsequent changes.
+
 ## Decision and scope
 
 Compare a bounded receiver optimization against `19faf4c`. Keep the retained

@@ -212,7 +212,7 @@ func TestCheckpointRejectsRetargetedStorageAlias(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = writeVerifiedTransferRecord(destination, storage, name, replacingCheckpointRecord{t: t, storage: alias, state: state, replacement: replacement})
+			err = writeVerifiedTransferRecord(destination, storage, name, replacingCheckpointRecord{t: t, storage: alias, state: state.state, replacement: replacement})
 			if err == nil {
 				t.Fatal("reported success after storage alias retargeted")
 			}

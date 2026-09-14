@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/lydakis/errand/internal/archive"
+	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/namedcache"
 	"github.com/lydakis/errand/internal/proto"
@@ -35,12 +36,13 @@ type workspaceRecord struct {
 }
 
 type workspaceStore struct {
-	gateMu  sync.Mutex
-	gates   map[string]*workspaceGate
-	mu      sync.Mutex
-	uploads map[string]*workspaceUpload // protected by mu; independent of command gates
-	dir     string
-	root    *os.Root
+	checkpointCache *changeops.CheckpointCache
+	gateMu          sync.Mutex
+	gates           map[string]*workspaceGate
+	mu              sync.Mutex
+	uploads         map[string]*workspaceUpload // protected by mu; independent of command gates
+	dir             string
+	root            *os.Root
 }
 
 func openWorkspaces(dir string) (*workspaceStore, error) {
@@ -58,7 +60,7 @@ func openWorkspaces(dir string) (*workspaceStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &workspaceStore{dir: dir, root: root}
+	s := &workspaceStore{dir: dir, root: root, checkpointCache: changeops.NewCheckpointCache(32, 64<<20)}
 	// Unpublished uploads and removal tombstones never contain running workspaces.
 	entries, err := os.ReadDir(dir)
 	if err != nil {

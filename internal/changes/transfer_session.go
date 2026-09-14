@@ -27,6 +27,7 @@ type TransferSession struct {
 	Directory, Root, Owner, SourceID string
 	RootID                           fsidentity.Identity
 	MaxSourceBytes, MaxChangeBytes   int64
+	Reuse                            *CheckpointCache
 	checkpointCache                  *checkpointReadCache
 }
 
@@ -46,7 +47,7 @@ func (s *TransferSession) Checkpoint() *TransferCheckpoint {
 	if s.checkpointCache == nil {
 		s.checkpointCache = &checkpointReadCache{}
 	}
-	return &TransferCheckpoint{cache: s.checkpointCache, Root: s.Root, RootID: s.RootID, Owner: s.Owner, SourceID: s.SourceID, StatePath: filepath.Join(s.Directory, "checkpoint.json")}
+	return &TransferCheckpoint{Reuse: s.Reuse, cache: s.checkpointCache, Root: s.Root, RootID: s.RootID, Owner: s.Owner, SourceID: s.SourceID, StatePath: filepath.Join(s.Directory, "checkpoint.json")}
 }
 func (s *TransferSession) Blobs() TransferBlobStore {
 	return TransferBlobStore{Directory: filepath.Join(s.Directory, "blobs"), MaxBytes: s.MaxSourceBytes}
@@ -59,9 +60,8 @@ func (s *TransferSession) sourceError(err error) error {
 	return fmt.Errorf("retaining workspace source (limit %d bytes; gc changes can reclaim only unreferenced bodies; creation and checkpoint bodies remain pinned): %w", s.MaxSourceBytes, err)
 }
 func (s *TransferSession) Initialize(ctx context.Context, source string, initial proto.Manifest) error {
-	if _, err := s.Checkpoint().readVersion(); err == nil {
-		_, err = s.Checkpoint().Initialize(initial)
-		return err
+	if err := s.Checkpoint().checkInitialized(initial); err == nil {
+		return nil
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -113,7 +113,7 @@ func (s *TransferSession) stage(ctx context.Context, id, source string, manifest
 			if readErr != nil {
 				return "", proto.ChangeBundle{}, readErr
 			}
-			if v.Revision != a.Revision || v.rootHash() != b.BaselineRoot || b.BaselineRoot != prepared.delta.BaselineRoot {
+			if v.revision() != a.Revision || v.rootHash() != b.BaselineRoot || b.BaselineRoot != prepared.delta.BaselineRoot {
 				return "", proto.ChangeBundle{}, ErrCheckpointChanged
 			}
 		}
@@ -151,7 +151,7 @@ func (s *TransferSession) stage(ctx context.Context, id, source string, manifest
 		}
 		b = cloneSourceDelta(prepared.delta)
 	} else {
-		b, err = workspaceDelta(ctx, v.Manifest, manifest, s.MaxChangeBytes)
+		b, err = v.delta(ctx, manifest, s.MaxChangeBytes)
 	}
 	if err != nil {
 		if errors.Is(err, ErrByteLimitExceeded) {
@@ -186,7 +186,7 @@ func (s *TransferSession) stage(ctx context.Context, id, source string, manifest
 	if err := RemoveTree(filepath.Join(tmp, BundleDirectory)); err != nil {
 		return "", b, err
 	}
-	a := TransferAttempt{ID: id, Revision: v.Revision, SourceRoot: sourceRoot, BundleRoot: b.RootHash(), CreatedAt: time.Now().UTC()}
+	a := TransferAttempt{ID: id, Revision: v.revision(), SourceRoot: sourceRoot, BundleRoot: b.RootHash(), CreatedAt: time.Now().UTC()}
 	if err := writeTransferJSON(filepath.Join(tmp, "attempt.json"), a); err != nil {
 		return "", b, err
 	}
@@ -266,7 +266,7 @@ func (s *TransferSession) Apply(id string, selected map[string]bool, materialize
 		if err != nil {
 			return ApplyResult{}, err
 		}
-		if v.Revision != a.Revision {
+		if v.revision() != a.Revision {
 			if _, err := s.Checkpoint().Advance(a.Revision, filepath.Join(dir, "receipt.json"), b); err != nil {
 				return ApplyResult{}, err
 			}
@@ -277,10 +277,10 @@ func (s *TransferSession) Apply(id string, selected map[string]bool, materialize
 		if err != nil {
 			return ApplyResult{}, err
 		}
-		if v.Revision != a.Revision || v.rootHash() != b.BaselineRoot {
+		if v.revision() != a.Revision || v.rootHash() != b.BaselineRoot {
 			return ApplyResult{}, ErrCheckpointChanged
 		}
-		if _, err := acceptedSourceManifest(v.Manifest, b, transferOutcome{Refused: true}); err != nil {
+		if err := v.validateBase(context.Background(), b); err != nil {
 			return ApplyResult{}, err
 		}
 		for p, enabled := range selected {
