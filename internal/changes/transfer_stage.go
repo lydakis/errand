@@ -50,7 +50,21 @@ func (s *TransferSession) materializeStage(ctx context.Context, source transferM
 
 // The source is private transfer staging. Temporary access is restored only
 // after every copying worker has finished, on success and on failure.
-func materializeTransferSource(ctx context.Context, source, dest string, m proto.Manifest) (err error) {
+func materializeTransferSource(ctx context.Context, source, dest string, m proto.Manifest) error {
+	if err := os.Mkdir(dest, 0700); err != nil {
+		return err
+	}
+	tree, err := os.OpenRoot(dest)
+	if err != nil {
+		return err
+	}
+	defer tree.Close()
+	return materializeSourceTree(ctx, source, tree, m, syncStagedData, func() error { return syncApplyRootDirectory(tree, ".") })
+}
+
+func materializeSourceTree(ctx context.Context, source string, tree *os.Root, m proto.Manifest,
+	syncData func(*os.File) error, barrier func() error,
+) (err error) {
 	access, err := makeManifestAccessibleContext(ctx, source, m)
 	if err != nil {
 		return err
@@ -89,14 +103,6 @@ func materializeTransferSource(ctx context.Context, source, dest string, m proto
 			}
 		}
 	}
-	if err := os.Mkdir(dest, 0700); err != nil {
-		return err
-	}
-	tree, err := os.OpenRoot(dest)
-	if err != nil {
-		return err
-	}
-	defer tree.Close()
 	return materializeTransferTree(ctx, tree, m, func(e proto.ManifestEntry) (io.ReadCloser, error) {
 		info, err := access.root.Lstat(e.Path)
 		if err != nil || !info.Mode().IsRegular() {
@@ -111,7 +117,7 @@ func materializeTransferSource(ctx context.Context, source, dest string, m proto
 			return nil, errors.Join(fmt.Errorf("transfer source %q changed while opening", e.Path), f.Close())
 		}
 		return &transferSourceReader{File: f, entry: e, mode: access.physical[e.Path]}, nil
-	}, syncStagedData, func() error { return syncApplyRootDirectory(tree, ".") })
+	}, syncData, barrier)
 }
 
 type transferSourceReader struct {

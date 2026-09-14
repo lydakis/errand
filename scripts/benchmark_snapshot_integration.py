@@ -2,6 +2,7 @@
 """Alternate frozen baseline/candidate paths on the same native host."""
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -10,7 +11,9 @@ import platform
 import plistlib
 import re
 import signal
+import shutil
 import subprocess
+import tempfile
 import time
 
 
@@ -70,7 +73,7 @@ def benchmark_cases(scope):
     return cases
 
 
-def run(command, root, env, log, timeout=1200):
+def run(command, root, env, log, timeout=1200, read_output=True):
     # Go's test timeout does not bound benchmarks. Bound the entire process
     # group, including commands launched by a benchmark, and retain partial logs.
     with log.open("w") as output:
@@ -91,7 +94,7 @@ def run(command, root, env, log, timeout=1200):
             raise
     if process.returncode:
         raise RuntimeError(f"{command} exited {process.returncode}; see {log}")
-    return log.read_text()
+    return log.read_text() if read_output else None
 
 
 def source_digest(root, production=False, benchmarks=False):
@@ -133,6 +136,60 @@ def filesystem(root, env, output, name):
     return run(["stat", "-f", "-c", "%T", "."], root, env, output / f"{name}.txt").strip()
 
 
+@contextmanager
+def benchmark_scratch(output, report=None):
+    # Keep generated bodies and executables off the retained diagnostic paths.
+    # A killed Go test cannot run its TempDir cleanup, including restricted trees.
+    scratch = Path(tempfile.mkdtemp(prefix=".scratch-", dir=output))
+    primary = None
+    try:
+        yield scratch
+    except BaseException as exc:
+        primary = exc
+        raise
+    finally:
+        try:
+            os.chmod(scratch, 0o700)
+            # Widen children before the top-down walk descends into them.
+            for parent, directories, _ in os.walk(scratch, topdown=True, followlinks=False):
+                for name in directories:
+                    path = Path(parent) / name
+                    if not path.is_symlink():
+                        path.chmod(0o700)
+            shutil.rmtree(scratch)
+        except BaseException as exc:
+            if report is not None:
+                report["cleanup_failure"] = dict(type=type(exc).__name__, error=str(exc), scratch=str(scratch))
+            if primary is None:
+                raise
+            primary.add_note(f"Scratch cleanup also failed at {scratch}: {exc}")
+
+
+@contextmanager
+def benchmark_campaign(output, report):
+    # These CLI entry points run on the main thread. Unwind through run() first
+    # so it kills/reaps the detached child before scratch cleanup starts.
+    def terminate(signum, frame):
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        raise SystemExit(128 + signum)
+
+    previous_handler = signal.signal(signal.SIGTERM, terminate)
+    report["status"] = "running"
+    try:
+        with benchmark_scratch(output, report) as scratch:
+            yield scratch
+        report["status"] = "complete"
+    except BaseException as exc:
+        report["status"] = "failed"
+        report["failure"] = dict(type=type(exc).__name__, error=str(exc))
+        raise
+    finally:
+        try:
+            (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+        finally:
+            signal.signal(signal.SIGTERM, previous_handler)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline", type=Path, required=True)
@@ -157,14 +214,20 @@ def main():
                   gomaxprocs=args.gomaxprocs, rounds=args.rounds, versions={}, orders=[], cases=cases,
                   scope="Native-host metadata/preparation and loopback HTTP command paths; no cross-host network latency.",
                   harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+    with benchmark_campaign(output, report) as scratch:
+        run_campaign(args, roots, cases, output, env, report, scratch)
+
+
+def run_campaign(args, roots, cases, output, env, report, scratch):
     report["go"] = run(["go", "version"], Path.cwd(), env, output / "go.txt").strip()
     report["filesystem"] = filesystem(Path.cwd(), env, output, "filesystem")
-    fixtures = output / "fixtures"
+    fixtures = scratch / "fixtures"
     fixtures.mkdir()
     env = dict(env, TMPDIR=str(fixtures))
     for name, root in roots.items():
         directory = output / name
         directory.mkdir()
+        (scratch / name).mkdir()
         # Validate each frozen tree, including the control, on this host.
         run(["go", "test", "-timeout=10m", "./..."], root, env, directory / "tests.txt")
         run(["go", "vet", "./..."], root, env, directory / "vet.txt")
@@ -177,7 +240,7 @@ def main():
         report["versions"][name] = version
         for package in sorted({case[0] for case in cases.values()}):
             key = package.removeprefix("./").replace("/", "-")
-            binary = directory / f"{key}.test"
+            binary = scratch / name / f"{key}.test"
             run(["go", "test", "-c", "-o", str(binary), package], root, env, directory / f"build-{key}.txt")
             version["binaries"][key] = hashlib.sha256(binary.read_bytes()).hexdigest()
     if args.scope == "staging" and len({v["benchmark_sha256"] for v in report["versions"].values()}) != 1:
@@ -199,20 +262,21 @@ def main():
             binary_key = package.removeprefix("./").replace("/", "-")
             for name in order:
                 directory = output / name
+                report["active"] = dict(variant=name, round=number, case=key)
+                (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
                 started, load_before = time.monotonic(), os.getloadavg()
-                raw = run([str(directory / f"{binary_key}.test"), "-test.v", "-test.run=^$", f"-test.bench={pattern}",
+                raw = run([str(scratch / name / f"{binary_key}.test"), "-test.v", "-test.run=^$", f"-test.bench={pattern}",
                            f"-test.benchtime={benchtime}", "-test.benchmem", "-test.timeout=10m"],
                           roots[name], env, directory / f"{number}-{key}.txt", timeout=300)
                 sample = parse_sample(raw, number)
                 sample.update(case=key, elapsed=time.monotonic()-started, load_before=load_before, load_after=os.getloadavg())
                 report["versions"][name]["samples"].append(sample)
+                report.pop("active", None)
                 (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
             print(f"Pair {number+1}/{args.rounds}: {key}", flush=True)
     for name in roots:
         if source_digest(roots[name]) != report["versions"][name]["source_sha256"]:
             raise RuntimeError(f"{name} source changed during measurement")
-        for key in report["versions"][name]["binaries"]:
-            (output / name / f"{key}.test").unlink()
 
 
 if __name__ == "__main__":

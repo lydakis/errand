@@ -36,6 +36,13 @@ remaining reconstructed source tree and staging's intermediate base publication.
 It also fixes publication retry durability and extends concurrent-failure
 coverage. Its native comparison uses the direct-staging slice as the baseline.
 
+The [latency diagnosis follow-up](LATENCY_DIAGNOSIS.md) separates fixture setup,
+workspace creation, job capture, transfer and cleanup. It removes another archive
+round trip from apply's private merge inputs through the shared verified copier.
+One APFS setup stall was localized to captured-base verification. Initial
+workspace/job population remains the next integration target; persistence and
+large-file chunking still follow it rather than changing this slice's scope.
+
 Keep the current content-addressed model. Selection policy determines eligible
 paths, a snapshot describes their state, and the content store resolves their
 bodies. Changing the snapshot representation and changing the unit of body

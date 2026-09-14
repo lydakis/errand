@@ -709,8 +709,8 @@ func materializeVerifiedMergeInputs(stagedRoot, destinationRoot string, bundle p
 			closeTreeAccesses(accesses)
 			return nil, err
 		}
-		access, err := materializeApplySnapshot(
-			filepath.Join(stagedRoot, tree.name), dest, destinationRoot, tree.manifest,
+		access, err := materializeMergeInput(
+			filepath.Join(stagedRoot, tree.name), dest, tree.manifest,
 		)
 		if err != nil {
 			closeTreeAccesses(accesses)

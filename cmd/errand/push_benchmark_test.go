@@ -46,6 +46,8 @@ func benchmarkPushPhases(b *testing.B, watch bool) {
 }
 
 func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
+	defer benchmarkCleanupPhase(b)()
+	fixtureDone := benchmarkPhase(b, "fixture")
 	b.Setenv("XDG_STATE_HOME", b.TempDir())
 	root := b.TempDir()
 	if !workload.git {
@@ -79,11 +81,17 @@ func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 		}
 	}
 	state := b.TempDir()
+	fixtureDone()
+	daemonDone := benchmarkPhase(b, "daemon-start")
 	d, err := daemon.New(daemon.Config{StateDir: state, InsecureNoAuth: true})
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		done := benchmarkPhase(b, "daemon-close")
+		d.Close()
+		done()
+	}()
 	var stage, apply, negotiation atomic.Int64
 	next := d.Handler()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -99,15 +107,20 @@ func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 		}
 	}))
 	defer server.Close()
+	daemonDone()
+	createDone := benchmarkPhase(b, "workspace-create")
 	ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: server.URL, Root: root}, "bench")
+	createDone()
 	if err != nil {
 		b.Fatal(err)
 	}
 	// Warm the workspace's retained source and staging paths first.
 	opts := client.PushOptions{PeerURL: server.URL, Workspace: ws.Name, Root: root, Apply: true}
+	warmDone := benchmarkPhase(b, "warm-push")
 	if _, err := client.PushChanges(opts); err != nil {
 		b.Fatal(err)
 	}
+	warmDone()
 	stage.Store(0)
 	apply.Store(0)
 	negotiation.Store(0)

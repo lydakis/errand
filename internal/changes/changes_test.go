@@ -2601,7 +2601,7 @@ func TestApplyRefusesLocallyModifiedStaging(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(staged, "remote", "artifact"), []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{}); err == nil || !strings.Contains(err.Error(), "changed during pack") {
+	if _, err := Apply(staged, local, bundle, nil, "test-owner", NewApplyTransaction(), ApplyOptions{}); err == nil || !strings.Contains(err.Error(), "verifying staged changes") {
 		t.Fatalf("Apply tampered staging error = %v", err)
 	}
 	if _, err := os.Lstat(filepath.Join(local, "artifact")); !os.IsNotExist(err) {

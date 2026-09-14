@@ -96,6 +96,8 @@ func BenchmarkFetchBodies(b *testing.B) {
 }
 
 func benchmarkFetchCompletion(b *testing.B, persistent bool, files, size int) {
+	defer benchmarkCleanupPhase(b)()
+	fixtureDone := benchmarkPhase(b, "fixture")
 	b.Setenv("XDG_STATE_HOME", b.TempDir())
 	root := b.TempDir()
 	write := func(name, body string) {
@@ -113,16 +115,25 @@ func benchmarkFetchCompletion(b *testing.B, persistent bool, files, size int) {
 		write(names[i], "initial\n")
 	}
 	state := b.TempDir()
+	fixtureDone()
+	daemonDone := benchmarkPhase(b, "daemon-start")
 	d, err := daemon.New(daemon.Config{StateDir: state, InsecureNoAuth: true})
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		done := benchmarkPhase(b, "daemon-close")
+		d.Close()
+		done()
+	}()
 	server := httptest.NewServer(d.Handler())
 	defer server.Close()
+	daemonDone()
 	workspace, workspaceID := "", ""
 	if persistent {
+		createDone := benchmarkPhase(b, "workspace-create")
 		ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: server.URL, Root: root}, "eval")
+		createDone()
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -132,6 +143,7 @@ func benchmarkFetchCompletion(b *testing.B, persistent bool, files, size int) {
 	b.ResetTimer()
 	b.StopTimer()
 	for i := 0; i < b.N; i++ {
+		editDone := benchmarkPhase(b, "edit")
 		body := fmt.Sprintf("fetch-%d", i)
 		var out bytes.Buffer
 		command := "printf '" + body + "' > " + names[0]
@@ -148,7 +160,10 @@ func benchmarkFetchCompletion(b *testing.B, persistent bool, files, size int) {
 			}
 			command = "true"
 		}
+		editDone()
+		jobDone := benchmarkPhase(b, "job-and-capture")
 		code := client.Run(client.RunOptions{PeerURL: server.URL, Root: root, Workspace: workspace, Argv: []string{"sh", "-c", command}, Stdout: &out, Stderr: &out})
+		jobDone()
 		if code != 0 {
 			b.Fatalf("job: %d %s", code, out.String())
 		}
@@ -167,21 +182,25 @@ func benchmarkFetchCompletion(b *testing.B, persistent bool, files, size int) {
 			}
 		}
 		var stats client.TransferStats
+		fetchDone := benchmarkPhase(b, "fetch")
 		b.StartTimer()
 		start := time.Now()
 		_, err = client.FetchChanges(client.ChangeFetchOptions{PeerURL: server.URL, JobID: jobs[0].ID, Apply: true, CallerDir: root, Stats: &stats})
 		duration := time.Since(start)
 		elapsed += duration
 		b.StopTimer()
+		fetchDone()
 		if err != nil {
 			b.Fatal(err)
 		}
+		verifyDone := benchmarkPhase(b, "verify")
 		for _, name := range names {
 			actual, err := os.ReadFile(filepath.Join(root, name))
 			if err != nil || !bytes.Equal(actual, expected[name]) {
 				b.Fatalf("contents of %s: %v", name, err)
 			}
 		}
+		verifyDone()
 		row, _ := json.Marshal(map[string]any{"mode": "fetch", "persistent": persistent, "sample": i, "seconds": duration.Seconds(), "transferred_bytes": stats.TransferredBytes})
 		fmt.Printf("EVALUATION %s\n", row)
 	}
