@@ -24,6 +24,18 @@ the selected cutoff, batching and materialization implementation.
 Full wire/checkpoint serialization remains measured work. No cross-machine or
 rsync/Mutagen latency claim follows from native-host loopback results.
 
+The [direct receiver staging slice](DIRECT_STAGING.md) now materializes persistent
+push/watch and fetch trees through one verified implementation, removing the
+internal archive/extract round trip. Its native measurements support staging
+gains on APFS and Btrfs; initial workspace/job population remains the next part
+of step 2. Complete watch/push gains and initialization tail latency remain
+unresolved rather than inferred from the component results.
+
+The [retained-body staging follow-up](RETAINED_BODY_STAGING.md) removes fetch's
+remaining reconstructed source tree and staging's intermediate base publication.
+It also fixes publication retry durability and extends concurrent-failure
+coverage. Its native comparison uses the direct-staging slice as the baseline.
+
 Keep the current content-addressed model. Selection policy determines eligible
 paths, a snapshot describes their state, and the content store resolves their
 bodies. Changing the snapshot representation and changing the unit of body

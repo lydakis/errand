@@ -107,7 +107,17 @@ func (s *TransferSession) StagePrepared(ctx context.Context, id, source string, 
 		return "", proto.ChangeBundle{}, fmt.Errorf("transfer source was not prepared")
 	}
 
-	return s.stage(ctx, id, source, proto.Manifest{}, &p)
+	return s.stage(ctx, id, transferDirectorySource(source), proto.Manifest{}, &p)
+}
+
+// StagePreparedFromBlobs stages a prepared source directly from retained bodies.
+// The same attempt, verification and checkpoint rules apply as StagePrepared;
+// no intermediate source tree is needed.
+func (s *TransferSession) StagePreparedFromBlobs(ctx context.Context, id string, p PreparedTransferSource) (string, proto.ChangeBundle, error) {
+	if !p.valid {
+		return "", proto.ChangeBundle{}, fmt.Errorf("transfer source was not prepared")
+	}
+	return s.stage(ctx, id, s.retainedSource(), proto.Manifest{}, &p)
 }
 
 func (p PreparedTransferSource) validateStageLimits(ctx context.Context, s *TransferSession) error {

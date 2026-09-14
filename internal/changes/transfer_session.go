@@ -29,6 +29,7 @@ type TransferSession struct {
 	MaxSourceBytes, MaxChangeBytes   int64
 	Reuse                            *CheckpointCache
 	checkpointCache                  *checkpointReadCache
+	syncAttemptParent                func(string) error
 }
 
 type TransferAttempt struct {
@@ -80,12 +81,16 @@ func (s *TransferSession) Initialize(ctx context.Context, source string, initial
 // Stage takes a complete, immutable source snapshot and records a delta against
 // the last accepted source. Reusing an ID is allowed only for that same snapshot.
 func (s *TransferSession) Stage(ctx context.Context, id, source string, manifest proto.Manifest) (string, proto.ChangeBundle, error) {
-	return s.stage(ctx, id, source, manifest, nil)
+	return s.stage(ctx, id, transferDirectorySource(source), manifest, nil)
 }
 
-func (s *TransferSession) stage(ctx context.Context, id, source string, manifest proto.Manifest, prepared *PreparedTransferSource) (string, proto.ChangeBundle, error) {
+func (s *TransferSession) stage(ctx context.Context, id string, source transferMaterializer, manifest proto.Manifest, prepared *PreparedTransferSource) (string, proto.ChangeBundle, error) {
 	if err := ctx.Err(); err != nil {
 		return "", proto.ChangeBundle{}, err
+	}
+	syncParent := s.syncAttemptParent
+	if syncParent == nil {
+		syncParent = syncDirectory
 	}
 	sourceRoot := ""
 	if prepared != nil {
@@ -116,6 +121,9 @@ func (s *TransferSession) stage(ctx context.Context, id, source string, manifest
 			if v.revision() != a.Revision || v.rootHash() != b.BaselineRoot || b.BaselineRoot != prepared.delta.BaselineRoot {
 				return "", proto.ChangeBundle{}, ErrCheckpointChanged
 			}
+		}
+		if err == nil {
+			err = syncParent(filepath.Dir(dest))
 		}
 		return dest, b, err
 	} else if !os.IsNotExist(err) {
@@ -164,71 +172,20 @@ func (s *TransferSession) stage(ctx context.Context, id, source string, manifest
 		return "", b, err
 	}
 	defer RemoveTree(tmp)
-	// Only changed roots need base files in this attempt; the full checkpoint
-	// remains pinned in the source store.
-	if err := s.Blobs().MaterializeBase(ctx, tmp, b.BaseManifest, s.MaxSourceBytes); err != nil {
-		return "", b, err
-	}
-	access, err := makeManifestAccessibleContext(ctx, source, b.RemoteManifest)
-	if err != nil {
-		return "", b, err
-	}
-	packErr := commitBundleWithPhysicalModesContext(ctx, filepath.Join(tmp, "change-base"), source, tmp, b, nil, access.physical)
-	if err := errors.Join(packErr, access.restore()); err != nil {
-		return "", b, err
-	}
-	if err := extractTransferBundle(tmp, b, s.MaxChangeBytes); err != nil {
-		return "", b, err
-	}
-	if err := RemoveTree(filepath.Join(tmp, "change-base")); err != nil {
-		return "", b, err
-	}
-	if err := RemoveTree(filepath.Join(tmp, BundleDirectory)); err != nil {
+	if err := s.materializeStage(ctx, source, tmp, b); err != nil {
 		return "", b, err
 	}
 	a := TransferAttempt{ID: id, Revision: v.revision(), SourceRoot: sourceRoot, BundleRoot: b.RootHash(), CreatedAt: time.Now().UTC()}
 	if err := writeTransferJSON(filepath.Join(tmp, "attempt.json"), a); err != nil {
 		return "", b, err
 	}
-	if err := os.Rename(tmp, dest); err != nil {
+	if err := ctx.Err(); err != nil {
 		return "", b, err
 	}
-	if err := syncDirectory(filepath.Dir(dest)); err != nil {
+	if err := publishBundleDirectory(tmp, dest, filepath.Dir(dest), syncParent); err != nil {
 		return "", b, err
 	}
 	return dest, b, nil
-}
-func extractTransferBundle(dir string, b proto.ChangeBundle, max int64) error {
-	for _, name := range []string{"base", "remote"} {
-		if err := os.Mkdir(filepath.Join(dir, name), 0700); err != nil {
-			return err
-		}
-	}
-	base, err := OpenBaseArchive(dir)
-	if err != nil {
-		return err
-	}
-	err = ExtractBase(base, filepath.Join(dir, "base"), b, max)
-	err = errors.Join(err, base.Close())
-	if err != nil {
-		return err
-	}
-	remote, err := OpenRemoteArchive(dir)
-	if err != nil {
-		return err
-	}
-	err = ExtractRemote(remote, filepath.Join(dir, "remote"), b, max)
-	err = errors.Join(err, remote.Close())
-	if err != nil {
-		return err
-	}
-	if err := SyncTransferSource(filepath.Join(dir, "base"), b.BaseManifest); err != nil {
-		return err
-	}
-	if err := SyncTransferSource(filepath.Join(dir, "remote"), b.RemoteManifest); err != nil {
-		return err
-	}
-	return writeTransferJSON(filepath.Join(dir, "bundle.json"), b)
 }
 func ReadTransferBundle(dir string) (proto.ChangeBundle, error) {
 	var b proto.ChangeBundle

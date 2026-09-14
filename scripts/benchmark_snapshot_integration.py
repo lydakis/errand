@@ -9,7 +9,9 @@ from pathlib import Path
 import platform
 import plistlib
 import re
+import signal
 import subprocess
+import time
 
 
 def benchmark_order(variants, number):
@@ -28,6 +30,15 @@ def benchmark_cases(scope):
     cases = {}
     def add(name, package, pattern, benchtime):
         cases[name] = (package, pattern, benchtime)
+    if scope == "staging":
+        for shape in ("small", "batch", "large"):
+            add(f"stage-{shape}", "./internal/changes", f"^BenchmarkTransferStageBodies$/^{shape}$", "3x")
+        for shape in ("batch", "large"):
+            add(f"fetch-{shape}", "./cmd/errand", f"^BenchmarkFetchBodies$/^{shape}$", "3x")
+        add("fetch-small", "./cmd/errand", "^BenchmarkFetchCompletion$/^persistent=true$", "3x")
+        add("watch", "./cmd/errand", "^BenchmarkWatchPhases$", "3x")
+        add("push", "./cmd/errand", "^BenchmarkPushPhases$", "3x")
+        return cases
     for count in (1000, 10000):
         for nested in ("false", "true"):
             for phase in ("prepare", "expand"):
@@ -59,13 +70,59 @@ def benchmark_cases(scope):
     return cases
 
 
-def run(command, root, env, log):
-    result = subprocess.run(command, cwd=root, env=env, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, text=True)
-    log.write_text(result.stdout)
-    if result.returncode:
-        raise RuntimeError(f"{command} exited {result.returncode}; see {log}")
-    return result.stdout
+def run(command, root, env, log, timeout=1200):
+    # Go's test timeout does not bound benchmarks. Bound the entire process
+    # group, including commands launched by a benchmark, and retain partial logs.
+    with log.open("w") as output:
+        process = subprocess.Popen(command, cwd=root, env=env, stdout=output,
+                                   stderr=subprocess.STDOUT, text=True, start_new_session=True)
+        try:
+            process.wait(timeout=timeout)
+        except BaseException as exc:
+            # Ctrl-C interrupts this driver, not the child's separate session.
+            # Stop and reap that group before propagating any interrupted wait.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
+            if isinstance(exc, subprocess.TimeoutExpired):
+                raise RuntimeError(f"{command} exceeded {timeout}s; see {log}") from exc
+            raise
+    if process.returncode:
+        raise RuntimeError(f"{command} exited {process.returncode}; see {log}")
+    return log.read_text()
+
+
+def source_digest(root, production=False, benchmarks=False):
+    files = sorted([*root.rglob("*.go"), root / "go.mod", root / "go.sum"])
+    digest = hashlib.sha256()
+    for path in files:
+        if production and path.name.endswith("_test.go"):
+            continue
+        if benchmarks and not path.name.endswith("_benchmark_test.go"):
+            continue
+        digest.update(str(path.relative_to(root)).encode() + b"\0" + path.read_bytes() + b"\0")
+    return digest.hexdigest()
+
+
+def parse_sample(raw, number):
+    samples, pending = [], None
+    for line in raw.splitlines():
+        head = re.match(r"^(Benchmark\S+)-\d+\s*(.*)$", line)
+        if head:
+            pending, line = head[1], head[2]
+        match = re.match(r"^\s*(\d+)\s+(.+)$", line)
+        if pending and match:
+            metrics = match[2].split()
+            if len(metrics) % 2 or "ns/op" not in metrics:
+                continue
+            samples.append(dict(name=pending, iterations=int(match[1]), round=number,
+                                metrics={metrics[i+1]: float(metrics[i]) for i in range(0, len(metrics), 2)}))
+            pending = None
+    if len(samples) != 1:
+        raise RuntimeError(f"Expected one benchmark sample, got {len(samples)}")
+    return samples[0]
 
 
 def filesystem(root, env, output, name):
@@ -83,7 +140,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--rounds", type=int, default=7)
-    parser.add_argument("--scope", choices=("full", "retained", "metadata", "receiver"), default="full",
+    parser.add_argument("--scope", choices=("full", "retained", "metadata", "receiver", "staging"), default="full",
                         help="Use receiver for complete commands and checkpoint reads, retained for metadata/preparation and watch")
     parser.add_argument("--gomaxprocs", type=int, default=2)
     args = parser.parse_args()
@@ -102,6 +159,9 @@ def main():
                   harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
     report["go"] = run(["go", "version"], Path.cwd(), env, output / "go.txt").strip()
     report["filesystem"] = filesystem(Path.cwd(), env, output, "filesystem")
+    fixtures = output / "fixtures"
+    fixtures.mkdir()
+    env = dict(env, TMPDIR=str(fixtures))
     for name, root in roots.items():
         directory = output / name
         directory.mkdir()
@@ -109,28 +169,29 @@ def main():
         run(["go", "test", "-timeout=10m", "./..."], root, env, directory / "tests.txt")
         run(["go", "vet", "./..."], root, env, directory / "vet.txt")
         run(["go", "test", "-race", "-timeout=10m", "./internal/manifest", "./internal/snapshot",
-             "./internal/changes", "./internal/archive", "./internal/client", "./cmd/errand"],
+             "./internal/changes", "./internal/archive", "./internal/client", "./internal/daemon", "./cmd/errand"],
             root, dict(env, CGO_ENABLED="1"), directory / "race.txt")
         print(f"{name}: tests, vet and race passed", flush=True)
-        files = sorted([*root.rglob("*.go"), root / "go.mod", root / "go.sum"])
-        digest = hashlib.sha256()
-        for path in files:
-            digest.update(str(path.relative_to(root)).encode() + b"\0" + path.read_bytes() + b"\0")
-        version = dict(source_sha256=digest.hexdigest(), source_files=[str(p.relative_to(root)) for p in files], binaries={}, samples=[])
+        version = dict(source_sha256=source_digest(root), production_sha256=source_digest(root, production=True),
+                       benchmark_sha256=source_digest(root, benchmarks=True), binaries={}, samples=[])
         report["versions"][name] = version
         for package in sorted({case[0] for case in cases.values()}):
             key = package.removeprefix("./").replace("/", "-")
             binary = directory / f"{key}.test"
             run(["go", "test", "-c", "-o", str(binary), package], root, env, directory / f"build-{key}.txt")
             version["binaries"][key] = hashlib.sha256(binary.read_bytes()).hexdigest()
+    if args.scope == "staging" and len({v["benchmark_sha256"] for v in report["versions"].values()}) != 1:
+        raise RuntimeError("Staging comparisons require identical benchmark sources")
     # Go normally puts fixtures in /tmp, which may be tmpfs even when the
     # runner's workspaces use Btrfs. Place fixtures under the requested output
     # directory and measure its actual filesystem, which may differ from cwd.
-    fixtures = output / "fixtures"
-    fixtures.mkdir()
-    env = dict(env, TMPDIR=str(fixtures))
     report["fixture_root"] = str(fixtures)
     report["fixture_filesystem"] = filesystem(fixtures, env, output, "fixture-filesystem")
+    if platform.system() == "Linux":
+        report["fixture_mount"] = run(["findmnt", "-T", str(fixtures), "-n", "-o", "FSTYPE,OPTIONS"], fixtures, env, output / "fixture-mount.txt").strip()
+    else:
+        report["fixture_mount"] = run(["mount"], fixtures, env, output / "fixture-mount.txt")
+    (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     for number in range(args.rounds):
         order = benchmark_order(roots, number)
         report["orders"].append(order)
@@ -138,25 +199,18 @@ def main():
             binary_key = package.removeprefix("./").replace("/", "-")
             for name in order:
                 directory = output / name
+                started, load_before = time.monotonic(), os.getloadavg()
                 raw = run([str(directory / f"{binary_key}.test"), "-test.v", "-test.run=^$", f"-test.bench={pattern}",
                            f"-test.benchtime={benchtime}", "-test.benchmem", "-test.timeout=10m"],
-                          roots[name], env, directory / f"{number}-{key}.txt")
-                samples = []
-                for line in raw.splitlines():
-                    match = re.match(r"^(Benchmark\S+)-\d+\s+(\d+)\s+(.+)$", line)
-                    if not match:
-                        continue
-                    metrics = match[3].split()
-                    if len(metrics) % 2:
-                        raise RuntimeError(f"Malformed benchmark line: {line}")
-                    samples.append(dict(name=match[1], iterations=int(match[2]), round=number,
-                                        metrics={metrics[i+1]: float(metrics[i]) for i in range(0, len(metrics), 2)}))
-                if len(samples) != 1:
-                    raise RuntimeError(f"Expected one {key} sample, got {len(samples)}")
-                report["versions"][name]["samples"].extend(samples)
+                          roots[name], env, directory / f"{number}-{key}.txt", timeout=300)
+                sample = parse_sample(raw, number)
+                sample.update(case=key, elapsed=time.monotonic()-started, load_before=load_before, load_after=os.getloadavg())
+                report["versions"][name]["samples"].append(sample)
                 (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
             print(f"Pair {number+1}/{args.rounds}: {key}", flush=True)
     for name in roots:
+        if source_digest(roots[name]) != report["versions"][name]["source_sha256"]:
+            raise RuntimeError(f"{name} source changed during measurement")
         for key in report["versions"][name]["binaries"]:
             (output / name / f"{key}.test").unlink()
 
