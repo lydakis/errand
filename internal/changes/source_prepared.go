@@ -102,7 +102,7 @@ func cloneSourceDelta(b proto.ChangeBundle) proto.ChangeBundle {
 	return b
 }
 
-func (s TransferSession) StagePrepared(ctx context.Context, id, source string, p PreparedTransferSource) (string, proto.ChangeBundle, error) {
+func (s *TransferSession) StagePrepared(ctx context.Context, id, source string, p PreparedTransferSource) (string, proto.ChangeBundle, error) {
 	if !p.valid {
 		return "", proto.ChangeBundle{}, fmt.Errorf("transfer source was not prepared")
 	}
@@ -110,7 +110,7 @@ func (s TransferSession) StagePrepared(ctx context.Context, id, source string, p
 	return s.stage(ctx, id, source, proto.Manifest{}, &p)
 }
 
-func (p PreparedTransferSource) validateStageLimits(ctx context.Context, s TransferSession) error {
+func (p PreparedTransferSource) validateStageLimits(ctx context.Context, s *TransferSession) error {
 	// Source quotas count the complete reconstructed tree, including unchanged
 	// cached files. Delta factories may have used a different byte allowance.
 	if err := ctx.Err(); err != nil {

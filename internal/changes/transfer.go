@@ -370,26 +370,34 @@ func readTransferState(root *os.Root, name string) (transferApplyState, error) {
 }
 
 func readTransferRecord(root *os.Root, name string, record any) error {
-	info, err := root.Lstat(name)
+	raw, err := readTransferRecordBytes(root, name)
 	if err != nil {
 		return err
 	}
+	return json.Unmarshal(raw, record)
+}
+
+func readTransferRecordBytes(root *os.Root, name string) ([]byte, error) {
+	info, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("transfer state is not a regular file")
+		return nil, fmt.Errorf("transfer state is not a regular file")
 	}
 	f, err := root.Open(name)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer f.Close()
 	raw, err := io.ReadAll(io.LimitReader(f, MaxBundleMetadataBytes+1))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(raw) > MaxBundleMetadataBytes {
-		return fmt.Errorf("transfer state exceeds size limit")
+		return nil, fmt.Errorf("transfer state exceeds size limit")
 	}
-	return json.Unmarshal(raw, record)
+	return raw, nil
 }
 
 func writeTransferState(root *os.Root, name string, state transferApplyState) error {

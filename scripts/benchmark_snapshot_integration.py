@@ -46,12 +46,16 @@ def benchmark_cases(scope):
     add("watch", "./cmd/errand", "^BenchmarkWatchPhases$", "10x")
     for scenario in ("small", "git-atomic", "nested-atomic", "structural"):
         add(f"watch-{scenario}", "./cmd/errand", f"^BenchmarkWatchWorkloads$/^{scenario}$", "5x")
-    if scope == "full":
+    if scope in ("full", "receiver"):
         add("push", "./cmd/errand", "^BenchmarkPushPhases$", "5x")
         for kind in ("workspace-create", "ephemeral-job"):
             add(kind, "./cmd/errand", f"^BenchmarkWorkspaceCreationAndSubmission$/^{kind}$", "3x")
         for persistent in ("false", "true"):
             add(f"fetch-{persistent}", "./cmd/errand", f"^BenchmarkFetchCompletion$/^persistent={persistent}$", "3x")
+    if scope == "receiver":
+        cases = {key: value for key, value in cases.items() if value[0] == "./cmd/errand"}
+        for count in (1000, 10000):
+            cases[f"checkpoint-{count}"] = ("./internal/changes", f"^BenchmarkCheckpointRead$/^{count}$", "500ms")
     return cases
 
 
@@ -79,8 +83,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--rounds", type=int, default=7)
-    parser.add_argument("--scope", choices=("full", "retained", "metadata"), default="full",
-                        help="Use retained for metadata/preparation and complete watch cycles only")
+    parser.add_argument("--scope", choices=("full", "retained", "metadata", "receiver"), default="full",
+                        help="Use receiver for complete commands and checkpoint reads, retained for metadata/preparation and watch")
     parser.add_argument("--gomaxprocs", type=int, default=2)
     args = parser.parse_args()
     if args.rounds < 1 or args.gomaxprocs < 1:

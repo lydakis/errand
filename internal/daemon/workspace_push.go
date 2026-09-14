@@ -17,8 +17,8 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
-func (d *Daemon) pushSession(row workspaceRecord, clientID string) changeops.TransferSession {
-	return changeops.TransferSession{Directory: filepath.Join(d.workspaces.dir, row.ID, "push", clientID), Root: filepath.Join(d.workspaces.dir, row.ID, "data"), RootID: row.Identity, Owner: row.Owner, SourceID: clientID, MaxSourceBytes: d.cfg.MaxLimits.MaxWorkspaceBytes, MaxChangeBytes: d.cfg.MaxLimits.MaxChangeBytes}
+func (d *Daemon) pushSession(row workspaceRecord, clientID string) *changeops.TransferSession {
+	return &changeops.TransferSession{Directory: filepath.Join(d.workspaces.dir, row.ID, "push", clientID), Root: filepath.Join(d.workspaces.dir, row.ID, "data"), RootID: row.Identity, Owner: row.Owner, SourceID: clientID, MaxSourceBytes: d.cfg.MaxLimits.MaxWorkspaceBytes, MaxChangeBytes: d.cfg.MaxLimits.MaxChangeBytes}
 }
 func (d *Daemon) pushWorkspace(r *http.Request, id Identity) (workspaceRecord, error) {
 	if !proto.ValidULID(r.PathValue("id")) {

@@ -35,6 +35,7 @@ type TransferCheckpoint struct {
 	Owner     string
 	SourceID  string
 	StatePath string
+	cache     *checkpointReadCache
 }
 
 type CheckpointVersion struct {
@@ -43,6 +44,7 @@ type CheckpointVersion struct {
 }
 
 type checkpointState struct {
+	identity    *checkpointIdentity
 	Version     int                 `json:"version"`
 	Owner       string              `json:"owner"`
 	SourceID    string              `json:"source_identity"`
@@ -64,7 +66,7 @@ type checkpointReceiptBinding struct {
 
 // Initialize records the complete shared creation snapshot. Repeating it with
 // that snapshot returns current progress; it never resets an advanced checkpoint.
-func (c TransferCheckpoint) Initialize(base proto.Manifest) (CheckpointVersion, error) {
+func (c *TransferCheckpoint) Initialize(base proto.Manifest) (CheckpointVersion, error) {
 	if err := validateCheckpointManifest(base); err != nil {
 		return CheckpointVersion{}, err
 	}
@@ -79,7 +81,7 @@ func (c TransferCheckpoint) Initialize(base proto.Manifest) (CheckpointVersion, 
 		if state.InitialRoot != base.RootHash() {
 			return CheckpointVersion{}, fmt.Errorf("checkpoint creation snapshot does not match")
 		}
-		return state.CheckpointVersion, verifyTransferPaths(destination, storage)
+		return state.export(), verifyTransferPaths(destination, storage)
 	}
 	if !errors.Is(err, os.ErrNotExist) {
 		return CheckpointVersion{}, err
@@ -89,21 +91,33 @@ func (c TransferCheckpoint) Initialize(base proto.Manifest) (CheckpointVersion, 
 	if err := c.save(destination, storage, name, state); err != nil {
 		return CheckpointVersion{}, err
 	}
-	return state.CheckpointVersion, nil
+	return state.export(), nil
 }
 
-func (c TransferCheckpoint) Read() (CheckpointVersion, error) {
-	destination, storage, name, err := c.open(c.StatePath)
+// Read returns a caller-owned copy; internal session operations borrow the
+// immutable validated state through readVersion instead.
+func (c *TransferCheckpoint) Read() (CheckpointVersion, error) {
+	state, err := c.readVersion()
 	if err != nil {
 		return CheckpointVersion{}, err
+	}
+	return state.export(), nil
+}
+func (s checkpointState) export() CheckpointVersion {
+	return CheckpointVersion{Revision: s.Revision, Manifest: cloneSourceManifest(s.Manifest)}
+}
+func (c *TransferCheckpoint) readVersion() (checkpointState, error) {
+	destination, storage, name, err := c.open(c.StatePath)
+	if err != nil {
+		return checkpointState{}, err
 	}
 	defer destination.Close()
 	defer storage.Close()
 	state, err := c.read(storage.root, name)
 	if err != nil {
-		return CheckpointVersion{}, err
+		return checkpointState{}, err
 	}
-	return state.CheckpointVersion, verifyTransferPaths(destination, storage)
+	return state, verifyTransferPaths(destination, storage)
 }
 
 // Advance consumes one completed receipt at expectedRevision. Installed paths
@@ -112,7 +126,7 @@ func (c TransferCheckpoint) Read() (CheckpointVersion, error) {
 // consumes a revision, recording the attempt without changing the manifest.
 // Repeating the latest update is idempotent; older updates are refused after
 // further progress, even when the manifest happens to have the same digest.
-func (c TransferCheckpoint) Advance(expectedRevision uint64, receiptPath string, bundle proto.ChangeBundle) (CheckpointVersion, error) {
+func (c *TransferCheckpoint) Advance(expectedRevision uint64, receiptPath string, bundle proto.ChangeBundle) (CheckpointVersion, error) {
 	if err := validateBundle(bundle); err != nil {
 		return CheckpointVersion{}, err
 	}
@@ -168,9 +182,9 @@ func (c TransferCheckpoint) Advance(expectedRevision uint64, receiptPath string,
 	request := hex.EncodeToString(digest[:])
 	canonicalReceipt := filepath.Join(receipts.path, receiptName)
 	if expectedRevision < math.MaxUint64 && state.Revision == expectedRevision+1 && state.LastReceipt == canonicalReceipt && state.LastRequest == request {
-		return state.CheckpointVersion, verifyTransferPaths(destination, storage, receipts)
+		return state.export(), verifyTransferPaths(destination, storage, receipts)
 	}
-	if state.Revision != expectedRevision || expectedRevision == math.MaxUint64 || state.Manifest.RootHash() != bundle.BaselineRoot {
+	if state.Revision != expectedRevision || expectedRevision == math.MaxUint64 || state.rootHash() != bundle.BaselineRoot {
 		return CheckpointVersion{}, ErrCheckpointChanged
 	}
 	next, err := acceptedSourceManifest(state.Manifest, bundle, *receipt.Outcome)
@@ -178,6 +192,7 @@ func (c TransferCheckpoint) Advance(expectedRevision uint64, receiptPath string,
 		return CheckpointVersion{}, err
 	}
 	state.Manifest = next
+	state.identity = &checkpointIdentity{}
 	state.Revision++
 	state.LastReceipt, state.LastRequest = canonicalReceipt, request
 	if unbound {
@@ -188,7 +203,7 @@ func (c TransferCheckpoint) Advance(expectedRevision uint64, receiptPath string,
 	if err := c.save(destination, storage, name, state); err != nil {
 		return CheckpointVersion{}, err
 	}
-	return state.CheckpointVersion, verifyTransferPaths(destination, storage, receipts)
+	return state.export(), verifyTransferPaths(destination, storage, receipts)
 }
 
 func acceptedSourceManifest(base proto.Manifest, bundle proto.ChangeBundle, outcome transferOutcome) (proto.Manifest, error) {
@@ -291,7 +306,7 @@ func mergeAcceptedSourceContext(ctx context.Context, base proto.Manifest, bundle
 	return next, nil
 }
 
-func (c TransferCheckpoint) open(statePath string) (*applyDestination, *applyDestination, string, error) {
+func (c *TransferCheckpoint) open(statePath string) (*applyDestination, *applyDestination, string, error) {
 	if c.Owner == "" || c.SourceID == "" || c.RootID.IsZero() || !filepath.IsAbs(statePath) {
 		return nil, nil, "", fmt.Errorf("checkpoint requires owner, source, destination identity, and absolute state path")
 	}
@@ -323,28 +338,11 @@ func (c TransferCheckpoint) open(statePath string) (*applyDestination, *applyDes
 	return destination, storage, filepath.Base(statePath), nil
 }
 
-func (c TransferCheckpoint) read(root *os.Root, name string) (checkpointState, error) {
-	var state checkpointState
-	if err := readTransferRecord(root, name, &state); err != nil {
-		return state, err
+func (c *TransferCheckpoint) save(destination, storage *applyDestination, name string, state checkpointState) error {
+	// Publication may fail after rename. Never keep a cache across a write.
+	if c.cache != nil {
+		*c.cache = checkpointReadCache{}
 	}
-	if state.Version != 1 || state.Owner != c.Owner || state.SourceID != c.SourceID || state.RootID != c.RootID {
-		return state, fmt.Errorf("checkpoint does not match its recorded relationship")
-	}
-	if _, err := hex.DecodeString(state.InitialRoot); err != nil || len(state.InitialRoot) != 64 {
-		return state, fmt.Errorf("invalid checkpoint creation digest")
-	}
-	if state.Revision == 0 {
-		if state.Manifest.RootHash() != state.InitialRoot || state.LastReceipt != "" || state.LastRequest != "" {
-			return state, fmt.Errorf("invalid initial checkpoint")
-		}
-	} else if _, err := hex.DecodeString(state.LastRequest); err != nil || len(state.LastRequest) != 64 || !filepath.IsAbs(state.LastReceipt) {
-		return state, fmt.Errorf("invalid checkpoint application identity")
-	}
-	return state, validateCheckpointManifest(state.Manifest)
-}
-
-func (c TransferCheckpoint) save(destination, storage *applyDestination, name string, state checkpointState) error {
 	return writeVerifiedTransferRecord(destination, storage, name, state)
 }
 

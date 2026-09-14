@@ -27,6 +27,7 @@ type TransferSession struct {
 	Directory, Root, Owner, SourceID string
 	RootID                           fsidentity.Identity
 	MaxSourceBytes, MaxChangeBytes   int64
+	checkpointCache                  *checkpointReadCache
 }
 
 type TransferAttempt struct {
@@ -41,21 +42,24 @@ type TransferAttempt struct {
 	Materialize bool            `json:"materialize,omitempty"`
 }
 
-func (s TransferSession) Checkpoint() TransferCheckpoint {
-	return TransferCheckpoint{Root: s.Root, RootID: s.RootID, Owner: s.Owner, SourceID: s.SourceID, StatePath: filepath.Join(s.Directory, "checkpoint.json")}
+func (s *TransferSession) Checkpoint() *TransferCheckpoint {
+	if s.checkpointCache == nil {
+		s.checkpointCache = &checkpointReadCache{}
+	}
+	return &TransferCheckpoint{cache: s.checkpointCache, Root: s.Root, RootID: s.RootID, Owner: s.Owner, SourceID: s.SourceID, StatePath: filepath.Join(s.Directory, "checkpoint.json")}
 }
-func (s TransferSession) Blobs() TransferBlobStore {
+func (s *TransferSession) Blobs() TransferBlobStore {
 	return TransferBlobStore{Directory: filepath.Join(s.Directory, "blobs"), MaxBytes: s.MaxSourceBytes}
 }
 
-func (s TransferSession) sourceError(err error) error {
+func (s *TransferSession) sourceError(err error) error {
 	if !errors.Is(err, ErrByteLimitExceeded) {
 		return err
 	}
 	return fmt.Errorf("retaining workspace source (limit %d bytes; gc changes can reclaim only unreferenced bodies; creation and checkpoint bodies remain pinned): %w", s.MaxSourceBytes, err)
 }
-func (s TransferSession) Initialize(ctx context.Context, source string, initial proto.Manifest) error {
-	if _, err := s.Checkpoint().Read(); err == nil {
+func (s *TransferSession) Initialize(ctx context.Context, source string, initial proto.Manifest) error {
+	if _, err := s.Checkpoint().readVersion(); err == nil {
 		_, err = s.Checkpoint().Initialize(initial)
 		return err
 	} else if !os.IsNotExist(err) {
@@ -75,11 +79,11 @@ func (s TransferSession) Initialize(ctx context.Context, source string, initial 
 
 // Stage takes a complete, immutable source snapshot and records a delta against
 // the last accepted source. Reusing an ID is allowed only for that same snapshot.
-func (s TransferSession) Stage(ctx context.Context, id, source string, manifest proto.Manifest) (string, proto.ChangeBundle, error) {
+func (s *TransferSession) Stage(ctx context.Context, id, source string, manifest proto.Manifest) (string, proto.ChangeBundle, error) {
 	return s.stage(ctx, id, source, manifest, nil)
 }
 
-func (s TransferSession) stage(ctx context.Context, id, source string, manifest proto.Manifest, prepared *PreparedTransferSource) (string, proto.ChangeBundle, error) {
+func (s *TransferSession) stage(ctx context.Context, id, source string, manifest proto.Manifest, prepared *PreparedTransferSource) (string, proto.ChangeBundle, error) {
 	if err := ctx.Err(); err != nil {
 		return "", proto.ChangeBundle{}, err
 	}
@@ -105,11 +109,11 @@ func (s TransferSession) stage(ctx context.Context, id, source string, manifest 
 		if err == nil && prepared != nil && !a.Applying {
 			// Unstarted retries still need a current merge base. Once applying,
 			// the immutable attempt/receipt owns recovery across checkpoint changes.
-			v, readErr := s.Checkpoint().Read()
+			v, readErr := s.Checkpoint().readVersion()
 			if readErr != nil {
 				return "", proto.ChangeBundle{}, readErr
 			}
-			if v.Revision != a.Revision || v.Manifest.RootHash() != b.BaselineRoot || b.BaselineRoot != prepared.delta.BaselineRoot {
+			if v.Revision != a.Revision || v.rootHash() != b.BaselineRoot || b.BaselineRoot != prepared.delta.BaselineRoot {
 				return "", proto.ChangeBundle{}, ErrCheckpointChanged
 			}
 		}
@@ -136,13 +140,13 @@ func (s TransferSession) stage(ctx context.Context, id, source string, manifest 
 	if stagedBytes > s.MaxChangeBytes {
 		return "", proto.ChangeBundle{}, fmt.Errorf("transfer staging budget exceeded; run gc changes")
 	}
-	v, err := s.Checkpoint().Read()
+	v, err := s.Checkpoint().readVersion()
 	if err != nil {
 		return "", proto.ChangeBundle{}, err
 	}
 	var b proto.ChangeBundle
 	if prepared != nil {
-		if v.Manifest.RootHash() != prepared.delta.BaselineRoot {
+		if v.rootHash() != prepared.delta.BaselineRoot {
 			return "", proto.ChangeBundle{}, ErrCheckpointChanged
 		}
 		b = cloneSourceDelta(prepared.delta)
@@ -233,7 +237,7 @@ func ReadTransferBundle(dir string) (proto.ChangeBundle, error) {
 	}
 	return b, VerifyExtracted(dir, b)
 }
-func (s TransferSession) Attempt(id string) (TransferAttempt, error) {
+func (s *TransferSession) Attempt(id string) (TransferAttempt, error) {
 	var a TransferAttempt
 	if !proto.ValidULID(id) {
 		return a, fmt.Errorf("invalid transfer ID")
@@ -244,7 +248,7 @@ func (s TransferSession) Attempt(id string) (TransferAttempt, error) {
 	}
 	return a, err
 }
-func (s TransferSession) Apply(id string, selected map[string]bool, materialize bool) (ApplyResult, error) {
+func (s *TransferSession) Apply(id string, selected map[string]bool, materialize bool) (ApplyResult, error) {
 	a, err := s.Attempt(id)
 	if err != nil {
 		return ApplyResult{}, err
@@ -258,7 +262,7 @@ func (s TransferSession) Apply(id string, selected map[string]bool, materialize 
 		return ApplyResult{}, fmt.Errorf("staged bundle changed after publication")
 	}
 	if a.Applying && !a.Done {
-		v, err := s.Checkpoint().Read()
+		v, err := s.Checkpoint().readVersion()
 		if err != nil {
 			return ApplyResult{}, err
 		}
@@ -269,11 +273,11 @@ func (s TransferSession) Apply(id string, selected map[string]bool, materialize 
 		}
 	}
 	if !a.Applying {
-		v, err := s.Checkpoint().Read()
+		v, err := s.Checkpoint().readVersion()
 		if err != nil {
 			return ApplyResult{}, err
 		}
-		if v.Revision != a.Revision || v.Manifest.RootHash() != b.BaselineRoot {
+		if v.Revision != a.Revision || v.rootHash() != b.BaselineRoot {
 			return ApplyResult{}, ErrCheckpointChanged
 		}
 		if _, err := acceptedSourceManifest(v.Manifest, b, transferOutcome{Refused: true}); err != nil {
@@ -323,7 +327,7 @@ func sameTransferSelection(b proto.ChangeBundle, a, c map[string]bool) bool {
 	}
 	return true
 }
-func (s TransferSession) Recover() error {
+func (s *TransferSession) Recover() error {
 	entries, err := os.ReadDir(filepath.Join(s.Directory, "attempts"))
 	if os.IsNotExist(err) {
 		return nil

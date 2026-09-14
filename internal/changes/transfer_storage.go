@@ -44,7 +44,7 @@ func TransferStorageBytes(dir string) (int64, error) {
 
 // GC never recovers or collects an in-flight application. Extra pins include
 // the creation snapshot when older immutable job results must be reconstructed.
-func (s TransferSession) GC(ctx context.Context, cutoff time.Time, dryRun bool, extra []proto.Manifest) (TransferGCResult, error) {
+func (s *TransferSession) GC(ctx context.Context, cutoff time.Time, dryRun bool, extra []proto.Manifest) (TransferGCResult, error) {
 	var result TransferGCResult
 	v, err := s.Checkpoint().Read()
 	if err != nil {
