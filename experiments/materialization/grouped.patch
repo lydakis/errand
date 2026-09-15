@@ -1,0 +1,79 @@
+--- a/internal/changes/transfer_materialize.go
++++ b/internal/changes/transfer_materialize.go
+@@ -6,6 +6,7 @@
+ 	"io"
+ 	"os"
+ 	"path"
++	"sort"
+ 
+ 	"github.com/lydakis/errand/internal/proto"
+ )
+@@ -88,29 +89,52 @@
+ 			files = append(files, e)
+ 		}
+ 	}
+-	if err := runStagingTasksContext(ctx, len(files), func(ctx context.Context, i int) error {
+-		e := files[i]
+-		in, err := open(e)
++	// Experimental directory scheduling: retain one destination-parent lease
++	// for up to eight files, while keeping enough batches for parallel flat trees.
++	// The source adapter retains its original descriptor and identity checks.
++	sort.SliceStable(files, func(i, j int) bool { return path.Dir(files[i].Path) < path.Dir(files[j].Path) })
++	var batches [][]proto.ManifestEntry
++	for start := 0; start < len(files); {
++		end := start + 1
++		for end < len(files) && end-start < 8 && path.Dir(files[end].Path) == path.Dir(files[start].Path) {
++			end++
++		}
++		batches = append(batches, files[start:end])
++		start = end
++	}
++	if err := runStagingTasksContext(ctx, len(batches), func(ctx context.Context, i int) error {
++		batch := batches[i]
++		parent, first, lease, err := paths.parent(batch[0].Path)
+ 		if err != nil {
+ 			return err
+ 		}
+-		parent, name, lease, err := paths.parent(e.Path)
+-		if err != nil {
+-			return errors.Join(err, in.Close())
+-		}
+ 		defer paths.release(lease)
+-		out, err := materializeFile(ctx, parent, name, e, in, policy.cloneFiles)
+-		if err != nil {
+-			return errors.Join(err, in.Close())
+-		}
+-		var modeErr error
+-		if policy.permissions == manifestPermissions {
+-			modeErr = out.Chmod(os.FileMode(e.Mode))
+-		}
+-		return errors.Join(modeErr, policy.syncData(out), out.Close(), in.Close())
++		for _, e := range batch {
++			if err := ctx.Err(); err != nil {
++				return err
++			}
++			in, err := open(e)
++			if err != nil {
++				return err
++			}
++			name := path.Join(path.Dir(first), path.Base(e.Path))
++			out, err := materializeFile(ctx, parent, name, e, in, policy.cloneFiles)
++			if err != nil {
++				return errors.Join(err, in.Close())
++			}
++			var modeErr error
++			if policy.permissions == manifestPermissions {
++				modeErr = out.Chmod(os.FileMode(e.Mode))
++			}
++			if err := errors.Join(modeErr, policy.syncData(out), out.Close(), in.Close()); err != nil {
++				return err
++			}
++		}
++		return nil
+ 	}); err != nil {
+ 		return err
+ 	}
++
+ 	// No file or implicit directory creation can traverse a link we created.
+ 	for _, e := range symlinks {
+ 		if err := ctx.Err(); err != nil {

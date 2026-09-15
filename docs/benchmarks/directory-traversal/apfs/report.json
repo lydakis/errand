@@ -1,0 +1,4135 @@
+{
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "rounds": 7,
+  "cases": {
+    "capture-1-files": [
+      "./internal/changes",
+      "^BenchmarkCaptureWorkspaceBase$/^1-files$",
+      "7x"
+    ],
+    "capture-512-files": [
+      "./internal/changes",
+      "^BenchmarkCaptureWorkspaceBase$/^512-files$",
+      "7x"
+    ],
+    "capture-512-directories": [
+      "./internal/changes",
+      "^BenchmarkCaptureWorkspaceBase$/^512-directories$",
+      "7x"
+    ],
+    "capture-32-deep": [
+      "./internal/changes",
+      "^BenchmarkCaptureWorkspaceBase$/^32-deep$",
+      "7x"
+    ],
+    "capture-8-deep-wide": [
+      "./internal/changes",
+      "^BenchmarkCaptureWorkspaceBase$/^8-deep-wide$",
+      "7x"
+    ],
+    "workspace-create": [
+      "./cmd/errand",
+      "^BenchmarkWorkspaceCreationAndSubmission$/^workspace-create$",
+      "3x"
+    ],
+    "ephemeral-job": [
+      "./cmd/errand",
+      "^BenchmarkWorkspaceCreationAndSubmission$/^ephemeral-job$",
+      "3x"
+    ],
+    "fetch-false": [
+      "./cmd/errand",
+      "^BenchmarkFetchCompletion$/^persistent=false$",
+      "3x"
+    ],
+    "fetch-true": [
+      "./cmd/errand",
+      "^BenchmarkFetchCompletion$/^persistent=true$",
+      "3x"
+    ],
+    "watch": [
+      "./cmd/errand",
+      "^BenchmarkWatchPhases$",
+      "3x"
+    ],
+    "push": [
+      "./cmd/errand",
+      "^BenchmarkPushPhases$",
+      "3x"
+    ]
+  },
+  "versions": {
+    "baseline": {
+      "source_sha256": "6c54adfc82d0fc50db87932dc61723094791795328d87d16ed1d54589569d004",
+      "production_sha256": "5c9c54a3def969e51feaae04d9bacfa12295c646044b202d044012db7fc09462",
+      "samples": [
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 0,
+          "metrics": {
+            "ns/op": 16925488.0,
+            "B/op": 37984.0,
+            "allocs/op": 68.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.3488702090107836,
+          "load_before": [
+            8.60400390625,
+            7.83740234375,
+            7.7509765625
+          ],
+          "load_after": [
+            8.60400390625,
+            7.83740234375,
+            7.7509765625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 0,
+          "metrics": {
+            "ns/op": 111130202.0,
+            "B/op": 10622285.0,
+            "allocs/op": 15972.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.1985804589930922,
+          "load_before": [
+            8.60400390625,
+            7.83740234375,
+            7.7509765625
+          ],
+          "load_after": [
+            8.60400390625,
+            7.83740234375,
+            7.7509765625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 0,
+          "metrics": {
+            "ns/op": 171684935.0,
+            "B/op": 11255141.0,
+            "allocs/op": 26284.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 2.1050546250189655,
+          "load_before": [
+            8.60400390625,
+            7.83740234375,
+            7.7509765625
+          ],
+          "load_after": [
+            9.19580078125,
+            7.97265625,
+            7.798828125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 0,
+          "metrics": {
+            "ns/op": 204877809.0,
+            "B/op": 11244828.0,
+            "allocs/op": 28873.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 1.8517655410105363,
+          "load_before": [
+            9.19580078125,
+            7.97265625,
+            7.798828125
+          ],
+          "load_after": [
+            9.19580078125,
+            7.97265625,
+            7.798828125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 0,
+          "metrics": {
+            "ns/op": 252528958.0,
+            "B/op": 6519390.0,
+            "allocs/op": 42040.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.819893667008728,
+          "load_before": [
+            9.8203125,
+            8.1220703125,
+            7.8525390625
+          ],
+          "load_after": [
+            9.59423828125,
+            8.10302734375,
+            7.84716796875
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 1068710514.0,
+            "B/op": 41293936.0,
+            "allocs/op": 260090.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.893061582988594,
+          "load_before": [
+            9.59423828125,
+            8.10302734375,
+            7.84716796875
+          ],
+          "load_after": [
+            10.04345703125,
+            8.24755859375,
+            7.90087890625
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 1308823167.0,
+            "B/op": 34816288.0,
+            "allocs/op": 177344.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 6.119724958960433,
+          "load_before": [
+            9.47900390625,
+            8.16015625,
+            7.8720703125
+          ],
+          "load_after": [
+            9.4404296875,
+            8.173828125,
+            7.87841796875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 135447278.0,
+            "fetch-ms/op": 135.4,
+            "B/op": 2346261.0,
+            "allocs/op": 7962.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.653376208036207,
+          "load_before": [
+            9.16455078125,
+            8.1376953125,
+            7.8671875
+          ],
+          "load_after": [
+            10.57080078125,
+            8.47705078125,
+            7.99072265625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 267771847.0,
+            "fetch-ms/op": 267.8,
+            "B/op": 12340368.0,
+            "allocs/op": 39041.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.555569959047716,
+          "load_before": [
+            10.12451171875,
+            8.4189453125,
+            7.97314453125
+          ],
+          "load_after": [
+            10.4345703125,
+            8.51123046875,
+            8.00830078125
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 437648792.0,
+            "apply-ms/op": 204.7,
+            "client-ms/op": 148.3,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 84.57,
+            "B/op": 103304293.0,
+            "allocs/op": 139072.0
+          },
+          "case": "watch",
+          "elapsed": 22.52826587500749,
+          "load_before": [
+            9.7587890625,
+            8.40283203125,
+            7.97265625
+          ],
+          "load_after": [
+            9.9755859375,
+            8.57470703125,
+            8.04736328125
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 783228458.0,
+            "apply-ms/op": 199.4,
+            "client-ms/op": 506.0,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 77.88,
+            "B/op": 203932810.0,
+            "allocs/op": 420495.0
+          },
+          "case": "push",
+          "elapsed": 21.00664604199119,
+          "load_before": [
+            10.10107421875,
+            8.68408203125,
+            8.09765625
+          ],
+          "load_after": [
+            11.42041015625,
+            9.0703125,
+            8.2509765625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 1,
+          "metrics": {
+            "ns/op": 15992559.0,
+            "B/op": 37984.0,
+            "allocs/op": 68.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.23753233399474993,
+          "load_before": [
+            16.662109375,
+            10.3720703125,
+            8.7333984375
+          ],
+          "load_after": [
+            16.662109375,
+            10.3720703125,
+            8.7333984375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 1,
+          "metrics": {
+            "ns/op": 112315983.0,
+            "B/op": 10625052.0,
+            "allocs/op": 15977.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.2018445000285283,
+          "load_before": [
+            16.662109375,
+            10.3720703125,
+            8.7333984375
+          ],
+          "load_after": [
+            16.662109375,
+            10.3720703125,
+            8.7333984375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 1,
+          "metrics": {
+            "ns/op": 149416554.0,
+            "B/op": 11253449.0,
+            "allocs/op": 26276.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 1.8516255000140518,
+          "load_before": [
+            16.52880859375,
+            10.44873046875,
+            8.77001953125
+          ],
+          "load_after": [
+            16.52880859375,
+            10.44873046875,
+            8.77001953125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 1,
+          "metrics": {
+            "ns/op": 215300542.0,
+            "B/op": 11251512.0,
+            "allocs/op": 29449.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 1.892397291958332,
+          "load_before": [
+            16.646484375,
+            10.57373046875,
+            8.82373046875
+          ],
+          "load_after": [
+            16.646484375,
+            10.57373046875,
+            8.82373046875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 1,
+          "metrics": {
+            "ns/op": 254345214.0,
+            "B/op": 6530846.0,
+            "allocs/op": 42035.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.8200657920097,
+          "load_before": [
+            15.87353515625,
+            10.51416015625,
+            8.81298828125
+          ],
+          "load_after": [
+            18.36572265625,
+            11.11962890625,
+            9.03662109375
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 1078794500.0,
+            "B/op": 40595328.0,
+            "allocs/op": 260085.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.710466332966462,
+          "load_before": [
+            19.61767578125,
+            11.4990234375,
+            9.1826171875
+          ],
+          "load_after": [
+            19.88818359375,
+            11.68994140625,
+            9.26318359375
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 1327834014.0,
+            "B/op": 35601504.0,
+            "allocs/op": 177379.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 5.900507999991532,
+          "load_before": [
+            18.77587890625,
+            11.59521484375,
+            9.24365234375
+          ],
+          "load_after": [
+            18.39306640625,
+            11.634765625,
+            9.271484375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 136568042.0,
+            "fetch-ms/op": 136.6,
+            "B/op": 2346696.0,
+            "allocs/op": 7964.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.538562791014556,
+          "load_before": [
+            16.099609375,
+            11.3662109375,
+            9.20361328125
+          ],
+          "load_after": [
+            15.21044921875,
+            11.26025390625,
+            9.1787109375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 271166861.0,
+            "fetch-ms/op": 271.2,
+            "B/op": 12351496.0,
+            "allocs/op": 39075.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.325277249969076,
+          "load_before": [
+            14.712890625,
+            11.22265625,
+            9.17724609375
+          ],
+          "load_after": [
+            13.76708984375,
+            11.1328125,
+            9.1689453125
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 441650014.0,
+            "apply-ms/op": 190.1,
+            "client-ms/op": 167.3,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 84.12,
+            "B/op": 109953152.0,
+            "allocs/op": 139126.0
+          },
+          "case": "watch",
+          "elapsed": 22.77222012495622,
+          "load_before": [
+            12.84033203125,
+            11.10400390625,
+            9.2041015625
+          ],
+          "load_after": [
+            13.56005859375,
+            11.38623046875,
+            9.34912109375
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 772635584.0,
+            "apply-ms/op": 190.8,
+            "client-ms/op": 505.3,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 76.61,
+            "B/op": 203932418.0,
+            "allocs/op": 420498.0
+          },
+          "case": "push",
+          "elapsed": 22.360826042015105,
+          "load_before": [
+            16.34521484375,
+            12.21923828125,
+            9.70751953125
+          ],
+          "load_after": [
+            14.259765625,
+            11.99658203125,
+            9.6845703125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 2,
+          "metrics": {
+            "ns/op": 16018548.0,
+            "B/op": 38011.0,
+            "allocs/op": 68.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.23290262499358505,
+          "load_before": [
+            14.259765625,
+            11.99658203125,
+            9.6845703125
+          ],
+          "load_after": [
+            14.259765625,
+            11.99658203125,
+            9.6845703125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 2,
+          "metrics": {
+            "ns/op": 88824578.0,
+            "B/op": 10625907.0,
+            "allocs/op": 15976.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 0.9948650000151247,
+          "load_before": [
+            14.259765625,
+            11.99658203125,
+            9.6845703125
+          ],
+          "load_after": [
+            14.259765625,
+            11.99658203125,
+            9.6845703125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 2,
+          "metrics": {
+            "ns/op": 143064393.0,
+            "B/op": 11256033.0,
+            "allocs/op": 26280.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 1.788807541015558,
+          "load_before": [
+            14.15869140625,
+            12.01318359375,
+            9.70361328125
+          ],
+          "load_after": [
+            14.15869140625,
+            12.01318359375,
+            9.70361328125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 2,
+          "metrics": {
+            "ns/op": 207686649.0,
+            "B/op": 11204289.0,
+            "allocs/op": 28306.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 1.8892791669932194,
+          "load_before": [
+            14.15869140625,
+            12.01318359375,
+            9.70361328125
+          ],
+          "load_after": [
+            14.3857421875,
+            12.095703125,
+            9.74609375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 2,
+          "metrics": {
+            "ns/op": 250171607.0,
+            "B/op": 6531397.0,
+            "allocs/op": 42039.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.7996725830016658,
+          "load_before": [
+            14.3857421875,
+            12.095703125,
+            9.74609375
+          ],
+          "load_after": [
+            13.7138671875,
+            11.994140625,
+            9.72412109375
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 1048519625.0,
+            "B/op": 40960626.0,
+            "allocs/op": 260096.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.615080041985493,
+          "load_before": [
+            13.17578125,
+            11.9111328125,
+            9.7080078125
+          ],
+          "load_after": [
+            13.48193359375,
+            11.99560546875,
+            9.75048828125
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 1339705597.0,
+            "B/op": 35001296.0,
+            "allocs/op": 177374.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 6.351165874977596,
+          "load_before": [
+            12.96240234375,
+            11.91259765625,
+            9.73388671875
+          ],
+          "load_after": [
+            13.68603515625,
+            12.07958984375,
+            9.8056640625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 130511556.0,
+            "fetch-ms/op": 130.5,
+            "B/op": 2348200.0,
+            "allocs/op": 7967.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.836127083050087,
+          "load_before": [
+            13.87109375,
+            12.14453125,
+            9.841796875
+          ],
+          "load_after": [
+            13.0546875,
+            12.0244140625,
+            9.82568359375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 276906513.0,
+            "fetch-ms/op": 276.9,
+            "B/op": 11658480.0,
+            "allocs/op": 39037.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.452430541045032,
+          "load_before": [
+            12.97021484375,
+            12.02392578125,
+            9.83837890625
+          ],
+          "load_after": [
+            12.57177734375,
+            11.95703125,
+            9.8271484375
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 505166097.0,
+            "apply-ms/op": 224.7,
+            "client-ms/op": 191.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 88.48,
+            "B/op": 105517578.0,
+            "allocs/op": 139076.0
+          },
+          "case": "watch",
+          "elapsed": 23.33595720899757,
+          "load_before": [
+            12.99267578125,
+            12.07177734375,
+            9.89306640625
+          ],
+          "load_after": [
+            12.9296875,
+            12.1279296875,
+            9.9638671875
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 1042065292.0,
+            "apply-ms/op": 455.5,
+            "client-ms/op": 510.6,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 75.91,
+            "B/op": 197283242.0,
+            "allocs/op": 420443.0
+          },
+          "case": "push",
+          "elapsed": 24.306892000022344,
+          "load_before": [
+            17.607421875,
+            13.3544921875,
+            10.48291015625
+          ],
+          "load_after": [
+            17.37890625,
+            13.6455078125,
+            10.669921875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 3,
+          "metrics": {
+            "ns/op": 16380434.0,
+            "B/op": 38013.0,
+            "allocs/op": 68.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.24127158301416785,
+          "load_before": [
+            37.4482421875,
+            18.61865234375,
+            12.54443359375
+          ],
+          "load_after": [
+            37.4482421875,
+            18.61865234375,
+            12.54443359375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 3,
+          "metrics": {
+            "ns/op": 107988006.0,
+            "B/op": 10622436.0,
+            "allocs/op": 15970.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.3158637500018813,
+          "load_before": [
+            37.4482421875,
+            18.61865234375,
+            12.54443359375
+          ],
+          "load_after": [
+            37.4482421875,
+            18.61865234375,
+            12.54443359375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 3,
+          "metrics": {
+            "ns/op": 193260816.0,
+            "B/op": 11257836.0,
+            "allocs/op": 26280.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 2.27646162500605,
+          "load_before": [
+            37.572265625,
+            18.95654296875,
+            12.69921875
+          ],
+          "load_after": [
+            39.2080078125,
+            19.6044921875,
+            12.96435546875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 3,
+          "metrics": {
+            "ns/op": 240195530.0,
+            "B/op": 11270280.0,
+            "allocs/op": 29670.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 2.138836416997947,
+          "load_before": [
+            39.2080078125,
+            19.6044921875,
+            12.96435546875
+          ],
+          "load_after": [
+            41.27294921875,
+            20.35791015625,
+            13.26904296875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 3,
+          "metrics": {
+            "ns/op": 287324387.0,
+            "B/op": 6528677.0,
+            "allocs/op": 42042.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 3.0582103339838795,
+          "load_before": [
+            41.27294921875,
+            20.35791015625,
+            13.26904296875
+          ],
+          "load_after": [
+            50.7802734375,
+            22.67578125,
+            14.12841796875
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 1252425819.0,
+            "B/op": 41649341.0,
+            "allocs/op": 260128.0
+          },
+          "case": "workspace-create",
+          "elapsed": 6.197899374994449,
+          "load_before": [
+            49.3564453125,
+            22.84716796875,
+            14.23876953125
+          ],
+          "load_after": [
+            45.42529296875,
+            22.88330078125,
+            14.3525390625
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 1360122236.0,
+            "B/op": 35235392.0,
+            "allocs/op": 177376.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 6.003082750015892,
+          "load_before": [
+            42.82861328125,
+            22.71875,
+            14.34423828125
+          ],
+          "load_after": [
+            40.84033203125,
+            22.64013671875,
+            14.365234375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 152374875.0,
+            "fetch-ms/op": 152.4,
+            "B/op": 2348304.0,
+            "allocs/op": 7961.0
+          },
+          "case": "fetch-false",
+          "elapsed": 7.159982957993634,
+          "load_before": [
+            37.21337890625,
+            22.45556640625,
+            14.3955078125
+          ],
+          "load_after": [
+            35.0341796875,
+            22.24853515625,
+            14.36962890625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 346049792.0,
+            "fetch-ms/op": 346.0,
+            "B/op": 11888053.0,
+            "allocs/op": 39031.0
+          },
+          "case": "fetch-true",
+          "elapsed": 10.431064500007778,
+          "load_before": [
+            33.95556640625,
+            22.45068359375,
+            14.53369140625
+          ],
+          "load_after": [
+            31.09521484375,
+            22.22021484375,
+            14.54443359375
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 438513569.0,
+            "apply-ms/op": 204.2,
+            "client-ms/op": 147.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 86.39,
+            "B/op": 105516560.0,
+            "allocs/op": 139081.0
+          },
+          "case": "watch",
+          "elapsed": 22.3152669579722,
+          "load_before": [
+            28.35595703125,
+            22.18505859375,
+            14.7099609375
+          ],
+          "load_after": [
+            25.0166015625,
+            21.93408203125,
+            14.83740234375
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 804134070.0,
+            "apply-ms/op": 206.9,
+            "client-ms/op": 518.4,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 78.85,
+            "B/op": 210571112.0,
+            "allocs/op": 420537.0
+          },
+          "case": "push",
+          "elapsed": 21.86802087497199,
+          "load_before": [
+            22.431640625,
+            21.56103515625,
+            14.86865234375
+          ],
+          "load_after": [
+            19.56884765625,
+            20.94482421875,
+            14.8017578125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 4,
+          "metrics": {
+            "ns/op": 15811637.0,
+            "B/op": 38011.0,
+            "allocs/op": 68.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.23402483301470056,
+          "load_before": [
+            19.56884765625,
+            20.94482421875,
+            14.8017578125
+          ],
+          "load_after": [
+            19.56884765625,
+            20.94482421875,
+            14.8017578125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 4,
+          "metrics": {
+            "ns/op": 93754494.0,
+            "B/op": 10622009.0,
+            "allocs/op": 15972.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.029211958986707,
+          "load_before": [
+            19.56884765625,
+            20.94482421875,
+            14.8017578125
+          ],
+          "load_after": [
+            19.04248046875,
+            20.8125,
+            14.791015625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 4,
+          "metrics": {
+            "ns/op": 153684982.0,
+            "B/op": 11254336.0,
+            "allocs/op": 26277.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 1.900215958012268,
+          "load_before": [
+            19.04248046875,
+            20.8125,
+            14.791015625
+          ],
+          "load_after": [
+            19.04248046875,
+            20.8125,
+            14.791015625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 4,
+          "metrics": {
+            "ns/op": 213173244.0,
+            "B/op": 11238582.0,
+            "allocs/op": 28954.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 1.944847334001679,
+          "load_before": [
+            18.318359375,
+            20.6328125,
+            14.7626953125
+          ],
+          "load_after": [
+            18.318359375,
+            20.6328125,
+            14.7626953125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 4,
+          "metrics": {
+            "ns/op": 265620310.0,
+            "B/op": 6533028.0,
+            "allocs/op": 42037.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.8960286250221543,
+          "load_before": [
+            27.02099609375,
+            22.3984375,
+            15.419921875
+          ],
+          "load_after": [
+            27.02099609375,
+            22.3984375,
+            15.419921875
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 1072629945.0,
+            "B/op": 41045581.0,
+            "allocs/op": 260125.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.594924083037768,
+          "load_before": [
+            30.70263671875,
+            23.23828125,
+            15.7568359375
+          ],
+          "load_after": [
+            31.76708984375,
+            23.58251953125,
+            15.921875
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 1339421597.0,
+            "B/op": 34849746.0,
+            "allocs/op": 177361.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 6.258996375021525,
+          "load_before": [
+            31.06494140625,
+            23.57275390625,
+            15.962890625
+          ],
+          "load_after": [
+            29.2978515625,
+            23.33056640625,
+            15.921875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 145741528.0,
+            "fetch-ms/op": 145.7,
+            "B/op": 2344538.0,
+            "allocs/op": 7964.0
+          },
+          "case": "fetch-false",
+          "elapsed": 7.183108583965804,
+          "load_before": [
+            26.69873046875,
+            22.97265625,
+            15.88134765625
+          ],
+          "load_after": [
+            25.44140625,
+            22.7734375,
+            15.8525390625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 284197056.0,
+            "fetch-ms/op": 284.2,
+            "B/op": 11657616.0,
+            "allocs/op": 39041.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.944020374969114,
+          "load_before": [
+            25.00537109375,
+            22.72705078125,
+            15.87646484375
+          ],
+          "load_after": [
+            22.630859375,
+            22.29150390625,
+            15.8017578125
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 443407292.0,
+            "apply-ms/op": 205.3,
+            "client-ms/op": 150.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 87.11,
+            "B/op": 105511592.0,
+            "allocs/op": 139061.0
+          },
+          "case": "watch",
+          "elapsed": 22.029466458014213,
+          "load_before": [
+            21.619140625,
+            22.08740234375,
+            15.767578125
+          ],
+          "load_after": [
+            18.86328125,
+            21.37841796875,
+            15.69287109375
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 795467140.0,
+            "apply-ms/op": 197.4,
+            "client-ms/op": 519.8,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 78.24,
+            "B/op": 208361834.0,
+            "allocs/op": 420533.0
+          },
+          "case": "push",
+          "elapsed": 22.063720917038154,
+          "load_before": [
+            17.78271484375,
+            20.95263671875,
+            15.67041015625
+          ],
+          "load_after": [
+            17.9580078125,
+            20.732421875,
+            15.74267578125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 5,
+          "metrics": {
+            "ns/op": 16155453.0,
+            "B/op": 37984.0,
+            "allocs/op": 68.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.23036212497390807,
+          "load_before": [
+            16.8525390625,
+            20.29638671875,
+            15.70166015625
+          ],
+          "load_after": [
+            16.8525390625,
+            20.29638671875,
+            15.70166015625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 5,
+          "metrics": {
+            "ns/op": 114409167.0,
+            "B/op": 10626509.0,
+            "allocs/op": 15980.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.2389815000351518,
+          "load_before": [
+            16.8525390625,
+            20.29638671875,
+            15.70166015625
+          ],
+          "load_after": [
+            16.2236328125,
+            20.1083984375,
+            15.662109375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 5,
+          "metrics": {
+            "ns/op": 158267917.0,
+            "B/op": 11254973.0,
+            "allocs/op": 26278.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 1.98391274997266,
+          "load_before": [
+            16.2236328125,
+            20.1083984375,
+            15.662109375
+          ],
+          "load_after": [
+            16.2236328125,
+            20.1083984375,
+            15.662109375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 5,
+          "metrics": {
+            "ns/op": 226185315.0,
+            "B/op": 11252531.0,
+            "allocs/op": 29288.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 2.091041750041768,
+          "load_before": [
+            15.64501953125,
+            19.923828125,
+            15.623046875
+          ],
+          "load_after": [
+            15.35302734375,
+            19.7919921875,
+            15.6015625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 5,
+          "metrics": {
+            "ns/op": 262757119.0,
+            "B/op": 6532730.0,
+            "allocs/op": 42041.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.941710916988086,
+          "load_before": [
+            15.35302734375,
+            19.7919921875,
+            15.6015625
+          ],
+          "load_after": [
+            17.32666015625,
+            20.12744140625,
+            15.744140625
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 1175640236.0,
+            "B/op": 40865986.0,
+            "allocs/op": 260084.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.960145333025139,
+          "load_before": [
+            17.46044921875,
+            20.1083984375,
+            15.76318359375
+          ],
+          "load_after": [
+            16.78271484375,
+            19.923828125,
+            15.72314453125
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 1311110847.0,
+            "B/op": 35778882.0,
+            "allocs/op": 177406.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 5.9499173749936745,
+          "load_before": [
+            15.8388671875,
+            19.67578125,
+            15.66015625
+          ],
+          "load_after": [
+            15.087890625,
+            19.3896484375,
+            15.60546875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 136022222.0,
+            "fetch-ms/op": 136.0,
+            "B/op": 2345704.0,
+            "allocs/op": 7965.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.491462875041179,
+          "load_before": [
+            14.43994140625,
+            19.18359375,
+            15.5546875
+          ],
+          "load_after": [
+            14.00390625,
+            19.01416015625,
+            15.51611328125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 280357112.0,
+            "fetch-ms/op": 280.4,
+            "B/op": 12341224.0,
+            "allocs/op": 39048.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.473283500003163,
+          "load_before": [
+            13.46142578125,
+            18.7333984375,
+            15.45703125
+          ],
+          "load_after": [
+            12.70361328125,
+            18.48876953125,
+            15.3896484375
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 431146736.0,
+            "apply-ms/op": 199.0,
+            "client-ms/op": 144.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 87.13,
+            "B/op": 98872864.0,
+            "allocs/op": 139048.0
+          },
+          "case": "watch",
+          "elapsed": 21.223872041970026,
+          "load_before": [
+            12.638671875,
+            18.1123046875,
+            15.3271484375
+          ],
+          "load_after": [
+            11.1044921875,
+            17.40771484375,
+            15.138671875
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 803795875.0,
+            "apply-ms/op": 208.2,
+            "client-ms/op": 518.1,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 77.48,
+            "B/op": 206144978.0,
+            "allocs/op": 420511.0
+          },
+          "case": "push",
+          "elapsed": 21.75926308298949,
+          "load_before": [
+            25.677734375,
+            20.0078125,
+            16.1220703125
+          ],
+          "load_after": [
+            30.72509765625,
+            21.5537109375,
+            16.767578125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 6,
+          "metrics": {
+            "ns/op": 15955262.0,
+            "B/op": 38004.0,
+            "allocs/op": 68.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.23492379201343283,
+          "load_before": [
+            30.72509765625,
+            21.5537109375,
+            16.767578125
+          ],
+          "load_after": [
+            30.72509765625,
+            21.5537109375,
+            16.767578125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 6,
+          "metrics": {
+            "ns/op": 90623417.0,
+            "B/op": 10627811.0,
+            "allocs/op": 15981.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.0236814999952912,
+          "load_before": [
+            30.72509765625,
+            21.5537109375,
+            16.767578125
+          ],
+          "load_after": [
+            30.72509765625,
+            21.5537109375,
+            16.767578125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 6,
+          "metrics": {
+            "ns/op": 155380000.0,
+            "B/op": 11253338.0,
+            "allocs/op": 26277.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 1.9842812919523567,
+          "load_before": [
+            31.0673828125,
+            21.77685546875,
+            16.8740234375
+          ],
+          "load_after": [
+            31.0673828125,
+            21.77685546875,
+            16.8740234375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 6,
+          "metrics": {
+            "ns/op": 220685810.0,
+            "B/op": 11253857.0,
+            "allocs/op": 29421.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 1.9534934170078486,
+          "load_before": [
+            31.0615234375,
+            21.9296875,
+            16.95654296875
+          ],
+          "load_after": [
+            31.0615234375,
+            21.9296875,
+            16.95654296875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 6,
+          "metrics": {
+            "ns/op": 258271149.0,
+            "B/op": 6529459.0,
+            "allocs/op": 42039.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 3.0617423329968005,
+          "load_before": [
+            32.57763671875,
+            22.3955078125,
+            17.14990234375
+          ],
+          "load_after": [
+            32.57763671875,
+            22.3955078125,
+            17.14990234375
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 1012217222.0,
+            "B/op": 40858642.0,
+            "allocs/op": 260118.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.392358957964461,
+          "load_before": [
+            32.8515625,
+            22.62109375,
+            17.26025390625
+          ],
+          "load_after": [
+            32.462890625,
+            22.7099609375,
+            17.32275390625
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 1300548486.0,
+            "B/op": 35311016.0,
+            "allocs/op": 177378.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 6.140071458008606,
+          "load_before": [
+            35.62890625,
+            23.52783203125,
+            17.64306640625
+          ],
+          "load_after": [
+            35.09765625,
+            23.61865234375,
+            17.70947265625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 156192805.0,
+            "fetch-ms/op": 156.2,
+            "B/op": 2344818.0,
+            "allocs/op": 7962.0
+          },
+          "case": "fetch-false",
+          "elapsed": 7.098307666950859,
+          "load_before": [
+            36.1552734375,
+            24.2099609375,
+            17.9873046875
+          ],
+          "load_after": [
+            35.662109375,
+            24.3056640625,
+            18.0576171875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 295286320.0,
+            "fetch-ms/op": 295.3,
+            "B/op": 12579762.0,
+            "allocs/op": 39094.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.712520124972798,
+          "load_before": [
+            35.92919921875,
+            24.54931640625,
+            18.18017578125
+          ],
+          "load_after": [
+            34.02099609375,
+            24.5146484375,
+            18.24169921875
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 442534208.0,
+            "apply-ms/op": 204.7,
+            "client-ms/op": 150.2,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 87.58,
+            "B/op": 101085362.0,
+            "allocs/op": 139056.0
+          },
+          "case": "watch",
+          "elapsed": 21.008542167022824,
+          "load_before": [
+            34.57958984375,
+            24.7880859375,
+            18.375
+          ],
+          "load_after": [
+            32.54443359375,
+            24.97509765625,
+            18.59130859375
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 779861875.0,
+            "apply-ms/op": 202.1,
+            "client-ms/op": 499.4,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 78.35,
+            "B/op": 210567586.0,
+            "allocs/op": 420539.0
+          },
+          "case": "push",
+          "elapsed": 20.832773500005715,
+          "load_before": [
+            30.21728515625,
+            25.02587890625,
+            18.79296875
+          ],
+          "load_after": [
+            27.96875,
+            24.884765625,
+            18.888671875
+          ]
+        }
+      ],
+      "binaries": {
+        "cmd-errand": "47598d31a128dead0de20df75f40144ba5d9216789f02df5ccc8662448c74f6e",
+        "internal-changes": "c6729a1338dc75f83262789cbe51bb52e4c6feddbd35ca2062cf5e4be7f590fc"
+      }
+    },
+    "candidate": {
+      "source_sha256": "12beb389c9446f8467e976ada22371f5e882c3f6f115ac202b1c9ac79d87a857",
+      "production_sha256": "8580bdac49683e83d925ef221a0ffc6eb8934a55c120190eaeb072577c3983b7",
+      "samples": [
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 0,
+          "metrics": {
+            "ns/op": 16432351.0,
+            "B/op": 38109.0,
+            "allocs/op": 73.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.3495285419630818,
+          "load_before": [
+            8.60400390625,
+            7.83740234375,
+            7.7509765625
+          ],
+          "load_after": [
+            8.60400390625,
+            7.83740234375,
+            7.7509765625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 0,
+          "metrics": {
+            "ns/op": 108076226.0,
+            "B/op": 10654483.0,
+            "allocs/op": 17520.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.1865688749821857,
+          "load_before": [
+            8.60400390625,
+            7.83740234375,
+            7.7509765625
+          ],
+          "load_after": [
+            8.60400390625,
+            7.83740234375,
+            7.7509765625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 0,
+          "metrics": {
+            "ns/op": 153365048.0,
+            "B/op": 11297644.0,
+            "allocs/op": 26799.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 1.8872263749944977,
+          "load_before": [
+            9.19580078125,
+            7.97265625,
+            7.798828125
+          ],
+          "load_after": [
+            9.19580078125,
+            7.97265625,
+            7.798828125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 0,
+          "metrics": {
+            "ns/op": 473170375.0,
+            "B/op": 11817378.0,
+            "allocs/op": 44892.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 3.7219289999920875,
+          "load_before": [
+            9.19580078125,
+            7.97265625,
+            7.798828125
+          ],
+          "load_after": [
+            9.8203125,
+            8.1220703125,
+            7.8525390625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 0,
+          "metrics": {
+            "ns/op": 245129810.0,
+            "B/op": 6540249.0,
+            "allocs/op": 42432.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.7780114579945803,
+          "load_before": [
+            9.59423828125,
+            8.10302734375,
+            7.84716796875
+          ],
+          "load_after": [
+            9.59423828125,
+            8.10302734375,
+            7.84716796875
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 1080833848.0,
+            "B/op": 41138093.0,
+            "allocs/op": 263121.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.8118980409926735,
+          "load_before": [
+            10.04345703125,
+            8.24755859375,
+            7.90087890625
+          ],
+          "load_after": [
+            9.47900390625,
+            8.16015625,
+            7.8720703125
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 1309834347.0,
+            "B/op": 35356594.0,
+            "allocs/op": 180411.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 5.954472250014078,
+          "load_before": [
+            9.4404296875,
+            8.173828125,
+            7.87841796875
+          ],
+          "load_after": [
+            9.16455078125,
+            8.1376953125,
+            7.8671875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 133533445.0,
+            "fetch-ms/op": 133.5,
+            "B/op": 2349000.0,
+            "allocs/op": 7975.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.421317416999955,
+          "load_before": [
+            10.57080078125,
+            8.47705078125,
+            7.99072265625
+          ],
+          "load_after": [
+            10.12451171875,
+            8.4189453125,
+            7.97314453125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 269222680.0,
+            "fetch-ms/op": 269.2,
+            "B/op": 11890725.0,
+            "allocs/op": 39065.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.272822584025562,
+          "load_before": [
+            10.4345703125,
+            8.51123046875,
+            8.00830078125
+          ],
+          "load_after": [
+            9.7587890625,
+            8.40283203125,
+            7.97265625
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 432182972.0,
+            "apply-ms/op": 196.2,
+            "client-ms/op": 148.0,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 87.88,
+            "B/op": 109944029.0,
+            "allocs/op": 139127.0
+          },
+          "case": "watch",
+          "elapsed": 21.77023999998346,
+          "load_before": [
+            9.9755859375,
+            8.57470703125,
+            8.04736328125
+          ],
+          "load_after": [
+            10.10107421875,
+            8.68408203125,
+            8.09765625
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 802035763.0,
+            "apply-ms/op": 210.6,
+            "client-ms/op": 512.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 78.52,
+            "B/op": 210561717.0,
+            "allocs/op": 420534.0
+          },
+          "case": "push",
+          "elapsed": 21.074377166980412,
+          "load_before": [
+            11.42041015625,
+            9.0703125,
+            8.2509765625
+          ],
+          "load_after": [
+            16.662109375,
+            10.3720703125,
+            8.7333984375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 1,
+          "metrics": {
+            "ns/op": 16430809.0,
+            "B/op": 38109.0,
+            "allocs/op": 73.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.23298229201463982,
+          "load_before": [
+            16.662109375,
+            10.3720703125,
+            8.7333984375
+          ],
+          "load_after": [
+            16.662109375,
+            10.3720703125,
+            8.7333984375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 1,
+          "metrics": {
+            "ns/op": 107333125.0,
+            "B/op": 10652649.0,
+            "allocs/op": 17520.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.1560910839471035,
+          "load_before": [
+            16.662109375,
+            10.3720703125,
+            8.7333984375
+          ],
+          "load_after": [
+            16.662109375,
+            10.3720703125,
+            8.7333984375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 1,
+          "metrics": {
+            "ns/op": 172793190.0,
+            "B/op": 11295918.0,
+            "allocs/op": 26803.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 2.1104988330043852,
+          "load_before": [
+            16.662109375,
+            10.3720703125,
+            8.7333984375
+          ],
+          "load_after": [
+            16.52880859375,
+            10.44873046875,
+            8.77001953125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 1,
+          "metrics": {
+            "ns/op": 439653137.0,
+            "B/op": 11798832.0,
+            "allocs/op": 44449.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 3.6723090420127846,
+          "load_before": [
+            16.52880859375,
+            10.44873046875,
+            8.77001953125
+          ],
+          "load_after": [
+            16.646484375,
+            10.57373046875,
+            8.82373046875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 1,
+          "metrics": {
+            "ns/op": 247712554.0,
+            "B/op": 6547853.0,
+            "allocs/op": 42440.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.769706999999471,
+          "load_before": [
+            16.646484375,
+            10.57373046875,
+            8.82373046875
+          ],
+          "load_after": [
+            15.87353515625,
+            10.51416015625,
+            8.81298828125
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 1050119778.0,
+            "B/op": 40934472.0,
+            "allocs/op": 263125.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.503277292009443,
+          "load_before": [
+            18.36572265625,
+            11.11962890625,
+            9.03662109375
+          ],
+          "load_after": [
+            19.61767578125,
+            11.4990234375,
+            9.1826171875
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 1294369847.0,
+            "B/op": 35213365.0,
+            "allocs/op": 180384.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 6.083708999969531,
+          "load_before": [
+            19.88818359375,
+            11.68994140625,
+            9.26318359375
+          ],
+          "load_after": [
+            18.77587890625,
+            11.59521484375,
+            9.24365234375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 136365083.0,
+            "fetch-ms/op": 136.4,
+            "B/op": 2349237.0,
+            "allocs/op": 7973.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.560511416988447,
+          "load_before": [
+            18.39306640625,
+            11.634765625,
+            9.271484375
+          ],
+          "load_after": [
+            16.099609375,
+            11.3662109375,
+            9.20361328125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 263678528.0,
+            "fetch-ms/op": 263.7,
+            "B/op": 11667090.0,
+            "allocs/op": 39067.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.416753124969546,
+          "load_before": [
+            15.21044921875,
+            11.26025390625,
+            9.1787109375
+          ],
+          "load_after": [
+            14.712890625,
+            11.22265625,
+            9.17724609375
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 434683458.0,
+            "apply-ms/op": 202.7,
+            "client-ms/op": 145.6,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 86.28,
+            "B/op": 101071968.0,
+            "allocs/op": 139062.0
+          },
+          "case": "watch",
+          "elapsed": 21.072658207966015,
+          "load_before": [
+            13.76708984375,
+            11.1328125,
+            9.1689453125
+          ],
+          "load_after": [
+            12.84033203125,
+            11.10400390625,
+            9.2041015625
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 786731653.0,
+            "apply-ms/op": 199.8,
+            "client-ms/op": 509.1,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 77.83,
+            "B/op": 203922037.0,
+            "allocs/op": 420508.0
+          },
+          "case": "push",
+          "elapsed": 20.8940309160389,
+          "load_before": [
+            13.56005859375,
+            11.38623046875,
+            9.34912109375
+          ],
+          "load_after": [
+            16.34521484375,
+            12.21923828125,
+            9.70751953125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 2,
+          "metrics": {
+            "ns/op": 16353208.0,
+            "B/op": 38109.0,
+            "allocs/op": 73.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.23828591697383672,
+          "load_before": [
+            14.259765625,
+            11.99658203125,
+            9.6845703125
+          ],
+          "load_after": [
+            14.259765625,
+            11.99658203125,
+            9.6845703125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 2,
+          "metrics": {
+            "ns/op": 96335185.0,
+            "B/op": 10660614.0,
+            "allocs/op": 17528.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.035543708014302,
+          "load_before": [
+            14.259765625,
+            11.99658203125,
+            9.6845703125
+          ],
+          "load_after": [
+            14.15869140625,
+            12.01318359375,
+            9.70361328125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 2,
+          "metrics": {
+            "ns/op": 146368821.0,
+            "B/op": 11298148.0,
+            "allocs/op": 26803.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 1.8403537920094095,
+          "load_before": [
+            14.15869140625,
+            12.01318359375,
+            9.70361328125
+          ],
+          "load_after": [
+            14.15869140625,
+            12.01318359375,
+            9.70361328125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 2,
+          "metrics": {
+            "ns/op": 422996518.0,
+            "B/op": 11744819.0,
+            "allocs/op": 43047.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 3.3882436249987222,
+          "load_before": [
+            14.3857421875,
+            12.095703125,
+            9.74609375
+          ],
+          "load_after": [
+            14.3857421875,
+            12.095703125,
+            9.74609375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 2,
+          "metrics": {
+            "ns/op": 245157583.0,
+            "B/op": 6545096.0,
+            "allocs/op": 42438.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.87964933400508,
+          "load_before": [
+            13.7138671875,
+            11.994140625,
+            9.72412109375
+          ],
+          "load_after": [
+            13.17578125,
+            11.9111328125,
+            9.7080078125
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 1086470750.0,
+            "B/op": 40806088.0,
+            "allocs/op": 263139.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.769622207968496,
+          "load_before": [
+            13.48193359375,
+            11.99560546875,
+            9.75048828125
+          ],
+          "load_after": [
+            12.96240234375,
+            11.91259765625,
+            9.73388671875
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 1333085042.0,
+            "B/op": 35141562.0,
+            "allocs/op": 180390.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 5.9955558750079945,
+          "load_before": [
+            13.68603515625,
+            12.07958984375,
+            9.8056640625
+          ],
+          "load_after": [
+            13.87109375,
+            12.14453125,
+            9.841796875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 135102916.0,
+            "fetch-ms/op": 135.1,
+            "B/op": 2349952.0,
+            "allocs/op": 7990.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.7486519170342945,
+          "load_before": [
+            13.0546875,
+            12.0244140625,
+            9.82568359375
+          ],
+          "load_after": [
+            12.97021484375,
+            12.02392578125,
+            9.83837890625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 289085334.0,
+            "fetch-ms/op": 289.1,
+            "B/op": 12349362.0,
+            "allocs/op": 39097.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.534470500017051,
+          "load_before": [
+            12.57177734375,
+            11.95703125,
+            9.8271484375
+          ],
+          "load_after": [
+            12.99267578125,
+            12.07177734375,
+            9.89306640625
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 446568958.0,
+            "apply-ms/op": 205.6,
+            "client-ms/op": 150.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 89.93,
+            "B/op": 109946762.0,
+            "allocs/op": 139120.0
+          },
+          "case": "watch",
+          "elapsed": 27.103574624983594,
+          "load_before": [
+            13.17529296875,
+            12.19189453125,
+            9.9990234375
+          ],
+          "load_after": [
+            17.607421875,
+            13.3544921875,
+            10.48291015625
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 889524556.0,
+            "apply-ms/op": 222.0,
+            "client-ms/op": 585.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 81.69,
+            "B/op": 201712077.0,
+            "allocs/op": 420499.0
+          },
+          "case": "push",
+          "elapsed": 23.77216816699365,
+          "load_before": [
+            17.37890625,
+            13.6455078125,
+            10.669921875
+          ],
+          "load_after": [
+            37.4482421875,
+            18.61865234375,
+            12.54443359375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 3,
+          "metrics": {
+            "ns/op": 18029268.0,
+            "B/op": 38105.0,
+            "allocs/op": 73.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.23973154101986438,
+          "load_before": [
+            37.4482421875,
+            18.61865234375,
+            12.54443359375
+          ],
+          "load_after": [
+            37.4482421875,
+            18.61865234375,
+            12.54443359375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 3,
+          "metrics": {
+            "ns/op": 105778488.0,
+            "B/op": 10661651.0,
+            "allocs/op": 17533.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.3140870000352152,
+          "load_before": [
+            37.4482421875,
+            18.61865234375,
+            12.54443359375
+          ],
+          "load_after": [
+            37.4482421875,
+            18.61865234375,
+            12.54443359375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 3,
+          "metrics": {
+            "ns/op": 431263726.0,
+            "B/op": 11304356.0,
+            "allocs/op": 26815.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 3.8786171250394545,
+          "load_before": [
+            37.4482421875,
+            18.61865234375,
+            12.54443359375
+          ],
+          "load_after": [
+            37.572265625,
+            18.95654296875,
+            12.69921875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 3,
+          "metrics": {
+            "ns/op": 394017411.0,
+            "B/op": 11802485.0,
+            "allocs/op": 44510.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 3.1622314589913003,
+          "load_before": [
+            39.2080078125,
+            19.6044921875,
+            12.96435546875
+          ],
+          "load_after": [
+            39.2080078125,
+            19.6044921875,
+            12.96435546875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 3,
+          "metrics": {
+            "ns/op": 263789173.0,
+            "B/op": 6550137.0,
+            "allocs/op": 42447.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.91515812498983,
+          "load_before": [
+            41.27294921875,
+            20.35791015625,
+            13.26904296875
+          ],
+          "load_after": [
+            41.27294921875,
+            20.35791015625,
+            13.26904296875
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 1128855722.0,
+            "B/op": 41020389.0,
+            "allocs/op": 263109.0
+          },
+          "case": "workspace-create",
+          "elapsed": 6.1372512499801815,
+          "load_before": [
+            50.7802734375,
+            22.67578125,
+            14.12841796875
+          ],
+          "load_after": [
+            49.3564453125,
+            22.84716796875,
+            14.23876953125
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 1497460014.0,
+            "B/op": 35877122.0,
+            "allocs/op": 180447.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 7.084962459048256,
+          "load_before": [
+            45.42529296875,
+            22.88330078125,
+            14.3525390625
+          ],
+          "load_after": [
+            42.82861328125,
+            22.71875,
+            14.34423828125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 146150861.0,
+            "fetch-ms/op": 146.2,
+            "B/op": 2344296.0,
+            "allocs/op": 7976.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.996336625015829,
+          "load_before": [
+            40.84033203125,
+            22.64013671875,
+            14.365234375
+          ],
+          "load_after": [
+            37.21337890625,
+            22.45556640625,
+            14.3955078125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 351498472.0,
+            "fetch-ms/op": 351.5,
+            "B/op": 12340237.0,
+            "allocs/op": 39060.0
+          },
+          "case": "fetch-true",
+          "elapsed": 7.5900590409873985,
+          "load_before": [
+            35.0341796875,
+            22.24853515625,
+            14.36962890625
+          ],
+          "load_after": [
+            33.95556640625,
+            22.45068359375,
+            14.53369140625
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 443955097.0,
+            "apply-ms/op": 209.6,
+            "client-ms/op": 151.6,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 82.7,
+            "B/op": 98872229.0,
+            "allocs/op": 139058.0
+          },
+          "case": "watch",
+          "elapsed": 21.081839707971085,
+          "load_before": [
+            31.09521484375,
+            22.22021484375,
+            14.54443359375
+          ],
+          "load_after": [
+            28.35595703125,
+            22.18505859375,
+            14.7099609375
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 808630235.0,
+            "apply-ms/op": 204.9,
+            "client-ms/op": 518.4,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 85.34,
+            "B/op": 210583024.0,
+            "allocs/op": 420561.0
+          },
+          "case": "push",
+          "elapsed": 20.201010083022993,
+          "load_before": [
+            25.0166015625,
+            21.93408203125,
+            14.83740234375
+          ],
+          "load_after": [
+            22.431640625,
+            21.56103515625,
+            14.86865234375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 4,
+          "metrics": {
+            "ns/op": 17451917.0,
+            "B/op": 38109.0,
+            "allocs/op": 73.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.23879729199688882,
+          "load_before": [
+            19.56884765625,
+            20.94482421875,
+            14.8017578125
+          ],
+          "load_after": [
+            19.56884765625,
+            20.94482421875,
+            14.8017578125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 4,
+          "metrics": {
+            "ns/op": 100290155.0,
+            "B/op": 10654458.0,
+            "allocs/op": 17524.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.096367124991957,
+          "load_before": [
+            19.04248046875,
+            20.8125,
+            14.791015625
+          ],
+          "load_after": [
+            19.04248046875,
+            20.8125,
+            14.791015625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 4,
+          "metrics": {
+            "ns/op": 152934506.0,
+            "B/op": 11298058.0,
+            "allocs/op": 26802.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 1.891835875052493,
+          "load_before": [
+            19.04248046875,
+            20.8125,
+            14.791015625
+          ],
+          "load_after": [
+            18.318359375,
+            20.6328125,
+            14.7626953125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 4,
+          "metrics": {
+            "ns/op": 431540589.0,
+            "B/op": 11813378.0,
+            "allocs/op": 44551.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 3.457170790992677,
+          "load_before": [
+            18.318359375,
+            20.6328125,
+            14.7626953125
+          ],
+          "load_after": [
+            27.02099609375,
+            22.3984375,
+            15.419921875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 4,
+          "metrics": {
+            "ns/op": 251322571.0,
+            "B/op": 6547049.0,
+            "allocs/op": 42441.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.738521999970544,
+          "load_before": [
+            27.02099609375,
+            22.3984375,
+            15.419921875
+          ],
+          "load_after": [
+            30.70263671875,
+            23.23828125,
+            15.7568359375
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 1046598875.0,
+            "B/op": 41255224.0,
+            "allocs/op": 263170.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.500242125010118,
+          "load_before": [
+            31.76708984375,
+            23.58251953125,
+            15.921875
+          ],
+          "load_after": [
+            31.06494140625,
+            23.57275390625,
+            15.962890625
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 1326634625.0,
+            "B/op": 35147090.0,
+            "allocs/op": 180374.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 5.887642124958802,
+          "load_before": [
+            29.2978515625,
+            23.33056640625,
+            15.921875
+          ],
+          "load_after": [
+            26.69873046875,
+            22.97265625,
+            15.88134765625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 145199625.0,
+            "fetch-ms/op": 145.2,
+            "B/op": 2350472.0,
+            "allocs/op": 7977.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.883711666974705,
+          "load_before": [
+            25.44140625,
+            22.7734375,
+            15.8525390625
+          ],
+          "load_after": [
+            25.00537109375,
+            22.72705078125,
+            15.87646484375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 273862236.0,
+            "fetch-ms/op": 273.9,
+            "B/op": 12341058.0,
+            "allocs/op": 39086.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.4202900000382215,
+          "load_before": [
+            22.630859375,
+            22.29150390625,
+            15.8017578125
+          ],
+          "load_after": [
+            21.619140625,
+            22.08740234375,
+            15.767578125
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 446631528.0,
+            "apply-ms/op": 203.2,
+            "client-ms/op": 157.0,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 86.35,
+            "B/op": 103301018.0,
+            "allocs/op": 139082.0
+          },
+          "case": "watch",
+          "elapsed": 23.194040249974933,
+          "load_before": [
+            18.86328125,
+            21.37841796875,
+            15.69287109375
+          ],
+          "load_after": [
+            17.78271484375,
+            20.95263671875,
+            15.67041015625
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 820969903.0,
+            "apply-ms/op": 212.8,
+            "client-ms/op": 520.5,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 87.69,
+            "B/op": 203942357.0,
+            "allocs/op": 420522.0
+          },
+          "case": "push",
+          "elapsed": 21.21739995799726,
+          "load_before": [
+            17.9580078125,
+            20.732421875,
+            15.74267578125
+          ],
+          "load_after": [
+            16.8525390625,
+            20.29638671875,
+            15.70166015625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 5,
+          "metrics": {
+            "ns/op": 17340083.0,
+            "B/op": 38105.0,
+            "allocs/op": 73.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.24376108398428187,
+          "load_before": [
+            16.8525390625,
+            20.29638671875,
+            15.70166015625
+          ],
+          "load_after": [
+            16.8525390625,
+            20.29638671875,
+            15.70166015625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 5,
+          "metrics": {
+            "ns/op": 99707399.0,
+            "B/op": 10658660.0,
+            "allocs/op": 17524.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.0846178329666145,
+          "load_before": [
+            16.8525390625,
+            20.29638671875,
+            15.70166015625
+          ],
+          "load_after": [
+            16.8525390625,
+            20.29638671875,
+            15.70166015625
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 5,
+          "metrics": {
+            "ns/op": 170331595.0,
+            "B/op": 11297555.0,
+            "allocs/op": 26800.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 2.0818090419634245,
+          "load_before": [
+            16.2236328125,
+            20.1083984375,
+            15.662109375
+          ],
+          "load_after": [
+            16.2236328125,
+            20.1083984375,
+            15.662109375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 5,
+          "metrics": {
+            "ns/op": 406702316.0,
+            "B/op": 11828496.0,
+            "allocs/op": 45047.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 3.3056286250357516,
+          "load_before": [
+            16.2236328125,
+            20.1083984375,
+            15.662109375
+          ],
+          "load_after": [
+            15.64501953125,
+            19.923828125,
+            15.623046875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 5,
+          "metrics": {
+            "ns/op": 281807167.0,
+            "B/op": 6555458.0,
+            "allocs/op": 42447.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 3.005250041023828,
+          "load_before": [
+            15.35302734375,
+            19.7919921875,
+            15.6015625
+          ],
+          "load_after": [
+            15.35302734375,
+            19.7919921875,
+            15.6015625
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 1040915514.0,
+            "B/op": 41239858.0,
+            "allocs/op": 263103.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.490091542014852,
+          "load_before": [
+            17.32666015625,
+            20.12744140625,
+            15.744140625
+          ],
+          "load_after": [
+            17.46044921875,
+            20.1083984375,
+            15.76318359375
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 1301185625.0,
+            "B/op": 35840765.0,
+            "allocs/op": 180429.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 6.105886666977312,
+          "load_before": [
+            16.78271484375,
+            19.923828125,
+            15.72314453125
+          ],
+          "load_after": [
+            15.8388671875,
+            19.67578125,
+            15.66015625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 141063111.0,
+            "fetch-ms/op": 141.1,
+            "B/op": 2345096.0,
+            "allocs/op": 7974.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.745432250027079,
+          "load_before": [
+            15.087890625,
+            19.3896484375,
+            15.60546875
+          ],
+          "load_after": [
+            14.43994140625,
+            19.18359375,
+            15.5546875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 282817153.0,
+            "fetch-ms/op": 282.8,
+            "B/op": 11656069.0,
+            "allocs/op": 39062.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.396801541966852,
+          "load_before": [
+            14.00390625,
+            19.01416015625,
+            15.51611328125
+          ],
+          "load_after": [
+            13.46142578125,
+            18.7333984375,
+            15.45703125
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 447819389.0,
+            "apply-ms/op": 212.1,
+            "client-ms/op": 149.3,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 86.33,
+            "B/op": 105511957.0,
+            "allocs/op": 139091.0
+          },
+          "case": "watch",
+          "elapsed": 21.678895250021014,
+          "load_before": [
+            12.70361328125,
+            18.48876953125,
+            15.3896484375
+          ],
+          "load_after": [
+            12.638671875,
+            18.1123046875,
+            15.3271484375
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 5,
+          "metrics": {
+            "ns/op": 810503486.0,
+            "apply-ms/op": 218.5,
+            "client-ms/op": 515.8,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 76.2,
+            "B/op": 201716410.0,
+            "allocs/op": 420502.0
+          },
+          "case": "push",
+          "elapsed": 21.333160208014306,
+          "load_before": [
+            11.1044921875,
+            17.40771484375,
+            15.138671875
+          ],
+          "load_after": [
+            25.677734375,
+            20.0078125,
+            16.1220703125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/1-files",
+          "iterations": 7,
+          "round": 6,
+          "metrics": {
+            "ns/op": 17189006.0,
+            "B/op": 38080.0,
+            "allocs/op": 73.0
+          },
+          "case": "capture-1-files",
+          "elapsed": 0.2522678340319544,
+          "load_before": [
+            30.72509765625,
+            21.5537109375,
+            16.767578125
+          ],
+          "load_after": [
+            30.72509765625,
+            21.5537109375,
+            16.767578125
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-files",
+          "iterations": 7,
+          "round": 6,
+          "metrics": {
+            "ns/op": 99854869.0,
+            "B/op": 10653281.0,
+            "allocs/op": 17518.0
+          },
+          "case": "capture-512-files",
+          "elapsed": 1.0873250419972464,
+          "load_before": [
+            31.0673828125,
+            21.77685546875,
+            16.8740234375
+          ],
+          "load_after": [
+            31.0673828125,
+            21.77685546875,
+            16.8740234375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/512-directories",
+          "iterations": 7,
+          "round": 6,
+          "metrics": {
+            "ns/op": 155273809.0,
+            "B/op": 11304990.0,
+            "allocs/op": 26813.0
+          },
+          "case": "capture-512-directories",
+          "elapsed": 1.9820093750022352,
+          "load_before": [
+            31.0673828125,
+            21.77685546875,
+            16.8740234375
+          ],
+          "load_after": [
+            31.0615234375,
+            21.9296875,
+            16.95654296875
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/32-deep",
+          "iterations": 7,
+          "round": 6,
+          "metrics": {
+            "ns/op": 419274244.0,
+            "B/op": 11784530.0,
+            "allocs/op": 44026.0
+          },
+          "case": "capture-32-deep",
+          "elapsed": 3.3430266250506975,
+          "load_before": [
+            31.0615234375,
+            21.9296875,
+            16.95654296875
+          ],
+          "load_after": [
+            32.57763671875,
+            22.3955078125,
+            17.14990234375
+          ]
+        },
+        {
+          "name": "BenchmarkCaptureWorkspaceBase/8-deep-wide",
+          "iterations": 7,
+          "round": 6,
+          "metrics": {
+            "ns/op": 248402321.0,
+            "B/op": 6543152.0,
+            "allocs/op": 42438.0
+          },
+          "case": "capture-8-deep-wide",
+          "elapsed": 2.757069249986671,
+          "load_before": [
+            32.57763671875,
+            22.3955078125,
+            17.14990234375
+          ],
+          "load_after": [
+            32.8515625,
+            22.62109375,
+            17.26025390625
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 1007598042.0,
+            "B/op": 41122333.0,
+            "allocs/op": 263111.0
+          },
+          "case": "workspace-create",
+          "elapsed": 5.272104208008386,
+          "load_before": [
+            32.462890625,
+            22.7099609375,
+            17.32275390625
+          ],
+          "load_after": [
+            35.62890625,
+            23.52783203125,
+            17.64306640625
+          ]
+        },
+        {
+          "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 1359832777.0,
+            "B/op": 36051674.0,
+            "allocs/op": 180438.0
+          },
+          "case": "ephemeral-job",
+          "elapsed": 5.956015125033446,
+          "load_before": [
+            35.09765625,
+            23.61865234375,
+            17.70947265625
+          ],
+          "load_after": [
+            34.68896484375,
+            23.72412109375,
+            17.78125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 144537792.0,
+            "fetch-ms/op": 144.5,
+            "B/op": 2350562.0,
+            "allocs/op": 7977.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.716999708034564,
+          "load_before": [
+            35.662109375,
+            24.3056640625,
+            18.0576171875
+          ],
+          "load_after": [
+            35.92919921875,
+            24.54931640625,
+            18.18017578125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 272873125.0,
+            "fetch-ms/op": 272.9,
+            "B/op": 12115989.0,
+            "allocs/op": 39071.0
+          },
+          "case": "fetch-true",
+          "elapsed": 6.633855958993081,
+          "load_before": [
+            34.02099609375,
+            24.5146484375,
+            18.24169921875
+          ],
+          "load_after": [
+            34.57958984375,
+            24.7880859375,
+            18.375
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 448278639.0,
+            "apply-ms/op": 212.0,
+            "client-ms/op": 149.5,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 86.71,
+            "B/op": 107729218.0,
+            "allocs/op": 139112.0
+          },
+          "case": "watch",
+          "elapsed": 21.35469975002343,
+          "load_before": [
+            32.54443359375,
+            24.97509765625,
+            18.59130859375
+          ],
+          "load_after": [
+            30.21728515625,
+            25.02587890625,
+            18.79296875
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 6,
+          "metrics": {
+            "ns/op": 930845069.0,
+            "apply-ms/op": 297.7,
+            "client-ms/op": 535.7,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 97.48,
+            "B/op": 203930232.0,
+            "allocs/op": 420511.0
+          },
+          "case": "push",
+          "elapsed": 22.177468749985565,
+          "load_before": [
+            27.96875,
+            24.884765625,
+            18.888671875
+          ],
+          "load_after": [
+            22.9677734375,
+            23.94970703125,
+            18.6923828125
+          ]
+        }
+      ],
+      "binaries": {
+        "cmd-errand": "2559cf0293a0d4949ba2a43948af96664e700126e1dbf3c8fb11bab20b9ea5e6",
+        "internal-changes": "3c959f824f010dc7ff4e309cac5f0bff02b6fe0709c6ce6f926aaa29790c0b32"
+      }
+    }
+  },
+  "orders": [
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ]
+  ],
+  "toolchains": {
+    "baseline": {
+      "CGO_ENABLED": "0",
+      "GOARCH": "arm64",
+      "GOEXPERIMENT": "",
+      "GOFLAGS": "-p=1",
+      "GOOS": "darwin",
+      "GOTOOLCHAIN": "auto",
+      "GOVERSION": "go1.27.1"
+    },
+    "candidate": {
+      "CGO_ENABLED": "0",
+      "GOARCH": "arm64",
+      "GOEXPERIMENT": "",
+      "GOFLAGS": "-p=1",
+      "GOOS": "darwin",
+      "GOTOOLCHAIN": "auto",
+      "GOVERSION": "go1.27.1"
+    }
+  },
+  "scope": "Native capture and loopback commands. Capture retains outputs until sample end; fixture writes are flushed before timing. sync runs between processes; this does not force cold caches or exclude unrelated host I/O.",
+  "python": "3.14.7",
+  "comparison_inputs": {
+    "baseline": {
+      "cmd/errand/access_test.go": "31604dac5a8502b2a33f90a32d022e75a710af4aaa968577d6c86735ca3cf927",
+      "cmd/errand/apply_reporting_test.go": "7d4d407a76892c0829b839fae332ef34a2063360539ef78e328b676904a98af4",
+      "cmd/errand/artifacts_test.go": "a1cb592c8d2cd908f449e2edf82828b62253f71b4ba0dbaaae1bda81754b7bd1",
+      "cmd/errand/cache_groups_test.go": "df13480786735df29b3f8edbb9e2bfc42b486d3c4c71e45bb3a2daa9d8917d50",
+      "cmd/errand/caches_test.go": "51d2b277bd6b5bf7449fe6fd3cb36e7814e2ccd6d07541291949fc0ad8bb1c36",
+      "cmd/errand/df_cache_test.go": "58a6e75bc7ee606870e81768c6f0fe74ce6d1849e50fed42732d56b1d81cc29f",
+      "cmd/errand/df_inventory_test.go": "1abb7e845010f373197332b1b3f926ba86d8de6e502bff0623eb286338f0b48c",
+      "cmd/errand/doctor_local_test.go": "7b2e23ddb6c6d69753260b5b466aefc1a8eddc24aaba7a072907a6f7b2d93572",
+      "cmd/errand/doctor_test.go": "07369b30848957240357e1620de2ad6bdb02c60bab47619763b5d542de58d9bb",
+      "cmd/errand/environment_files_test.go": "4e379bf78d5a04bd3215b3671c7178c17b87ae6c4315d62346f59b87604e467b",
+      "cmd/errand/forward_test.go": "d0b433dda0e73236116b64a4d852a6d7f1be40e1d0f7943f8d23358c52d60167",
+      "cmd/errand/gc_test.go": "13e006fb611c8711acb2b06fdf288feab00c296c44cf00612c73be9cb046a59e",
+      "cmd/errand/local_transport_test.go": "2e82891f040052fe4ff35d27dd4e0ff3642613c04f322e43bd50dfc10169a259",
+      "cmd/errand/main_test.go": "43a5cdefaa18bd1447779b45d80c66cd439a0ca7f8d7ae447e53845cac21a367",
+      "cmd/errand/offline_test.go": "60e09c0f770cef9b54c9bdec0b9594375d228906d23b8beb5a8a678849439f41",
+      "cmd/errand/peers_render_test.go": "af6e1ffd9c9ad137e51102169226709333576f2cbd5a79caa342ef53555a0b9c",
+      "cmd/errand/peers_test.go": "326a343bc52974f76b154dbea89eb82a88af45ec73cc86a477d213b80fd195f1",
+      "cmd/errand/persistent_config_test.go": "f0f47499aef55494d546347e626a86d2ff2a2794d607a551c5dbc2dbf7fc00e9",
+      "cmd/errand/phases_benchmark_test.go": "83bb94cedf19c51c2c9587aee90243e24345dd32afdbee5a625208c7448b17d3",
+      "cmd/errand/placement_integration_test.go": "29ed473ca55405a608987127d3e211089faf336a3e2235028f0242d7ae4bf788",
+      "cmd/errand/placement_test.go": "eae502e11819ebb6fd6837e9733ce00361f0cb792b490101768749bff4b48b86",
+      "cmd/errand/profile_integration_test.go": "8ab2db51635ad06fe51e1087168cfb5a61636a28de4d5da230bda40369295a40",
+      "cmd/errand/ps_render_test.go": "ecf99e409d1b0542b3dc43a57d9780fec6e4603a2e190a010708ce26a4a9e28e",
+      "cmd/errand/push_batch_test.go": "b674dac11f275152f76f559cddaa503e0b8d9a93b53c1b122c42aaeda6cc0d32",
+      "cmd/errand/push_benchmark_test.go": "a9440c4c348cf5204404343481a16ffc393eadb8007b3bde8051ab819e10a665",
+      "cmd/errand/push_record_test.go": "7866d151113b9dacb3b267e8470e31ddc387755e3b666fe0f65376d1d16f1f9e",
+      "cmd/errand/push_test.go": "fbde42ccb920413d0f640a42b7bdaaa5a6b3ee526325692cb8f14ef491b0236d",
+      "cmd/errand/push_watch_burst_test.go": "44f9a8b72fc7141ee74653181268a92b1bf6ff01cac0e290583b7abae1596998",
+      "cmd/errand/push_watch_delta_test.go": "d87d3e70cb80c97b50a948ac5d8dfa6f81ccdebc8e3c9fa9194addd6e71040db",
+      "cmd/errand/push_watch_test.go": "bfeeac49be93a742a70e33c573037911f690a55ba6f9a9f8d08d51f7ff5aab24",
+      "cmd/errand/run_config_test.go": "1133a2301369b0685e76a3440a71c8e6a2804341564b1ab127e80714485c4cf5",
+      "cmd/errand/run_environment_test.go": "b7e576c94a47a8b5881fd8ac646ff8a7114258d63b552ce47c0ec9d8f9d2927e",
+      "cmd/errand/session_test.go": "08057b225ac265bb6a0add38444de18f34abced11704ba52db19aaf2fe3f7127",
+      "cmd/errand/setup_ssh_test.go": "d38d0347f60a5cfc7399bb7758bbb398c91db76445d13c391359c35b63f201af",
+      "cmd/errand/shared_paths_benchmark_test.go": "d90cf40b402a0ca88fa7a34abcdd1dc21d48322cc01785a3e853e5948c0a2b86",
+      "cmd/errand/ssh_transport_test.go": "28ef1b01664c65c7e9e689ed3c17e62e899daacbb7f39c41fc863683a654eab6",
+      "cmd/errand/status_test.go": "f9822b31559708808e1fba1a579cd9976b2dfdc57ac1c833ece70e3267898266",
+      "cmd/errand/test_main_test.go": "c1449a1d17edfd8b322c1ae7fb652f996fafdc23bceae25b431e28d09d7c8599",
+      "cmd/errand/transfer_reporting_test.go": "09a37c720c4ac415a30016e3b61e9d2aed6e9640295b835fc8e7621a825a0b35",
+      "cmd/errand/version_advisory_test.go": "a89d19f91b8707e071ddbfb6c64a09c73272b2d8cad2749931ea67ffd548b8bb",
+      "cmd/errand/version_discovery_test.go": "7c074efed6f52bd09a155b2e0808f8cec2f7cfc446428f447fdcd2d8419d7b83",
+      "cmd/errand/version_warning_test.go": "74cfb6466ef7064a8889e0d1aa799db5111b377c8f3af70a8489370f2a4c398f",
+      "cmd/errand/workspace_defaults_test.go": "0ec4602012c6680f4f02036456f9e95eeb8492e5a446c53093013caa3c5baad5",
+      "cmd/errand/workspaces_test.go": "b04bcf20d7513dead7311c46a8a646972f6052bf850dab4aeb91d86b264215fa",
+      "experiments/snapshotindex/benchmark_test.go": "721872e215bc22487d320617aa093e84bd0329e8acac972fcf0d07ff36f01939",
+      "experiments/snapshotindex/index_test.go": "6fb3c09ed0d046bdad8883e959f93f8ceb86f997133f607e691d19258c289f16",
+      "go.mod": "829ba9307fd2f739c48048ff80ef63a9f8d72266659a7bf0e7ae4d8cb32ade9b",
+      "go.sum": "b901d4ab1e60f0dedb01b06a025b7974e6799893f8785ab5057ba008ecc135f7",
+      "internal/archive/archive_test.go": "b36345cf7da0d5c0c92483845681fab07ff42d3a948d8b1bc3151e917a1baba1",
+      "internal/archive/validation_test.go": "75ac13f1dfd6a2b907d7894128246ac0f14483e2f878cf4d70f4ad04d7f45e9f",
+      "internal/changes/apply_materialize_benchmark_test.go": "13b5d8a42a1ae7fc715cd2d7065152097345f214daf54604a1fd0abe33c5c256",
+      "internal/changes/apply_materialize_test.go": "dc15904d74b7e263d22b17cf9e552e881f1b95c1c9d940dba7597d1c3307b15d",
+      "internal/changes/artifacts_test.go": "1e075a842cf20aa36215fc033a12f4c25d39c0037bea9df05883129a27fdcd24",
+      "internal/changes/base_benchmark_test.go": "86d1109e35c57de0eff8d51d4b2668c99143ba26ee9fe31437580cb949411b34",
+      "internal/changes/base_shared_test.go": "a42f0ab00e7588af17b6a955b623587d8376a2596370665ef4978295272913b1",
+      "internal/changes/base_test.go": "abe13cff729fafcdb69e93111d2cf2ee672376a783a260b35d08194142f8a1d1",
+      "internal/changes/caches_test.go": "b0374b3c032e19e987da7bdb30827b3fb8842f69f937a2e028ce803dd13acff9",
+      "internal/changes/changes_test.go": "4548ccfe98d347c90503267ea6d1bb4f366db1a9a2852c95642e5a490fbb485e",
+      "internal/changes/checkpoint_benchmark_test.go": "165a4930d55ee645cad188ea5d213dd9c7ec4ba9431d5a02d710b60c42590456",
+      "internal/changes/checkpoint_cache_benchmark_test.go": "6fbc520c220376646bdc5f78488477a86d06b726ed3abafd62e71d7293d77b31",
+      "internal/changes/checkpoint_cache_test.go": "6fc962299e99683f3d43a571c8f7d32b78c251d014ad19664caed7831c902be9",
+      "internal/changes/checkpoint_lifecycle_benchmark_test.go": "cf45253522819301a3ee6baa560df94412681ae2e9d0c124509776bf1ebfd94a",
+      "internal/changes/checkpoint_regression_test.go": "17bb0089bfe657b01d04574f368495becf120ba0ed348d922c5174fd0bae0d5c",
+      "internal/changes/checkpoint_reuse_test.go": "b3e6c4650e92b5862588a1f82af4966c96545dafc7109dfbcf0aa0779986898b",
+      "internal/changes/checkpoint_test.go": "80bb1e25194e79868873340af14d2c2db54e8c01b6fa1e6c51d451929bfc3762",
+      "internal/changes/cumulative_apply_test.go": "e0025c7533877637fdff26f7a8c1d046e141273e8ffcd85e359077fe3867a9e6",
+      "internal/changes/export_test.go": "fa891253e0027a756417998cbb0076345dffa0e828b4199427d59390fcd9bbd5",
+      "internal/changes/manifest_index_test.go": "882b508c49c989d8dd795ae8618c78f7f183bb54907dda3525019677c8a43e80",
+      "internal/changes/materialize_paths_test.go": "6e2d5c575365dab8c777225b950d3c0dc9d859b7c72532685cc67f72654cb56f",
+      "internal/changes/prepared_benchmark_test.go": "e1434c262c083acb734ad7226aa86d7c6d95d5b486d9cce73461a5a6c65d083c",
+      "internal/changes/retained_benchmark_test.go": "5d8963c2486da485bdc0ea1b2f61428897fd7b12cfd8feb5a98eb91b7a94107d",
+      "internal/changes/source_delta_test.go": "77a79fe4b7e16d47dafb2627ffd586901987828c480289a32471cf8a5a7c8184",
+      "internal/changes/source_metadata_benchmark_test.go": "c2e6d11a1128973c5ac97b662c4ae7e0f617bc9574d0d6a40839dcca12261c2f",
+      "internal/changes/source_prepared_test.go": "f8fd5b4c2b609b826a3879b1f33207371c54def19c0d52dea9d57b6de45b37a6",
+      "internal/changes/source_search_test.go": "b91bd065de18cbadc8eb9b0b5a836d6d7c779dd380a83af6f6083adfcff6ae68",
+      "internal/changes/source_snapshot_test.go": "0862adeb3a135dc3b46d161f6e8f8e32936be8772b15252d14ef2f1ac0aee933",
+      "internal/changes/staging_parallel_test.go": "c2996fc4e73f86d91a2b94eafe3482c6c621cc674c0987fdc584bd38f894f713",
+      "internal/changes/staging_sync_test.go": "8f009d1b60aba5171a94e5ba8d372c6dbcfd9fa7097630d50a25fd713c6eb796",
+      "internal/changes/transfer_benchmark_test.go": "dc8714ce547f05b4ebab56bfcd99ff4ef90a96189d18755761832a98cba37484",
+      "internal/changes/transfer_blobs_retry_test.go": "8b4222077a05d4a93022795cc865663abec3befd9eb5917dfe7cd037a06eb347",
+      "internal/changes/transfer_blobs_test.go": "b4dd0d66cb1f6e71586e67a2cc679ae4b205abbc8c25990328a96f47f77bedf9",
+      "internal/changes/transfer_materialize_test.go": "915988a716911484f29f42baed5a948f609351359b228b72643bfb38885e03a4",
+      "internal/changes/transfer_observation_test.go": "d0a80f3bf4199e78595adbf2ae564562f1cd2be17210ba55dfb2429b2c7a2a64",
+      "internal/changes/transfer_recovery_test.go": "3450cc278dad351b03898798c8393aef36132e4c01da71f0764396e325e03d37",
+      "internal/changes/transfer_session_test.go": "bba613fa4fc280a9ea0bb624a9794f1c4ed6ede4b025a061d1bdd84ce381936e",
+      "internal/changes/transfer_stage_benchmark_test.go": "809526c4aa7b417e2846e25a0fd01832a878cb46a5503bec8bdb18836aeaba4e",
+      "internal/changes/transfer_stage_blobs_test.go": "fb98a67a4ef903676c7d2523c283ae9886e5c4d091c9f2c44c14aba1ada4ffbd",
+      "internal/changes/transfer_stage_test.go": "8e3e2e672c0c778093cc4e6013cd32aa77be570fb6f4cc2d3723a044de29ee0d",
+      "internal/changes/transfer_test.go": "ed2f54364ff97b7e648b26a49aa03af7526547e84b88714cb960389276e3b254",
+      "internal/client/automatic_apply_inspect_test.go": "2b13758638ae9b304e9b12226c57e090e7a1e469704f0940eaf180c8158c6646",
+      "internal/client/caches_test.go": "af5d74e65550c21a1b306c8f7ea955d7a593af599342d7a204e5ef0a859def5a",
+      "internal/client/changes_test.go": "aa22a95af5ae512eca7f0b9447cb13b8ab5ab1c48d5796967900917d745ce116",
+      "internal/client/client_test.go": "e894503a5bb134485c99fc5278babe16aa352836db92cc9d829f4538b2565b1d",
+      "internal/client/forward_test.go": "c44302e899348225d53f0853ba524fb694779e89168ff58397d57c75df4deaff",
+      "internal/client/job_details_test.go": "eaeb46ee7a33b994cca19253191b62b554175be7be03427ea91ad57f93ba56b3",
+      "internal/client/local_test.go": "3b2bb42cc9bf04e6336182c750ab74b8300cb90b378a1491c4098e126fce1fb0",
+      "internal/client/placement_test.go": "b8111e17f385d50fed32fb8aa1f2a62bd17e935141cef10e950b37407afa5fc7",
+      "internal/client/probe_test.go": "39ccc1f2c75e18a16b6d5833ad6e97c833b2e654f4ddf9fccb8d018afbb29b5f",
+      "internal/client/push_watch_retry_test.go": "f07ce5858ae5259f7a5d479187a961eb15de2da8cfa797d442f26a3557a570be",
+      "internal/client/snapshot_transfer_test.go": "31f8d788a74b3eb128350b37a2b526e0d69dd833304eb025449b4466bd334fb3",
+      "internal/client/ssh_diagnostic_test.go": "0c4dcd0f4165fef77555e447fb39f3a5d3e42ef70311e0140e958257360797dd",
+      "internal/client/storage_contract_test.go": "b67d1c74f5e96102d22d3937b5dbcb426785af07de05739d2c1e126e9021b07b",
+      "internal/client/storage_test.go": "a66bd25b1b51e4b280fc98a0ee7ba87d4db50fca32fe0496660a4d522e51c1f5",
+      "internal/client/upload_deadline_test.go": "25fe84268355aa43508ca155dbc0d9050c3f83bca0982ebac33574ea1e1913cf",
+      "internal/client/workspace_descriptor_test.go": "1d94b5282e7858a186aecee4f96f513bc1abfc8fb326007724406f72b3878a22",
+      "internal/client/workspace_selection_test.go": "069a460df86210db9716fcf2d4c4baf0b4972519cc26d86836cb32f417fcfde7",
+      "internal/client/workspace_transfer_failure_test.go": "ec6aa2959e1938ea34adbf99823d069d6ef122dc6019f2c230e2baf0ed3b5146",
+      "internal/client/workspaces_test.go": "398b97cc4d73e262b1f23355a4fbb85d43dc9f45acc919b5344af7a17a95654c",
+      "internal/config/access_test.go": "e407d2b9027bf4e841e434698b70f1632ed551a6fae6efde6b69fbfdc5ae0b1b",
+      "internal/config/artifacts_test.go": "96b5883681c6c50633f5299a3d848d6a63485cbf9a6c0f7077b589c2176c3efa",
+      "internal/config/cache_groups_test.go": "8454e014ab4d770b07074b37442d5e6bc0e904ed3cb75a20e79ba94bed4247cb",
+      "internal/config/caches_test.go": "3282b5b4cf661138c980558f5de0fdb00446a98f2fdffd3074d0a664037caf62",
+      "internal/config/config_test.go": "667c6cb32d2b23c5cc49a0cc9053b6310ec8e37482b69f3e71ed5e556a405662",
+      "internal/config/environment_files_test.go": "9e822cf39b649f522a9a28a6c3d8ce3f468499153406ce398002a2bb177bbe27",
+      "internal/config/environment_test.go": "8806de97465c08280c53912a263fda6fcdf25b1b8b57cb2e1c808b6991287adc",
+      "internal/config/local_test.go": "e525d002bca737fc6640926b38871d8f13b3d35cbaeddd2b31aff36a5820c1da",
+      "internal/config/placement_test.go": "3337bffa9bb9ba5e9ff2416167cc4d9ef9cd5e46efa13e560ccfb038af5c79d2",
+      "internal/config/profiles_test.go": "932fae0425880dac171af0509f03ae6061df85b88328d687db2c3fcfdf6fd483",
+      "internal/config/run_test.go": "b5e9e3cd27cdecbdce7c3b7bb350157ddfd46834d993d52ac6b2ef162b42a9bb",
+      "internal/config/session_test.go": "671b265022c2821dbc931f3995b31ae4e926be7cf531eee274e2f10a58f397b5",
+      "internal/config/strict_test.go": "7e2477faf1ef92977da2445ca6c7ee56302c4c806e8bfc958a573e5a49299af8",
+      "internal/config/transport_test.go": "f1dafeabd548ba888dc3bc7f4d8eed57af01851d98f734fd0419ef939ce44fe2",
+      "internal/daemon/admission_persistence_test.go": "e80cd1d9899d0432c2dec9c390b71040c1c9aa18f5a3e6a1e83a0e5f9a43438c",
+      "internal/daemon/admission_regression_test.go": "4642915813b244d169c267d2909af87974832c1c308038a006ceb0287239286d",
+      "internal/daemon/artifacts_test.go": "19c8fa5e5dd27988dedd3d9dc2d044b71f7ab98f02f7d9688603e769bdfe8b0f",
+      "internal/daemon/auth_test.go": "ce3688084df6e8ae38f394b66ccc5295098dd3f5ea209ccd5f492fffbe17b10e",
+      "internal/daemon/cache_build_tools_test.go": "cef2bcba38ac818b094f5acf4508c24846d28258526ec4d1575bdfe69c4deec3",
+      "internal/daemon/cache_materialize_benchmark_test.go": "6c125dcf8ddd95ea2f42a5a19f219980e74e5ee9990ea66f7d2b29810767b686",
+      "internal/daemon/cache_native_test.go": "7f28ec99a191c12c2f2eea100022a67413e4b736e7978589c5591cdbdf2e05d2",
+      "internal/daemon/cache_policy_test.go": "e42e3d394b2640042e88ea881270d8a35e023ae41d8f382a984572ef73653f13",
+      "internal/daemon/cache_preparation_test.go": "0863a28a9fb5610420f6e899f4077d4fc7345bce2baf287107158fe355df607e",
+      "internal/daemon/cache_settlement_test.go": "b0f21e0b07c6a7ca0a8eab414a467af8868e805ed295577a24fab208a6b26e02",
+      "internal/daemon/cache_test.go": "0e2e84f88ea5bf03b7e7e83986aca0ca5e09453cbbe629248c99c1a4950eebde",
+      "internal/daemon/cache_tools_test.go": "00f0b393407afd9d6e925760addbf205f7b87ba0ae4b08352a52bf375a284b01",
+      "internal/daemon/cache_trees_test.go": "ef6bbcc17197beed5abb1809a09c224ab73354b910c46219c22707c79c310634",
+      "internal/daemon/daemon_test.go": "ed213a87489233d0f096eeb41a1fc0b278c69eacee7f539d0353d82d5b68f229",
+      "internal/daemon/deny_test.go": "2a7072974a250d064a46e23f38e2d5e4a354beea2eb7448335ab5344016f2640",
+      "internal/daemon/forward_test.go": "f498bc575efe2c6ad5e62e4814ad466a2f42b0b7c9e1bb5fac02f7baabf28186",
+      "internal/daemon/job_gc_test.go": "fda697f26cb88a3ef89aae5bce5ed8783dbdb7198e84e643bd8c364417bd4495",
+      "internal/daemon/job_preview_test.go": "1a4ee40585de649c609ed953b6c6b6c48d315fbd6be2b27f4f5e7b5b4c744f88",
+      "internal/daemon/local_identity_test.go": "02c979ab4f247b352617d46498da65d65078e5f07e353e0f79b49316047926b2",
+      "internal/daemon/local_mode_test.go": "df8be9015465945208098379b3a984182dc3ee6bdc61d6d3182fb55d8e90eedf",
+      "internal/daemon/milestone2_test.go": "1eaadf010756a2e9cd3ec48a40141e5be318d04ac58f9007715c3eca1a17f130",
+      "internal/daemon/milestone35_test.go": "51185f18697edb69520be5d584a06082c917ae6b4d0ae53e4f7d882cdaa22356",
+      "internal/daemon/milestone3_test.go": "f63708ff94124b98b87ccd913ebc27974e552d10ac45892e1ecab385834606e3",
+      "internal/daemon/milestone4_test.go": "1a198307d318b992e49954164805501ea36f34c3bcc66979ebe2cc3a9674792c",
+      "internal/daemon/named_caches_test.go": "d2889d7f63ee9e02e79864137d8ad44919edaf83b90e2f5c183684b302f0fa5b",
+      "internal/daemon/peercred_uid_test.go": "f07cb1c54a2570e053e11c10d47a289c2f2e059917a17f982db0deaa8e38dfdd",
+      "internal/daemon/placement_test.go": "7cb4a0ba7ef2020aedc543ab0b5d28414757fb8946c3ab1f8a1cdc0519a4d926",
+      "internal/daemon/process_group_linux_test.go": "ce50fbac97afbbb4022cfdd0463ec9953dc18c1394f4d6c3d7bc8bc370f11fb4",
+      "internal/daemon/process_group_test.go": "5d4f08c1c804dab7244dfbccd2d82442724c717fc3427f9aea52e92a9fd9f42d",
+      "internal/daemon/process_scope_test.go": "b1f902e39f4c463fea4094005ce062e625160b681608f352b0a32b5a434bf146",
+      "internal/daemon/setup_quiesce_test.go": "0d90005228642d97dbeeb6ec14b47e589608d37a6bd95e0f2850dd2e4a30cf55",
+      "internal/daemon/storage_test.go": "61f60cbbfcd6e3dbabdf31b1e5279e7689778baf532ee9ef6aaec11c6839df75",
+      "internal/daemon/workspace_concurrency_test.go": "dbe9ec0d6e50867b74210572b26370cec42b3b4dcbe97d943618c24631360a59",
+      "internal/daemon/workspace_concurrent_recovery_test.go": "7f96b00b3cc45c45c70936e5c75f933770f345ad65d426bfe0fcc9acc875bb2b",
+      "internal/daemon/workspace_create_snapshot_test.go": "48e02fbc39b7362d40702657998095a80d45cabba48c03e4ea0739f5879edd7f",
+      "internal/daemon/workspace_descriptor_test.go": "30ad63d8c74f2b50bafbb1d14d01a3d2d7a759ac863d5a64c74c3a3f61e99012",
+      "internal/daemon/workspace_fetch_test.go": "2e8f2822d1c16bc3eeef6b8bffba3ff1af0645789429193903ce100086a84bb2",
+      "internal/daemon/workspace_format_test.go": "08a5732090e9b368e31775e12b04adf2f5bb4fb6dd6d84648cf910c2d2822979",
+      "internal/daemon/workspace_isolation_test.go": "547094506bb6dad2ba8cde94c396451d34693f6afc3770d1c639c7aa60349db3",
+      "internal/daemon/workspace_push_cache_test.go": "f00b40608c5c4533610d83b16dee69634b74c044974b3351ecfde022ea919750",
+      "internal/daemon/workspace_push_delta_test.go": "551d00e6e474d12bc2c027b7aa0d064673657d4997166b0e166cbda8dc473892",
+      "internal/daemon/workspace_push_snapshot_test.go": "a62217ac2216844139992fc9ed711250e78e12bbaff36313353ce9a934aa307f",
+      "internal/daemon/workspace_recovery_test.go": "c1744ea0f6a0f12ff92040c82fee71c389e57d76c165d2ec5b72260debf92010",
+      "internal/daemon/workspace_scope_failure_test.go": "ea0e64579f339019260eb1f91093ee5c74df89cfca871b5e163f02050487ec62",
+      "internal/daemon/workspace_snapshot_benchmark_test.go": "720c4e3d2dfcbecfb97181dbadbf6c43b6b3bf84d6f9b1fa981c6371e4507d3d",
+      "internal/daemon/workspace_storage_test.go": "3dad1927f7e88d26e8a88e020991fd2bf93966e5b7d60ac9b027660bf68d6519",
+      "internal/daemon/workspace_transfer_gc_test.go": "268885ddd62161476e4a567ae7e22510840b7927a3af46db5fe0f486c8a434ca",
+      "internal/daemon/workspace_transfer_test.go": "fb727fe7df4f6fc66a01d7275b6ce22bc07fa761b10635f770fb3efb4ad9d261",
+      "internal/daemon/workspace_upload_admission_test.go": "ddeed6d3d6e8a8c96cd49680d4ab97369a4bf0eac752e7bed54be515adc48cfe",
+      "internal/daemon/workspace_upload_test.go": "71b944e980f2aa61a81fdd3e9a1ca972723c2c0fded2a13d258bb4ee8eb676a1",
+      "internal/daemon/workspaces_test.go": "a8c5e6f5cc79f141b2c7aaad4b5bf567cfc7a08efb7f05461e687bdb325fbbf0",
+      "internal/logio/logio_test.go": "396d08586f39d6b7cadd030116864eaf188fec3e2a835e9302a4cda587dfb0c7",
+      "internal/manifest/adaptive_test.go": "6d01a95cb57a33071fae807ad87ddca565898bee68b76d7a55274a00b56409d7",
+      "internal/manifest/export_test.go": "ab474a173c64599ea9027376a2a1be2ebd0e31cdbc33508ead2fbac002b5fc1b",
+      "internal/manifest/memory_benchmark_test.go": "717ce101a2ec07ea1462213246d2213b7494e21f46131988a3d9f7758be11e79",
+      "internal/manifest/snapshot_test.go": "f28a33a9da2028e263557ab81b6c485c08b8939f5a53e64358ceb8c6eaf1684f",
+      "internal/namedcache/gc_pressure_test.go": "f5ff973ddb222f747d068f472117eba228ff83bcbf1ca07e924ff33430babfd5",
+      "internal/namedcache/leases_test.go": "c0c4ff6e89a8ddfa12d16bbe787a29949f351f63fc31da5e6aebf9a01c949717",
+      "internal/namedcache/store_test.go": "7c8c0469295cb32adc2cd9256da2eb642e1895cf8a86ff24496606724e7b517b",
+      "internal/namedcache/tree_filesystem_linux_test.go": "370876afb3e8673cdcf05660c84b1bb10fec488a91aa6273a9ecbf0a2be4cb59",
+      "internal/namedcache/tree_holders_test.go": "ed83d358021cbf272982db616737e40e6201bb281763d0191beff4eb293c680e",
+      "internal/namedcache/tree_publication_test.go": "e9b257dfcd85bd34c7c1be8331fb8b7e077914b492ed5cb5deacd2cc999a8e82",
+      "internal/namedcache/tree_recovery_test.go": "c5e660d39beb8e7e7409a65ca541116f07c9c72601c0d06f77c14ffef42b2d0b",
+      "internal/namedcache/trees_test.go": "c7124922f2b9bf19bcc6825d8b2ff525e5f7844e27346f8bed50ce75f9865e99",
+      "internal/pathpolicy/artifacts_test.go": "01cfc92881fd09ed7cf66d733e499e440994ecb856a7439f7d4ed59a8dfe4aed",
+      "internal/pathpolicy/caches_test.go": "96cf703571509e68c2c6dd9f677193a8268f6d0345883ffb3d744b65d7fd8eb2",
+      "internal/pathpolicy/policy_test.go": "44944660b0399bc165e61d54ec68cd9b5af4d050fd7e681320e994a73fe834ac",
+      "internal/placement/requirements_test.go": "d28d57a05d3db6a8f7371a58145b5db68bdf984bd7f502810cfec35ba62e9323",
+      "internal/proto/spec_test.go": "5e2cee8248de9a02698dcb930e7a974254dbea64a64d7f5e05a2fea15f1c7097",
+      "internal/proto/ulid_test.go": "f4bf5c19509336d0615969ae10722cec665b5b4acd325f3db59038b217bd1b20",
+      "internal/serviceruntime/runtime_test.go": "73efe3e08c13da8cfc2bbe272009c3f22f24c26b6eeb53f737a7a3aa1059012a",
+      "internal/setup/config_path_test.go": "8384ad67d1597b4135f27483d20480bbacc5cc55bc95cf412215d611e6231139",
+      "internal/setup/config_plan_test.go": "9ee94275edf511aa34bd4dca3fb122c41fe42863e74185a850d7552de83699fe",
+      "internal/setup/diagnose_test.go": "5db799e1469197d8b89db21266bab517a9ab90d0c476468e55ecd46c1a8e1eb0",
+      "internal/setup/executable_test.go": "b99d0de5c96c07be4949cbdad93607e060bdf29be100572dbdcc782df8256be5",
+      "internal/setup/local_test.go": "a08ef2fc54786b48f66b2301ef3a2dedd1e6c64ffcc6105d689dee040a36edc7",
+      "internal/setup/service_identity_test.go": "983c430e44c92d1f8c54db9ee2db99c3fd9a6b6658909d208ca95f879d496446",
+      "internal/setup/service_live_cleanup_test.go": "b27bd2e30193ad0a99c83061f73acc2cd682707542886c40ac7e379ec1a33799",
+      "internal/setup/service_live_network_test.go": "e23005eaa9925c70bda2e95178cbdd7e6a00fd509db469aac768d0fa9be5fdde",
+      "internal/setup/service_live_test.go": "867af67b481b7992a6f3f39a0e2f92373197d708d296bc62596b22a110ef4dc5",
+      "internal/setup/setup_test.go": "7fdd784cff832afa4f707c6b153972fb93de2ea38ead0c785c94a9ce35ec6930",
+      "internal/setup/ssh_test.go": "8d93934d65017795d9ffbddae4b496df835e15f6dac678cc13945da827d8cf0e",
+      "internal/setup/transport_test.go": "e08450dec7a9ffd05d80ff5d106341f4a753d2da1faf5052a9027a52905ef8c5",
+      "internal/setup/upgrade_test.go": "3c62b2adfeb9e680550c83510380701882a3a3ecf1208695b4739412098c278d",
+      "internal/snapshot/benchmark_test.go": "9422579f8f5c2e9f1f2e82f23262b5023100bb545bc6ecfeb914b6f3f5385653",
+      "internal/snapshot/builder_test.go": "226a47729eb6a6e2d344b2316ecbc431f8a08f7eabec08faadf36c6b494aeb15",
+      "internal/snapshot/caches_test.go": "730edb68d7e4f15f0c7d868828774460b47775cb17027e90ad4dc3c941e65b30",
+      "internal/snapshot/git_info_test.go": "4569d379784a8c58dbc9e68c26ae1e18d41471016eb6732656ee4d64b2e04147",
+      "internal/snapshot/snapshot_test.go": "d34f94873f97c8e7b944eb34e9b8bb6ed31de784a494c1dfbabecbb59a209e5c",
+      "internal/snapshot/watch_prepare_benchmark_test.go": "5f67b143bfc0678b1fb0c14550a0df7da47b0e6905ffeaad8d144b87516803b3",
+      "internal/snapshot/watch_prepare_test.go": "036b8e29207a0e6a624ccb8d306bfd8d7fa8b6300b9fff4b3e99f05560664c00",
+      "internal/snapshot/watch_test.go": "6c57379eb70fc33bde3d87fb2fdf4a56392fb8ce6f570af60d5b9a49c2979273",
+      "internal/tailnet/self_test.go": "6ff6500c386c3bcca39d36d8a5c677f61ced361359dae99d284d77c7e02341d7",
+      "internal/tailnet/tailnet_test.go": "f0d1d041e8ceaf82363e1aaa4da47efbadb8c8defec9547fe826b6c259099044",
+      "internal/unixpeer/dial_test.go": "91f6acad0f562aa138967cf47ad403537718092d3fb303b5b07b571fa80f3be8",
+      "internal/workspace/cache_discovery_test.go": "a132da034c89aa931d1a8f17f8a17c5b1fb62e74918a8651da96b7312ac04c03",
+      "internal/workspace/strict_test.go": "c290be5c2476b7c0c79826ad7546e88565eefd3c6532ffaf23279d80272e2c2c",
+      "internal/workspace/workspace_test.go": "06bfa9a142070c44343dfdd318ad5e7de709fedad34115eeebf6a02423ed06b5"
+    },
+    "candidate": {
+      "cmd/errand/access_test.go": "31604dac5a8502b2a33f90a32d022e75a710af4aaa968577d6c86735ca3cf927",
+      "cmd/errand/apply_reporting_test.go": "7d4d407a76892c0829b839fae332ef34a2063360539ef78e328b676904a98af4",
+      "cmd/errand/artifacts_test.go": "a1cb592c8d2cd908f449e2edf82828b62253f71b4ba0dbaaae1bda81754b7bd1",
+      "cmd/errand/cache_groups_test.go": "df13480786735df29b3f8edbb9e2bfc42b486d3c4c71e45bb3a2daa9d8917d50",
+      "cmd/errand/caches_test.go": "51d2b277bd6b5bf7449fe6fd3cb36e7814e2ccd6d07541291949fc0ad8bb1c36",
+      "cmd/errand/df_cache_test.go": "58a6e75bc7ee606870e81768c6f0fe74ce6d1849e50fed42732d56b1d81cc29f",
+      "cmd/errand/df_inventory_test.go": "1abb7e845010f373197332b1b3f926ba86d8de6e502bff0623eb286338f0b48c",
+      "cmd/errand/doctor_local_test.go": "7b2e23ddb6c6d69753260b5b466aefc1a8eddc24aaba7a072907a6f7b2d93572",
+      "cmd/errand/doctor_test.go": "07369b30848957240357e1620de2ad6bdb02c60bab47619763b5d542de58d9bb",
+      "cmd/errand/environment_files_test.go": "4e379bf78d5a04bd3215b3671c7178c17b87ae6c4315d62346f59b87604e467b",
+      "cmd/errand/forward_test.go": "d0b433dda0e73236116b64a4d852a6d7f1be40e1d0f7943f8d23358c52d60167",
+      "cmd/errand/gc_test.go": "13e006fb611c8711acb2b06fdf288feab00c296c44cf00612c73be9cb046a59e",
+      "cmd/errand/local_transport_test.go": "2e82891f040052fe4ff35d27dd4e0ff3642613c04f322e43bd50dfc10169a259",
+      "cmd/errand/main_test.go": "43a5cdefaa18bd1447779b45d80c66cd439a0ca7f8d7ae447e53845cac21a367",
+      "cmd/errand/offline_test.go": "60e09c0f770cef9b54c9bdec0b9594375d228906d23b8beb5a8a678849439f41",
+      "cmd/errand/peers_render_test.go": "af6e1ffd9c9ad137e51102169226709333576f2cbd5a79caa342ef53555a0b9c",
+      "cmd/errand/peers_test.go": "326a343bc52974f76b154dbea89eb82a88af45ec73cc86a477d213b80fd195f1",
+      "cmd/errand/persistent_config_test.go": "f0f47499aef55494d546347e626a86d2ff2a2794d607a551c5dbc2dbf7fc00e9",
+      "cmd/errand/phases_benchmark_test.go": "83bb94cedf19c51c2c9587aee90243e24345dd32afdbee5a625208c7448b17d3",
+      "cmd/errand/placement_integration_test.go": "29ed473ca55405a608987127d3e211089faf336a3e2235028f0242d7ae4bf788",
+      "cmd/errand/placement_test.go": "eae502e11819ebb6fd6837e9733ce00361f0cb792b490101768749bff4b48b86",
+      "cmd/errand/profile_integration_test.go": "8ab2db51635ad06fe51e1087168cfb5a61636a28de4d5da230bda40369295a40",
+      "cmd/errand/ps_render_test.go": "ecf99e409d1b0542b3dc43a57d9780fec6e4603a2e190a010708ce26a4a9e28e",
+      "cmd/errand/push_batch_test.go": "b674dac11f275152f76f559cddaa503e0b8d9a93b53c1b122c42aaeda6cc0d32",
+      "cmd/errand/push_benchmark_test.go": "a9440c4c348cf5204404343481a16ffc393eadb8007b3bde8051ab819e10a665",
+      "cmd/errand/push_record_test.go": "7866d151113b9dacb3b267e8470e31ddc387755e3b666fe0f65376d1d16f1f9e",
+      "cmd/errand/push_test.go": "fbde42ccb920413d0f640a42b7bdaaa5a6b3ee526325692cb8f14ef491b0236d",
+      "cmd/errand/push_watch_burst_test.go": "44f9a8b72fc7141ee74653181268a92b1bf6ff01cac0e290583b7abae1596998",
+      "cmd/errand/push_watch_delta_test.go": "d87d3e70cb80c97b50a948ac5d8dfa6f81ccdebc8e3c9fa9194addd6e71040db",
+      "cmd/errand/push_watch_test.go": "bfeeac49be93a742a70e33c573037911f690a55ba6f9a9f8d08d51f7ff5aab24",
+      "cmd/errand/run_config_test.go": "1133a2301369b0685e76a3440a71c8e6a2804341564b1ab127e80714485c4cf5",
+      "cmd/errand/run_environment_test.go": "b7e576c94a47a8b5881fd8ac646ff8a7114258d63b552ce47c0ec9d8f9d2927e",
+      "cmd/errand/session_test.go": "08057b225ac265bb6a0add38444de18f34abced11704ba52db19aaf2fe3f7127",
+      "cmd/errand/setup_ssh_test.go": "d38d0347f60a5cfc7399bb7758bbb398c91db76445d13c391359c35b63f201af",
+      "cmd/errand/shared_paths_benchmark_test.go": "d90cf40b402a0ca88fa7a34abcdd1dc21d48322cc01785a3e853e5948c0a2b86",
+      "cmd/errand/ssh_transport_test.go": "28ef1b01664c65c7e9e689ed3c17e62e899daacbb7f39c41fc863683a654eab6",
+      "cmd/errand/status_test.go": "f9822b31559708808e1fba1a579cd9976b2dfdc57ac1c833ece70e3267898266",
+      "cmd/errand/test_main_test.go": "c1449a1d17edfd8b322c1ae7fb652f996fafdc23bceae25b431e28d09d7c8599",
+      "cmd/errand/transfer_reporting_test.go": "09a37c720c4ac415a30016e3b61e9d2aed6e9640295b835fc8e7621a825a0b35",
+      "cmd/errand/version_advisory_test.go": "a89d19f91b8707e071ddbfb6c64a09c73272b2d8cad2749931ea67ffd548b8bb",
+      "cmd/errand/version_discovery_test.go": "7c074efed6f52bd09a155b2e0808f8cec2f7cfc446428f447fdcd2d8419d7b83",
+      "cmd/errand/version_warning_test.go": "74cfb6466ef7064a8889e0d1aa799db5111b377c8f3af70a8489370f2a4c398f",
+      "cmd/errand/workspace_defaults_test.go": "0ec4602012c6680f4f02036456f9e95eeb8492e5a446c53093013caa3c5baad5",
+      "cmd/errand/workspaces_test.go": "b04bcf20d7513dead7311c46a8a646972f6052bf850dab4aeb91d86b264215fa",
+      "experiments/snapshotindex/benchmark_test.go": "721872e215bc22487d320617aa093e84bd0329e8acac972fcf0d07ff36f01939",
+      "experiments/snapshotindex/index_test.go": "6fb3c09ed0d046bdad8883e959f93f8ceb86f997133f607e691d19258c289f16",
+      "go.mod": "829ba9307fd2f739c48048ff80ef63a9f8d72266659a7bf0e7ae4d8cb32ade9b",
+      "go.sum": "b901d4ab1e60f0dedb01b06a025b7974e6799893f8785ab5057ba008ecc135f7",
+      "internal/archive/archive_test.go": "b36345cf7da0d5c0c92483845681fab07ff42d3a948d8b1bc3151e917a1baba1",
+      "internal/archive/validation_test.go": "75ac13f1dfd6a2b907d7894128246ac0f14483e2f878cf4d70f4ad04d7f45e9f",
+      "internal/changes/apply_materialize_benchmark_test.go": "13b5d8a42a1ae7fc715cd2d7065152097345f214daf54604a1fd0abe33c5c256",
+      "internal/changes/apply_materialize_test.go": "dc15904d74b7e263d22b17cf9e552e881f1b95c1c9d940dba7597d1c3307b15d",
+      "internal/changes/artifacts_test.go": "1e075a842cf20aa36215fc033a12f4c25d39c0037bea9df05883129a27fdcd24",
+      "internal/changes/base_benchmark_test.go": "86d1109e35c57de0eff8d51d4b2668c99143ba26ee9fe31437580cb949411b34",
+      "internal/changes/base_shared_test.go": "a42f0ab00e7588af17b6a955b623587d8376a2596370665ef4978295272913b1",
+      "internal/changes/base_test.go": "abe13cff729fafcdb69e93111d2cf2ee672376a783a260b35d08194142f8a1d1",
+      "internal/changes/caches_test.go": "b0374b3c032e19e987da7bdb30827b3fb8842f69f937a2e028ce803dd13acff9",
+      "internal/changes/changes_test.go": "4548ccfe98d347c90503267ea6d1bb4f366db1a9a2852c95642e5a490fbb485e",
+      "internal/changes/checkpoint_benchmark_test.go": "165a4930d55ee645cad188ea5d213dd9c7ec4ba9431d5a02d710b60c42590456",
+      "internal/changes/checkpoint_cache_benchmark_test.go": "6fbc520c220376646bdc5f78488477a86d06b726ed3abafd62e71d7293d77b31",
+      "internal/changes/checkpoint_cache_test.go": "6fc962299e99683f3d43a571c8f7d32b78c251d014ad19664caed7831c902be9",
+      "internal/changes/checkpoint_lifecycle_benchmark_test.go": "cf45253522819301a3ee6baa560df94412681ae2e9d0c124509776bf1ebfd94a",
+      "internal/changes/checkpoint_regression_test.go": "17bb0089bfe657b01d04574f368495becf120ba0ed348d922c5174fd0bae0d5c",
+      "internal/changes/checkpoint_reuse_test.go": "b3e6c4650e92b5862588a1f82af4966c96545dafc7109dfbcf0aa0779986898b",
+      "internal/changes/checkpoint_test.go": "80bb1e25194e79868873340af14d2c2db54e8c01b6fa1e6c51d451929bfc3762",
+      "internal/changes/cumulative_apply_test.go": "e0025c7533877637fdff26f7a8c1d046e141273e8ffcd85e359077fe3867a9e6",
+      "internal/changes/export_test.go": "fa891253e0027a756417998cbb0076345dffa0e828b4199427d59390fcd9bbd5",
+      "internal/changes/manifest_index_test.go": "882b508c49c989d8dd795ae8618c78f7f183bb54907dda3525019677c8a43e80",
+      "internal/changes/materialize_paths_test.go": "6e2d5c575365dab8c777225b950d3c0dc9d859b7c72532685cc67f72654cb56f",
+      "internal/changes/prepared_benchmark_test.go": "e1434c262c083acb734ad7226aa86d7c6d95d5b486d9cce73461a5a6c65d083c",
+      "internal/changes/retained_benchmark_test.go": "5d8963c2486da485bdc0ea1b2f61428897fd7b12cfd8feb5a98eb91b7a94107d",
+      "internal/changes/source_delta_test.go": "77a79fe4b7e16d47dafb2627ffd586901987828c480289a32471cf8a5a7c8184",
+      "internal/changes/source_metadata_benchmark_test.go": "c2e6d11a1128973c5ac97b662c4ae7e0f617bc9574d0d6a40839dcca12261c2f",
+      "internal/changes/source_prepared_test.go": "f8fd5b4c2b609b826a3879b1f33207371c54def19c0d52dea9d57b6de45b37a6",
+      "internal/changes/source_search_test.go": "b91bd065de18cbadc8eb9b0b5a836d6d7c779dd380a83af6f6083adfcff6ae68",
+      "internal/changes/source_snapshot_test.go": "0862adeb3a135dc3b46d161f6e8f8e32936be8772b15252d14ef2f1ac0aee933",
+      "internal/changes/staging_parallel_test.go": "c2996fc4e73f86d91a2b94eafe3482c6c621cc674c0987fdc584bd38f894f713",
+      "internal/changes/staging_sync_test.go": "8f009d1b60aba5171a94e5ba8d372c6dbcfd9fa7097630d50a25fd713c6eb796",
+      "internal/changes/transfer_benchmark_test.go": "dc8714ce547f05b4ebab56bfcd99ff4ef90a96189d18755761832a98cba37484",
+      "internal/changes/transfer_blobs_retry_test.go": "8b4222077a05d4a93022795cc865663abec3befd9eb5917dfe7cd037a06eb347",
+      "internal/changes/transfer_blobs_test.go": "b4dd0d66cb1f6e71586e67a2cc679ae4b205abbc8c25990328a96f47f77bedf9",
+      "internal/changes/transfer_materialize_test.go": "915988a716911484f29f42baed5a948f609351359b228b72643bfb38885e03a4",
+      "internal/changes/transfer_observation_test.go": "d0a80f3bf4199e78595adbf2ae564562f1cd2be17210ba55dfb2429b2c7a2a64",
+      "internal/changes/transfer_recovery_test.go": "3450cc278dad351b03898798c8393aef36132e4c01da71f0764396e325e03d37",
+      "internal/changes/transfer_session_test.go": "bba613fa4fc280a9ea0bb624a9794f1c4ed6ede4b025a061d1bdd84ce381936e",
+      "internal/changes/transfer_stage_benchmark_test.go": "809526c4aa7b417e2846e25a0fd01832a878cb46a5503bec8bdb18836aeaba4e",
+      "internal/changes/transfer_stage_blobs_test.go": "fb98a67a4ef903676c7d2523c283ae9886e5c4d091c9f2c44c14aba1ada4ffbd",
+      "internal/changes/transfer_stage_test.go": "8e3e2e672c0c778093cc4e6013cd32aa77be570fb6f4cc2d3723a044de29ee0d",
+      "internal/changes/transfer_test.go": "ed2f54364ff97b7e648b26a49aa03af7526547e84b88714cb960389276e3b254",
+      "internal/client/automatic_apply_inspect_test.go": "2b13758638ae9b304e9b12226c57e090e7a1e469704f0940eaf180c8158c6646",
+      "internal/client/caches_test.go": "af5d74e65550c21a1b306c8f7ea955d7a593af599342d7a204e5ef0a859def5a",
+      "internal/client/changes_test.go": "aa22a95af5ae512eca7f0b9447cb13b8ab5ab1c48d5796967900917d745ce116",
+      "internal/client/client_test.go": "e894503a5bb134485c99fc5278babe16aa352836db92cc9d829f4538b2565b1d",
+      "internal/client/forward_test.go": "c44302e899348225d53f0853ba524fb694779e89168ff58397d57c75df4deaff",
+      "internal/client/job_details_test.go": "eaeb46ee7a33b994cca19253191b62b554175be7be03427ea91ad57f93ba56b3",
+      "internal/client/local_test.go": "3b2bb42cc9bf04e6336182c750ab74b8300cb90b378a1491c4098e126fce1fb0",
+      "internal/client/placement_test.go": "b8111e17f385d50fed32fb8aa1f2a62bd17e935141cef10e950b37407afa5fc7",
+      "internal/client/probe_test.go": "39ccc1f2c75e18a16b6d5833ad6e97c833b2e654f4ddf9fccb8d018afbb29b5f",
+      "internal/client/push_watch_retry_test.go": "f07ce5858ae5259f7a5d479187a961eb15de2da8cfa797d442f26a3557a570be",
+      "internal/client/snapshot_transfer_test.go": "31f8d788a74b3eb128350b37a2b526e0d69dd833304eb025449b4466bd334fb3",
+      "internal/client/ssh_diagnostic_test.go": "0c4dcd0f4165fef77555e447fb39f3a5d3e42ef70311e0140e958257360797dd",
+      "internal/client/storage_contract_test.go": "b67d1c74f5e96102d22d3937b5dbcb426785af07de05739d2c1e126e9021b07b",
+      "internal/client/storage_test.go": "a66bd25b1b51e4b280fc98a0ee7ba87d4db50fca32fe0496660a4d522e51c1f5",
+      "internal/client/upload_deadline_test.go": "25fe84268355aa43508ca155dbc0d9050c3f83bca0982ebac33574ea1e1913cf",
+      "internal/client/workspace_descriptor_test.go": "1d94b5282e7858a186aecee4f96f513bc1abfc8fb326007724406f72b3878a22",
+      "internal/client/workspace_selection_test.go": "069a460df86210db9716fcf2d4c4baf0b4972519cc26d86836cb32f417fcfde7",
+      "internal/client/workspace_transfer_failure_test.go": "ec6aa2959e1938ea34adbf99823d069d6ef122dc6019f2c230e2baf0ed3b5146",
+      "internal/client/workspaces_test.go": "398b97cc4d73e262b1f23355a4fbb85d43dc9f45acc919b5344af7a17a95654c",
+      "internal/config/access_test.go": "e407d2b9027bf4e841e434698b70f1632ed551a6fae6efde6b69fbfdc5ae0b1b",
+      "internal/config/artifacts_test.go": "96b5883681c6c50633f5299a3d848d6a63485cbf9a6c0f7077b589c2176c3efa",
+      "internal/config/cache_groups_test.go": "8454e014ab4d770b07074b37442d5e6bc0e904ed3cb75a20e79ba94bed4247cb",
+      "internal/config/caches_test.go": "3282b5b4cf661138c980558f5de0fdb00446a98f2fdffd3074d0a664037caf62",
+      "internal/config/config_test.go": "667c6cb32d2b23c5cc49a0cc9053b6310ec8e37482b69f3e71ed5e556a405662",
+      "internal/config/environment_files_test.go": "9e822cf39b649f522a9a28a6c3d8ce3f468499153406ce398002a2bb177bbe27",
+      "internal/config/environment_test.go": "8806de97465c08280c53912a263fda6fcdf25b1b8b57cb2e1c808b6991287adc",
+      "internal/config/local_test.go": "e525d002bca737fc6640926b38871d8f13b3d35cbaeddd2b31aff36a5820c1da",
+      "internal/config/placement_test.go": "3337bffa9bb9ba5e9ff2416167cc4d9ef9cd5e46efa13e560ccfb038af5c79d2",
+      "internal/config/profiles_test.go": "932fae0425880dac171af0509f03ae6061df85b88328d687db2c3fcfdf6fd483",
+      "internal/config/run_test.go": "b5e9e3cd27cdecbdce7c3b7bb350157ddfd46834d993d52ac6b2ef162b42a9bb",
+      "internal/config/session_test.go": "671b265022c2821dbc931f3995b31ae4e926be7cf531eee274e2f10a58f397b5",
+      "internal/config/strict_test.go": "7e2477faf1ef92977da2445ca6c7ee56302c4c806e8bfc958a573e5a49299af8",
+      "internal/config/transport_test.go": "f1dafeabd548ba888dc3bc7f4d8eed57af01851d98f734fd0419ef939ce44fe2",
+      "internal/daemon/admission_persistence_test.go": "e80cd1d9899d0432c2dec9c390b71040c1c9aa18f5a3e6a1e83a0e5f9a43438c",
+      "internal/daemon/admission_regression_test.go": "4642915813b244d169c267d2909af87974832c1c308038a006ceb0287239286d",
+      "internal/daemon/artifacts_test.go": "19c8fa5e5dd27988dedd3d9dc2d044b71f7ab98f02f7d9688603e769bdfe8b0f",
+      "internal/daemon/auth_test.go": "ce3688084df6e8ae38f394b66ccc5295098dd3f5ea209ccd5f492fffbe17b10e",
+      "internal/daemon/cache_build_tools_test.go": "cef2bcba38ac818b094f5acf4508c24846d28258526ec4d1575bdfe69c4deec3",
+      "internal/daemon/cache_materialize_benchmark_test.go": "6c125dcf8ddd95ea2f42a5a19f219980e74e5ee9990ea66f7d2b29810767b686",
+      "internal/daemon/cache_native_test.go": "7f28ec99a191c12c2f2eea100022a67413e4b736e7978589c5591cdbdf2e05d2",
+      "internal/daemon/cache_policy_test.go": "e42e3d394b2640042e88ea881270d8a35e023ae41d8f382a984572ef73653f13",
+      "internal/daemon/cache_preparation_test.go": "0863a28a9fb5610420f6e899f4077d4fc7345bce2baf287107158fe355df607e",
+      "internal/daemon/cache_settlement_test.go": "b0f21e0b07c6a7ca0a8eab414a467af8868e805ed295577a24fab208a6b26e02",
+      "internal/daemon/cache_test.go": "0e2e84f88ea5bf03b7e7e83986aca0ca5e09453cbbe629248c99c1a4950eebde",
+      "internal/daemon/cache_tools_test.go": "00f0b393407afd9d6e925760addbf205f7b87ba0ae4b08352a52bf375a284b01",
+      "internal/daemon/cache_trees_test.go": "ef6bbcc17197beed5abb1809a09c224ab73354b910c46219c22707c79c310634",
+      "internal/daemon/daemon_test.go": "ed213a87489233d0f096eeb41a1fc0b278c69eacee7f539d0353d82d5b68f229",
+      "internal/daemon/deny_test.go": "2a7072974a250d064a46e23f38e2d5e4a354beea2eb7448335ab5344016f2640",
+      "internal/daemon/forward_test.go": "f498bc575efe2c6ad5e62e4814ad466a2f42b0b7c9e1bb5fac02f7baabf28186",
+      "internal/daemon/job_gc_test.go": "fda697f26cb88a3ef89aae5bce5ed8783dbdb7198e84e643bd8c364417bd4495",
+      "internal/daemon/job_preview_test.go": "1a4ee40585de649c609ed953b6c6b6c48d315fbd6be2b27f4f5e7b5b4c744f88",
+      "internal/daemon/local_identity_test.go": "02c979ab4f247b352617d46498da65d65078e5f07e353e0f79b49316047926b2",
+      "internal/daemon/local_mode_test.go": "df8be9015465945208098379b3a984182dc3ee6bdc61d6d3182fb55d8e90eedf",
+      "internal/daemon/milestone2_test.go": "1eaadf010756a2e9cd3ec48a40141e5be318d04ac58f9007715c3eca1a17f130",
+      "internal/daemon/milestone35_test.go": "51185f18697edb69520be5d584a06082c917ae6b4d0ae53e4f7d882cdaa22356",
+      "internal/daemon/milestone3_test.go": "f63708ff94124b98b87ccd913ebc27974e552d10ac45892e1ecab385834606e3",
+      "internal/daemon/milestone4_test.go": "1a198307d318b992e49954164805501ea36f34c3bcc66979ebe2cc3a9674792c",
+      "internal/daemon/named_caches_test.go": "d2889d7f63ee9e02e79864137d8ad44919edaf83b90e2f5c183684b302f0fa5b",
+      "internal/daemon/peercred_uid_test.go": "f07cb1c54a2570e053e11c10d47a289c2f2e059917a17f982db0deaa8e38dfdd",
+      "internal/daemon/placement_test.go": "7cb4a0ba7ef2020aedc543ab0b5d28414757fb8946c3ab1f8a1cdc0519a4d926",
+      "internal/daemon/process_group_linux_test.go": "ce50fbac97afbbb4022cfdd0463ec9953dc18c1394f4d6c3d7bc8bc370f11fb4",
+      "internal/daemon/process_group_test.go": "5d4f08c1c804dab7244dfbccd2d82442724c717fc3427f9aea52e92a9fd9f42d",
+      "internal/daemon/process_scope_test.go": "b1f902e39f4c463fea4094005ce062e625160b681608f352b0a32b5a434bf146",
+      "internal/daemon/setup_quiesce_test.go": "0d90005228642d97dbeeb6ec14b47e589608d37a6bd95e0f2850dd2e4a30cf55",
+      "internal/daemon/storage_test.go": "61f60cbbfcd6e3dbabdf31b1e5279e7689778baf532ee9ef6aaec11c6839df75",
+      "internal/daemon/workspace_concurrency_test.go": "dbe9ec0d6e50867b74210572b26370cec42b3b4dcbe97d943618c24631360a59",
+      "internal/daemon/workspace_concurrent_recovery_test.go": "7f96b00b3cc45c45c70936e5c75f933770f345ad65d426bfe0fcc9acc875bb2b",
+      "internal/daemon/workspace_create_snapshot_test.go": "48e02fbc39b7362d40702657998095a80d45cabba48c03e4ea0739f5879edd7f",
+      "internal/daemon/workspace_descriptor_test.go": "30ad63d8c74f2b50bafbb1d14d01a3d2d7a759ac863d5a64c74c3a3f61e99012",
+      "internal/daemon/workspace_fetch_test.go": "2e8f2822d1c16bc3eeef6b8bffba3ff1af0645789429193903ce100086a84bb2",
+      "internal/daemon/workspace_format_test.go": "08a5732090e9b368e31775e12b04adf2f5bb4fb6dd6d84648cf910c2d2822979",
+      "internal/daemon/workspace_isolation_test.go": "547094506bb6dad2ba8cde94c396451d34693f6afc3770d1c639c7aa60349db3",
+      "internal/daemon/workspace_push_cache_test.go": "f00b40608c5c4533610d83b16dee69634b74c044974b3351ecfde022ea919750",
+      "internal/daemon/workspace_push_delta_test.go": "551d00e6e474d12bc2c027b7aa0d064673657d4997166b0e166cbda8dc473892",
+      "internal/daemon/workspace_push_snapshot_test.go": "a62217ac2216844139992fc9ed711250e78e12bbaff36313353ce9a934aa307f",
+      "internal/daemon/workspace_recovery_test.go": "c1744ea0f6a0f12ff92040c82fee71c389e57d76c165d2ec5b72260debf92010",
+      "internal/daemon/workspace_scope_failure_test.go": "ea0e64579f339019260eb1f91093ee5c74df89cfca871b5e163f02050487ec62",
+      "internal/daemon/workspace_snapshot_benchmark_test.go": "720c4e3d2dfcbecfb97181dbadbf6c43b6b3bf84d6f9b1fa981c6371e4507d3d",
+      "internal/daemon/workspace_storage_test.go": "3dad1927f7e88d26e8a88e020991fd2bf93966e5b7d60ac9b027660bf68d6519",
+      "internal/daemon/workspace_transfer_gc_test.go": "268885ddd62161476e4a567ae7e22510840b7927a3af46db5fe0f486c8a434ca",
+      "internal/daemon/workspace_transfer_test.go": "fb727fe7df4f6fc66a01d7275b6ce22bc07fa761b10635f770fb3efb4ad9d261",
+      "internal/daemon/workspace_upload_admission_test.go": "ddeed6d3d6e8a8c96cd49680d4ab97369a4bf0eac752e7bed54be515adc48cfe",
+      "internal/daemon/workspace_upload_test.go": "71b944e980f2aa61a81fdd3e9a1ca972723c2c0fded2a13d258bb4ee8eb676a1",
+      "internal/daemon/workspaces_test.go": "a8c5e6f5cc79f141b2c7aaad4b5bf567cfc7a08efb7f05461e687bdb325fbbf0",
+      "internal/logio/logio_test.go": "396d08586f39d6b7cadd030116864eaf188fec3e2a835e9302a4cda587dfb0c7",
+      "internal/manifest/adaptive_test.go": "6d01a95cb57a33071fae807ad87ddca565898bee68b76d7a55274a00b56409d7",
+      "internal/manifest/export_test.go": "ab474a173c64599ea9027376a2a1be2ebd0e31cdbc33508ead2fbac002b5fc1b",
+      "internal/manifest/memory_benchmark_test.go": "717ce101a2ec07ea1462213246d2213b7494e21f46131988a3d9f7758be11e79",
+      "internal/manifest/snapshot_test.go": "f28a33a9da2028e263557ab81b6c485c08b8939f5a53e64358ceb8c6eaf1684f",
+      "internal/namedcache/gc_pressure_test.go": "f5ff973ddb222f747d068f472117eba228ff83bcbf1ca07e924ff33430babfd5",
+      "internal/namedcache/leases_test.go": "c0c4ff6e89a8ddfa12d16bbe787a29949f351f63fc31da5e6aebf9a01c949717",
+      "internal/namedcache/store_test.go": "7c8c0469295cb32adc2cd9256da2eb642e1895cf8a86ff24496606724e7b517b",
+      "internal/namedcache/tree_filesystem_linux_test.go": "370876afb3e8673cdcf05660c84b1bb10fec488a91aa6273a9ecbf0a2be4cb59",
+      "internal/namedcache/tree_holders_test.go": "ed83d358021cbf272982db616737e40e6201bb281763d0191beff4eb293c680e",
+      "internal/namedcache/tree_publication_test.go": "e9b257dfcd85bd34c7c1be8331fb8b7e077914b492ed5cb5deacd2cc999a8e82",
+      "internal/namedcache/tree_recovery_test.go": "c5e660d39beb8e7e7409a65ca541116f07c9c72601c0d06f77c14ffef42b2d0b",
+      "internal/namedcache/trees_test.go": "c7124922f2b9bf19bcc6825d8b2ff525e5f7844e27346f8bed50ce75f9865e99",
+      "internal/pathpolicy/artifacts_test.go": "01cfc92881fd09ed7cf66d733e499e440994ecb856a7439f7d4ed59a8dfe4aed",
+      "internal/pathpolicy/caches_test.go": "96cf703571509e68c2c6dd9f677193a8268f6d0345883ffb3d744b65d7fd8eb2",
+      "internal/pathpolicy/policy_test.go": "44944660b0399bc165e61d54ec68cd9b5af4d050fd7e681320e994a73fe834ac",
+      "internal/placement/requirements_test.go": "d28d57a05d3db6a8f7371a58145b5db68bdf984bd7f502810cfec35ba62e9323",
+      "internal/proto/spec_test.go": "5e2cee8248de9a02698dcb930e7a974254dbea64a64d7f5e05a2fea15f1c7097",
+      "internal/proto/ulid_test.go": "f4bf5c19509336d0615969ae10722cec665b5b4acd325f3db59038b217bd1b20",
+      "internal/serviceruntime/runtime_test.go": "73efe3e08c13da8cfc2bbe272009c3f22f24c26b6eeb53f737a7a3aa1059012a",
+      "internal/setup/config_path_test.go": "8384ad67d1597b4135f27483d20480bbacc5cc55bc95cf412215d611e6231139",
+      "internal/setup/config_plan_test.go": "9ee94275edf511aa34bd4dca3fb122c41fe42863e74185a850d7552de83699fe",
+      "internal/setup/diagnose_test.go": "5db799e1469197d8b89db21266bab517a9ab90d0c476468e55ecd46c1a8e1eb0",
+      "internal/setup/executable_test.go": "b99d0de5c96c07be4949cbdad93607e060bdf29be100572dbdcc782df8256be5",
+      "internal/setup/local_test.go": "a08ef2fc54786b48f66b2301ef3a2dedd1e6c64ffcc6105d689dee040a36edc7",
+      "internal/setup/service_identity_test.go": "983c430e44c92d1f8c54db9ee2db99c3fd9a6b6658909d208ca95f879d496446",
+      "internal/setup/service_live_cleanup_test.go": "b27bd2e30193ad0a99c83061f73acc2cd682707542886c40ac7e379ec1a33799",
+      "internal/setup/service_live_network_test.go": "e23005eaa9925c70bda2e95178cbdd7e6a00fd509db469aac768d0fa9be5fdde",
+      "internal/setup/service_live_test.go": "867af67b481b7992a6f3f39a0e2f92373197d708d296bc62596b22a110ef4dc5",
+      "internal/setup/setup_test.go": "7fdd784cff832afa4f707c6b153972fb93de2ea38ead0c785c94a9ce35ec6930",
+      "internal/setup/ssh_test.go": "8d93934d65017795d9ffbddae4b496df835e15f6dac678cc13945da827d8cf0e",
+      "internal/setup/transport_test.go": "e08450dec7a9ffd05d80ff5d106341f4a753d2da1faf5052a9027a52905ef8c5",
+      "internal/setup/upgrade_test.go": "3c62b2adfeb9e680550c83510380701882a3a3ecf1208695b4739412098c278d",
+      "internal/snapshot/benchmark_test.go": "9422579f8f5c2e9f1f2e82f23262b5023100bb545bc6ecfeb914b6f3f5385653",
+      "internal/snapshot/builder_test.go": "226a47729eb6a6e2d344b2316ecbc431f8a08f7eabec08faadf36c6b494aeb15",
+      "internal/snapshot/caches_test.go": "730edb68d7e4f15f0c7d868828774460b47775cb17027e90ad4dc3c941e65b30",
+      "internal/snapshot/git_info_test.go": "4569d379784a8c58dbc9e68c26ae1e18d41471016eb6732656ee4d64b2e04147",
+      "internal/snapshot/snapshot_test.go": "d34f94873f97c8e7b944eb34e9b8bb6ed31de784a494c1dfbabecbb59a209e5c",
+      "internal/snapshot/watch_prepare_benchmark_test.go": "5f67b143bfc0678b1fb0c14550a0df7da47b0e6905ffeaad8d144b87516803b3",
+      "internal/snapshot/watch_prepare_test.go": "036b8e29207a0e6a624ccb8d306bfd8d7fa8b6300b9fff4b3e99f05560664c00",
+      "internal/snapshot/watch_test.go": "6c57379eb70fc33bde3d87fb2fdf4a56392fb8ce6f570af60d5b9a49c2979273",
+      "internal/tailnet/self_test.go": "6ff6500c386c3bcca39d36d8a5c677f61ced361359dae99d284d77c7e02341d7",
+      "internal/tailnet/tailnet_test.go": "f0d1d041e8ceaf82363e1aaa4da47efbadb8c8defec9547fe826b6c259099044",
+      "internal/unixpeer/dial_test.go": "91f6acad0f562aa138967cf47ad403537718092d3fb303b5b07b571fa80f3be8",
+      "internal/workspace/cache_discovery_test.go": "a132da034c89aa931d1a8f17f8a17c5b1fb62e74918a8651da96b7312ac04c03",
+      "internal/workspace/strict_test.go": "c290be5c2476b7c0c79826ad7546e88565eefd3c6532ffaf23279d80272e2c2c",
+      "internal/workspace/workspace_test.go": "06bfa9a142070c44343dfdd318ad5e7de709fedad34115eeebf6a02423ed06b5"
+    }
+  },
+  "harness_inputs": {
+    "benchmark.py": "a7bb143e87fbc1d07d8db5cf4286891edc41960b839f7f4c4933d06188610aa0",
+    "benchmark_materialization.py": "cde72c756f97ccb4ba3bd53e9d99dbdd036011118444766cd35d9e8aa521ad3e",
+    "benchmark_push.py": "a7bad0dbcd2aa76a67c8624668b874f5469a492342407a6c697970cf67b54f36",
+    "benchmark_snapshot_index.py": "0bc23ea3c6035b9df4d92c4cae4d94b8a07c013a800aa243dc72f5dc198f8eae",
+    "benchmark_snapshot_integration.py": "9f642c54650caf902bc25257909a5b4f6371d9a3a752604ac5c246e1b437208d",
+    "benchmark_watch.py": "801a41916418ab6f76c18b7bed21e12bc2764eba775bd9ad333e9a60b21e68d6",
+    "homebrew_formula.py": "138ceda430ed970b6ee331989f3578030cd8950169b71e32155877dd79a51a75",
+    "notarize_macos.py": "886505d735c11dd1d7f8ea0b9eb1e7068c2022fb2e5cc77a1542cb782793f83e",
+    "prepare_homebrew_update.py": "ebf3959689d4a7bc393e9e7e4f0a4ca43ce40209feb0f17f2b9f6c276c9045d6",
+    "profile_transfer_latency.py": "895440f06ebcf90d21f4f7c14a9f33dc5bbfa49279f0661b82d8bdebf6637eab",
+    "snapshot_provenance.py": "32c2a01bda02fe7bc0f6ea08ca553ae844cee8c9b642fac23f53633c8c3d1266",
+    "summarize_snapshot_benchmarks.py": "2da0c00175c0f119a1bcc308339a0cae1be6806b5effc313d6c7fe8096fea1fd",
+    "test_benchmark.py": "965bd5afaa6f5c5ea44582dc2740f5ab4a47a44b97d46a8c9754b8bc714ee804",
+    "test_benchmark_push.py": "51865970a05b6c42e4a4412f2839259e4a50a5156f74131d986898f6a47fc04c",
+    "test_benchmark_scratch.py": "83f616a27cc8436426073ae1bdcbc9a3afb03ff709b023d6be98d6c32c478304",
+    "test_homebrew_formula.py": "870b8b6d3d3d5495ca12f0c364801e77b833d0afb93d7a23daab28fd91a143cd",
+    "test_notarize_macos.py": "123665dae9d05eba4a069822cb597aea42fc426eb17e06234a32f1bfcec7a74f",
+    "test_prepare_homebrew_update.py": "a9f6cbd056883dc253eafd1193fd259cb3529f23c38caa1b607b9c92d88cde94",
+    "test_release_workflow.py": "95dc7a430dd746f4ea019fa8027cceddad4862f547b5bbd4b38ee3ac432a3dbf",
+    "test_snapshot_benchmark_order.py": "f98272552afa947523112a1d0059d36d5a6747ca9dfcdab595a51fbd262e4d01",
+    "test_snapshot_provenance.py": "f952d707b0f37d12b17b1a1163f1200251a51dcf2c42db401456f020ce134b37",
+    "test_snapshot_summary.py": "25cdd7decb3ddf74eabce4fa392fdfb141c6f0520d2e7107442569d44810b2fa"
+  },
+  "status": "complete",
+  "fixture_filesystem": "apfs"
+}

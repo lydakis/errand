@@ -66,6 +66,16 @@ slowdown, without establishing equivalence. Incoming tar decoding
 remains a transport boundary. Persisted incremental state and large-file transfer
 remain the subsequent roadmap steps.
 
+The [directory materialization comparison](DIRECTORY_MATERIALIZATION.md) controls
+capture cleanup I/O and compares the current scheduler with sorted and
+order-preserving directory batches. Both batching candidates roughly double deep
+APFS capture latency. Separate profiles and temporary counters expose increased
+full-path fallbacks, consistent with longer destination leases and greater source
+cache pressure from dispatch across directories. They do not isolate the causal
+latency contribution of each adapter. The current per-file
+scheduler is retained; the benchmark controls and rejected experiments are kept
+as evidence. Persisted incremental state is the next main implementation step.
+
 Keep the current content-addressed model. Selection policy determines eligible
 paths, a snapshot describes their state, and the content store resolves their
 bodies. Changing the snapshot representation and changing the unit of body
@@ -122,13 +132,36 @@ not sufficient evidence for migrating all of them.
   directories without changing source permissions. Cover ordinary/deep paths,
   symlink metadata and APFS aliases, plus deterministic cloned-output verification,
   exhausted parent-cache capacity and eviction-time identity rejection.
-- **Next bounded performance slice, before step 3:** control deferred cleanup I/O
-  in the capture benchmarks, then extend wide/deep native paired measurements.
-  Profile time waiting for the retained-parent mutex and its filesystem calls.
-  Compare the current cache with directory-grouped traversal only under matched
-  workloads and unchanged source-binding, descriptor-bound and durability contracts.
-  Keep the current implementation until the alternative demonstrates a win;
-  small or inconsistent timing differences are not evidence of equivalence.
+- **Completed before step 3:** remove between-iteration deletion from capture
+  timing, synchronize fixtures before measurement, and extend wide/deep native
+  paired comparisons. Separate mutex/syscall profiles and temporary counters
+  support a traversal hypothesis for the directory-batching regressions. Keep
+  current per-file scheduling;
+  neither sorted nor original-order batches passed the APFS capture gate. The
+  complete comparison and its measurement limits are in the linked report.
+- **Included in this measurement slice after review:** reject benchmark output
+  inside frozen sources before work, require actual diagnostic samples and complete
+  adapter counters, and add regression coverage. Record mount metadata and imported
+  diagnostic harness/toolchain identities for future runs. Preserve the historical
+  artifacts, map patches to measured source identities, show timing spread and
+  distinguish manifest dispatch order, destination lease duration and source-cache
+  pressure in the report. These fixes do not adopt a runtime optimization.
+- **After step 3, only if directory-heavy capture remains a measured priority:**
+  compare relaxing leaf-first eviction for the private destination cache against
+  current per-file scheduling. Destination verification is already disabled; this
+  changes only its eviction rule. Separately evaluate reducing source-cache mutex
+  time around directory open/stat/close calls. Neither hypothesis is validated by
+  aggregate mutex percentages. Preserve descriptor bounds, borrowed-handle lifetime,
+  source binding checks and eviction-time verification before considering adoption.
+- **Before adopting another directory-materialization candidate:** include realistic
+  shallow/broad layouts, small sets, deep/wide shapes, restricted directories and
+  complete operations. For smaller effects, use even, position-balanced pairs,
+  check 1x/3x/7x output-retention sensitivity and replicate mutex and syscall profiles
+  in separate processes. These precision experiments belong with that candidate,
+  not as a prerequisite for moving to persisted incremental state.
+- **When benchmark orchestration next needs another shared behavior:** factor the
+  comparison drivers around that concrete need. Reusing provenance helpers is useful
+  now; a broad campaign-driver rewrite is not needed to retain rejected experiments.
 - **When new fixture/build inputs appear:** include fixture permissions and symlink
   metadata, embedded assets and other build inputs in provenance. These are not
   grounds for invalidating the existing byte-identical fixture comparisons.

@@ -328,12 +328,14 @@ failure; the changes package's race tests and vet were rechecked on both hosts.
 The final regression asserts source and captured permissions before the output
 oracle temporarily widens its own private input for verification.
 
-The next bounded performance slice will first control deferred cleanup I/O, then
-extend wide/deep measurements and compare retained-parent contention with a
-directory-grouped alternative. Timer exclusion alone does not exclude delayed
-cleanup writes from a later flush. Preserve source-binding checks, descriptor
-bounds and durability in any alternative. The existing performance tables remain
-unchanged; they do not establish the effect of this permission correction.
+The [directory materialization follow-up](DIRECTORY_MATERIALIZATION.md) now
+controls deferred cleanup I/O, extends wide/deep measurements and compares the
+current scheduler with two directory-batched alternatives. Both alternatives
+regress deep APFS capture; the current implementation is retained. Timer
+exclusion alone does not exclude delayed cleanup writes from a later flush.
+The original tables here remain unchanged; the follow-up measures the corrected
+`36d2f59` baseline with the revised fixture policy and makes no cross-campaign
+speedup claim.
 
 ### Reproduce the frozen measurements
 

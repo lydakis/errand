@@ -3,6 +3,7 @@ package changes
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,7 +30,7 @@ func BenchmarkCaptureWorkspaceBase(b *testing.B) {
 	} {
 		b.Run(shape.name, func(b *testing.B) {
 			files := shape.files
-			root, job := b.TempDir(), b.TempDir()
+			root, jobs := b.TempDir(), b.TempDir()
 			data := make([]byte, 8*1024*1024/files)
 			for i := range data {
 				data[i] = byte(i)
@@ -76,18 +77,68 @@ func BenchmarkCaptureWorkspaceBase(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			// Flush fixture writes before measuring capture. Retain captured trees
+			// until the entire sample ends: StopTimer alone does not prevent a
+			// deletion's deferred writes from joining the next capture's fsync.
+			syncCaptureFixture(b, root)
 			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				if err := CaptureWorkspaceBaseContext(context.Background(), root, job, manifest); err != nil {
+			for b.Loop() {
+				b.StopTimer()
+				job, err := os.MkdirTemp(jobs, "capture-")
+				if err != nil {
 					b.Fatal(err)
 				}
-				b.StopTimer()
-				if err := os.RemoveAll(workspaceBasePath(job)); err != nil {
+				if err := syncDirectory(jobs); err != nil {
 					b.Fatal(err)
 				}
 				b.StartTimer()
+				if err := CaptureWorkspaceBaseContext(context.Background(), root, job, manifest); err != nil {
+					b.Fatal(err)
+				}
 			}
 		})
+	}
+}
+
+func syncCaptureFixture(b *testing.B, root string) {
+	b.Helper()
+	var directories []string
+	err := filepath.WalkDir(root, func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			directories = append(directories, name)
+			return nil
+		}
+		file, err := os.Open(name)
+		if err != nil {
+			return err
+		}
+		syncErr := syncStagedData(file)
+		closeErr := file.Close()
+		if syncErr != nil {
+			return syncErr
+		}
+		return closeErr
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	for i := len(directories) - 1; i >= 0; i-- {
+		// One full barrier at the root is sufficient on Darwin after each
+		// directory has received the same member fsync used by production.
+		dir, err := os.Open(directories[i])
+		if err != nil {
+			b.Fatal(err)
+		}
+		syncErr := syncStagedData(dir)
+		closeErr := dir.Close()
+		if syncErr != nil || closeErr != nil {
+			b.Fatalf("sync fixture directory: %v; close: %v", syncErr, closeErr)
+		}
+	}
+	if err := syncDirectory(root); err != nil {
+		b.Fatal(err)
 	}
 }
