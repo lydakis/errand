@@ -59,61 +59,6 @@ func TestCaptureBasePreservesIndependentTree(t *testing.T) {
 	}
 }
 
-func TestCloneOrCopyFileFallback(t *testing.T) {
-	for _, failure := range []bool{false, true} {
-		name := "success"
-		if failure {
-			name = "sync-failure"
-		}
-		t.Run(name, func(t *testing.T) {
-			root := t.TempDir()
-			src, dest := filepath.Join(root, "source"), filepath.Join(root, "captured")
-			const content = "original contents"
-			if err := os.WriteFile(src, []byte(content), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			// Both clone implementations require an absent destination. An
-			// existing placeholder forces the byte-copy fallback on any filesystem.
-			if err := os.WriteFile(dest, []byte("placeholder"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			const mode = os.FileMode(0o500)
-			injected := errors.New("injected sync failure")
-			err := cloneOrCopyFile(context.Background(), src, dest, mode, func(file *os.File) error {
-				if failure {
-					return injected
-				}
-				return syncStagedData(file)
-			})
-			if failure {
-				if !errors.Is(err, injected) {
-					t.Fatalf("copy error = %v, want sync failure", err)
-				}
-				if _, err := os.Stat(dest); !os.IsNotExist(err) {
-					t.Fatalf("failed copy left destination: %v", err)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(src, []byte("changed"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			if got, err := os.ReadFile(dest); err != nil || string(got) != content {
-				t.Fatalf("captured contents = %q, %v", got, err)
-			}
-			info, err := os.Stat(dest)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := info.Mode().Perm(); got != mode {
-				t.Fatalf("captured mode = %o, want %o", got, mode)
-			}
-		})
-	}
-}
-
 func TestCaptureBaseFailureLeavesNoPartialTree(t *testing.T) {
 	for _, failure := range []string{"missing-file", "changed-content", "cancelled"} {
 		t.Run(failure, func(t *testing.T) {

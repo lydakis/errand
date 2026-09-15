@@ -2,8 +2,11 @@
 
 package changes
 
-import "errors"
+import (
+	"errors"
+	"os"
+)
 
-func cloneFile(_, _ string) error {
-	return errors.New("copy-on-write cloning is unavailable")
+func cloneFileInto(_ *os.File, _ *os.Root, _ string) (*os.File, error) {
+	return nil, errors.New("copy-on-write cloning is unavailable")
 }

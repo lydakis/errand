@@ -677,15 +677,15 @@ func TestCaptureWorkspaceBaselinesHonorsLimits(t *testing.T) {
 	}
 }
 
-func TestCopyContextStopsBeforeReadingAfterCancellation(t *testing.T) {
+func TestTransferCopyStopsBeforeReadingAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	reader := &cancelAfterFirstRead{cancel: cancel}
 	var dest bytes.Buffer
-	if err := copyContext(ctx, &dest, reader); !errors.Is(err, context.Canceled) {
-		t.Fatalf("copyContext() error = %v, want context.Canceled", err)
+	if err := copyTransferBlob(ctx, &dest, reader, proto.ManifestEntry{Path: "file", Size: 2}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("copyTransferBlob() error = %v, want context.Canceled", err)
 	}
 	if reader.readAfterCancel {
-		t.Fatal("copyContext() read from the source after cancellation")
+		t.Fatal("copyTransferBlob() read from the source after cancellation")
 	}
 }
 

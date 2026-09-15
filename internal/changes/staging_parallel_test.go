@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
@@ -136,12 +135,12 @@ func TestStagingCancellationPreservesFirstFailure(t *testing.T) {
 func TestCapturedDirectoriesJoinSiblingsBeforeRestrictingParent(t *testing.T) {
 	root := t.TempDir()
 	paths := []string{"parent", "parent/a", "parent/b"}
-	var directories []proto.ManifestEntry
+	directories := map[string]materializedDirectory{}
 	for _, path := range paths {
 		if err := os.Mkdir(filepath.Join(root, path), 0700); err != nil {
 			t.Fatal(err)
 		}
-		directories = append(directories, proto.ManifestEntry{Path: path, Type: proto.EntryDir, Mode: 0})
+		directories[path] = materializedDirectory{mode: 0, explicit: true}
 	}
 	t.Cleanup(func() {
 		for _, path := range paths {
@@ -152,7 +151,15 @@ func TestCapturedDirectoriesJoinSiblingsBeforeRestrictingParent(t *testing.T) {
 	var children atomic.Int32
 	done := make(chan error, 1)
 	go func() {
-		done <- finalizeCapturedDirectories(root, directories, func(file *os.File) error {
+		tree, err := os.OpenRoot(root)
+		if err != nil {
+			done <- err
+			return
+		}
+		defer tree.Close()
+		paths := materializationPaths{root: tree}
+		defer paths.close()
+		done <- finalizeMaterializedDirectories(t.Context(), &paths, directories, func(file *os.File) error {
 			info, err := file.Stat()
 			if err != nil {
 				return err

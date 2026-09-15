@@ -75,7 +75,7 @@ func (s TransferBlobStore) MaterializeBase(ctx context.Context, jobDir string, m
 }
 
 func materializeTransferBase(ctx context.Context, storage, tree *os.Root, manifest proto.Manifest) error {
-	return materializeTransferTree(ctx, tree, manifest, manifestPermissions, func(e proto.ManifestEntry) (io.ReadCloser, error) {
+	return materializeTransferTree(ctx, tree, manifest, durableMaterialization(func() error { return syncApplyRootDirectory(tree, ".") }), func(e proto.ManifestEntry) (io.ReadCloser, error) {
 		return openTransferBlob(storage, strings.ToLower(e.SHA256), e)
-	}, syncStagedData, func() error { return syncApplyRootDirectory(tree, ".") })
+	})
 }

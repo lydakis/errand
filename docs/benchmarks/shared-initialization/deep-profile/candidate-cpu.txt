@@ -1,0 +1,106 @@
+File: candidate.test
+Type: cpu
+Time: 2026-09-14 21:50:05 EDT
+Duration: 1.11s, Total samples = 1.91s (171.91%)
+Showing nodes accounting for 1.91s, 100% of 1.91s total
+      flat  flat%   sum%        cum   cum%
+     1.89s 98.95% 98.95%      1.89s 98.95%  syscall.rawsyscalln
+         0     0% 98.95%      1.89s 98.95%  syscall.syscalln
+         0     0% 98.95%      1.64s 85.86%  os.ignoringEINTR (inline)
+         0     0% 98.95%      1.59s 83.25%  syscall.syscall6
+         0     0% 98.95%      1.50s 78.53%  internal/syscall/unix.Openat (inline)
+         0     0% 98.95%      1.50s 78.53%  syscall.openat
+         0     0% 98.95%      1.48s 77.49%  github.com/lydakis/errand/internal/changes.runStagingTasksContext.func1
+         0     0% 98.95%      1.47s 76.96%  github.com/lydakis/errand/internal/changes.materializeTransferTree.func1
+         0     0% 98.95%      1.47s 76.96%  github.com/lydakis/errand/internal/changes.runStagingTasks.func1
+         0     0% 98.95%      1.47s 76.96%  os.rootOpenDir (partial-inline)
+         0     0% 98.95%      1.47s 76.96%  sync.(*WaitGroup).Go.func1
+         0     0% 98.95%      1.33s 69.63%  os.rootOpenDir.func1 (inline)
+         0     0% 98.95%      0.97s 50.79%  os.(*Root).Open (inline)
+         0     0% 98.95%      0.97s 50.79%  os.(*Root).OpenFile
+         0     0% 98.95%      0.97s 50.79%  os.doInRoot[go.shape.int]
+         0     0% 98.95%      0.97s 50.79%  os.rootOpenFileNolog
+         0     0% 98.95%      0.84s 43.98%  github.com/lydakis/errand/internal/changes.materializeFile
+         0     0% 98.95%      0.77s 40.31%  github.com/lydakis/errand/internal/changes.(*transferSourceReader).cloneTo
+         0     0% 98.95%      0.77s 40.31%  github.com/lydakis/errand/internal/changes.cloneFileInto
+         0     0% 98.95%      0.61s 31.94%  github.com/lydakis/errand/internal/changes.materializeSourceAtRoot.func2
+         0     0% 98.95%      0.45s 23.56%  os.(*Root).Lstat
+         0     0% 98.95%      0.45s 23.56%  os.doInRoot[go.shape.interface { IsDir bool; ModTime time.Time; Mode io/fs.FileMode; Name string; Size int64; Sys interface {} }]
+         0     0% 98.95%      0.45s 23.56%  os.rootStat
+         0     0% 98.95%      0.42s 21.99%  testing.(*B).run1.func1
+         0     0% 98.95%      0.42s 21.99%  testing.(*B).runN
+         0     0% 98.95%      0.39s 20.42%  github.com/lydakis/errand/internal/changes.BenchmarkCaptureWorkspaceBase.func1
+         0     0% 98.95%      0.29s 15.18%  syscall.syscall
+         0     0% 98.95%      0.27s 14.14%  github.com/lydakis/errand/internal/changes.CaptureWorkspaceBaseContext (inline)
+         0     0% 98.95%      0.27s 14.14%  github.com/lydakis/errand/internal/changes.captureWorkspaceBaseContext
+         0     0% 98.95%      0.27s 14.14%  github.com/lydakis/errand/internal/changes.materializeSourceAtRoot
+         0     0% 98.95%      0.15s  7.85%  github.com/lydakis/errand/internal/changes.materializeTransferTree
+         0     0% 98.95%      0.14s  7.33%  os.(*Root).MkdirAll
+         0     0% 98.95%      0.14s  7.33%  os.doInRoot[go.shape.struct {}]
+         0     0% 98.95%      0.14s  7.33%  os.rootMkdirAll
+         0     0% 98.95%      0.14s  7.33%  os.rootMkdirAll.func1
+         0     0% 98.95%      0.14s  7.33%  os.rootOpenDir.1 (inline)
+         0     0% 98.95%      0.09s  4.71%  golang.org/x/sys/unix.Fclonefileat
+         0     0% 98.95%      0.09s  4.71%  os.OpenFile
+         0     0% 98.95%      0.09s  4.71%  os.open (inline)
+         0     0% 98.95%      0.09s  4.71%  os.openFileNolog
+         0     0% 98.95%      0.09s  4.71%  os.openFileNolog.func1 (inline)
+         0     0% 98.95%      0.09s  4.71%  syscall.Open
+         0     0% 98.95%      0.07s  3.66%  github.com/lydakis/errand/internal/changes.contextReader.Read
+         0     0% 98.95%      0.07s  3.66%  github.com/lydakis/errand/internal/changes.copyTransferBlob
+         0     0% 98.95%      0.07s  3.66%  internal/poll.(*FD).Read
+         0     0% 98.95%      0.07s  3.66%  internal/poll.ignoringEINTRIO (inline)
+         0     0% 98.95%      0.07s  3.66%  io.(*LimitedReader).Read
+         0     0% 98.95%      0.07s  3.66%  io.Copy (inline)
+         0     0% 98.95%      0.07s  3.66%  io.copyBuffer
+         0     0% 98.95%      0.07s  3.66%  os.(*File).Read
+         0     0% 98.95%      0.07s  3.66%  os.(*File).read (inline)
+         0     0% 98.95%      0.07s  3.66%  syscall.Read (inline)
+         0     0% 98.95%      0.07s  3.66%  syscall.read
+         0     0% 98.95%      0.06s  3.14%  os.RemoveAll (inline)
+         0     0% 98.95%      0.06s  3.14%  os.WriteFile
+         0     0% 98.95%      0.06s  3.14%  os.removeAll
+         0     0% 98.95%      0.06s  3.14%  os.removeAllFrom
+         0     0% 98.95%      0.06s  3.14%  syscall.Close
+         0     0% 98.95%      0.05s  2.62%  internal/syscall/unix.Unlinkat (inline)
+         0     0% 98.95%      0.05s  2.62%  syscall.unlinkat
+         0     0% 98.95%      0.04s  2.09%  os.removefileat (inline)
+         0     0% 98.95%      0.04s  2.09%  os.removefileat.func1 (inline)
+         0     0% 98.95%      0.03s  1.57%  github.com/lydakis/errand/internal/snapshot.(*Builder).hash
+         0     0% 98.95%      0.03s  1.57%  github.com/lydakis/errand/internal/snapshot.Build (inline)
+         0     0% 98.95%      0.03s  1.57%  github.com/lydakis/errand/internal/snapshot.BuildBounded
+         0     0% 98.95%      0.03s  1.57%  github.com/lydakis/errand/internal/snapshot.BuildBoundedContext (inline)
+         0     0% 98.95%      0.03s  1.57%  github.com/lydakis/errand/internal/snapshot.buildBoundedContext
+         0     0% 98.95%      0.03s  1.57%  github.com/lydakis/errand/internal/snapshot.hashFileSizedContext
+         0     0% 98.95%      0.03s  1.57%  os.Open (inline)
+         0     0% 98.95%      0.03s  1.57%  os.rootOpenFileNolog.func1
+         0     0% 98.95%      0.03s  1.57%  os.rootOpenFileNolog.func1.1 (inline)
+         0     0% 98.95%      0.03s  1.57%  testing.(*B).runN.func1
+         0     0% 98.95%      0.03s  1.57%  testing.(*common).Cleanup.func1
+         0     0% 98.95%      0.03s  1.57%  testing.(*common).makeTempDir.func1
+         0     0% 98.95%      0.03s  1.57%  testing.(*common).runCleanup
+         0     0% 98.95%      0.03s  1.57%  testing.removeAll
+         0     0% 98.95%      0.02s  1.05%  internal/poll.(*FD).Fchmod
+         0     0% 98.95%      0.02s  1.05%  internal/poll.(*FD).Fchmod.func1 (inline)
+         0     0% 98.95%      0.02s  1.05%  internal/poll.ignoringEINTR (inline)
+         0     0% 98.95%      0.02s  1.05%  os.(*File).Chmod (inline)
+         0     0% 98.95%      0.02s  1.05%  os.(*File).chmod
+         0     0% 98.95%      0.02s  1.05%  runtime.exitsyscallNoP
+         0     0% 98.95%      0.02s  1.05%  runtime.mPark (inline)
+         0     0% 98.95%      0.02s  1.05%  runtime.mcall
+         0     0% 98.95%      0.02s  1.05%  runtime.notesleep
+     0.02s  1.05%   100%      0.02s  1.05%  runtime.pthread_cond_wait
+         0     0%   100%      0.02s  1.05%  runtime.semasleep
+         0     0%   100%      0.02s  1.05%  runtime.stopm
+         0     0%   100%      0.02s  1.05%  syscall.Fchmod
+         0     0%   100%      0.01s  0.52%  github.com/lydakis/errand/internal/changes.finalizeMaterializedDirectories
+         0     0%   100%      0.01s  0.52%  github.com/lydakis/errand/internal/changes.finalizeMaterializedDirectories.func1
+         0     0%   100%      0.01s  0.52%  github.com/lydakis/errand/internal/changes.runStagingTasks
+         0     0%   100%      0.01s  0.52%  github.com/lydakis/errand/internal/changes.runStagingTasksContext
+         0     0%   100%      0.01s  0.52%  internal/poll.(*FD).OpenDir
+         0     0%   100%      0.01s  0.52%  os.(*File).Readdirnames
+         0     0%   100%      0.01s  0.52%  os.(*File).readdir
+         0     0%   100%      0.01s  0.52%  os.removedirat (inline)
+         0     0%   100%      0.01s  0.52%  os.removedirat.func1 (inline)
+         0     0%   100%      0.01s  0.52%  syscall.fdopendir
+         0     0%   100%      0.01s  0.52%  syscall.syscallPtr

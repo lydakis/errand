@@ -21,6 +21,5 @@ func materializeMergeInput(source, destination string, m proto.Manifest) error {
 		return err
 	}
 	defer tree.Close()
-	return materializeSourceTree(context.Background(), source, tree, m, mergeInputPermissions,
-		func(*os.File) error { return nil }, func() error { return nil })
+	return materializeSourceTree(context.Background(), source, tree, m, scratchMaterialization())
 }

@@ -43,9 +43,9 @@ func TestTransferMaterializationRejectsAliasedSymlinkParent(t *testing.T) {
 		{Path: "Link", Type: proto.EntrySymlink, Target: "0-target"},
 		{Path: "link/file", Type: proto.EntryFile, Mode: 0600, Size: 4, SHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("body")))},
 	}}
-	err = materializeTransferTree(t.Context(), tree, m, manifestPermissions, func(proto.ManifestEntry) (io.ReadCloser, error) {
+	err = materializeTransferTree(t.Context(), tree, m, durableMaterialization(func() error { t.Fatal("aliased tree reached publication barrier"); return nil }), func(proto.ManifestEntry) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader("body")), nil
-	}, syncStagedData, func() error { t.Fatal("aliased tree reached publication barrier"); return nil })
+	})
 	if err == nil {
 		t.Fatal("symlink alias accepted")
 	}
@@ -61,9 +61,9 @@ func TestTransferMaterializationDoesNotFlushRejectedContent(t *testing.T) {
 	}
 	defer tree.Close()
 	m := proto.Manifest{Entries: []proto.ManifestEntry{{Path: "file", Type: proto.EntryFile, Mode: 0600, Size: 4, SHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("good")))}}}
-	err = materializeTransferTree(t.Context(), tree, m, manifestPermissions, func(proto.ManifestEntry) (io.ReadCloser, error) {
+	err = materializeTransferTree(t.Context(), tree, m, materializationPolicy{permissions: manifestPermissions, syncData: func(*os.File) error { t.Fatal("flushed rejected content"); return nil }, barrier: func() error { t.Fatal("published rejected content"); return nil }}, func(proto.ManifestEntry) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader("evil")), nil
-	}, func(*os.File) error { t.Fatal("flushed rejected content"); return nil }, func() error { t.Fatal("published rejected content"); return nil })
+	})
 	if err == nil {
 		t.Fatal("corrupt content accepted")
 	}
@@ -97,9 +97,7 @@ func TestTransferMaterializationDurability(t *testing.T) {
 			injected := errors.New("injected materialization failure")
 			var members atomic.Int32
 			barriers := 0
-			err = materializeTransferTree(ctx, tree, m, manifestPermissions, func(e proto.ManifestEntry) (io.ReadCloser, error) {
-				return os.Open(filepath.Join(source, e.Path))
-			}, func(f *os.File) error {
+			policy := materializationPolicy{permissions: manifestPermissions, syncData: func(f *os.File) error {
 				members.Add(1)
 				info, err := f.Stat()
 				if err != nil {
@@ -115,7 +113,7 @@ func TestTransferMaterializationDurability(t *testing.T) {
 					cancel()
 				}
 				return syncStagedData(f)
-			}, func() error {
+			}, barrier: func() error {
 				barriers++
 				if members.Load() != 2 {
 					t.Errorf("barrier before all members: %d", members.Load())
@@ -124,7 +122,8 @@ func TestTransferMaterializationDurability(t *testing.T) {
 					return injected
 				}
 				return syncApplyRootDirectory(tree, ".")
-			})
+			}}
+			err = materializeTransferTree(ctx, tree, m, policy, func(e proto.ManifestEntry) (io.ReadCloser, error) { return os.Open(filepath.Join(source, e.Path)) })
 			switch failure {
 			case "none":
 				if err != nil || barriers != 1 {
@@ -144,5 +143,35 @@ func TestTransferMaterializationDurability(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A case-folding alias can already have its explicit mode when an implicit
+// parent is finalized. That implicit spelling must not reset the shared inode.
+func TestImplicitDirectoryFinalizationPreservesExistingMode(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "dir"), 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(filepath.Join(root, "dir"), 0700) })
+	tree, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tree.Close()
+	paths := materializationPaths{root: tree}
+	defer paths.close()
+	synced := false
+	err = finalizeMaterializedDirectories(t.Context(), &paths,
+		map[string]materializedDirectory{"dir": {}}, func(f *os.File) error {
+			synced = true
+			info, err := f.Stat()
+			if err == nil && info.Mode().Perm() != 0500 {
+				t.Errorf("implicit parent reset mode to %o", info.Mode().Perm())
+			}
+			return err
+		})
+	if err != nil || !synced {
+		t.Fatalf("implicit directory durability: synced=%v, error=%v", synced, err)
 	}
 }

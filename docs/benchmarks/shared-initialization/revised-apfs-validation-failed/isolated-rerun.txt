@@ -1,0 +1,3 @@
+GOMAXPROCS=2 CGO_ENABLED=1 go test -race ./internal/client -run ^TestDetachedInterruptWaitsForForwardingAndDoesNotReportSuccess$ -count=3
+Frozen baseline: f109142 plus identical benchmark overlay.
+ok github.com/lydakis/errand/internal/client 2.456s

@@ -2,8 +2,26 @@
 
 package changes
 
-import "golang.org/x/sys/unix"
+import (
+	"errors"
+	"os"
+	"path"
 
-func cloneFile(src, dest string) error {
-	return unix.Clonefile(src, dest, 0)
+	"golang.org/x/sys/unix"
+)
+
+func cloneFileInto(source *os.File, tree *os.Root, name string) (*os.File, error) {
+	parent, err := tree.Open(path.Dir(name))
+	if err != nil {
+		return nil, err
+	}
+	defer parent.Close()
+	if err := unix.Fclonefileat(int(source.Fd()), int(parent.Fd()), path.Base(name), 0); err != nil {
+		return nil, err
+	}
+	file, err := tree.Open(name)
+	if err != nil {
+		return nil, errors.Join(err, tree.Remove(name))
+	}
+	return file, nil
 }

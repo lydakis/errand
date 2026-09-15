@@ -1,0 +1,9 @@
+{
+  "scope": "Diagnostic traces, not timing comparisons",
+  "versions": {
+    "baseline": "fec9273c3703c420262e7ae7506698f4b1f45b46dc78181f28a5201bfa3dfd8d",
+    "candidate": "5963f543a2b7e2e7557d5bcf15d8893b7de592ede8cf305a813f112ef7f8c828"
+  },
+  "status": "complete",
+  "filesystem": "btrfs"
+}

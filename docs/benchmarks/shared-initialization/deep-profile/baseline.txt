@@ -1,0 +1,6 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/lydakis/errand/internal/changes
+cpu: Apple M1 Max
+BenchmarkCaptureWorkspaceBase/32-deep-2         	       1	 454350167 ns/op	10984792 B/op	   40575 allocs/op
+PASS

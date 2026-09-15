@@ -59,65 +59,69 @@ func materializeTransferSource(ctx context.Context, source, dest string, m proto
 		return err
 	}
 	defer tree.Close()
-	return materializeSourceTree(ctx, source, tree, m, manifestPermissions, syncStagedData, func() error { return syncApplyRootDirectory(tree, ".") })
+	return materializeSourceTree(ctx, source, tree, m, durableMaterialization(func() error { return syncApplyRootDirectory(tree, ".") }))
 }
 
-func materializeSourceTree(ctx context.Context, source string, tree *os.Root, m proto.Manifest, permissions treePermissions,
-	syncData func(*os.File) error, barrier func() error,
+func materializeSourceTree(ctx context.Context, source string, tree *os.Root, m proto.Manifest, policy materializationPolicy,
 ) (err error) {
 	access, err := makeManifestAccessibleContext(ctx, source, m)
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, access.restore()) }()
+	return materializeSourceAtRoot(ctx, access.root, tree, m, access.physical, policy)
+}
+
+// A nil physical-mode map selects strict source access: no chmod or widening.
+func materializeSourceAtRoot(ctx context.Context, source, tree *os.Root, m proto.Manifest, physical map[string]uint32, policy materializationPolicy) (err error) {
+	paths := materializationPaths{root: source, verify: true}
+	defer func() { err = errors.Join(err, paths.close()) }()
+	mode := func(e proto.ManifestEntry) uint32 {
+		if physical == nil {
+			return e.Mode
+		}
+		return physical[e.Path]
+	}
 	for _, e := range m.Entries {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		info, err := access.root.Lstat(e.Path)
-		if err != nil {
+		// File metadata is checked against its opened descriptor below. Doing it
+		// here as well adds a full metadata pass without strengthening that check.
+		if e.Type == proto.EntryFile {
+			continue
+		}
+		if err := checkMaterializationSource(&paths, e, mode(e)); err != nil {
 			return err
 		}
-		if uint32(info.Mode().Perm()) != access.physical[e.Path] {
-			return fmt.Errorf("transfer source %q changed mode", e.Path)
-		}
-		switch e.Type {
-		case proto.EntryDir:
-			if !info.IsDir() {
-				return fmt.Errorf("transfer source %q changed type", e.Path)
-			}
-		case proto.EntrySymlink:
-			if info.Mode()&os.ModeSymlink == 0 {
-				return fmt.Errorf("transfer source %q changed type", e.Path)
-			}
-			target, err := access.root.Readlink(e.Path)
-			if err != nil {
-				return err
-			}
-			if target != e.Target {
-				return fmt.Errorf("transfer source %q changed target", e.Path)
-			}
-		case proto.EntryFile:
-			if !info.Mode().IsRegular() || info.Size() != e.Size {
-				return fmt.Errorf("transfer source %q changed type or size", e.Path)
-			}
-		}
 	}
-	return materializeTransferTree(ctx, tree, m, permissions, func(e proto.ManifestEntry) (io.ReadCloser, error) {
-		info, err := access.root.Lstat(e.Path)
-		if err != nil || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("transfer source %q is not a regular file", e.Path)
+	return materializeTransferTree(ctx, tree, m, policy, func(e proto.ManifestEntry) (io.ReadCloser, error) {
+		parent, name, lease, err := paths.parent(e.Path)
+		defer paths.release(lease)
+		var info os.FileInfo
+		var f *os.File
+		if err == nil {
+			info, err = parent.Lstat(name)
+			if err == nil && !info.Mode().IsRegular() {
+				return nil, fmt.Errorf("transfer source %q is not a regular file", e.Path)
+			}
+			if err == nil {
+				f, err = parent.Open(name)
+			}
 		}
-		f, err := access.root.Open(e.Path)
+		if errors.Is(err, os.ErrPermission) && !errors.Is(err, errMaterializationParentVerification) {
+			f, err = openSearchSourceFile(source, e.Path)
+			info = nil // O_NOFOLLOW and the descriptor stat replace the lstat/open pair.
+		}
 		if err != nil {
 			return nil, err
 		}
 		opened, err := f.Stat()
-		if err != nil || !os.SameFile(info, opened) || opened.Size() != e.Size || uint32(opened.Mode().Perm()) != access.physical[e.Path] {
+		if err != nil || !opened.Mode().IsRegular() || (info != nil && !os.SameFile(info, opened)) || opened.Size() != e.Size || uint32(opened.Mode().Perm()) != mode(e) {
 			return nil, errors.Join(fmt.Errorf("transfer source %q changed while opening", e.Path), f.Close())
 		}
-		return &transferSourceReader{File: f, entry: e, mode: access.physical[e.Path]}, nil
-	}, syncData, barrier)
+		return &transferSourceReader{File: f, entry: e, mode: mode(e)}, nil
+	})
 }
 
 type transferSourceReader struct {
@@ -132,4 +136,44 @@ func (r *transferSourceReader) Close() error {
 		err = fmt.Errorf("transfer source %q changed while copying", r.entry.Path)
 	}
 	return errors.Join(err, r.File.Close())
+}
+
+func (r *transferSourceReader) cloneTo(tree *os.Root, name string) (*os.File, error) {
+	return cloneFileInto(r.File, tree, name)
+}
+
+func checkMaterializationSource(paths *materializationPaths, e proto.ManifestEntry, mode uint32) error {
+	parent, name, lease, err := paths.parent(e.Path)
+	defer paths.release(lease)
+	var info os.FileInfo
+	if err == nil {
+		info, err = parent.Lstat(name)
+	}
+	if errors.Is(err, os.ErrPermission) && !errors.Is(err, errMaterializationParentVerification) {
+		return checkSearchSource(paths.root, e, mode)
+	}
+	if err != nil {
+		return err
+	}
+	if uint32(info.Mode().Perm()) != mode {
+		return fmt.Errorf("transfer source %q changed mode", e.Path)
+	}
+	switch e.Type {
+	case proto.EntryDir:
+		if !info.IsDir() {
+			return fmt.Errorf("transfer source %q changed type", e.Path)
+		}
+	case proto.EntrySymlink:
+		if info.Mode()&os.ModeSymlink == 0 {
+			return fmt.Errorf("transfer source %q changed type", e.Path)
+		}
+		target, err := parent.Readlink(name)
+		if err != nil {
+			return err
+		}
+		if target != e.Target {
+			return fmt.Errorf("transfer source %q changed target", e.Path)
+		}
+	}
+	return nil
 }

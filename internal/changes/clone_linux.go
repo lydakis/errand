@@ -3,24 +3,19 @@
 package changes
 
 import (
+	"errors"
 	"os"
 
 	"golang.org/x/sys/unix"
 )
 
-func cloneFile(src, dest string) error {
-	in, err := os.Open(src)
+func cloneFileInto(source *os.File, tree *os.Root, name string) (*os.File, error) {
+	file, err := tree.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer in.Close()
-	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
+	if err := unix.IoctlFileClone(int(file.Fd()), int(source.Fd())); err != nil {
+		return nil, errors.Join(err, file.Close(), tree.Remove(name))
 	}
-	if err := unix.IoctlFileClone(int(out.Fd()), int(in.Fd())); err != nil {
-		out.Close()
-		return err
-	}
-	return out.Close()
+	return file, nil
 }

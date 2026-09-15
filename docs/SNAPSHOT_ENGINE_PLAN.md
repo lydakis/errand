@@ -27,8 +27,9 @@ rsync/Mutagen latency claim follows from native-host loopback results.
 The [direct receiver staging slice](DIRECT_STAGING.md) now materializes persistent
 push/watch and fetch trees through one verified implementation, removing the
 internal archive/extract round trip. Its native measurements support staging
-gains on APFS and Btrfs; initial workspace/job population remains the next part
-of step 2. Complete watch/push gains and initialization tail latency remain
+gains on APFS and Btrfs. The shared initialization slice below extends that
+writer to immutable workspace/job capture in step 2. Complete watch/push gains
+and initialization tail latency remain
 unresolved rather than inferred from the component results.
 
 The [retained-body staging follow-up](RETAINED_BODY_STAGING.md) removes fetch's
@@ -39,9 +40,9 @@ coverage. Its native comparison uses the direct-staging slice as the baseline.
 The [latency diagnosis follow-up](LATENCY_DIAGNOSIS.md) separates fixture setup,
 workspace creation, job capture, transfer and cleanup. It removes another archive
 round trip from apply's private merge inputs through the shared verified copier.
-One APFS setup stall was localized to captured-base verification. Initial
-workspace/job population remains the next integration target; persistence and
-large-file chunking still follow it rather than changing this slice's scope.
+One APFS setup stall was localized to captured-base verification, which the
+shared initialization slice below addresses. Persistence and large-file chunking
+remain subsequent steps.
 
 The [private-input permission follow-up](PRIVATE_MERGE_INPUTS.md) removes the
 second destination accessibility walk and redundant permission work from the
@@ -50,8 +51,20 @@ preparation gains while complete-operation effects remain unresolved, including
 a possible small APFS regression. A focused follow-up reversed the paired
 direction without establishing equivalence. Retaining the component improvement
 accepts that uncertainty; both sets of evidence are retained. Verified independent
-copies, logical modes and durable publication remain unchanged. Continue with initial workspace/job
-population in step 2, then persisted incremental state and large-file transfer.
+copies, logical modes and durable publication remain unchanged.
+
+The [shared initialization slice](SHARED_INITIALIZATION.md) now routes immutable
+change-base capture for workspace creation, ephemeral staging and persistent job
+acquisition through that same writer. Native APFS cloning and Linux reflinks are
+verified within each worker; fallback copies hash in flight. The first candidate
+exposed a deep-path APFS regression; bounded parent reuse removed it. The final
+slice also preserves explicit directory modes when implicit spellings alias them
+on APFS. Native validation passes on both filesystems, and capture gains support
+retention. Complete-operation and directory-heavy Btrfs results remain mixed;
+the higher-iteration push follow-up did not reproduce the final run's >5%
+slowdown, without establishing equivalence. Incoming tar decoding
+remains a transport boundary. Persisted incremental state and large-file transfer
+remain the subsequent roadmap steps.
 
 Keep the current content-addressed model. Selection policy determines eligible
 paths, a snapshot describes their state, and the content store resolves their
@@ -88,25 +101,43 @@ not sufficient evidence for migrating all of them.
 
 ## Review follow-ups and timing
 
-- **Before the next performance measurements:** strengthen benchmark provenance.
+- **Implemented for the initialization comparison:** strengthen benchmark provenance.
   Include benchmark support/helper sources and imported harness modules, record
   toolchain identity, and define which inputs must match between variants with
   a default mismatch guard. Filename patterns alone do not establish equivalent
   benchmark workloads. Preserve the current frozen evidence; its measured source
   identities were checked separately.
-- **With workspace/job initialization in step 2:** evaluate a cohesive internal
+- **Included in the shared initialization candidate:** evaluate a cohesive internal
   materialization policy that groups scratch/durable permissions, restoration,
   member flushes and publication barriers around the same verified writer.
   Preserve the private path's skipped permission bookkeeping and durable callers'
   synchronization guarantees. Measure the proposed policy before adopting it;
   do not add discarded map construction merely to reduce branching.
-- **In that initialization benchmark matrix:** add a genuinely deep directory
+- **Included in the initialization benchmark matrix:** add a genuinely deep directory
   fixture. The existing `inputs-nested` case measures 1,024 files spread across
   32 one-level directories, not depth. Keep its original labels and raw results.
+  New cases cover a 32-level chain and 128 independent eight-level branches; the
+  chain exposed the first initialization candidate's regression.
+- **Included in the initialization review fix:** preserve capture through search-only
+  directories without changing source permissions. Cover ordinary/deep paths,
+  symlink metadata and APFS aliases, plus deterministic cloned-output verification,
+  exhausted parent-cache capacity and eviction-time identity rejection.
+- **Next bounded performance slice, before step 3:** control deferred cleanup I/O
+  in the capture benchmarks, then extend wide/deep native paired measurements.
+  Profile time waiting for the retained-parent mutex and its filesystem calls.
+  Compare the current cache with directory-grouped traversal only under matched
+  workloads and unchanged source-binding, descriptor-bound and durability contracts.
+  Keep the current implementation until the alternative demonstrates a win;
+  small or inconsistent timing differences are not evidence of equivalence.
+- **When new fixture/build inputs appear:** include fixture permissions and symlink
+  metadata, embedded assets and other build inputs in provenance. These are not
+  grounds for invalidating the existing byte-identical fixture comparisons.
 
-The current review follow-up adds restricted-input three-way merge coverage and
-corrects the adoption decision's uncertainty. It does not expand production
-scope. Persisted incremental state and large-file transfer remain steps 3 and 4.
+The earlier private-input review added restricted-input three-way merge coverage
+and corrected that decision's uncertainty. The initialization follow-up includes
+the earlier three considered items, with frozen first and revised candidates and
+all native samples retained. Its final adoption decision and remaining uncertainty are in the linked
+report; persisted incremental state and large-file transfer remain steps 3 and 4.
 
 ## First experiment
 

@@ -16,6 +16,8 @@ import subprocess
 import tempfile
 import time
 
+from snapshot_provenance import comparison_inputs, harness_inputs, require_matching_inputs
+
 
 def benchmark_order(variants, number):
     names = list(variants)
@@ -33,6 +35,16 @@ def benchmark_cases(scope):
     cases = {}
     def add(name, package, pattern, benchtime):
         cases[name] = (package, pattern, benchtime)
+    if scope == "initialization":
+        for shape in ("1-files", "512-files", "512-directories", "32-deep", "8-deep-wide"):
+            add(f"capture-{shape}", "./internal/changes", f"^BenchmarkCaptureWorkspaceBase$/^{shape}$", "3x")
+        for kind in ("workspace-create", "ephemeral-job"):
+            add(kind, "./cmd/errand", f"^BenchmarkWorkspaceCreationAndSubmission$/^{kind}$", "3x")
+        for persistent in ("false", "true"):
+            add(f"fetch-{persistent}", "./cmd/errand", f"^BenchmarkFetchCompletion$/^persistent={persistent}$", "3x")
+        add("watch", "./cmd/errand", "^BenchmarkWatchPhases$", "3x")
+        add("push", "./cmd/errand", "^BenchmarkPushPhases$", "3x")
+        return cases
     if scope == "merge-inputs":
         for shape in ("small", "batch", "nested", "restricted", "large"):
             add(f"inputs-{shape}", "./internal/changes", f"^BenchmarkVerifiedMergeInputs$/^{shape}$", "3x")
@@ -207,9 +219,11 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--rounds", type=int, default=7)
-    parser.add_argument("--scope", choices=("full", "retained", "metadata", "receiver", "staging", "merge-inputs"), default="full",
+    parser.add_argument("--scope", choices=("full", "retained", "metadata", "receiver", "staging", "merge-inputs", "initialization"), default="full",
                         help="Use receiver for complete commands and checkpoint reads, retained for metadata/preparation and watch")
     parser.add_argument("--gomaxprocs", type=int, default=2)
+    parser.add_argument("--allow-input-difference", action="append", default=[], metavar="PATH",
+                        help="Explicit repository-relative test/fixture/module difference; recorded in the report")
     args = parser.parse_args()
     if args.rounds < 1 or args.gomaxprocs < 1:
         parser.error("rounds and gomaxprocs must be positive")
@@ -229,6 +243,19 @@ def main():
 
 
 def run_campaign(args, roots, cases, output, env, report, scratch):
+    report["comparison_inputs"] = {name: comparison_inputs(root) for name, root in roots.items()}
+    report["allowed_input_differences"] = require_matching_inputs(
+        report["comparison_inputs"], args.allow_input_difference)
+    harness_root = Path(__file__).resolve().parent
+    report["harness_inputs"] = harness_inputs(harness_root)
+    report["python"] = platform.python_version()
+    report["toolchains"] = {}
+    for name, root in roots.items():
+        report["toolchains"][name] = json.loads(run(
+            ["go", "env", "-json", "GOVERSION", "GOOS", "GOARCH", "CGO_ENABLED", "GOFLAGS", "GOTOOLCHAIN", "GOEXPERIMENT"],
+            root, env, output / f"{name}-toolchain.json"))
+    if len({json.dumps(value, sort_keys=True) for value in report["toolchains"].values()}) != 1:
+        raise RuntimeError("Comparison toolchains differ")
     report["go"] = run(["go", "version"], Path.cwd(), env, output / "go.txt").strip()
     report["filesystem"] = filesystem(Path.cwd(), env, output, "filesystem")
     fixtures = scratch / "fixtures"
@@ -287,6 +314,10 @@ def run_campaign(args, roots, cases, output, env, report, scratch):
     for name in roots:
         if source_digest(roots[name]) != report["versions"][name]["source_sha256"]:
             raise RuntimeError(f"{name} source changed during measurement")
+        if comparison_inputs(roots[name]) != report["comparison_inputs"][name]:
+            raise RuntimeError(f"{name} comparison inputs changed during measurement")
+    if harness_inputs(harness_root) != report["harness_inputs"]:
+        raise RuntimeError("Harness sources changed during measurement")
 
 
 if __name__ == "__main__":
