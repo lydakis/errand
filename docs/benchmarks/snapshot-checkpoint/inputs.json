@@ -1,0 +1,27 @@
+{
+  "initial": {
+    "archive": "initial-inputs.tar.gz",
+    "archive_sha256": "15b41f88f4214df92ae43595d8dc8cb8ddea34dbf1a784f5956dba4d83c173e7",
+    "source_sha256": "0efb9ab8a09898aa0b430b8466aff6e46238f756031f4b20e07455c513817841"
+  },
+  "verification": {
+    "archive": "verification-inputs.tar.gz",
+    "archive_sha256": "fd9510fb59901c0287ed6cf10c9781352c1f40da1defddfb7e032651383484cc",
+    "source_sha256": "432e7ca9feb71ab53098f6f37e236bdff812d6608f9192c34b8ada7b1f9e124c"
+  },
+  "final": {
+    "archive": "inputs.tar.gz",
+    "archive_sha256": "6c343acc4843b923d7049bf91ab1c3985f39a27bdca279c874d1b16633a90257",
+    "source_sha256": "97939014278c8b3aaa066859bb0a0a63a863d2b0d4346adf4c2b016bce75ff42"
+  },
+  "review-fixes": {
+    "archive": "review-fixes-inputs.tar.gz",
+    "archive_sha256": "89f30f64460c467904c9d8460a9d3393fa0dbfad5ebdf1e545507ea9687e0739",
+    "source_sha256": "b08e2c49ebc90e572ca7e9722399b7f5771877d866e8bc00047bca29373c31b5"
+  },
+  "review-final": {
+    "archive": "review-final-inputs.tar.gz",
+    "archive_sha256": "d98b852b85c69912be47e311eaf6658d7d425a8e592b2dfb4338dc6a3b01208d",
+    "source_sha256": "094b5b02dce653e8125a3a5b933868cf0db70bea459b0fe3492276b188fb0b8d"
+  }
+}

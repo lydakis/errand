@@ -74,7 +74,21 @@ full-path fallbacks, consistent with longer destination leases and greater sourc
 cache pressure from dispatch across directories. They do not isolate the causal
 latency contribution of each adapter. The current per-file
 scheduler is retained; the benchmark controls and rejected experiments are kept
-as evidence. Persisted incremental state is the next main implementation step.
+as evidence.
+
+The [restart checkpoint experiment](SNAPSHOT_CHECKPOINT.md) starts step 3 with
+versioned, bounded observation persistence and native APFS/Btrfs measurements.
+Warm preparations reuse body hashes after fresh selection and stat checks. The
+prototype reconstructs the existing adaptive index from ordered checkpoint metadata;
+derived Merkle nodes are not persisted yet. Warm 10K preparations improve on both
+hosts, while misses add work and small APFS effects remain uncertain. Production
+callers remain unchanged. The next gate is initial-population cost, followed by
+measured index restoration/changed-record publication and shared caller integration.
+
+The [checkpoint review follow-up](SNAPSHOT_CHECKPOINT_REVIEW.md) fixes rejection
+of ignored directory churn and relative-root cache misses. It adds cancellation
+through checkpoint I/O, checks both benchmark modes, and reports execution position.
+These are corrections to the isolated prototype, not production adoption.
 
 Keep the current content-addressed model. Selection policy determines eligible
 paths, a snapshot describes their state, and the content store resolves their
@@ -98,6 +112,8 @@ transfer are separate decisions. Neither requires abandoning transactional apply
    changed metadata and bound history/recovery work. Define versioned identity,
    invalidation, cleanup and crash recovery together. Cached observations never
    replace selection checks or proof that the filesystem still matches them.
+   The observation-checkpoint prototype and native measurements are complete;
+   persistence of derived index state and production adoption remain open.
 4. **Optimize large changed files.** Compare whole-file transfer, basis-dependent
    rolling deltas, and content-defined chunks under the same content interface.
    Include cold destinations, shifted insertions, incompressible data, bandwidth
@@ -111,6 +127,33 @@ not sufficient evidence for migrating all of them.
 
 ## Review follow-ups and timing
 
+- **Included in the first step-3 prototype:** versioned checkout/selection/boot/
+  filesystem identity, bounded current/temp files, atomic replacement, corruption
+  fallback, concurrent writers and cancellation. Cache placement rejects source
+  symlink/case aliases. Advisory cache writes do not change production fsync rules.
+  Native paired measurements include cache misses, unchanged restarts and edits,
+  with frozen inputs and all earlier candidates retained.
+- **Next step-3 gate:** measure collecting observations during the ordinary builder
+  to avoid duplicate miss-path stat work. Then compare restoring derived index
+  state and publishing changed records against the frozen observation prototype.
+  Load validation, full rebuild/compaction and recovery costs are part of that
+  comparison. Full stat inventory and selection verification remain separate costs;
+  neither storage change can be assumed to remove them. Integrate only after those
+  gates, preserving the selection guard through freezing and testing every caller.
+- **Include in that next measured slice:** share native observation and ancestor
+  rules with the builder; bypass unsupported and oversized caches without duplicate
+  preparation; compare direct construction of current state against rebuilding
+  prior state and applying edits. Both keep the adaptive contiguous/Merkle engine.
+  Compare removal of duplicate validation/copies through a validated ownership
+  boundary. Add larger entry counts, multiple edit densities and Git-selected
+  fixtures before selecting a storage design. Preserve this frozen prototype as
+  the comparison control rather than changing representation without measurement.
+- **Before checkpoint production adoption:** make filesystem eligibility executable,
+  verify cache ownership/permissions, and bind cache operations to validated
+  directory handles or controlled locations. Account for mount aliases as well as
+  symlink/case aliases. Clarify native timestamp and mmap/racy-write assumptions.
+  These are adoption requirements, not guarantees established by private sibling
+  benchmark caches. Compatible policy-change reuse stays a later optimization.
 - **Implemented for the initialization comparison:** strengthen benchmark provenance.
   Include benchmark support/helper sources and imported harness modules, record
   toolchain identity, and define which inputs must match between variants with
