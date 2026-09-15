@@ -43,6 +43,16 @@ One APFS setup stall was localized to captured-base verification. Initial
 workspace/job population remains the next integration target; persistence and
 large-file chunking still follow it rather than changing this slice's scope.
 
+The [private-input permission follow-up](PRIVATE_MERGE_INPUTS.md) removes the
+second destination accessibility walk and redundant permission work from the
+shared copier's disposable merge inputs. Native paired results support many-file
+preparation gains while complete-operation effects remain unresolved, including
+a possible small APFS regression. A focused follow-up reversed the paired
+direction without establishing equivalence. Retaining the component improvement
+accepts that uncertainty; both sets of evidence are retained. Verified independent
+copies, logical modes and durable publication remain unchanged. Continue with initial workspace/job
+population in step 2, then persisted incremental state and large-file transfer.
+
 Keep the current content-addressed model. Selection policy determines eligible
 paths, a snapshot describes their state, and the content store resolves their
 bodies. Changing the snapshot representation and changing the unit of body
@@ -75,6 +85,28 @@ Cabal, covering watch delivery and receipt, ordinary push, both fetch modes,
 workspace creation and ephemeral submission. Include small/large trees, cold/warm
 state, atomic saves, deletions, bursts and no changes. A win in one operation is
 not sufficient evidence for migrating all of them.
+
+## Review follow-ups and timing
+
+- **Before the next performance measurements:** strengthen benchmark provenance.
+  Include benchmark support/helper sources and imported harness modules, record
+  toolchain identity, and define which inputs must match between variants with
+  a default mismatch guard. Filename patterns alone do not establish equivalent
+  benchmark workloads. Preserve the current frozen evidence; its measured source
+  identities were checked separately.
+- **With workspace/job initialization in step 2:** evaluate a cohesive internal
+  materialization policy that groups scratch/durable permissions, restoration,
+  member flushes and publication barriers around the same verified writer.
+  Preserve the private path's skipped permission bookkeeping and durable callers'
+  synchronization guarantees. Measure the proposed policy before adopting it;
+  do not add discarded map construction merely to reduce branching.
+- **In that initialization benchmark matrix:** add a genuinely deep directory
+  fixture. The existing `inputs-nested` case measures 1,024 files spread across
+  32 one-level directories, not depth. Keep its original labels and raw results.
+
+The current review follow-up adds restricted-input three-way merge coverage and
+corrects the adoption decision's uncertainty. It does not expand production
+scope. Persisted incremental state and large-file transfer remain steps 3 and 4.
 
 ## First experiment
 

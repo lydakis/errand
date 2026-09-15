@@ -43,7 +43,7 @@ func TestTransferMaterializationRejectsAliasedSymlinkParent(t *testing.T) {
 		{Path: "Link", Type: proto.EntrySymlink, Target: "0-target"},
 		{Path: "link/file", Type: proto.EntryFile, Mode: 0600, Size: 4, SHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("body")))},
 	}}
-	err = materializeTransferTree(t.Context(), tree, m, func(proto.ManifestEntry) (io.ReadCloser, error) {
+	err = materializeTransferTree(t.Context(), tree, m, manifestPermissions, func(proto.ManifestEntry) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader("body")), nil
 	}, syncStagedData, func() error { t.Fatal("aliased tree reached publication barrier"); return nil })
 	if err == nil {
@@ -61,7 +61,7 @@ func TestTransferMaterializationDoesNotFlushRejectedContent(t *testing.T) {
 	}
 	defer tree.Close()
 	m := proto.Manifest{Entries: []proto.ManifestEntry{{Path: "file", Type: proto.EntryFile, Mode: 0600, Size: 4, SHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("good")))}}}
-	err = materializeTransferTree(t.Context(), tree, m, func(proto.ManifestEntry) (io.ReadCloser, error) {
+	err = materializeTransferTree(t.Context(), tree, m, manifestPermissions, func(proto.ManifestEntry) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader("evil")), nil
 	}, func(*os.File) error { t.Fatal("flushed rejected content"); return nil }, func() error { t.Fatal("published rejected content"); return nil })
 	if err == nil {
@@ -97,7 +97,7 @@ func TestTransferMaterializationDurability(t *testing.T) {
 			injected := errors.New("injected materialization failure")
 			var members atomic.Int32
 			barriers := 0
-			err = materializeTransferTree(ctx, tree, m, func(e proto.ManifestEntry) (io.ReadCloser, error) {
+			err = materializeTransferTree(ctx, tree, m, manifestPermissions, func(e proto.ManifestEntry) (io.ReadCloser, error) {
 				return os.Open(filepath.Join(source, e.Path))
 			}, func(f *os.File) error {
 				members.Add(1)

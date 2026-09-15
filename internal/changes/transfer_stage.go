@@ -59,10 +59,10 @@ func materializeTransferSource(ctx context.Context, source, dest string, m proto
 		return err
 	}
 	defer tree.Close()
-	return materializeSourceTree(ctx, source, tree, m, syncStagedData, func() error { return syncApplyRootDirectory(tree, ".") })
+	return materializeSourceTree(ctx, source, tree, m, manifestPermissions, syncStagedData, func() error { return syncApplyRootDirectory(tree, ".") })
 }
 
-func materializeSourceTree(ctx context.Context, source string, tree *os.Root, m proto.Manifest,
+func materializeSourceTree(ctx context.Context, source string, tree *os.Root, m proto.Manifest, permissions treePermissions,
 	syncData func(*os.File) error, barrier func() error,
 ) (err error) {
 	access, err := makeManifestAccessibleContext(ctx, source, m)
@@ -103,7 +103,7 @@ func materializeSourceTree(ctx context.Context, source string, tree *os.Root, m 
 			}
 		}
 	}
-	return materializeTransferTree(ctx, tree, m, func(e proto.ManifestEntry) (io.ReadCloser, error) {
+	return materializeTransferTree(ctx, tree, m, permissions, func(e proto.ManifestEntry) (io.ReadCloser, error) {
 		info, err := access.root.Lstat(e.Path)
 		if err != nil || !info.Mode().IsRegular() {
 			return nil, fmt.Errorf("transfer source %q is not a regular file", e.Path)

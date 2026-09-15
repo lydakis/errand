@@ -1,0 +1,512 @@
+{
+  "status": "complete",
+  "rounds": 5,
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "versions": {
+    "baseline": {
+      "source_sha256": "f04ad5275256b59819b567fb9a2044c22d1093309d6d947c5ccfc7ea730a35ea",
+      "production_sha256": "a3559c70b06ee5562662c6964afbd1ef7cded4d50e60829acfd277524a4590e9",
+      "benchmark_sha256": "1ed7cd37d495fb7106ac0aff73a95118b897dc474dd0776f86ef79991940b773",
+      "binary_sha256": "fff3ffce31bb321ff7cad6524aa41a70d483d0f1599c9396c3daf3eee978e588",
+      "samples": [
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 639516639.0,
+            "fetch-ms/op": 639.5,
+            "B/op": 13032840.0,
+            "allocs/op": 52562.0
+          },
+          "case": "fetch-large",
+          "elapsed": 13.612115875119343,
+          "load_before": [
+            2.7802734375,
+            3.01708984375,
+            3.2119140625
+          ],
+          "load_after": [
+            2.60107421875,
+            2.96630859375,
+            3.18994140625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 123244736.0,
+            "fetch-ms/op": 123.2,
+            "B/op": 2450525.0,
+            "allocs/op": 8661.0
+          },
+          "case": "fetch-false",
+          "elapsed": 8.03761125006713,
+          "load_before": [
+            2.9951171875,
+            3.0341796875,
+            3.21044921875
+          ],
+          "load_after": [
+            2.7548828125,
+            2.9833984375,
+            3.19140625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 679949194.0,
+            "fetch-ms/op": 679.9,
+            "B/op": 13035136.0,
+            "allocs/op": 52570.0
+          },
+          "case": "fetch-large",
+          "elapsed": 15.16513679199852,
+          "load_before": [
+            2.7548828125,
+            2.9833984375,
+            3.19140625
+          ],
+          "load_after": [
+            3.203125,
+            3.07958984375,
+            3.22216796875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 163900403.0,
+            "fetch-ms/op": 163.9,
+            "B/op": 2451026.0,
+            "allocs/op": 8660.0
+          },
+          "case": "fetch-false",
+          "elapsed": 10.719136792002246,
+          "load_before": [
+            3.08935546875,
+            3.05859375,
+            3.2119140625
+          ],
+          "load_after": [
+            2.9150390625,
+            3.0234375,
+            3.197265625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 803426542.0,
+            "fetch-ms/op": 803.4,
+            "B/op": 13263440.0,
+            "allocs/op": 52567.0
+          },
+          "case": "fetch-large",
+          "elapsed": 13.300069458084181,
+          "load_before": [
+            3.416015625,
+            3.12060546875,
+            3.2265625
+          ],
+          "load_after": [
+            3.72412109375,
+            3.19677734375,
+            3.25146484375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 130829764.0,
+            "fetch-ms/op": 130.8,
+            "B/op": 2454021.0,
+            "allocs/op": 8661.0
+          },
+          "case": "fetch-false",
+          "elapsed": 10.646652459166944,
+          "load_before": [
+            4.2265625,
+            3.3095703125,
+            3.29052734375
+          ],
+          "load_after": [
+            4.02783203125,
+            3.31005859375,
+            3.29052734375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 604807388.0,
+            "fetch-ms/op": 604.8,
+            "B/op": 13033525.0,
+            "allocs/op": 52557.0
+          },
+          "case": "fetch-large",
+          "elapsed": 16.61078937491402,
+          "load_before": [
+            4.02783203125,
+            3.31005859375,
+            3.29052734375
+          ],
+          "load_after": [
+            3.9716796875,
+            3.32763671875,
+            3.29638671875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 133714500.0,
+            "fetch-ms/op": 133.7,
+            "B/op": 2456101.0,
+            "allocs/op": 8667.0
+          },
+          "case": "fetch-false",
+          "elapsed": 8.068004708038643,
+          "load_before": [
+            3.232421875,
+            3.1962890625,
+            3.24951171875
+          ],
+          "load_after": [
+            3.49072265625,
+            3.2548828125,
+            3.26953125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 629412903.0,
+            "fetch-ms/op": 629.4,
+            "B/op": 13032642.0,
+            "allocs/op": 52561.0
+          },
+          "case": "fetch-large",
+          "elapsed": 13.74278933298774,
+          "load_before": [
+            2.9931640625,
+            3.15380859375,
+            3.23193359375
+          ],
+          "load_after": [
+            3.0673828125,
+            3.16455078125,
+            3.23486328125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 133814861.0,
+            "fetch-ms/op": 133.8,
+            "B/op": 2453909.0,
+            "allocs/op": 8660.0
+          },
+          "case": "fetch-false",
+          "elapsed": 8.810467791976407,
+          "load_before": [
+            2.90283203125,
+            3.1259765625,
+            3.22021484375
+          ],
+          "load_after": [
+            3.1572265625,
+            3.1708984375,
+            3.23486328125
+          ]
+        }
+      ]
+    },
+    "candidate": {
+      "source_sha256": "e3bd20da109c3ffa026730fda16b5f12e7858a408f85f391a3b95a58592061bf",
+      "production_sha256": "fec9273c3703c420262e7ae7506698f4b1f45b46dc78181f28a5201bfa3dfd8d",
+      "benchmark_sha256": "1ed7cd37d495fb7106ac0aff73a95118b897dc474dd0776f86ef79991940b773",
+      "binary_sha256": "a393b598ce289e7ef62d694e099b0dce7a1237663288ca12989ae18c4cabad73",
+      "samples": [
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 636485972.0,
+            "fetch-ms/op": 636.5,
+            "B/op": 13251616.0,
+            "allocs/op": 52487.0
+          },
+          "case": "fetch-large",
+          "elapsed": 13.193184500094503,
+          "load_before": [
+            2.74853515625,
+            3.0185546875,
+            3.21484375
+          ],
+          "load_after": [
+            2.7802734375,
+            3.01708984375,
+            3.2119140625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 128094625.0,
+            "fetch-ms/op": 128.1,
+            "B/op": 2443912.0,
+            "allocs/op": 8584.0
+          },
+          "case": "fetch-false",
+          "elapsed": 9.205175750190392,
+          "load_before": [
+            2.60107421875,
+            2.96630859375,
+            3.18994140625
+          ],
+          "load_after": [
+            2.9951171875,
+            3.0341796875,
+            3.21044921875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 648126028.0,
+            "fetch-ms/op": 648.1,
+            "B/op": 13256128.0,
+            "allocs/op": 52500.0
+          },
+          "case": "fetch-large",
+          "elapsed": 14.330788917141035,
+          "load_before": [
+            3.203125,
+            3.07958984375,
+            3.22216796875
+          ],
+          "load_after": [
+            3.08935546875,
+            3.05859375,
+            3.2119140625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 124718625.0,
+            "fetch-ms/op": 124.7,
+            "B/op": 2439861.0,
+            "allocs/op": 8581.0
+          },
+          "case": "fetch-false",
+          "elapsed": 7.159317250130698,
+          "load_before": [
+            2.9150390625,
+            3.0234375,
+            3.197265625
+          ],
+          "load_after": [
+            2.7802734375,
+            2.98974609375,
+            3.1826171875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 749254333.0,
+            "fetch-ms/op": 749.3,
+            "B/op": 13019720.0,
+            "allocs/op": 52470.0
+          },
+          "case": "fetch-large",
+          "elapsed": 12.506772624794394,
+          "load_before": [
+            2.7802734375,
+            2.98974609375,
+            3.1826171875
+          ],
+          "load_after": [
+            3.416015625,
+            3.12060546875,
+            3.2265625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 129658111.0,
+            "fetch-ms/op": 129.7,
+            "B/op": 2442080.0,
+            "allocs/op": 8584.0
+          },
+          "case": "fetch-false",
+          "elapsed": 6.639181375037879,
+          "load_before": [
+            3.72412109375,
+            3.19677734375,
+            3.25146484375
+          ],
+          "load_after": [
+            4.2265625,
+            3.3095703125,
+            3.29052734375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 641521347.0,
+            "fetch-ms/op": 641.5,
+            "B/op": 13018530.0,
+            "allocs/op": 52485.0
+          },
+          "case": "fetch-large",
+          "elapsed": 18.10420708404854,
+          "load_before": [
+            3.9716796875,
+            3.32763671875,
+            3.29638671875
+          ],
+          "load_after": [
+            3.232421875,
+            3.1962890625,
+            3.24951171875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 129909139.0,
+            "fetch-ms/op": 129.9,
+            "B/op": 2443474.0,
+            "allocs/op": 8582.0
+          },
+          "case": "fetch-false",
+          "elapsed": 9.629664792213589,
+          "load_before": [
+            3.49072265625,
+            3.2548828125,
+            3.26953125
+          ],
+          "load_after": [
+            3.18115234375,
+            3.19677734375,
+            3.248046875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 622407778.0,
+            "fetch-ms/op": 622.4,
+            "B/op": 13254869.0,
+            "allocs/op": 52502.0
+          },
+          "case": "fetch-large",
+          "elapsed": 13.261959375115111,
+          "load_before": [
+            3.18115234375,
+            3.19677734375,
+            3.248046875
+          ],
+          "load_after": [
+            2.9931640625,
+            3.15380859375,
+            3.23193359375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 131194333.0,
+            "fetch-ms/op": 131.2,
+            "B/op": 2441717.0,
+            "allocs/op": 8587.0
+          },
+          "case": "fetch-false",
+          "elapsed": 9.637827457860112,
+          "load_before": [
+            3.0673828125,
+            3.16455078125,
+            3.23486328125
+          ],
+          "load_after": [
+            2.90283203125,
+            3.1259765625,
+            3.22021484375
+          ]
+        }
+      ]
+    }
+  },
+  "orders": [
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ]
+  ],
+  "cases": {
+    "fetch-large": "^BenchmarkFetchBodies$/^large$",
+    "fetch-false": "^BenchmarkFetchCompletion$/^persistent=false$"
+  },
+  "reason": "Predeclared follow-up of APFS large-fetch slowdown in all five primary pairs, and four of five ephemeral-fetch pairs. Same production and benchmark sources, same three iterations; no repeated correctness suite.",
+  "harness_sha256": "377d6e78aa87f30102570e8a9a383bbbc772d3b61291166e2f5184c5a68caae5",
+  "fixture_filesystem": "apfs"
+}

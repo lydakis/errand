@@ -216,11 +216,9 @@ func ApplyToWorkspace(
 	if err := os.Mkdir(trustedRoot, 0o700); err != nil {
 		return ApplyResult{}, err
 	}
-	trustedAccess, err := materializeVerifiedMergeInputs(stagedRoot, trustedRoot, bundle)
-	if err != nil {
+	if err := materializeVerifiedMergeInputs(stagedRoot, trustedRoot, bundle); err != nil {
 		return ApplyResult{}, fmt.Errorf("verifying staged changes: %w", err)
 	}
-	defer closeTreeAccesses(trustedAccess)
 	var oursManifest proto.Manifest
 	var inputs map[string]applyPathInput
 	for {
@@ -695,8 +693,7 @@ func materializeApplySnapshotStrict(sourceRoot, destinationRoot, tempRoot string
 	return makeTreeAccessible(destinationRoot)
 }
 
-func materializeVerifiedMergeInputs(stagedRoot, destinationRoot string, bundle proto.ChangeBundle) ([]*treeAccess, error) {
-	var accesses []*treeAccess
+func materializeVerifiedMergeInputs(stagedRoot, destinationRoot string, bundle proto.ChangeBundle) error {
 	for _, tree := range []struct {
 		name     string
 		manifest proto.Manifest
@@ -706,25 +703,13 @@ func materializeVerifiedMergeInputs(stagedRoot, destinationRoot string, bundle p
 	} {
 		dest := filepath.Join(destinationRoot, tree.name)
 		if err := os.Mkdir(dest, 0o700); err != nil {
-			closeTreeAccesses(accesses)
-			return nil, err
+			return err
 		}
-		access, err := materializeMergeInput(
-			filepath.Join(stagedRoot, tree.name), dest, tree.manifest,
-		)
-		if err != nil {
-			closeTreeAccesses(accesses)
-			return nil, err
+		if err := materializeMergeInput(filepath.Join(stagedRoot, tree.name), dest, tree.manifest); err != nil {
+			return err
 		}
-		accesses = append(accesses, access)
 	}
-	return accesses, nil
-}
-
-func closeTreeAccesses(accesses []*treeAccess) {
-	for _, access := range accesses {
-		_ = access.closeWithoutRestore()
-	}
+	return nil
 }
 
 func captureBaselineWithAccess(

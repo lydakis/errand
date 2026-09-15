@@ -33,6 +33,16 @@ def benchmark_cases(scope):
     cases = {}
     def add(name, package, pattern, benchtime):
         cases[name] = (package, pattern, benchtime)
+    if scope == "merge-inputs":
+        for shape in ("small", "batch", "nested", "restricted", "large"):
+            add(f"inputs-{shape}", "./internal/changes", f"^BenchmarkVerifiedMergeInputs$/^{shape}$", "3x")
+        for shape in ("batch", "large"):
+            add(f"fetch-{shape}", "./cmd/errand", f"^BenchmarkFetchBodies$/^{shape}$", "3x")
+        for persistent in ("false", "true"):
+            add(f"fetch-{persistent}", "./cmd/errand", f"^BenchmarkFetchCompletion$/^persistent={persistent}$", "3x")
+        add("watch", "./cmd/errand", "^BenchmarkWatchPhases$", "3x")
+        add("push", "./cmd/errand", "^BenchmarkPushPhases$", "3x")
+        return cases
     if scope == "staging":
         for shape in ("small", "batch", "large"):
             add(f"stage-{shape}", "./internal/changes", f"^BenchmarkTransferStageBodies$/^{shape}$", "3x")
@@ -197,7 +207,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--rounds", type=int, default=7)
-    parser.add_argument("--scope", choices=("full", "retained", "metadata", "receiver", "staging"), default="full",
+    parser.add_argument("--scope", choices=("full", "retained", "metadata", "receiver", "staging", "merge-inputs"), default="full",
                         help="Use receiver for complete commands and checkpoint reads, retained for metadata/preparation and watch")
     parser.add_argument("--gomaxprocs", type=int, default=2)
     args = parser.parse_args()
@@ -243,8 +253,8 @@ def run_campaign(args, roots, cases, output, env, report, scratch):
             binary = scratch / name / f"{key}.test"
             run(["go", "test", "-c", "-o", str(binary), package], root, env, directory / f"build-{key}.txt")
             version["binaries"][key] = hashlib.sha256(binary.read_bytes()).hexdigest()
-    if args.scope == "staging" and len({v["benchmark_sha256"] for v in report["versions"].values()}) != 1:
-        raise RuntimeError("Staging comparisons require identical benchmark sources")
+    if args.scope in ("staging", "merge-inputs") and len({v["benchmark_sha256"] for v in report["versions"].values()}) != 1:
+        raise RuntimeError("Transfer comparisons require identical benchmark sources")
     # Go normally puts fixtures in /tmp, which may be tmpfs even when the
     # runner's workspaces use Btrfs. Place fixtures under the requested output
     # directory and measure its actual filesystem, which may differ from cwd.

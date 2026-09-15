@@ -2621,11 +2621,9 @@ func TestVerifiedMergeInputsAreIndependentOfStaging(t *testing.T) {
 	}
 	staged := extractTestBundle(t, jobDir, bundle)
 	trusted := t.TempDir()
-	accesses, err := materializeVerifiedMergeInputs(staged, trusted, bundle)
-	if err != nil {
+	if err := materializeVerifiedMergeInputs(staged, trusted, bundle); err != nil {
 		t.Fatal(err)
 	}
-	defer closeTreeAccesses(accesses)
 	if err := os.WriteFile(filepath.Join(staged, "remote", "artifact"), []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}

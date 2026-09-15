@@ -10,14 +10,26 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+// Scratch inputs retain owner access; their manifests carry logical modes.
+// Published staging restores manifest modes before its durability barrier.
+type treePermissions uint8
+
+const (
+	manifestPermissions treePermissions = iota
+	mergeInputPermissions
+)
+
 // materializeTransferTree builds a private tree from verified content readers.
 // Blob reconstruction and incoming transfer staging use the same member flushes,
 // child-first mode restoration and final durability barrier. The caller owns
 // cleanup and publication; no failed tree is exposed under a durable name.
-func materializeTransferTree(ctx context.Context, tree *os.Root, manifest proto.Manifest,
+func materializeTransferTree(ctx context.Context, tree *os.Root, manifest proto.Manifest, permissions treePermissions,
 	open func(proto.ManifestEntry) (io.ReadCloser, error), syncData func(*os.File) error, barrier func() error,
 ) error {
-	directories := map[string]os.FileMode{}
+	var directories map[string]os.FileMode
+	if permissions == manifestPermissions {
+		directories = make(map[string]os.FileMode)
+	}
 	var files, symlinks []proto.ManifestEntry
 	for _, e := range manifest.Entries {
 		if err := ctx.Err(); err != nil {
@@ -26,14 +38,16 @@ func materializeTransferTree(ctx context.Context, tree *os.Root, manifest proto.
 		if err := tree.MkdirAll(path.Dir(e.Path), 0700); err != nil {
 			return err
 		}
-		for parent := path.Dir(e.Path); parent != "."; parent = path.Dir(parent) {
+		for parent := path.Dir(e.Path); directories != nil && parent != "."; parent = path.Dir(parent) {
 			if _, exists := directories[parent]; !exists {
 				directories[parent] = 0700
 			}
 		}
 		switch e.Type {
 		case proto.EntryDir:
-			directories[e.Path] = os.FileMode(e.Mode)
+			if directories != nil {
+				directories[e.Path] = os.FileMode(e.Mode)
+			}
 			if err := tree.MkdirAll(e.Path, 0700); err != nil {
 				return err
 			}
@@ -57,7 +71,11 @@ func materializeTransferTree(ctx context.Context, tree *os.Root, manifest proto.
 		if copyErr != nil {
 			return errors.Join(copyErr, out.Close(), in.Close())
 		}
-		return errors.Join(out.Chmod(os.FileMode(e.Mode)), syncData(out), out.Close(), in.Close())
+		var modeErr error
+		if permissions == manifestPermissions {
+			modeErr = out.Chmod(os.FileMode(e.Mode))
+		}
+		return errors.Join(modeErr, syncData(out), out.Close(), in.Close())
 	}); err != nil {
 		return err
 	}

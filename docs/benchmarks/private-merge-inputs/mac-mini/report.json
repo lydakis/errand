@@ -1,0 +1,2658 @@
+{
+  "revision": "3a0cf85 private accessible merge inputs",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "gomaxprocs": 2,
+  "rounds": 5,
+  "versions": {
+    "baseline": {
+      "source_sha256": "f04ad5275256b59819b567fb9a2044c22d1093309d6d947c5ccfc7ea730a35ea",
+      "production_sha256": "a3559c70b06ee5562662c6964afbd1ef7cded4d50e60829acfd277524a4590e9",
+      "benchmark_sha256": "1ed7cd37d495fb7106ac0aff73a95118b897dc474dd0776f86ef79991940b773",
+      "binaries": {
+        "cmd-errand": "06bddb284a741441eff04978fb0d074d88958527831217c2196b331915e80dad",
+        "internal-changes": "88e4eff5893a2b3f8c177e788856c5362111a4df0139c044dad2e599b539714a"
+      },
+      "samples": [
+        {
+          "name": "BenchmarkVerifiedMergeInputs/small",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 1074736.0,
+            "B/op": 34712.0,
+            "allocs/op": 358.0
+          },
+          "case": "inputs-small",
+          "elapsed": 0.3797868750989437,
+          "load_before": [
+            3.0439453125,
+            3.30517578125,
+            3.58935546875
+          ],
+          "load_after": [
+            3.0439453125,
+            3.30517578125,
+            3.58935546875
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/batch",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 21912931.0,
+            "B/op": 2548778.0,
+            "allocs/op": 16422.0
+          },
+          "case": "inputs-batch",
+          "elapsed": 0.3060209578834474,
+          "load_before": [
+            3.0439453125,
+            3.30517578125,
+            3.58935546875
+          ],
+          "load_after": [
+            3.0439453125,
+            3.30517578125,
+            3.58935546875
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/nested",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 218944333.0,
+            "B/op": 10902893.0,
+            "allocs/op": 128462.0
+          },
+          "case": "inputs-nested",
+          "elapsed": 1.8677694590296596,
+          "load_before": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ],
+          "load_after": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/restricted",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 30151347.0,
+            "B/op": 1702173.0,
+            "allocs/op": 23729.0
+          },
+          "case": "inputs-restricted",
+          "elapsed": 0.3114233328960836,
+          "load_before": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ],
+          "load_after": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/large",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 32358236.0,
+            "B/op": 99672.0,
+            "allocs/op": 358.0
+          },
+          "case": "inputs-large",
+          "elapsed": 0.27285520802251995,
+          "load_before": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ],
+          "load_after": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/batch",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 7612931555.0,
+            "fetch-ms/op": 7613.0,
+            "B/op": 239291541.0,
+            "allocs/op": 368176.0
+          },
+          "case": "fetch-batch",
+          "elapsed": 42.07770225009881,
+          "load_before": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ],
+          "load_after": [
+            2.67626953125,
+            3.17529296875,
+            3.525390625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 597106945.0,
+            "fetch-ms/op": 597.1,
+            "B/op": 13485437.0,
+            "allocs/op": 52560.0
+          },
+          "case": "fetch-large",
+          "elapsed": 15.983214332954958,
+          "load_before": [
+            2.52294921875,
+            3.06982421875,
+            3.46728515625
+          ],
+          "load_after": [
+            2.74560546875,
+            3.09716796875,
+            3.47021484375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 121009569.0,
+            "fetch-ms/op": 121.0,
+            "B/op": 2451586.0,
+            "allocs/op": 8665.0
+          },
+          "case": "fetch-false",
+          "elapsed": 8.58766125002876,
+          "load_before": [
+            2.966796875,
+            3.125,
+            3.47314453125
+          ],
+          "load_after": [
+            3.44970703125,
+            3.22216796875,
+            3.50537109375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 259512903.0,
+            "fetch-ms/op": 259.5,
+            "B/op": 12272253.0,
+            "allocs/op": 40090.0
+          },
+          "case": "fetch-true",
+          "elapsed": 12.340514082927257,
+          "load_before": [
+            4.11669921875,
+            3.37744140625,
+            3.55712890625
+          ],
+          "load_after": [
+            3.6533203125,
+            3.3095703125,
+            3.529296875
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 366100347.0,
+            "apply-ms/op": 172.4,
+            "client-ms/op": 127.1,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 66.51,
+            "B/op": 101114504.0,
+            "allocs/op": 139649.0
+          },
+          "case": "watch",
+          "elapsed": 36.561547625111416,
+          "load_before": [
+            3.40478515625,
+            3.26611328125,
+            3.5107421875
+          ],
+          "load_after": [
+            3.24609375,
+            3.24853515625,
+            3.49365234375
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 526088139.0,
+            "apply-ms/op": 171.3,
+            "client-ms/op": 295.4,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 59.37,
+            "B/op": 207797794.0,
+            "allocs/op": 421137.0
+          },
+          "case": "push",
+          "elapsed": 41.69424991682172,
+          "load_before": [
+            2.78271484375,
+            3.14794921875,
+            3.4462890625
+          ],
+          "load_after": [
+            3.1171875,
+            3.19921875,
+            3.44921875
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/small",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 1602570.0,
+            "B/op": 34712.0,
+            "allocs/op": 358.0
+          },
+          "case": "inputs-small",
+          "elapsed": 0.2752635411452502,
+          "load_before": [
+            2.6484375,
+            3.07861328125,
+            3.39404296875
+          ],
+          "load_after": [
+            2.6484375,
+            3.07861328125,
+            3.39404296875
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/batch",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 18386348.0,
+            "B/op": 2546733.0,
+            "allocs/op": 16419.0
+          },
+          "case": "inputs-batch",
+          "elapsed": 0.2613887498155236,
+          "load_before": [
+            2.6484375,
+            3.07861328125,
+            3.39404296875
+          ],
+          "load_after": [
+            2.6484375,
+            3.07861328125,
+            3.39404296875
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/nested",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 129506833.0,
+            "B/op": 10902917.0,
+            "allocs/op": 128455.0
+          },
+          "case": "inputs-nested",
+          "elapsed": 1.2718958749901503,
+          "load_before": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ],
+          "load_after": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/restricted",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 31272555.0,
+            "B/op": 1702541.0,
+            "allocs/op": 23728.0
+          },
+          "case": "inputs-restricted",
+          "elapsed": 0.32845820882357657,
+          "load_before": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ],
+          "load_after": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/large",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 28740361.0,
+            "B/op": 99672.0,
+            "allocs/op": 358.0
+          },
+          "case": "inputs-large",
+          "elapsed": 0.18040679208934307,
+          "load_before": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ],
+          "load_after": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/batch",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 7703241472.0,
+            "fetch-ms/op": 7703.0,
+            "B/op": 238366594.0,
+            "allocs/op": 368145.0
+          },
+          "case": "fetch-batch",
+          "elapsed": 43.608124000020325,
+          "load_before": [
+            2.71484375,
+            3.0693359375,
+            3.37353515625
+          ],
+          "load_after": [
+            2.50390625,
+            2.93896484375,
+            3.3076171875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 563457472.0,
+            "fetch-ms/op": 563.5,
+            "B/op": 12795013.0,
+            "allocs/op": 52548.0
+          },
+          "case": "fetch-large",
+          "elapsed": 13.341131166787818,
+          "load_before": [
+            2.44677734375,
+            2.908203125,
+            3.2900390625
+          ],
+          "load_after": [
+            2.27294921875,
+            2.84716796875,
+            3.2607421875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 114383000.0,
+            "fetch-ms/op": 114.4,
+            "B/op": 2448725.0,
+            "allocs/op": 8660.0
+          },
+          "case": "fetch-false",
+          "elapsed": 7.843401832971722,
+          "load_before": [
+            2.1708984375,
+            2.81640625,
+            3.2470703125
+          ],
+          "load_after": [
+            2.06396484375,
+            2.7724609375,
+            3.2265625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 226727819.0,
+            "fetch-ms/op": 226.7,
+            "B/op": 12046554.0,
+            "allocs/op": 40093.0
+          },
+          "case": "fetch-true",
+          "elapsed": 12.65184483397752,
+          "load_before": [
+            2.3544921875,
+            2.81201171875,
+            3.2353515625
+          ],
+          "load_after": [
+            2.3427734375,
+            2.78759765625,
+            3.21923828125
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 361575681.0,
+            "apply-ms/op": 175.4,
+            "client-ms/op": 123.5,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 62.59,
+            "B/op": 105563904.0,
+            "allocs/op": 139695.0
+          },
+          "case": "watch",
+          "elapsed": 38.90627375012264,
+          "load_before": [
+            2.20849609375,
+            2.71240234375,
+            3.173828125
+          ],
+          "load_after": [
+            2.50439453125,
+            2.75244140625,
+            3.16943359375
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 522950847.0,
+            "apply-ms/op": 177.5,
+            "client-ms/op": 286.1,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 59.36,
+            "B/op": 210020224.0,
+            "allocs/op": 421169.0
+          },
+          "case": "push",
+          "elapsed": 36.465365750016645,
+          "load_before": [
+            2.9609375,
+            2.845703125,
+            3.18017578125
+          ],
+          "load_after": [
+            3.18212890625,
+            2.92236328125,
+            3.193359375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/small",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 2597042.0,
+            "B/op": 34712.0,
+            "allocs/op": 358.0
+          },
+          "case": "inputs-small",
+          "elapsed": 0.3681720830500126,
+          "load_before": [
+            3.18212890625,
+            2.92236328125,
+            3.193359375
+          ],
+          "load_after": [
+            3.18212890625,
+            2.92236328125,
+            3.193359375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/batch",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 17315833.0,
+            "B/op": 2548002.0,
+            "allocs/op": 16421.0
+          },
+          "case": "inputs-batch",
+          "elapsed": 0.3264353747945279,
+          "load_before": [
+            3.18212890625,
+            2.92236328125,
+            3.193359375
+          ],
+          "load_after": [
+            3.18212890625,
+            2.92236328125,
+            3.193359375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/nested",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 124039570.0,
+            "B/op": 10901933.0,
+            "allocs/op": 128460.0
+          },
+          "case": "inputs-nested",
+          "elapsed": 1.331324459053576,
+          "load_before": [
+            3.18212890625,
+            2.92236328125,
+            3.193359375
+          ],
+          "load_after": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/restricted",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 32452709.0,
+            "B/op": 1705885.0,
+            "allocs/op": 23738.0
+          },
+          "case": "inputs-restricted",
+          "elapsed": 0.3720251671038568,
+          "load_before": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ],
+          "load_after": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/large",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 57882861.0,
+            "B/op": 99672.0,
+            "allocs/op": 358.0
+          },
+          "case": "inputs-large",
+          "elapsed": 0.4904744999948889,
+          "load_before": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ],
+          "load_after": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/batch",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 7452314056.0,
+            "fetch-ms/op": 7452.0,
+            "B/op": 239220477.0,
+            "allocs/op": 368195.0
+          },
+          "case": "fetch-batch",
+          "elapsed": 41.51847108313814,
+          "load_before": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ],
+          "load_after": [
+            2.94091796875,
+            2.8984375,
+            3.16845703125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 601870556.0,
+            "fetch-ms/op": 601.9,
+            "B/op": 13023786.0,
+            "allocs/op": 52563.0
+          },
+          "case": "fetch-large",
+          "elapsed": 10.388865875080228,
+          "load_before": [
+            3.33349609375,
+            3.029296875,
+            3.20361328125
+          ],
+          "load_after": [
+            4.39013671875,
+            3.259765625,
+            3.28271484375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 120955347.0,
+            "fetch-ms/op": 121.0,
+            "B/op": 2447352.0,
+            "allocs/op": 8662.0
+          },
+          "case": "fetch-false",
+          "elapsed": 10.095838041976094,
+          "load_before": [
+            3.70654296875,
+            3.16455078125,
+            3.24755859375
+          ],
+          "load_after": [
+            3.5927734375,
+            3.1708984375,
+            3.248046875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 269645847.0,
+            "fetch-ms/op": 269.6,
+            "B/op": 12040554.0,
+            "allocs/op": 40076.0
+          },
+          "case": "fetch-true",
+          "elapsed": 10.933268249966204,
+          "load_before": [
+            3.46484375,
+            3.1513671875,
+            3.24072265625
+          ],
+          "load_after": [
+            3.3193359375,
+            3.12939453125,
+            3.23193359375
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 397305000.0,
+            "apply-ms/op": 195.9,
+            "client-ms/op": 134.2,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 67.02,
+            "B/op": 103350434.0,
+            "allocs/op": 139675.0
+          },
+          "case": "watch",
+          "elapsed": 41.83964066696353,
+          "load_before": [
+            3.7470703125,
+            3.2353515625,
+            3.267578125
+          ],
+          "load_after": [
+            3.33203125,
+            3.189453125,
+            3.24658203125
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 526708167.0,
+            "apply-ms/op": 186.2,
+            "client-ms/op": 279.8,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 60.7,
+            "B/op": 207802429.0,
+            "allocs/op": 421145.0
+          },
+          "case": "push",
+          "elapsed": 46.00387999997474,
+          "load_before": [
+            3.98193359375,
+            3.361328125,
+            3.306640625
+          ],
+          "load_after": [
+            3.51513671875,
+            3.32421875,
+            3.294921875
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/small",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 1243305.0,
+            "B/op": 34717.0,
+            "allocs/op": 358.0
+          },
+          "case": "inputs-small",
+          "elapsed": 0.33829762507230043,
+          "load_before": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ],
+          "load_after": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/batch",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 18063986.0,
+            "B/op": 2547922.0,
+            "allocs/op": 16419.0
+          },
+          "case": "inputs-batch",
+          "elapsed": 0.2812106250785291,
+          "load_before": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ],
+          "load_after": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/nested",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 122957764.0,
+            "B/op": 10900064.0,
+            "allocs/op": 128447.0
+          },
+          "case": "inputs-nested",
+          "elapsed": 1.1570042921230197,
+          "load_before": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ],
+          "load_after": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/restricted",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 28424055.0,
+            "B/op": 1709232.0,
+            "allocs/op": 23746.0
+          },
+          "case": "inputs-restricted",
+          "elapsed": 0.31754408311098814,
+          "load_before": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ],
+          "load_after": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/large",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 57595819.0,
+            "B/op": 99672.0,
+            "allocs/op": 358.0
+          },
+          "case": "inputs-large",
+          "elapsed": 0.4650476248934865,
+          "load_before": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ],
+          "load_after": [
+            3.59033203125,
+            3.35693359375,
+            3.306640625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/batch",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 8312531208.0,
+            "fetch-ms/op": 8313.0,
+            "B/op": 239526922.0,
+            "allocs/op": 368155.0
+          },
+          "case": "fetch-batch",
+          "elapsed": 43.74650012515485,
+          "load_before": [
+            3.3056640625,
+            3.30517578125,
+            3.2890625
+          ],
+          "load_after": [
+            3.19091796875,
+            3.2880859375,
+            3.283203125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 796110667.0,
+            "fetch-ms/op": 796.1,
+            "B/op": 13256784.0,
+            "allocs/op": 52555.0
+          },
+          "case": "fetch-large",
+          "elapsed": 17.759241041960195,
+          "load_before": [
+            3.48095703125,
+            3.34033203125,
+            3.30078125
+          ],
+          "load_after": [
+            3.00439453125,
+            3.2412109375,
+            3.265625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 121489028.0,
+            "fetch-ms/op": 121.5,
+            "B/op": 2445621.0,
+            "allocs/op": 8659.0
+          },
+          "case": "fetch-false",
+          "elapsed": 8.665694792056456,
+          "load_before": [
+            2.916015625,
+            3.21142578125,
+            3.25390625
+          ],
+          "load_after": [
+            2.6943359375,
+            3.154296875,
+            3.23291015625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 315636278.0,
+            "fetch-ms/op": 315.6,
+            "B/op": 12265024.0,
+            "allocs/op": 40067.0
+          },
+          "case": "fetch-true",
+          "elapsed": 12.71485812496394,
+          "load_before": [
+            2.85400390625,
+            3.1630859375,
+            3.234375
+          ],
+          "load_after": [
+            3.68603515625,
+            3.3369140625,
+            3.29541015625
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 354982000.0,
+            "apply-ms/op": 168.7,
+            "client-ms/op": 118.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 67.31,
+            "B/op": 101140032.0,
+            "allocs/op": 139665.0
+          },
+          "case": "watch",
+          "elapsed": 35.219030749984086,
+          "load_before": [
+            3.80615234375,
+            3.41748046875,
+            3.32666015625
+          ],
+          "load_after": [
+            3.58349609375,
+            3.41357421875,
+            3.32861328125
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 521952499.0,
+            "apply-ms/op": 176.8,
+            "client-ms/op": 281.7,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 63.42,
+            "B/op": 203371328.0,
+            "allocs/op": 421130.0
+          },
+          "case": "push",
+          "elapsed": 43.23597608390264,
+          "load_before": [
+            3.9150390625,
+            3.52978515625,
+            3.375
+          ],
+          "load_after": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/small",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 8587500.0,
+            "B/op": 34712.0,
+            "allocs/op": 358.0
+          },
+          "case": "inputs-small",
+          "elapsed": 0.31520612514577806,
+          "load_before": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ],
+          "load_after": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/batch",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 18199472.0,
+            "B/op": 2550010.0,
+            "allocs/op": 16424.0
+          },
+          "case": "inputs-batch",
+          "elapsed": 0.29343495797365904,
+          "load_before": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ],
+          "load_after": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/nested",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 179450667.0,
+            "B/op": 10905192.0,
+            "allocs/op": 128470.0
+          },
+          "case": "inputs-nested",
+          "elapsed": 1.6017911250237375,
+          "load_before": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ],
+          "load_after": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/restricted",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 40671666.0,
+            "B/op": 1702168.0,
+            "allocs/op": 23730.0
+          },
+          "case": "inputs-restricted",
+          "elapsed": 0.4779853329528123,
+          "load_before": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ],
+          "load_after": [
+            5.451171875,
+            4.02490234375,
+            3.56787109375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/large",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 61323778.0,
+            "B/op": 99672.0,
+            "allocs/op": 358.0
+          },
+          "case": "inputs-large",
+          "elapsed": 0.3890872080810368,
+          "load_before": [
+            5.451171875,
+            4.02490234375,
+            3.56787109375
+          ],
+          "load_after": [
+            5.451171875,
+            4.02490234375,
+            3.56787109375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/batch",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 9157197750.0,
+            "fetch-ms/op": 9157.0,
+            "B/op": 239047634.0,
+            "allocs/op": 368128.0
+          },
+          "case": "fetch-batch",
+          "elapsed": 50.7009053749498,
+          "load_before": [
+            5.451171875,
+            4.02490234375,
+            3.56787109375
+          ],
+          "load_after": [
+            4.3193359375,
+            3.94140625,
+            3.56298828125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 585535653.0,
+            "fetch-ms/op": 585.5,
+            "B/op": 13257877.0,
+            "allocs/op": 52571.0
+          },
+          "case": "fetch-large",
+          "elapsed": 13.64410762512125,
+          "load_before": [
+            3.24462890625,
+            3.70068359375,
+            3.49169921875
+          ],
+          "load_after": [
+            2.88818359375,
+            3.6005859375,
+            3.45947265625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 125707153.0,
+            "fetch-ms/op": 125.7,
+            "B/op": 2452250.0,
+            "allocs/op": 8660.0
+          },
+          "case": "fetch-false",
+          "elapsed": 15.243548625148833,
+          "load_before": [
+            2.91845703125,
+            3.5703125,
+            3.45068359375
+          ],
+          "load_after": [
+            2.64013671875,
+            3.4765625,
+            3.41845703125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 226733514.0,
+            "fetch-ms/op": 226.7,
+            "B/op": 12038674.0,
+            "allocs/op": 40074.0
+          },
+          "case": "fetch-true",
+          "elapsed": 13.204696500208229,
+          "load_before": [
+            2.54150390625,
+            3.42724609375,
+            3.4013671875
+          ],
+          "load_after": [
+            2.802734375,
+            3.4384765625,
+            3.40576171875
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 439215528.0,
+            "apply-ms/op": 226.4,
+            "client-ms/op": 126.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 85.83,
+            "B/op": 101130176.0,
+            "allocs/op": 139658.0
+          },
+          "case": "watch",
+          "elapsed": 45.68671383312903,
+          "load_before": [
+            2.7587890625,
+            3.4072265625,
+            3.39501953125
+          ],
+          "load_after": [
+            2.73388671875,
+            3.31494140625,
+            3.361328125
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 540777153.0,
+            "apply-ms/op": 186.1,
+            "client-ms/op": 292.6,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 62.08,
+            "B/op": 203373869.0,
+            "allocs/op": 421126.0
+          },
+          "case": "push",
+          "elapsed": 44.20945241698064,
+          "load_before": [
+            2.82568359375,
+            3.27197265625,
+            3.341796875
+          ],
+          "load_after": [
+            3.23974609375,
+            3.32373046875,
+            3.35546875
+          ]
+        }
+      ]
+    },
+    "candidate": {
+      "source_sha256": "e3bd20da109c3ffa026730fda16b5f12e7858a408f85f391a3b95a58592061bf",
+      "production_sha256": "fec9273c3703c420262e7ae7506698f4b1f45b46dc78181f28a5201bfa3dfd8d",
+      "benchmark_sha256": "1ed7cd37d495fb7106ac0aff73a95118b897dc474dd0776f86ef79991940b773",
+      "binaries": {
+        "cmd-errand": "09c6e79334e9367d11d0032e8cb246486c12424b42c31308296ef9d94b09df6e",
+        "internal-changes": "bd86f3b35528e99a02bd36e63cccc86878235fdb5c9f02fe0587f177423b47f8"
+      },
+      "samples": [
+        {
+          "name": "BenchmarkVerifiedMergeInputs/small",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 882209.0,
+            "B/op": 15248.0,
+            "allocs/op": 210.0
+          },
+          "case": "inputs-small",
+          "elapsed": 0.04366595786996186,
+          "load_before": [
+            3.0439453125,
+            3.30517578125,
+            3.58935546875
+          ],
+          "load_after": [
+            3.0439453125,
+            3.30517578125,
+            3.58935546875
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/batch",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 16969917.0,
+            "B/op": 2239456.0,
+            "allocs/op": 13187.0
+          },
+          "case": "inputs-batch",
+          "elapsed": 0.27317083277739584,
+          "load_before": [
+            3.0439453125,
+            3.30517578125,
+            3.58935546875
+          ],
+          "load_after": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/nested",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 143257097.0,
+            "B/op": 8496576.0,
+            "allocs/op": 103720.0
+          },
+          "case": "inputs-nested",
+          "elapsed": 1.7265939170029014,
+          "load_before": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ],
+          "load_after": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/restricted",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 23510431.0,
+            "B/op": 1260805.0,
+            "allocs/op": 17626.0
+          },
+          "case": "inputs-restricted",
+          "elapsed": 0.31115462514571846,
+          "load_before": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ],
+          "load_after": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/large",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 50578750.0,
+            "B/op": 80208.0,
+            "allocs/op": 210.0
+          },
+          "case": "inputs-large",
+          "elapsed": 0.43158070812933147,
+          "load_before": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ],
+          "load_after": [
+            2.9599609375,
+            3.283203125,
+            3.57958984375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/batch",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 7489102388.0,
+            "fetch-ms/op": 7489.0,
+            "B/op": 239661309.0,
+            "allocs/op": 366053.0
+          },
+          "case": "fetch-batch",
+          "elapsed": 44.05845579202287,
+          "load_before": [
+            2.67626953125,
+            3.17529296875,
+            3.525390625
+          ],
+          "load_after": [
+            2.52294921875,
+            3.06982421875,
+            3.46728515625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 616039236.0,
+            "fetch-ms/op": 616.0,
+            "B/op": 13477218.0,
+            "allocs/op": 52501.0
+          },
+          "case": "fetch-large",
+          "elapsed": 13.564823874970898,
+          "load_before": [
+            2.74560546875,
+            3.09716796875,
+            3.47021484375
+          ],
+          "load_after": [
+            2.966796875,
+            3.125,
+            3.47314453125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 125346195.0,
+            "fetch-ms/op": 125.3,
+            "B/op": 2442088.0,
+            "allocs/op": 8582.0
+          },
+          "case": "fetch-false",
+          "elapsed": 8.63438312499784,
+          "load_before": [
+            3.44970703125,
+            3.22216796875,
+            3.50537109375
+          ],
+          "load_after": [
+            4.11669921875,
+            3.37744140625,
+            3.55712890625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 239157458.0,
+            "fetch-ms/op": 239.2,
+            "B/op": 11803104.0,
+            "allocs/op": 40004.0
+          },
+          "case": "fetch-true",
+          "elapsed": 12.473271792056039,
+          "load_before": [
+            3.6533203125,
+            3.3095703125,
+            3.529296875
+          ],
+          "load_after": [
+            3.40478515625,
+            3.26611328125,
+            3.5107421875
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 408642931.0,
+            "apply-ms/op": 183.0,
+            "client-ms/op": 158.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 66.61,
+            "B/op": 109997130.0,
+            "allocs/op": 139649.0
+          },
+          "case": "watch",
+          "elapsed": 39.48809487512335,
+          "load_before": [
+            3.24609375,
+            3.24853515625,
+            3.49365234375
+          ],
+          "load_after": [
+            2.78271484375,
+            3.14794921875,
+            3.4462890625
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 0,
+          "metrics": {
+            "ns/op": 517396486.0,
+            "apply-ms/op": 171.9,
+            "client-ms/op": 285.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 59.54,
+            "B/op": 210009728.0,
+            "allocs/op": 421098.0
+          },
+          "case": "push",
+          "elapsed": 38.48355062492192,
+          "load_before": [
+            3.1171875,
+            3.19921875,
+            3.44921875
+          ],
+          "load_after": [
+            2.6484375,
+            3.07861328125,
+            3.39404296875
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/small",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 810889.0,
+            "B/op": 15248.0,
+            "allocs/op": 210.0
+          },
+          "case": "inputs-small",
+          "elapsed": 0.3055023751221597,
+          "load_before": [
+            2.6484375,
+            3.07861328125,
+            3.39404296875
+          ],
+          "load_after": [
+            2.6484375,
+            3.07861328125,
+            3.39404296875
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/batch",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 16304875.0,
+            "B/op": 2239488.0,
+            "allocs/op": 13187.0
+          },
+          "case": "inputs-batch",
+          "elapsed": 0.2208940419368446,
+          "load_before": [
+            2.6484375,
+            3.07861328125,
+            3.39404296875
+          ],
+          "load_after": [
+            2.6484375,
+            3.07861328125,
+            3.39404296875
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/nested",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 125570514.0,
+            "B/op": 8495237.0,
+            "allocs/op": 103720.0
+          },
+          "case": "inputs-nested",
+          "elapsed": 1.3714554158505052,
+          "load_before": [
+            2.6484375,
+            3.07861328125,
+            3.39404296875
+          ],
+          "load_after": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/restricted",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 20651015.0,
+            "B/op": 1264264.0,
+            "allocs/op": 17631.0
+          },
+          "case": "inputs-restricted",
+          "elapsed": 0.23394345818087459,
+          "load_before": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ],
+          "load_after": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/large",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 35384278.0,
+            "B/op": 80208.0,
+            "allocs/op": 210.0
+          },
+          "case": "inputs-large",
+          "elapsed": 0.28131029196083546,
+          "load_before": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ],
+          "load_after": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/batch",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 7791836194.0,
+            "fetch-ms/op": 7792.0,
+            "B/op": 238829176.0,
+            "allocs/op": 366034.0
+          },
+          "case": "fetch-batch",
+          "elapsed": 43.63182033319026,
+          "load_before": [
+            2.75634765625,
+            3.09375,
+            3.3974609375
+          ],
+          "load_after": [
+            2.71484375,
+            3.0693359375,
+            3.37353515625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 590733403.0,
+            "fetch-ms/op": 590.7,
+            "B/op": 12782781.0,
+            "allocs/op": 52472.0
+          },
+          "case": "fetch-large",
+          "elapsed": 16.31544025009498,
+          "load_before": [
+            2.50390625,
+            2.93896484375,
+            3.3076171875
+          ],
+          "load_after": [
+            2.44677734375,
+            2.908203125,
+            3.2900390625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 129123458.0,
+            "fetch-ms/op": 129.1,
+            "B/op": 2437504.0,
+            "allocs/op": 8583.0
+          },
+          "case": "fetch-false",
+          "elapsed": 8.518206167034805,
+          "load_before": [
+            2.27294921875,
+            2.84716796875,
+            3.2607421875
+          ],
+          "load_after": [
+            2.1708984375,
+            2.81640625,
+            3.2470703125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 229019098.0,
+            "fetch-ms/op": 229.0,
+            "B/op": 12718949.0,
+            "allocs/op": 40038.0
+          },
+          "case": "fetch-true",
+          "elapsed": 11.595857749925926,
+          "load_before": [
+            2.06396484375,
+            2.7724609375,
+            3.2265625
+          ],
+          "load_after": [
+            2.3544921875,
+            2.81201171875,
+            3.2353515625
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 362563500.0,
+            "apply-ms/op": 174.3,
+            "client-ms/op": 123.2,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 64.98,
+            "B/op": 96688994.0,
+            "allocs/op": 139563.0
+          },
+          "case": "watch",
+          "elapsed": 35.538209040882066,
+          "load_before": [
+            2.3427734375,
+            2.78759765625,
+            3.21923828125
+          ],
+          "load_after": [
+            2.20849609375,
+            2.71240234375,
+            3.173828125
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 1,
+          "metrics": {
+            "ns/op": 506791459.0,
+            "apply-ms/op": 173.4,
+            "client-ms/op": 274.2,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 59.22,
+            "B/op": 207794322.0,
+            "allocs/op": 421089.0
+          },
+          "case": "push",
+          "elapsed": 41.36848949990235,
+          "load_before": [
+            2.50439453125,
+            2.75244140625,
+            3.16943359375
+          ],
+          "load_after": [
+            2.9609375,
+            2.845703125,
+            3.18017578125
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/small",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 832028.0,
+            "B/op": 15248.0,
+            "allocs/op": 210.0
+          },
+          "case": "inputs-small",
+          "elapsed": 0.40110595896840096,
+          "load_before": [
+            3.18212890625,
+            2.92236328125,
+            3.193359375
+          ],
+          "load_after": [
+            3.18212890625,
+            2.92236328125,
+            3.193359375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/batch",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 13135278.0,
+            "B/op": 2240757.0,
+            "allocs/op": 13190.0
+          },
+          "case": "inputs-batch",
+          "elapsed": 0.3400885830633342,
+          "load_before": [
+            3.18212890625,
+            2.92236328125,
+            3.193359375
+          ],
+          "load_after": [
+            3.18212890625,
+            2.92236328125,
+            3.193359375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/nested",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 106706639.0,
+            "B/op": 8492874.0,
+            "allocs/op": 103712.0
+          },
+          "case": "inputs-nested",
+          "elapsed": 1.1825818330980837,
+          "load_before": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ],
+          "load_after": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/restricted",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 20906167.0,
+            "B/op": 1262765.0,
+            "allocs/op": 17627.0
+          },
+          "case": "inputs-restricted",
+          "elapsed": 0.2489196250680834,
+          "load_before": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ],
+          "load_after": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/large",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 87646875.0,
+            "B/op": 80208.0,
+            "allocs/op": 210.0
+          },
+          "case": "inputs-large",
+          "elapsed": 0.6695950420107692,
+          "load_before": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ],
+          "load_after": [
+            3.08740234375,
+            2.90673828125,
+            3.18603515625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/batch",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 7315497833.0,
+            "fetch-ms/op": 7315.0,
+            "B/op": 239624290.0,
+            "allocs/op": 366084.0
+          },
+          "case": "fetch-batch",
+          "elapsed": 38.898207291960716,
+          "load_before": [
+            2.94091796875,
+            2.8984375,
+            3.16845703125
+          ],
+          "load_after": [
+            3.33349609375,
+            3.029296875,
+            3.20361328125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 607221403.0,
+            "fetch-ms/op": 607.2,
+            "B/op": 13244888.0,
+            "allocs/op": 52484.0
+          },
+          "case": "fetch-large",
+          "elapsed": 15.856096459086984,
+          "load_before": [
+            4.39013671875,
+            3.259765625,
+            3.28271484375
+          ],
+          "load_after": [
+            3.70654296875,
+            3.16455078125,
+            3.24755859375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 119267000.0,
+            "fetch-ms/op": 119.3,
+            "B/op": 2437770.0,
+            "allocs/op": 8581.0
+          },
+          "case": "fetch-false",
+          "elapsed": 8.673856041161343,
+          "load_before": [
+            3.5927734375,
+            3.1708984375,
+            3.248046875
+          ],
+          "load_after": [
+            3.46484375,
+            3.1513671875,
+            3.24072265625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 255577278.0,
+            "fetch-ms/op": 255.6,
+            "B/op": 12946522.0,
+            "allocs/op": 40042.0
+          },
+          "case": "fetch-true",
+          "elapsed": 10.63745337491855,
+          "load_before": [
+            3.3193359375,
+            3.12939453125,
+            3.23193359375
+          ],
+          "load_after": [
+            3.7470703125,
+            3.2353515625,
+            3.267578125
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 368200708.0,
+            "apply-ms/op": 180.8,
+            "client-ms/op": 120.3,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 67.0,
+            "B/op": 101117368.0,
+            "allocs/op": 139588.0
+          },
+          "case": "watch",
+          "elapsed": 29.13675829092972,
+          "load_before": [
+            3.33203125,
+            3.189453125,
+            3.24658203125
+          ],
+          "load_after": [
+            3.98193359375,
+            3.361328125,
+            3.306640625
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 2,
+          "metrics": {
+            "ns/op": 617897556.0,
+            "apply-ms/op": 244.7,
+            "client-ms/op": 304.7,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 68.53,
+            "B/op": 214434461.0,
+            "allocs/op": 421127.0
+          },
+          "case": "push",
+          "elapsed": 38.27870212495327,
+          "load_before": [
+            3.51513671875,
+            3.32421875,
+            3.294921875
+          ],
+          "load_after": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/small",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 1363556.0,
+            "B/op": 15248.0,
+            "allocs/op": 210.0
+          },
+          "case": "inputs-small",
+          "elapsed": 0.2580664590932429,
+          "load_before": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ],
+          "load_after": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/batch",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 21175069.0,
+            "B/op": 2255248.0,
+            "allocs/op": 13208.0
+          },
+          "case": "inputs-batch",
+          "elapsed": 0.29768604086712,
+          "load_before": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ],
+          "load_after": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/nested",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 103238000.0,
+            "B/op": 8492026.0,
+            "allocs/op": 103708.0
+          },
+          "case": "inputs-nested",
+          "elapsed": 1.1402753749862313,
+          "load_before": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ],
+          "load_after": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/restricted",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 21816028.0,
+            "B/op": 1262272.0,
+            "allocs/op": 17630.0
+          },
+          "case": "inputs-restricted",
+          "elapsed": 0.40270070801489055,
+          "load_before": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ],
+          "load_after": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/large",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 48073736.0,
+            "B/op": 80208.0,
+            "allocs/op": 210.0
+          },
+          "case": "inputs-large",
+          "elapsed": 0.38334125000983477,
+          "load_before": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ],
+          "load_after": [
+            3.5546875,
+            3.34619140625,
+            3.302734375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/batch",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 8290970556.0,
+            "fetch-ms/op": 8291.0,
+            "B/op": 239467184.0,
+            "allocs/op": 366046.0
+          },
+          "case": "fetch-batch",
+          "elapsed": 46.833584083011374,
+          "load_before": [
+            3.59033203125,
+            3.35693359375,
+            3.306640625
+          ],
+          "load_after": [
+            3.3056640625,
+            3.30517578125,
+            3.2890625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 812987014.0,
+            "fetch-ms/op": 813.0,
+            "B/op": 12555813.0,
+            "allocs/op": 52471.0
+          },
+          "case": "fetch-large",
+          "elapsed": 14.34705170779489,
+          "load_before": [
+            3.19091796875,
+            3.2880859375,
+            3.283203125
+          ],
+          "load_after": [
+            3.48095703125,
+            3.34033203125,
+            3.30078125
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 127160528.0,
+            "fetch-ms/op": 127.2,
+            "B/op": 2441258.0,
+            "allocs/op": 8585.0
+          },
+          "case": "fetch-false",
+          "elapsed": 14.854797875043005,
+          "load_before": [
+            3.00439453125,
+            3.2412109375,
+            3.265625
+          ],
+          "load_after": [
+            2.916015625,
+            3.21142578125,
+            3.25390625
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 237202417.0,
+            "fetch-ms/op": 237.2,
+            "B/op": 12484813.0,
+            "allocs/op": 40022.0
+          },
+          "case": "fetch-true",
+          "elapsed": 14.35633245902136,
+          "load_before": [
+            2.6943359375,
+            3.154296875,
+            3.23291015625
+          ],
+          "load_after": [
+            2.85400390625,
+            3.1630859375,
+            3.234375
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 373437070.0,
+            "apply-ms/op": 186.0,
+            "client-ms/op": 118.6,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 68.74,
+            "B/op": 103331397.0,
+            "allocs/op": 139596.0
+          },
+          "case": "watch",
+          "elapsed": 39.463135708123446,
+          "load_before": [
+            3.68603515625,
+            3.3369140625,
+            3.29541015625
+          ],
+          "load_after": [
+            3.80615234375,
+            3.41748046875,
+            3.32666015625
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 3,
+          "metrics": {
+            "ns/op": 509191625.0,
+            "apply-ms/op": 171.7,
+            "client-ms/op": 273.7,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 63.81,
+            "B/op": 212226360.0,
+            "allocs/op": 421123.0
+          },
+          "case": "push",
+          "elapsed": 39.61771412496455,
+          "load_before": [
+            3.58349609375,
+            3.41357421875,
+            3.32861328125
+          ],
+          "load_after": [
+            3.9150390625,
+            3.52978515625,
+            3.375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/small",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 694333.0,
+            "B/op": 15248.0,
+            "allocs/op": 210.0
+          },
+          "case": "inputs-small",
+          "elapsed": 0.21616733307018876,
+          "load_before": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ],
+          "load_after": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/batch",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 18148500.0,
+            "B/op": 2240426.0,
+            "allocs/op": 13189.0
+          },
+          "case": "inputs-batch",
+          "elapsed": 0.2032582089304924,
+          "load_before": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ],
+          "load_after": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/nested",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 108693833.0,
+            "B/op": 8492805.0,
+            "allocs/op": 103710.0
+          },
+          "case": "inputs-nested",
+          "elapsed": 1.29987470805645,
+          "load_before": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ],
+          "load_after": [
+            5.6650390625,
+            4.04248046875,
+            3.5712890625
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/restricted",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 35258472.0,
+            "B/op": 1263117.0,
+            "allocs/op": 17629.0
+          },
+          "case": "inputs-restricted",
+          "elapsed": 0.3759723750408739,
+          "load_before": [
+            5.451171875,
+            4.02490234375,
+            3.56787109375
+          ],
+          "load_after": [
+            5.451171875,
+            4.02490234375,
+            3.56787109375
+          ]
+        },
+        {
+          "name": "BenchmarkVerifiedMergeInputs/large",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 53277250.0,
+            "B/op": 80208.0,
+            "allocs/op": 210.0
+          },
+          "case": "inputs-large",
+          "elapsed": 0.47401637490838766,
+          "load_before": [
+            5.451171875,
+            4.02490234375,
+            3.56787109375
+          ],
+          "load_after": [
+            5.451171875,
+            4.02490234375,
+            3.56787109375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/batch",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 7747398972.0,
+            "fetch-ms/op": 7747.0,
+            "B/op": 239135141.0,
+            "allocs/op": 365859.0
+          },
+          "case": "fetch-batch",
+          "elapsed": 45.79372874996625,
+          "load_before": [
+            4.3193359375,
+            3.94140625,
+            3.56298828125
+          ],
+          "load_after": [
+            3.24462890625,
+            3.70068359375,
+            3.49169921875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchBodies/large",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 606790264.0,
+            "fetch-ms/op": 606.8,
+            "B/op": 13014152.0,
+            "allocs/op": 52476.0
+          },
+          "case": "fetch-large",
+          "elapsed": 17.022385332966223,
+          "load_before": [
+            2.88818359375,
+            3.6005859375,
+            3.45947265625
+          ],
+          "load_after": [
+            2.91845703125,
+            3.5703125,
+            3.45068359375
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=false",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 166298611.0,
+            "fetch-ms/op": 166.3,
+            "B/op": 2439114.0,
+            "allocs/op": 8584.0
+          },
+          "case": "fetch-false",
+          "elapsed": 9.120071167126298,
+          "load_before": [
+            2.64013671875,
+            3.4765625,
+            3.41845703125
+          ],
+          "load_after": [
+            2.54150390625,
+            3.42724609375,
+            3.4013671875
+          ]
+        },
+        {
+          "name": "BenchmarkFetchCompletion/persistent=true",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 222142681.0,
+            "fetch-ms/op": 222.1,
+            "B/op": 12499128.0,
+            "allocs/op": 40058.0
+          },
+          "case": "fetch-true",
+          "elapsed": 13.224440874997526,
+          "load_before": [
+            2.802734375,
+            3.4384765625,
+            3.40576171875
+          ],
+          "load_after": [
+            2.7587890625,
+            3.4072265625,
+            3.39501953125
+          ]
+        },
+        {
+          "name": "BenchmarkWatchPhases",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 381388639.0,
+            "apply-ms/op": 189.4,
+            "client-ms/op": 126.9,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 64.97,
+            "B/op": 103342882.0,
+            "allocs/op": 139593.0
+          },
+          "case": "watch",
+          "elapsed": 36.87392441602424,
+          "load_before": [
+            2.73388671875,
+            3.31494140625,
+            3.361328125
+          ],
+          "load_after": [
+            2.82568359375,
+            3.27197265625,
+            3.341796875
+          ]
+        },
+        {
+          "name": "BenchmarkPushPhases",
+          "iterations": 3,
+          "round": 4,
+          "metrics": {
+            "ns/op": 555632764.0,
+            "apply-ms/op": 186.0,
+            "client-ms/op": 305.5,
+            "negotiate-ms/op": 0.0,
+            "stage-ms/op": 64.17,
+            "B/op": 210001765.0,
+            "allocs/op": 421078.0
+          },
+          "case": "push",
+          "elapsed": 38.393863207893446,
+          "load_before": [
+            3.23974609375,
+            3.32373046875,
+            3.35546875
+          ],
+          "load_after": [
+            2.93408203125,
+            3.23876953125,
+            3.32177734375
+          ]
+        }
+      ]
+    }
+  },
+  "orders": [
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ]
+  ],
+  "cases": {
+    "inputs-small": [
+      "./internal/changes",
+      "^BenchmarkVerifiedMergeInputs$/^small$",
+      "3x"
+    ],
+    "inputs-batch": [
+      "./internal/changes",
+      "^BenchmarkVerifiedMergeInputs$/^batch$",
+      "3x"
+    ],
+    "inputs-nested": [
+      "./internal/changes",
+      "^BenchmarkVerifiedMergeInputs$/^nested$",
+      "3x"
+    ],
+    "inputs-restricted": [
+      "./internal/changes",
+      "^BenchmarkVerifiedMergeInputs$/^restricted$",
+      "3x"
+    ],
+    "inputs-large": [
+      "./internal/changes",
+      "^BenchmarkVerifiedMergeInputs$/^large$",
+      "3x"
+    ],
+    "fetch-batch": [
+      "./cmd/errand",
+      "^BenchmarkFetchBodies$/^batch$",
+      "3x"
+    ],
+    "fetch-large": [
+      "./cmd/errand",
+      "^BenchmarkFetchBodies$/^large$",
+      "3x"
+    ],
+    "fetch-false": [
+      "./cmd/errand",
+      "^BenchmarkFetchCompletion$/^persistent=false$",
+      "3x"
+    ],
+    "fetch-true": [
+      "./cmd/errand",
+      "^BenchmarkFetchCompletion$/^persistent=true$",
+      "3x"
+    ],
+    "watch": [
+      "./cmd/errand",
+      "^BenchmarkWatchPhases$",
+      "3x"
+    ],
+    "push": [
+      "./cmd/errand",
+      "^BenchmarkPushPhases$",
+      "3x"
+    ]
+  },
+  "scope": "Native-host metadata/preparation and loopback HTTP command paths; no cross-host network latency.",
+  "harness_sha256": "0cd5560f106abf9402461d524e916cdebfb4869b05c588704123786dc717cd19",
+  "status": "complete",
+  "go": "go version go1.27.1 darwin/arm64",
+  "filesystem": "apfs",
+  "fixture_root": "/Users/ody/.errand/jobs/01M2H5MYFPZYP3YP1FS3K1CGEC/workspace/results/.scratch-08iweo7h/fixtures",
+  "fixture_filesystem": "apfs",
+  "fixture_mount": "/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)\ndevfs on /dev (devfs, local, nobrowse)\n/dev/disk3s6 on /System/Volumes/VM (apfs, local, noexec, journaled, noatime, nobrowse)\n/dev/disk3s2 on /System/Volumes/Preboot (apfs, local, journaled, nobrowse)\n/dev/disk3s4 on /System/Volumes/Update (apfs, local, journaled, nobrowse)\n/dev/disk1s2 on /System/Volumes/xarts (apfs, local, noexec, journaled, noatime, nobrowse)\n/dev/disk1s1 on /System/Volumes/iSCPreboot (apfs, local, journaled, nobrowse)\n/dev/disk1s3 on /System/Volumes/Hardware (apfs, local, journaled, nobrowse)\n/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)\nmap auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)\n/dev/disk2s1 on /System/Volumes/Update/SFR/mnt1 (apfs, local, journaled, nobrowse)\n/dev/disk3s1 on /System/Volumes/Update/mnt1 (apfs, sealed, local, journaled, nobrowse)\n"
+}
