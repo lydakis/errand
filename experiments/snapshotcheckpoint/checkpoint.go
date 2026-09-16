@@ -24,11 +24,19 @@ import (
 // Scan remains zero for the shared pass; retained frozen reports used it separately.
 type Phases struct{ Selection, Load, Scan, Hash, Index, Verify, Save time.Duration }
 type Result struct {
-	State                   *manifest.Snapshot
-	Phases                  Phases
-	Reused, Hashed          int
-	CheckpointBytes         int64
-	Written                 bool
+	State          *manifest.Snapshot
+	Phases         Phases
+	Reused, Hashed int
+	// CheckpointBytes counts published bytes when Written is true; otherwise
+	// it is the loaded file size on a hit. Failed writes may report partial bytes.
+	CheckpointBytes int64
+	Written         bool
+	// ReplacedBase reports replacement of an existing derived base, including
+	// ordinary derived-mode rewrites, journal compaction and suffix recovery.
+	ReplacedBase bool
+	// JournalRecordsLoaded counts transactions replayed before publication.
+	// It excludes a new append and remains the pre-compaction count on replacement.
+	JournalRecordsLoaded    int
 	CacheStatus, CacheError string
 }
 
@@ -95,11 +103,20 @@ func PrepareCurrent(ctx context.Context, root, cache string, opts snapshot.Selec
 	return prepare(ctx, root, cache, opts, defaultPreparation(true))
 }
 
+// PrepareDerived compares full derived-index replacement and bounded journal
+// publication with the observation-only control. Neither is a production cache.
+func PrepareDerived(ctx context.Context, root, cache string, opts snapshot.SelectOptions, journal bool) (Result, error) {
+	config := defaultPreparation(false)
+	config.derived, config.journal = true, journal
+	return prepare(ctx, root, cache, opts, config)
+}
+
 type preparation struct {
-	direct     bool
-	entryLimit int
-	identify   func(string, proto.SelectionPolicy, snapshot.SelectOptions) (identity, error)
-	build      func(context.Context, string, snapshot.BuildPaths, snapshot.ObservationOptions) (*snapshot.ObservedBuild, error)
+	direct           bool
+	derived, journal bool
+	entryLimit       int
+	identify         func(string, proto.SelectionPolicy, snapshot.SelectOptions) (identity, error)
+	build            func(context.Context, string, snapshot.BuildPaths, snapshot.ObservationOptions) (*snapshot.ObservedBuild, error)
 }
 
 func defaultPreparation(direct bool) preparation {
@@ -177,7 +194,11 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 	case !collect:
 		r.CacheStatus = "oversized"
 	default:
-		prior, r.CacheStatus, r.CheckpointBytes, err = readCheckpoint(ctx, cache, key, !config.direct)
+		if config.derived {
+			prior, r.CacheStatus, r.CheckpointBytes, err = readDerived(ctx, cache, key)
+		} else {
+			prior, r.CacheStatus, r.CheckpointBytes, err = readCheckpoint(ctx, cache, key, !config.direct)
+		}
 	}
 	r.Phases.Load = time.Since(start)
 	if err != nil {
@@ -198,10 +219,10 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 			return r, err
 		}
 	}
-	writable := collect && (r.CacheStatus != "hit" || built.Changed)
+	writable := collect && (r.CacheStatus != "hit" || verified.Changed())
 	r.Phases.Hash = time.Since(start)
 	start = time.Now()
-	if r.CacheStatus == "hit" && !config.direct {
+	if (r.CacheStatus == "hit" || r.CacheStatus == "recovered") && !config.direct {
 		r.State = prior.state
 		err = r.State.PrepareUpdates(ctx)
 		if err == nil {
@@ -236,7 +257,11 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 	r.Phases.Verify = time.Since(start)
 	if writable {
 		start = time.Now()
-		r.CheckpointBytes, err = writeCheckpoint(ctx, cache, key, verified)
+		if config.derived {
+			r.CheckpointBytes, r.ReplacedBase, err = writeDerived(ctx, cache, key, verified, r.State, prior, config.journal)
+		} else {
+			r.CheckpointBytes, err = writeCheckpoint(ctx, cache, key, verified)
+		}
 		r.Phases.Save = time.Since(start)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -247,6 +272,7 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 			r.Written = true
 		}
 	}
+	r.JournalRecordsLoaded = prior.journalRecords
 	return r, nil
 }
 

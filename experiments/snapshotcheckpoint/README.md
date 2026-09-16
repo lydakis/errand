@@ -7,6 +7,11 @@ disk checkpoints. The experiment measures whether preserving
 source observations pays for checkpoint loading, fresh selection/stat work,
 index reconstruction and publication in a new process.
 
+The [derived-index comparison](../../docs/DERIVED_INDEX.md) adds opt-in `derived`
+and `journal` probe modes. The contract below describes the observation control;
+the comparison document records the new format, validation, bounded journal,
+compaction and recovery behavior. Production callers remain unchanged.
+
 ## Contract
 
 - Each call runs `snapshot.SelectFilesGuarded` again and stats every selected path.

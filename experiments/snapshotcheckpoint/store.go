@@ -24,7 +24,14 @@ const maxEntries = 200000
 
 type loadedCheckpoint struct {
 	checkpoint
-	state *manifest.Snapshot
+	state          *manifest.Snapshot
+	diskDigest     [32]byte
+	chain          [32]byte
+	diskSize       int
+	journalRecords int
+	journalBytes   int
+	recovered      bool
+	pendingEdits   []observationEdit
 }
 
 // The bounded, checksummed payload is disposable after machine failure. Its

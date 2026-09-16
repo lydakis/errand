@@ -1,0 +1,3326 @@
+{
+  "mini": {
+    "job": "mac-mini/01M2M0Z1MP3TD76YSNS5JB84HJ",
+    "source_sha256": "e05ce3b17a10656ee84ed6b0aa0fe5fb525966d21cf5f3542db3e1f7ae922ad1",
+    "summary": [
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "median_ms": 44.113917,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159780.0,
+        "written_bytes": 159780.0,
+        "phases_ms": {
+          "Selection": 16.7135005,
+          "Load": 0.6608955,
+          "Scan": 0.0,
+          "Hash": 11.3551665,
+          "Index": 0.5075625,
+          "Verify": 14.132125,
+          "Save": 0.809021
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "derived",
+        "median_ms": 49.0688535,
+        "paired_ratio": 1.1209943485759384,
+        "ratio_range": [
+          0.658888998108249,
+          1.481797035600515
+        ],
+        "wins": 2,
+        "cache_bytes": 159876.0,
+        "written_bytes": 159876.0,
+        "phases_ms": {
+          "Selection": 19.431417,
+          "Load": 0.8587915,
+          "Scan": 0.0,
+          "Hash": 12.6755415,
+          "Index": 0.5467915,
+          "Verify": 14.339979,
+          "Save": 0.9145625
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "journal",
+        "median_ms": 43.874104,
+        "paired_ratio": 1.0398314529169526,
+        "ratio_range": [
+          0.751594210396968,
+          1.8325110414103294
+        ],
+        "wins": 2,
+        "cache_bytes": 723003.5,
+        "written_bytes": 160945.0,
+        "phases_ms": {
+          "Selection": 14.664875,
+          "Load": 3.3525625,
+          "Scan": 0.0,
+          "Hash": 9.961771,
+          "Index": 0.453896,
+          "Verify": 14.029146,
+          "Save": 1.180458
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "compaction",
+        "variant": "checkpoint",
+        "median_ms": 41.3002085,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159780.0,
+        "written_bytes": 159780.0,
+        "phases_ms": {
+          "Selection": 21.272812,
+          "Load": 0.8346875,
+          "Scan": 0.0,
+          "Hash": 2.119813,
+          "Index": 0.0266045,
+          "Verify": 15.8203125,
+          "Save": 0.7664375
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "compaction",
+        "variant": "derived",
+        "median_ms": 41.3830205,
+        "paired_ratio": 1.084239762383593,
+        "ratio_range": [
+          0.46435544954660196,
+          2.0501576368994177
+        ],
+        "wins": 3,
+        "cache_bytes": 159876.0,
+        "written_bytes": 159876.0,
+        "phases_ms": {
+          "Selection": 20.1250625,
+          "Load": 0.9234375,
+          "Scan": 0.0,
+          "Hash": 2.542708,
+          "Index": 0.0319165,
+          "Verify": 16.5325625,
+          "Save": 0.648479
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "compaction",
+        "variant": "journal",
+        "median_ms": 47.5502295,
+        "paired_ratio": 0.8538579259410364,
+        "ratio_range": [
+          0.7986511979114023,
+          2.3714259899627916
+        ],
+        "wins": 4,
+        "cache_bytes": 159876.0,
+        "written_bytes": 159876.0,
+        "phases_ms": {
+          "Selection": 23.0665415,
+          "Load": 3.4732085,
+          "Scan": 0.0,
+          "Hash": 2.216583,
+          "Index": 0.0207705,
+          "Verify": 17.484479,
+          "Save": 0.9514375
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "median_ms": 42.663521,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159780.0,
+        "written_bytes": 159780.0,
+        "phases_ms": {
+          "Selection": 21.3537915,
+          "Load": 0.8350625,
+          "Scan": 0.0,
+          "Hash": 2.7404165,
+          "Index": 0.032709,
+          "Verify": 16.738271,
+          "Save": 0.7160835
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "derived",
+        "median_ms": 49.9228955,
+        "paired_ratio": 1.3113653996092287,
+        "ratio_range": [
+          0.4991628671473626,
+          2.040077881890722
+        ],
+        "wins": 2,
+        "cache_bytes": 159876.0,
+        "written_bytes": 159876.0,
+        "phases_ms": {
+          "Selection": 25.2930625,
+          "Load": 1.0767505,
+          "Scan": 0.0,
+          "Hash": 2.6878545,
+          "Index": 0.0403125,
+          "Verify": 19.0716245,
+          "Save": 0.793729
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "journal",
+        "median_ms": 36.674187,
+        "paired_ratio": 0.9060487300634916,
+        "ratio_range": [
+          0.4900448278795788,
+          1.6546173115172598
+        ],
+        "wins": 4,
+        "cache_bytes": 163635.0,
+        "written_bytes": 1074.0,
+        "phases_ms": {
+          "Selection": 17.912562,
+          "Load": 0.9700625,
+          "Scan": 0.0,
+          "Hash": 2.078021,
+          "Index": 0.025521,
+          "Verify": 15.0682915,
+          "Save": 0.3135205
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "median_ms": 44.3855,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159780.0,
+        "written_bytes": 159780.0,
+        "phases_ms": {
+          "Selection": 17.348042,
+          "Load": 0.0746875,
+          "Scan": 0.0,
+          "Hash": 12.0523545,
+          "Index": 0.1146045,
+          "Verify": 14.091917,
+          "Save": 0.5625415
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "derived",
+        "median_ms": 48.32325,
+        "paired_ratio": 1.2329687160921237,
+        "ratio_range": [
+          0.5146272671898718,
+          1.845207244860292
+        ],
+        "wins": 3,
+        "cache_bytes": 159876.0,
+        "written_bytes": 159876.0,
+        "phases_ms": {
+          "Selection": 19.878479,
+          "Load": 0.1083125,
+          "Scan": 0.0,
+          "Hash": 12.776604,
+          "Index": 0.115167,
+          "Verify": 14.644729,
+          "Save": 0.5523755
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "journal",
+        "median_ms": 51.2044585,
+        "paired_ratio": 1.1939200945440795,
+        "ratio_range": [
+          0.5139491399675544,
+          1.9450473014817369
+        ],
+        "wins": 2,
+        "cache_bytes": 159876.0,
+        "written_bytes": 159876.0,
+        "phases_ms": {
+          "Selection": 20.9787495,
+          "Load": 0.1213755,
+          "Scan": 0.0,
+          "Hash": 14.392729,
+          "Index": 0.122417,
+          "Verify": 14.9480205,
+          "Save": 0.573625
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "median_ms": 45.274583,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159780.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 22.9756455,
+          "Load": 0.955667,
+          "Scan": 0.0,
+          "Hash": 2.5056045,
+          "Index": 0.0181245,
+          "Verify": 17.9885,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "derived",
+        "median_ms": 51.5535415,
+        "paired_ratio": 1.189826590392192,
+        "ratio_range": [
+          0.4831293739882913,
+          1.9660755590042913
+        ],
+        "wins": 2,
+        "cache_bytes": 159876.0,
+        "written_bytes": 159876.0,
+        "phases_ms": {
+          "Selection": 25.1675835,
+          "Load": 1.175479,
+          "Scan": 0.0,
+          "Hash": 3.555896,
+          "Index": 0.020167,
+          "Verify": 20.367,
+          "Save": 0.796458
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "journal",
+        "median_ms": 45.200292,
+        "paired_ratio": 1.009328978923237,
+        "ratio_range": [
+          0.6160033397696875,
+          1.6339618395422957
+        ],
+        "wins": 3,
+        "cache_bytes": 159876.0,
+        "written_bytes": 159876.0,
+        "phases_ms": {
+          "Selection": 21.946833,
+          "Load": 1.0264375,
+          "Scan": 0.0,
+          "Hash": 2.8404375,
+          "Index": 0.0171665,
+          "Verify": 18.059438,
+          "Save": 0.818979
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "median_ms": 51.3103335,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159780.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 25.9125205,
+          "Load": 1.1047295,
+          "Scan": 0.0,
+          "Hash": 3.5979585,
+          "Index": 0.020104,
+          "Verify": 20.134458,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "derived",
+        "median_ms": 39.750792,
+        "paired_ratio": 0.8873395926630314,
+        "ratio_range": [
+          0.4640042314890634,
+          1.9722202376296
+        ],
+        "wins": 3,
+        "cache_bytes": 159876.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 19.781021,
+          "Load": 0.92825,
+          "Scan": 0.0,
+          "Hash": 2.3543545,
+          "Index": 0.0146045,
+          "Verify": 16.2937295,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "journal",
+        "median_ms": 53.0615835,
+        "paired_ratio": 1.0679019759584252,
+        "ratio_range": [
+          0.47225421626090397,
+          1.9058914723922413
+        ],
+        "wins": 3,
+        "cache_bytes": 159876.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 27.288229,
+          "Load": 1.255125,
+          "Scan": 0.0,
+          "Hash": 3.4609375,
+          "Index": 0.0199375,
+          "Verify": 20.455521,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "median_ms": 317.282125,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628752.0,
+        "written_bytes": 1628752.0,
+        "phases_ms": {
+          "Selection": 129.6354165,
+          "Load": 4.778917,
+          "Scan": 0.0,
+          "Hash": 23.189542,
+          "Index": 2.7206245,
+          "Verify": 141.8388545,
+          "Save": 3.976209
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "derived",
+        "median_ms": 321.069666,
+        "paired_ratio": 1.0690490325361068,
+        "ratio_range": [
+          0.8780695589574684,
+          1.209327784207481
+        ],
+        "wins": 2,
+        "cache_bytes": 2749868.5,
+        "written_bytes": 2749868.5,
+        "phases_ms": {
+          "Selection": 129.2755005,
+          "Load": 15.886354,
+          "Scan": 0.0,
+          "Hash": 23.498729,
+          "Index": 1.4080415,
+          "Verify": 135.067729,
+          "Save": 10.2451665
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "journal",
+        "median_ms": 334.6077295,
+        "paired_ratio": 1.069261426323509,
+        "ratio_range": [
+          0.9153867522691822,
+          1.0803741377938976
+        ],
+        "wins": 1,
+        "cache_bytes": 3327266.0,
+        "written_bytes": 164946.0,
+        "phases_ms": {
+          "Selection": 123.117708,
+          "Load": 19.521083,
+          "Scan": 0.0,
+          "Hash": 23.656687,
+          "Index": 1.074916,
+          "Verify": 147.4992915,
+          "Save": 2.886646
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "compaction",
+        "variant": "checkpoint",
+        "median_ms": 292.7872295,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628752.0,
+        "written_bytes": 1628752.0,
+        "phases_ms": {
+          "Selection": 136.8722705,
+          "Load": 4.968271,
+          "Scan": 0.0,
+          "Hash": 12.972125,
+          "Index": 1.819937,
+          "Verify": 133.7610205,
+          "Save": 3.5611665
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "compaction",
+        "variant": "derived",
+        "median_ms": 301.3559165,
+        "paired_ratio": 0.997725549191254,
+        "ratio_range": [
+          0.9033299648110811,
+          1.173383821695169
+        ],
+        "wins": 3,
+        "cache_bytes": 2749841.0,
+        "written_bytes": 2749841.0,
+        "phases_ms": {
+          "Selection": 137.625896,
+          "Load": 16.3038335,
+          "Scan": 0.0,
+          "Hash": 13.328479,
+          "Index": 0.1098755,
+          "Verify": 122.3477505,
+          "Save": 10.353417
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "compaction",
+        "variant": "journal",
+        "median_ms": 327.348375,
+        "paired_ratio": 1.171375296914726,
+        "ratio_range": [
+          0.8295756785974983,
+          1.2249376903091707
+        ],
+        "wins": 1,
+        "cache_bytes": 2749841.0,
+        "written_bytes": 2749841.0,
+        "phases_ms": {
+          "Selection": 126.744875,
+          "Load": 21.5264165,
+          "Scan": 0.0,
+          "Hash": 14.1826245,
+          "Index": 0.1162285,
+          "Verify": 149.9880625,
+          "Save": 10.172708
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "median_ms": 300.350792,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628752.0,
+        "written_bytes": 1628752.0,
+        "phases_ms": {
+          "Selection": 128.3231875,
+          "Load": 4.9282495,
+          "Scan": 0.0,
+          "Hash": 12.609604,
+          "Index": 1.8699375,
+          "Verify": 156.782812,
+          "Save": 3.576146
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "derived",
+        "median_ms": 314.0965625,
+        "paired_ratio": 0.9951199739296248,
+        "ratio_range": [
+          0.9296151518958438,
+          1.205403968755853
+        ],
+        "wins": 3,
+        "cache_bytes": 2749959.0,
+        "written_bytes": 2749959.0,
+        "phases_ms": {
+          "Selection": 130.0003955,
+          "Load": 15.937354,
+          "Scan": 0.0,
+          "Hash": 13.2790835,
+          "Index": 0.1106665,
+          "Verify": 143.5448335,
+          "Save": 10.3198125
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "journal",
+        "median_ms": 282.2215835,
+        "paired_ratio": 0.9273045783389475,
+        "ratio_range": [
+          0.7261348006997455,
+          0.9820926257915575
+        ],
+        "wins": 6,
+        "cache_bytes": 2753746.5,
+        "written_bytes": 1079.0,
+        "phases_ms": {
+          "Selection": 120.1009165,
+          "Load": 16.7742085,
+          "Scan": 0.0,
+          "Hash": 13.2530625,
+          "Index": 0.110062,
+          "Verify": 111.9417915,
+          "Save": 2.156167
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "median_ms": 399.926458,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628752.0,
+        "written_bytes": 1628752.0,
+        "phases_ms": {
+          "Selection": 119.5217085,
+          "Load": 0.0679585,
+          "Scan": 0.0,
+          "Hash": 122.6154165,
+          "Index": 3.0342705,
+          "Verify": 154.932146,
+          "Save": 3.6373545
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "derived",
+        "median_ms": 390.868541,
+        "paired_ratio": 0.9775044437520746,
+        "ratio_range": [
+          0.8606090279250439,
+          1.204426577719687
+        ],
+        "wins": 3,
+        "cache_bytes": 2749970.0,
+        "written_bytes": 2749970.0,
+        "phases_ms": {
+          "Selection": 115.4310005,
+          "Load": 0.101833,
+          "Scan": 0.0,
+          "Hash": 122.9182085,
+          "Index": 3.0989795,
+          "Verify": 130.3172505,
+          "Save": 10.183104
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "journal",
+        "median_ms": 423.9385625,
+        "paired_ratio": 1.0354968040955654,
+        "ratio_range": [
+          0.9004066442492931,
+          1.27232963286738
+        ],
+        "wins": 3,
+        "cache_bytes": 2749970.0,
+        "written_bytes": 2749970.0,
+        "phases_ms": {
+          "Selection": 134.1725625,
+          "Load": 0.1077915,
+          "Scan": 0.0,
+          "Hash": 122.5011665,
+          "Index": 2.919,
+          "Verify": 155.4537505,
+          "Save": 10.7686665
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "median_ms": 313.805771,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628752.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 132.8832085,
+          "Load": 4.9647915,
+          "Scan": 0.0,
+          "Hash": 12.8479795,
+          "Index": 1.844292,
+          "Verify": 170.998396,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "derived",
+        "median_ms": 297.7246665,
+        "paired_ratio": 0.9475030607083432,
+        "ratio_range": [
+          0.8718065307411851,
+          1.1405987386218028
+        ],
+        "wins": 4,
+        "cache_bytes": 2749840.0,
+        "written_bytes": 2749840.0,
+        "phases_ms": {
+          "Selection": 127.764896,
+          "Load": 16.2035835,
+          "Scan": 0.0,
+          "Hash": 13.4695,
+          "Index": 0.1108335,
+          "Verify": 133.6593545,
+          "Save": 10.392604
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "journal",
+        "median_ms": 325.4885,
+        "paired_ratio": 1.0157561166334659,
+        "ratio_range": [
+          0.9283382515095441,
+          1.283108560857149
+        ],
+        "wins": 2,
+        "cache_bytes": 2749840.0,
+        "written_bytes": 2749840.0,
+        "phases_ms": {
+          "Selection": 138.949854,
+          "Load": 16.365312,
+          "Scan": 0.0,
+          "Hash": 13.160021,
+          "Index": 0.103896,
+          "Verify": 155.3695,
+          "Save": 10.247021
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "median_ms": 300.053979,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628752.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 122.2567505,
+          "Load": 4.92725,
+          "Scan": 0.0,
+          "Hash": 12.5703335,
+          "Index": 1.816313,
+          "Verify": 151.892938,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "derived",
+        "median_ms": 279.954625,
+        "paired_ratio": 0.9625771043059154,
+        "ratio_range": [
+          0.8330332958986103,
+          1.1250355117127402
+        ],
+        "wins": 4,
+        "cache_bytes": 2749970.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 124.189583,
+          "Load": 15.9606875,
+          "Scan": 0.0,
+          "Hash": 13.2830625,
+          "Index": 0.105937,
+          "Verify": 127.753083,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "journal",
+        "median_ms": 294.636354,
+        "paired_ratio": 1.011866377258195,
+        "ratio_range": [
+          0.9077103538567123,
+          1.1389107571604544
+        ],
+        "wins": 3,
+        "cache_bytes": 2749970.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 126.1659375,
+          "Load": 16.1013125,
+          "Scan": 0.0,
+          "Hash": 13.3351665,
+          "Index": 0.103625,
+          "Verify": 139.0629795,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "median_ms": 98.0406665,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629342.0,
+        "written_bytes": 1629342.0,
+        "phases_ms": {
+          "Selection": 34.2195835,
+          "Load": 5.3510835,
+          "Scan": 0.0,
+          "Hash": 24.7001875,
+          "Index": 3.108875,
+          "Verify": 23.72725,
+          "Save": 3.4507915
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "derived",
+        "median_ms": 114.291625,
+        "paired_ratio": 1.2099148266331219,
+        "ratio_range": [
+          0.8300835263281876,
+          1.5497236414623885
+        ],
+        "wins": 2,
+        "cache_bytes": 2750572.0,
+        "written_bytes": 2750572.0,
+        "phases_ms": {
+          "Selection": 35.5477705,
+          "Load": 17.4608125,
+          "Scan": 0.0,
+          "Hash": 23.668437,
+          "Index": 1.07775,
+          "Verify": 23.6931455,
+          "Save": 9.9353125
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "journal",
+        "median_ms": 112.8474375,
+        "paired_ratio": 1.066896223323893,
+        "ratio_range": [
+          0.9612059295285302,
+          1.5499079871041166
+        ],
+        "wins": 1,
+        "cache_bytes": 3327220.5,
+        "written_bytes": 164811.0,
+        "phases_ms": {
+          "Selection": 35.9082295,
+          "Load": 19.959563,
+          "Scan": 0.0,
+          "Hash": 23.459563,
+          "Index": 1.0726045,
+          "Verify": 23.691771,
+          "Save": 2.6830205
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "compaction",
+        "variant": "checkpoint",
+        "median_ms": 89.2319375,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629342.0,
+        "written_bytes": 1629342.0,
+        "phases_ms": {
+          "Selection": 37.0134795,
+          "Load": 5.505521,
+          "Scan": 0.0,
+          "Hash": 14.3754585,
+          "Index": 2.397146,
+          "Verify": 23.469104,
+          "Save": 3.8640415
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "compaction",
+        "variant": "derived",
+        "median_ms": 124.824792,
+        "paired_ratio": 1.3532623619872703,
+        "ratio_range": [
+          0.8465773239118133,
+          1.6618003622538033
+        ],
+        "wins": 1,
+        "cache_bytes": 2750541.0,
+        "written_bytes": 2750541.0,
+        "phases_ms": {
+          "Selection": 54.576833,
+          "Load": 19.3177705,
+          "Scan": 0.0,
+          "Hash": 14.0270625,
+          "Index": 0.135208,
+          "Verify": 23.386,
+          "Save": 9.8598335
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "compaction",
+        "variant": "journal",
+        "median_ms": 100.207625,
+        "paired_ratio": 1.1792704363559254,
+        "ratio_range": [
+          0.8841495689243811,
+          1.4986584096680033
+        ],
+        "wins": 2,
+        "cache_bytes": 2750541.0,
+        "written_bytes": 2750541.0,
+        "phases_ms": {
+          "Selection": 28.9936665,
+          "Load": 21.1935415,
+          "Scan": 0.0,
+          "Hash": 13.0234165,
+          "Index": 0.1266875,
+          "Verify": 23.5787915,
+          "Save": 9.927542
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "median_ms": 95.7340415,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629070.0,
+        "written_bytes": 1629070.0,
+        "phases_ms": {
+          "Selection": 41.4517085,
+          "Load": 5.8197705,
+          "Scan": 0.0,
+          "Hash": 15.027875,
+          "Index": 2.3013125,
+          "Verify": 23.1891665,
+          "Save": 3.6834585
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "derived",
+        "median_ms": 112.400583,
+        "paired_ratio": 1.1073643606142785,
+        "ratio_range": [
+          0.9103696682797919,
+          1.585188824653429
+        ],
+        "wins": 2,
+        "cache_bytes": 2750385.5,
+        "written_bytes": 2750385.5,
+        "phases_ms": {
+          "Selection": 42.045208,
+          "Load": 18.5966245,
+          "Scan": 0.0,
+          "Hash": 13.7620625,
+          "Index": 0.134229,
+          "Verify": 23.3036455,
+          "Save": 9.705833
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "journal",
+        "median_ms": 98.047854,
+        "paired_ratio": 1.081303410708019,
+        "ratio_range": [
+          0.7448147603874974,
+          1.474000873429086
+        ],
+        "wins": 3,
+        "cache_bytes": 2754175.5,
+        "written_bytes": 1081.0,
+        "phases_ms": {
+          "Selection": 37.0875,
+          "Load": 18.377979,
+          "Scan": 0.0,
+          "Hash": 13.3582085,
+          "Index": 0.130583,
+          "Verify": 23.3405835,
+          "Save": 2.0904165
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "median_ms": 196.0527715,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629070.0,
+        "written_bytes": 1629070.0,
+        "phases_ms": {
+          "Selection": 38.895958,
+          "Load": 0.058396,
+          "Scan": 0.0,
+          "Hash": 124.517771,
+          "Index": 2.839375,
+          "Verify": 23.6894165,
+          "Save": 3.581271
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "derived",
+        "median_ms": 205.0328545,
+        "paired_ratio": 1.0155070942317206,
+        "ratio_range": [
+          0.8653502815034709,
+          1.240965232355769
+        ],
+        "wins": 3,
+        "cache_bytes": 2750392.0,
+        "written_bytes": 2750392.0,
+        "phases_ms": {
+          "Selection": 41.964333,
+          "Load": 0.0830215,
+          "Scan": 0.0,
+          "Hash": 123.8608125,
+          "Index": 2.810354,
+          "Verify": 23.6051665,
+          "Save": 9.689146
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "journal",
+        "median_ms": 209.2287295,
+        "paired_ratio": 1.0309090764164035,
+        "ratio_range": [
+          0.8715601627598265,
+          1.2347576728522107
+        ],
+        "wins": 2,
+        "cache_bytes": 2750392.0,
+        "written_bytes": 2750392.0,
+        "phases_ms": {
+          "Selection": 45.235937,
+          "Load": 0.087792,
+          "Scan": 0.0,
+          "Hash": 124.5452915,
+          "Index": 2.646875,
+          "Verify": 23.530667,
+          "Save": 9.7382915
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "median_ms": 97.506521,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629342.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 47.230375,
+          "Load": 6.0062715,
+          "Scan": 0.0,
+          "Hash": 15.428396,
+          "Index": 2.2443125,
+          "Verify": 23.24825,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "derived",
+        "median_ms": 103.8505625,
+        "paired_ratio": 1.065123989551381,
+        "ratio_range": [
+          0.8801303460128952,
+          1.67138688406946
+        ],
+        "wins": 2,
+        "cache_bytes": 2750537.0,
+        "written_bytes": 2750537.0,
+        "phases_ms": {
+          "Selection": 36.7586455,
+          "Load": 17.758042,
+          "Scan": 0.0,
+          "Hash": 13.2764165,
+          "Index": 0.1206875,
+          "Verify": 23.3379585,
+          "Save": 9.6483335
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "journal",
+        "median_ms": 99.144708,
+        "paired_ratio": 1.1053026449958683,
+        "ratio_range": [
+          0.9246893614068392,
+          1.752105181118
+        ],
+        "wins": 2,
+        "cache_bytes": 2750537.0,
+        "written_bytes": 2750537.0,
+        "phases_ms": {
+          "Selection": 32.8458545,
+          "Load": 16.722208,
+          "Scan": 0.0,
+          "Hash": 13.3067915,
+          "Index": 0.1249165,
+          "Verify": 23.390687,
+          "Save": 9.8973955
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "median_ms": 96.0140835,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629070.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 45.369583,
+          "Load": 6.1133335,
+          "Scan": 0.0,
+          "Hash": 15.30425,
+          "Index": 2.335083,
+          "Verify": 23.6021875,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "derived",
+        "median_ms": 89.036854,
+        "paired_ratio": 0.9984478409845885,
+        "ratio_range": [
+          0.8167306751630908,
+          1.4571159525726023
+        ],
+        "wins": 3,
+        "cache_bytes": 2750392.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 32.3225205,
+          "Load": 16.6498955,
+          "Scan": 0.0,
+          "Hash": 13.493437,
+          "Index": 0.1238335,
+          "Verify": 23.372563,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "journal",
+        "median_ms": 104.7092915,
+        "paired_ratio": 1.1495983350160628,
+        "ratio_range": [
+          0.7869595459590696,
+          1.457263794388937
+        ],
+        "wins": 2,
+        "cache_bytes": 2750392.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 45.149292,
+          "Load": 18.8034375,
+          "Scan": 0.0,
+          "Hash": 13.56625,
+          "Index": 0.1232085,
+          "Verify": 23.5651875,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "median_ms": 278.9184585,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142504.0,
+        "written_bytes": 8142504.0,
+        "phases_ms": {
+          "Selection": 78.180271,
+          "Load": 21.704021,
+          "Scan": 0.0,
+          "Hash": 74.866375,
+          "Index": 9.889916,
+          "Verify": 64.4114795,
+          "Save": 16.2443955
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "derived",
+        "median_ms": 368.3647915,
+        "paired_ratio": 1.2940622172401195,
+        "ratio_range": [
+          1.134922214100814,
+          1.4123388554419822
+        ],
+        "wins": 0,
+        "cache_bytes": 13783647.5,
+        "written_bytes": 13783647.5,
+        "phases_ms": {
+          "Selection": 88.394583,
+          "Load": 75.881729,
+          "Scan": 0.0,
+          "Hash": 73.506771,
+          "Index": 1.7121875,
+          "Verify": 64.721604,
+          "Save": 50.6056875
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "journal",
+        "median_ms": 345.933375,
+        "paired_ratio": 1.196913268999594,
+        "ratio_range": [
+          1.0544178507355755,
+          1.376423128518143
+        ],
+        "wins": 0,
+        "cache_bytes": 14361006.0,
+        "written_bytes": 164948.0,
+        "phases_ms": {
+          "Selection": 98.7414995,
+          "Load": 80.4785005,
+          "Scan": 0.0,
+          "Hash": 72.351146,
+          "Index": 1.6879375,
+          "Verify": 64.5781045,
+          "Save": 10.288938
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "compaction",
+        "variant": "checkpoint",
+        "median_ms": 264.57925,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142504.0,
+        "written_bytes": 8142504.0,
+        "phases_ms": {
+          "Selection": 71.972604,
+          "Load": 21.4881665,
+          "Scan": 0.0,
+          "Hash": 65.5734165,
+          "Index": 10.088896,
+          "Verify": 65.025979,
+          "Save": 15.450667
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "compaction",
+        "variant": "derived",
+        "median_ms": 343.501208,
+        "paired_ratio": 1.296401806921076,
+        "ratio_range": [
+          1.2093366664012764,
+          1.3419773344625283
+        ],
+        "wins": 0,
+        "cache_bytes": 13783769.5,
+        "written_bytes": 13783769.5,
+        "phases_ms": {
+          "Selection": 74.736729,
+          "Load": 76.2658125,
+          "Scan": 0.0,
+          "Hash": 63.9593125,
+          "Index": 0.687604,
+          "Verify": 64.3135835,
+          "Save": 50.9092085
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "compaction",
+        "variant": "journal",
+        "median_ms": 379.248479,
+        "paired_ratio": 1.4368836044233837,
+        "ratio_range": [
+          1.2585215954684528,
+          1.5647900495158713
+        ],
+        "wins": 0,
+        "cache_bytes": 13783769.5,
+        "written_bytes": 13783769.5,
+        "phases_ms": {
+          "Selection": 81.824021,
+          "Load": 98.271021,
+          "Scan": 0.0,
+          "Hash": 63.5555835,
+          "Index": 0.689604,
+          "Verify": 64.732354,
+          "Save": 51.2347915
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "median_ms": 290.177437,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142504.0,
+        "written_bytes": 8142504.0,
+        "phases_ms": {
+          "Selection": 98.204229,
+          "Load": 21.7864995,
+          "Scan": 0.0,
+          "Hash": 64.5880415,
+          "Index": 10.050521,
+          "Verify": 64.3603335,
+          "Save": 15.845521
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "derived",
+        "median_ms": 368.0585,
+        "paired_ratio": 1.251741249245613,
+        "ratio_range": [
+          1.157631873828761,
+          1.4248392714124993
+        ],
+        "wins": 0,
+        "cache_bytes": 13783688.0,
+        "written_bytes": 13783688.0,
+        "phases_ms": {
+          "Selection": 98.9789165,
+          "Load": 75.3378125,
+          "Scan": 0.0,
+          "Hash": 65.1015,
+          "Index": 0.678541,
+          "Verify": 64.3920625,
+          "Save": 50.0217705
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "journal",
+        "median_ms": 330.682625,
+        "paired_ratio": 1.1546607701973275,
+        "ratio_range": [
+          1.0113212692458045,
+          1.250723290692691
+        ],
+        "wins": 0,
+        "cache_bytes": 13787468.0,
+        "written_bytes": 1080.0,
+        "phases_ms": {
+          "Selection": 99.700917,
+          "Load": 79.119625,
+          "Scan": 0.0,
+          "Hash": 62.92525,
+          "Index": 0.6669165,
+          "Verify": 64.743312,
+          "Save": 9.726021
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "median_ms": 803.0785205,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142504.0,
+        "written_bytes": 8142504.0,
+        "phases_ms": {
+          "Selection": 76.209542,
+          "Load": 0.064625,
+          "Scan": 0.0,
+          "Hash": 614.8155835,
+          "Index": 13.5269375,
+          "Verify": 65.455521,
+          "Save": 17.068271
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "derived",
+        "median_ms": 826.618333,
+        "paired_ratio": 1.0304505228508143,
+        "ratio_range": [
+          1.0108741821963438,
+          1.063042058966626
+        ],
+        "wins": 0,
+        "cache_bytes": 13783688.0,
+        "written_bytes": 13783688.0,
+        "phases_ms": {
+          "Selection": 71.010771,
+          "Load": 0.090666,
+          "Scan": 0.0,
+          "Hash": 611.897667,
+          "Index": 13.464792,
+          "Verify": 65.355354,
+          "Save": 50.156958
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "journal",
+        "median_ms": 849.2415415,
+        "paired_ratio": 1.0404737002021682,
+        "ratio_range": [
+          1.015465781873587,
+          1.0808886014836152
+        ],
+        "wins": 0,
+        "cache_bytes": 13783688.0,
+        "written_bytes": 13783688.0,
+        "phases_ms": {
+          "Selection": 98.2218955,
+          "Load": 0.0888125,
+          "Scan": 0.0,
+          "Hash": 607.0114165,
+          "Index": 13.3928125,
+          "Verify": 65.665333,
+          "Save": 49.9610005
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "median_ms": 259.3108545,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142504.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 82.3602915,
+          "Load": 21.5936875,
+          "Scan": 0.0,
+          "Hash": 65.392604,
+          "Index": 10.1829165,
+          "Verify": 64.7415215,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "derived",
+        "median_ms": 349.1963335,
+        "paired_ratio": 1.323707186058515,
+        "ratio_range": [
+          1.246792397250307,
+          1.5146223595562536
+        ],
+        "wins": 0,
+        "cache_bytes": 13783758.0,
+        "written_bytes": 13783758.0,
+        "phases_ms": {
+          "Selection": 77.5116045,
+          "Load": 76.549479,
+          "Scan": 0.0,
+          "Hash": 65.824229,
+          "Index": 0.674896,
+          "Verify": 64.5260415,
+          "Save": 50.92725
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "journal",
+        "median_ms": 371.341938,
+        "paired_ratio": 1.369456014855226,
+        "ratio_range": [
+          1.20880395240688,
+          1.537992166556912
+        ],
+        "wins": 0,
+        "cache_bytes": 13783758.0,
+        "written_bytes": 13783758.0,
+        "phases_ms": {
+          "Selection": 99.940813,
+          "Load": 75.955896,
+          "Scan": 0.0,
+          "Hash": 64.720729,
+          "Index": 0.684208,
+          "Verify": 64.7559165,
+          "Save": 50.4702085
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "median_ms": 253.468292,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142504.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 79.041708,
+          "Load": 21.592625,
+          "Scan": 0.0,
+          "Hash": 64.623792,
+          "Index": 10.1401875,
+          "Verify": 64.605792,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "derived",
+        "median_ms": 320.784646,
+        "paired_ratio": 1.2476011638837443,
+        "ratio_range": [
+          1.0309279601651342,
+          1.3215397350212912
+        ],
+        "wins": 0,
+        "cache_bytes": 13783688.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 103.2664165,
+          "Load": 75.8981665,
+          "Scan": 0.0,
+          "Hash": 65.048146,
+          "Index": 0.664875,
+          "Verify": 63.968292,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "journal",
+        "median_ms": 300.469083,
+        "paired_ratio": 1.1506114228954778,
+        "ratio_range": [
+          1.061883038289996,
+          1.3220164359498956
+        ],
+        "wins": 0,
+        "cache_bytes": 13783688.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 84.0396465,
+          "Load": 75.3785415,
+          "Scan": 0.0,
+          "Hash": 62.924667,
+          "Index": 0.661875,
+          "Verify": 64.096,
+          "Save": 0.0
+        }
+      }
+    ]
+  },
+  "cabal": {
+    "job": "cabal/01M2M0Z1MP6ZBG0CCA15FEEC23",
+    "source_sha256": "e05ce3b17a10656ee84ed6b0aa0fe5fb525966d21cf5f3542db3e1f7ae922ad1",
+    "summary": [
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "median_ms": 28.577131,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 143620.0,
+        "written_bytes": 143620.0,
+        "phases_ms": {
+          "Selection": 4.1944255,
+          "Load": 1.51958,
+          "Scan": 0.0,
+          "Hash": 13.5840125,
+          "Index": 1.1362845,
+          "Verify": 3.991792,
+          "Save": 2.9725045
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "derived",
+        "median_ms": 29.548853,
+        "paired_ratio": 1.0267052796343543,
+        "ratio_range": [
+          0.9073379229015135,
+          1.1942102362246239
+        ],
+        "wins": 2,
+        "cache_bytes": 143716.0,
+        "written_bytes": 143716.0,
+        "phases_ms": {
+          "Selection": 4.1975145,
+          "Load": 1.9478905,
+          "Scan": 0.0,
+          "Hash": 13.749057,
+          "Index": 1.1301505,
+          "Verify": 4.3912985,
+          "Save": 3.118673
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "journal",
+        "median_ms": 40.371429,
+        "paired_ratio": 1.4236645983568614,
+        "ratio_range": [
+          0.9088763714447712,
+          1.7584023131370827
+        ],
+        "wins": 2,
+        "cache_bytes": 651079.5,
+        "written_bytes": 144961.0,
+        "phases_ms": {
+          "Selection": 4.2808705,
+          "Load": 10.08598,
+          "Scan": 0.0,
+          "Hash": 14.2547935,
+          "Index": 1.1549185,
+          "Verify": 4.3468975,
+          "Save": 3.653008
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "compaction",
+        "variant": "checkpoint",
+        "median_ms": 16.368191,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 143620.0,
+        "written_bytes": 143620.0,
+        "phases_ms": {
+          "Selection": 4.28512,
+          "Load": 1.467062,
+          "Scan": 0.0,
+          "Hash": 2.3513275,
+          "Index": 0.0510285,
+          "Verify": 4.757595,
+          "Save": 2.341883
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "compaction",
+        "variant": "derived",
+        "median_ms": 16.7875575,
+        "paired_ratio": 1.029427753468259,
+        "ratio_range": [
+          0.9951006321015399,
+          1.053320344420083
+        ],
+        "wins": 1,
+        "cache_bytes": 143716.0,
+        "written_bytes": 143716.0,
+        "phases_ms": {
+          "Selection": 4.27716,
+          "Load": 1.956249,
+          "Scan": 0.0,
+          "Hash": 2.4870375,
+          "Index": 0.1476635,
+          "Verify": 4.251174,
+          "Save": 2.3718065
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "compaction",
+        "variant": "journal",
+        "median_ms": 22.2429875,
+        "paired_ratio": 1.352477855051151,
+        "ratio_range": [
+          1.3088971260872513,
+          1.4100294439690817
+        ],
+        "wins": 0,
+        "cache_bytes": 143716.0,
+        "written_bytes": 143716.0,
+        "phases_ms": {
+          "Selection": 4.323647,
+          "Load": 7.2737955,
+          "Scan": 0.0,
+          "Hash": 2.521505,
+          "Index": 0.0704485,
+          "Verify": 3.965886,
+          "Save": 2.695643
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "median_ms": 16.3037025,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 143620.0,
+        "written_bytes": 143620.0,
+        "phases_ms": {
+          "Selection": 4.213879,
+          "Load": 1.5314525,
+          "Scan": 0.0,
+          "Hash": 2.307438,
+          "Index": 0.049992,
+          "Verify": 4.7920175,
+          "Save": 2.3325435
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "derived",
+        "median_ms": 16.7876155,
+        "paired_ratio": 1.032075436619354,
+        "ratio_range": [
+          0.9980075321760956,
+          1.040729766830511
+        ],
+        "wins": 1,
+        "cache_bytes": 143716.0,
+        "written_bytes": 143716.0,
+        "phases_ms": {
+          "Selection": 4.098726,
+          "Load": 1.942356,
+          "Scan": 0.0,
+          "Hash": 2.4032295,
+          "Index": 0.140276,
+          "Verify": 4.510147,
+          "Save": 2.39818
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "journal",
+        "median_ms": 15.4499595,
+        "paired_ratio": 0.9458346126364978,
+        "ratio_range": [
+          0.9028104575558312,
+          1.019447023622123
+        ],
+        "wins": 5,
+        "cache_bytes": 147475.0,
+        "written_bytes": 1074.0,
+        "phases_ms": {
+          "Selection": 4.301048,
+          "Load": 2.515692,
+          "Scan": 0.0,
+          "Hash": 2.659883,
+          "Index": 0.0638655,
+          "Verify": 3.905199,
+          "Save": 0.6643225
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "median_ms": 24.367774,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 143620.0,
+        "written_bytes": 143620.0,
+        "phases_ms": {
+          "Selection": 4.264818,
+          "Load": 0.1021945,
+          "Scan": 0.0,
+          "Hash": 12.8553625,
+          "Index": 0.184573,
+          "Verify": 4.637354,
+          "Save": 1.239564
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "derived",
+        "median_ms": 24.2131585,
+        "paired_ratio": 1.0039650075776434,
+        "ratio_range": [
+          0.9798707143375394,
+          1.0306595638911993
+        ],
+        "wins": 3,
+        "cache_bytes": 143716.0,
+        "written_bytes": 143716.0,
+        "phases_ms": {
+          "Selection": 4.2856315,
+          "Load": 0.132829,
+          "Scan": 0.0,
+          "Hash": 12.826667,
+          "Index": 0.1767975,
+          "Verify": 4.50478,
+          "Save": 1.2353895
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "journal",
+        "median_ms": 24.3274705,
+        "paired_ratio": 0.9927237397521098,
+        "ratio_range": [
+          0.9858104644321456,
+          1.010336718362588
+        ],
+        "wins": 4,
+        "cache_bytes": 143716.0,
+        "written_bytes": 143716.0,
+        "phases_ms": {
+          "Selection": 4.289648,
+          "Load": 0.1183925,
+          "Scan": 0.0,
+          "Hash": 12.8248915,
+          "Index": 0.2414665,
+          "Verify": 4.386666,
+          "Save": 1.1922165
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "median_ms": 13.828987,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 143620.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 4.218066,
+          "Load": 1.564021,
+          "Scan": 0.0,
+          "Hash": 2.2564375,
+          "Index": 0.031967,
+          "Verify": 4.727375,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "derived",
+        "median_ms": 16.559135,
+        "paired_ratio": 1.2081516006767015,
+        "ratio_range": [
+          1.166433916411048,
+          1.216751757975504
+        ],
+        "wins": 0,
+        "cache_bytes": 143716.0,
+        "written_bytes": 143716.0,
+        "phases_ms": {
+          "Selection": 4.1933945,
+          "Load": 1.927809,
+          "Scan": 0.0,
+          "Hash": 2.4548245,
+          "Index": 0.0467075,
+          "Verify": 4.3175035,
+          "Save": 2.447854
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "journal",
+        "median_ms": 16.7309495,
+        "paired_ratio": 1.2026913034091757,
+        "ratio_range": [
+          1.1485832447349,
+          1.2281894900192534
+        ],
+        "wins": 0,
+        "cache_bytes": 143716.0,
+        "written_bytes": 143716.0,
+        "phases_ms": {
+          "Selection": 4.315371,
+          "Load": 1.9070145,
+          "Scan": 0.0,
+          "Hash": 2.587187,
+          "Index": 0.0518515,
+          "Verify": 4.084564,
+          "Save": 2.4087945
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "median_ms": 13.914784,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 143620.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 4.2532125,
+          "Load": 1.4990375,
+          "Scan": 0.0,
+          "Hash": 2.2395925,
+          "Index": 0.0324595,
+          "Verify": 4.767796,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "derived",
+        "median_ms": 13.9701335,
+        "paired_ratio": 1.010798320855344,
+        "ratio_range": [
+          0.9975361833151792,
+          1.0261305181265714
+        ],
+        "wins": 1,
+        "cache_bytes": 143716.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 4.3325525,
+          "Load": 1.937206,
+          "Scan": 0.0,
+          "Hash": 2.367783,
+          "Index": 0.0480685,
+          "Verify": 4.2970095,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "journal",
+        "median_ms": 14.0539655,
+        "paired_ratio": 1.0105725537917767,
+        "ratio_range": [
+          0.9710573134859994,
+          1.1791628246251593
+        ],
+        "wins": 1,
+        "cache_bytes": 143716.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 4.1934095,
+          "Load": 1.93396,
+          "Scan": 0.0,
+          "Hash": 2.5212965,
+          "Index": 0.0488,
+          "Verify": 4.1387365,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "median_ms": 410.2817165,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467549.0,
+        "written_bytes": 1467549.0,
+        "phases_ms": {
+          "Selection": 126.9195315,
+          "Load": 24.5566645,
+          "Scan": 0.0,
+          "Hash": 62.8821485,
+          "Index": 18.403852,
+          "Verify": 129.403502,
+          "Save": 27.953134
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "derived",
+        "median_ms": 480.5068465,
+        "paired_ratio": 1.1673408912977794,
+        "ratio_range": [
+          0.9920768855587753,
+          1.2836115412830793
+        ],
+        "wins": 1,
+        "cache_bytes": 2588664.5,
+        "written_bytes": 2588664.5,
+        "phases_ms": {
+          "Selection": 129.2931315,
+          "Load": 79.1476605,
+          "Scan": 0.0,
+          "Hash": 52.5484045,
+          "Index": 4.912458,
+          "Verify": 125.509507,
+          "Save": 56.3071215
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "journal",
+        "median_ms": 449.3180835,
+        "paired_ratio": 1.1240704551014005,
+        "ratio_range": [
+          1.0186763152608616,
+          1.186657618304187
+        ],
+        "wins": 0,
+        "cache_bytes": 3110114.5,
+        "written_bytes": 148961.0,
+        "phases_ms": {
+          "Selection": 126.0157765,
+          "Load": 104.412393,
+          "Scan": 0.0,
+          "Hash": 58.3474455,
+          "Index": 3.7286715,
+          "Verify": 125.513176,
+          "Save": 18.7155
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "compaction",
+        "variant": "checkpoint",
+        "median_ms": 358.1760105,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467549.0,
+        "written_bytes": 1467549.0,
+        "phases_ms": {
+          "Selection": 126.249659,
+          "Load": 21.720522,
+          "Scan": 0.0,
+          "Hash": 34.3183325,
+          "Index": 15.577038,
+          "Verify": 122.3523915,
+          "Save": 20.673173
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "compaction",
+        "variant": "derived",
+        "median_ms": 422.9783565,
+        "paired_ratio": 1.1960534539398455,
+        "ratio_range": [
+          1.1276379456797418,
+          1.2403211944696486
+        ],
+        "wins": 0,
+        "cache_bytes": 2588637.0,
+        "written_bytes": 2588637.0,
+        "phases_ms": {
+          "Selection": 126.6014435,
+          "Load": 80.2220385,
+          "Scan": 0.0,
+          "Hash": 25.439045,
+          "Index": 0.625413,
+          "Verify": 125.7738465,
+          "Save": 49.3952945
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "compaction",
+        "variant": "journal",
+        "median_ms": 451.02568,
+        "paired_ratio": 1.2680601019528335,
+        "ratio_range": [
+          1.14301390762339,
+          1.4056023083076747
+        ],
+        "wins": 0,
+        "cache_bytes": 2588637.0,
+        "written_bytes": 2588637.0,
+        "phases_ms": {
+          "Selection": 129.5609625,
+          "Load": 109.179522,
+          "Scan": 0.0,
+          "Hash": 27.8911035,
+          "Index": 0.505897,
+          "Verify": 123.152602,
+          "Save": 41.609774
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "median_ms": 322.1642775,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467549.0,
+        "written_bytes": 1467549.0,
+        "phases_ms": {
+          "Selection": 106.99856,
+          "Load": 19.114907,
+          "Scan": 0.0,
+          "Hash": 33.014257,
+          "Index": 22.3042055,
+          "Verify": 103.747137,
+          "Save": 19.6431545
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "derived",
+        "median_ms": 383.172561,
+        "paired_ratio": 1.210878698257926,
+        "ratio_range": [
+          1.0491056565287993,
+          1.2449687791975355
+        ],
+        "wins": 0,
+        "cache_bytes": 2588755.0,
+        "written_bytes": 2588755.0,
+        "phases_ms": {
+          "Selection": 103.6850035,
+          "Load": 77.71584,
+          "Scan": 0.0,
+          "Hash": 28.173891,
+          "Index": 0.539063,
+          "Verify": 107.6223685,
+          "Save": 48.324022
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "journal",
+        "median_ms": 354.649087,
+        "paired_ratio": 1.1007841070697282,
+        "ratio_range": [
+          0.9748798022321786,
+          1.2223970349001263
+        ],
+        "wins": 1,
+        "cache_bytes": 2592539.0,
+        "written_bytes": 1078.0,
+        "phases_ms": {
+          "Selection": 106.5004815,
+          "Load": 81.6256585,
+          "Scan": 0.0,
+          "Hash": 24.206231,
+          "Index": 0.6150825,
+          "Verify": 106.996569,
+          "Save": 14.5179545
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "median_ms": 728.322476,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467549.0,
+        "written_bytes": 1467549.0,
+        "phases_ms": {
+          "Selection": 111.749529,
+          "Load": 0.155978,
+          "Scan": 0.0,
+          "Hash": 446.897777,
+          "Index": 29.2810285,
+          "Verify": 106.3151345,
+          "Save": 14.085481
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "derived",
+        "median_ms": 742.1669975,
+        "paired_ratio": 1.0122890610065785,
+        "ratio_range": [
+          0.9062894095759505,
+          1.130698393226452
+        ],
+        "wins": 3,
+        "cache_bytes": 2588766.0,
+        "written_bytes": 2588766.0,
+        "phases_ms": {
+          "Selection": 110.362361,
+          "Load": 0.1690715,
+          "Scan": 0.0,
+          "Hash": 436.0486435,
+          "Index": 23.6390915,
+          "Verify": 105.731925,
+          "Save": 43.1534705
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "journal",
+        "median_ms": 718.718272,
+        "paired_ratio": 1.0126844863337656,
+        "ratio_range": [
+          0.8705736803355157,
+          1.0948282564744751
+        ],
+        "wins": 3,
+        "cache_bytes": 2588766.0,
+        "written_bytes": 2588766.0,
+        "phases_ms": {
+          "Selection": 108.0228915,
+          "Load": 0.176313,
+          "Scan": 0.0,
+          "Hash": 433.19811,
+          "Index": 19.858728,
+          "Verify": 108.940078,
+          "Save": 36.3527215
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "median_ms": 343.086497,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467549.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 125.307556,
+          "Load": 26.680533,
+          "Scan": 0.0,
+          "Hash": 37.172519,
+          "Index": 17.771382,
+          "Verify": 120.9308015,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "derived",
+        "median_ms": 440.587867,
+        "paired_ratio": 1.2841275663204677,
+        "ratio_range": [
+          1.1405134262429713,
+          1.4232510140175159
+        ],
+        "wins": 0,
+        "cache_bytes": 2588636.0,
+        "written_bytes": 2588636.0,
+        "phases_ms": {
+          "Selection": 131.563048,
+          "Load": 87.8005645,
+          "Scan": 0.0,
+          "Hash": 29.7891155,
+          "Index": 0.699583,
+          "Verify": 128.29859,
+          "Save": 46.8374925
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "journal",
+        "median_ms": 420.912706,
+        "paired_ratio": 1.2297953113655073,
+        "ratio_range": [
+          1.1246003256449046,
+          1.3960798624839124
+        ],
+        "wins": 0,
+        "cache_bytes": 2588636.0,
+        "written_bytes": 2588636.0,
+        "phases_ms": {
+          "Selection": 126.0206735,
+          "Load": 83.058814,
+          "Scan": 0.0,
+          "Hash": 29.877391,
+          "Index": 0.627274,
+          "Verify": 124.622694,
+          "Save": 45.574803
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "median_ms": 298.5530815,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467549.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 106.8139375,
+          "Load": 21.970659,
+          "Scan": 0.0,
+          "Hash": 31.9171165,
+          "Index": 14.6016695,
+          "Verify": 104.8577975,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "derived",
+        "median_ms": 342.210555,
+        "paired_ratio": 1.1716592461376674,
+        "ratio_range": [
+          1.0830296980301592,
+          1.304088839070567
+        ],
+        "wins": 0,
+        "cache_bytes": 2588766.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 108.0686145,
+          "Load": 82.960394,
+          "Scan": 0.0,
+          "Hash": 25.842149,
+          "Index": 0.6196045,
+          "Verify": 110.045189,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "journal",
+        "median_ms": 345.165171,
+        "paired_ratio": 1.1546596390855735,
+        "ratio_range": [
+          1.1002867221189485,
+          1.3454745494383489
+        ],
+        "wins": 0,
+        "cache_bytes": 2588766.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 108.4355835,
+          "Load": 83.9179915,
+          "Scan": 0.0,
+          "Hash": 28.9986195,
+          "Index": 0.512672,
+          "Verify": 106.578717,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "median_ms": 164.7853585,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467648.0,
+        "written_bytes": 1467648.0,
+        "phases_ms": {
+          "Selection": 21.7765025,
+          "Load": 14.7098625,
+          "Scan": 0.0,
+          "Hash": 55.7263625,
+          "Index": 17.150487,
+          "Verify": 20.4725075,
+          "Save": 20.018377
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "derived",
+        "median_ms": 224.819938,
+        "paired_ratio": 1.3483566110332772,
+        "ratio_range": [
+          1.2472225452868684,
+          1.5582010690658574
+        ],
+        "wins": 0,
+        "cache_bytes": 2588853.5,
+        "written_bytes": 2588853.5,
+        "phases_ms": {
+          "Selection": 22.0003535,
+          "Load": 68.452533,
+          "Scan": 0.0,
+          "Hash": 52.7941175,
+          "Index": 3.431267,
+          "Verify": 19.9280605,
+          "Save": 43.394634
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "journal",
+        "median_ms": 207.764615,
+        "paired_ratio": 1.2973268836436298,
+        "ratio_range": [
+          1.0571275182082258,
+          1.4596256408352697
+        ],
+        "wins": 0,
+        "cache_bytes": 3110119.0,
+        "written_bytes": 148964.0,
+        "phases_ms": {
+          "Selection": 21.711499,
+          "Load": 76.9390785,
+          "Scan": 0.0,
+          "Hash": 52.7529335,
+          "Index": 3.436768,
+          "Verify": 18.8049625,
+          "Save": 13.4773315
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "compaction",
+        "variant": "checkpoint",
+        "median_ms": 141.126045,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467648.0,
+        "written_bytes": 1467648.0,
+        "phases_ms": {
+          "Selection": 21.9892215,
+          "Load": 15.7618335,
+          "Scan": 0.0,
+          "Hash": 31.5118875,
+          "Index": 17.9048375,
+          "Verify": 20.165276,
+          "Save": 18.4461875
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "compaction",
+        "variant": "derived",
+        "median_ms": 192.665398,
+        "paired_ratio": 1.34121283750983,
+        "ratio_range": [
+          1.266817598592681,
+          1.5079047820004519
+        ],
+        "wins": 0,
+        "cache_bytes": 2588846.0,
+        "written_bytes": 2588846.0,
+        "phases_ms": {
+          "Selection": 21.8132595,
+          "Load": 63.992805,
+          "Scan": 0.0,
+          "Hash": 25.4253605,
+          "Index": 0.5664665,
+          "Verify": 20.7908195,
+          "Save": 41.3785665
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "compaction",
+        "variant": "journal",
+        "median_ms": 224.584104,
+        "paired_ratio": 1.5915973522734672,
+        "ratio_range": [
+          1.5081936324384824,
+          1.7390478781934111
+        ],
+        "wins": 0,
+        "cache_bytes": 2588846.0,
+        "written_bytes": 2588846.0,
+        "phases_ms": {
+          "Selection": 22.0650685,
+          "Load": 94.80957,
+          "Scan": 0.0,
+          "Hash": 26.8394705,
+          "Index": 0.540229,
+          "Verify": 19.5071185,
+          "Save": 43.743995
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "median_ms": 129.364118,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467648.0,
+        "written_bytes": 1467648.0,
+        "phases_ms": {
+          "Selection": 22.1763605,
+          "Load": 16.151633,
+          "Scan": 0.0,
+          "Hash": 27.943988,
+          "Index": 12.1289075,
+          "Verify": 20.238677,
+          "Save": 18.6138655
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "derived",
+        "median_ms": 196.796899,
+        "paired_ratio": 1.4725283192391516,
+        "ratio_range": [
+          1.3384138191058224,
+          1.6385456350735907
+        ],
+        "wins": 0,
+        "cache_bytes": 2588962.5,
+        "written_bytes": 2588962.5,
+        "phases_ms": {
+          "Selection": 21.773724,
+          "Load": 71.0589015,
+          "Scan": 0.0,
+          "Hash": 25.280978,
+          "Index": 0.561038,
+          "Verify": 18.97398,
+          "Save": 39.836262
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "journal",
+        "median_ms": 164.2882475,
+        "paired_ratio": 1.242654398630397,
+        "ratio_range": [
+          1.077092300799218,
+          1.3471817903813952
+        ],
+        "wins": 0,
+        "cache_bytes": 2592752.5,
+        "written_bytes": 1081.0,
+        "phases_ms": {
+          "Selection": 21.864765,
+          "Load": 67.01075,
+          "Scan": 0.0,
+          "Hash": 25.7203675,
+          "Index": 0.5657065,
+          "Verify": 19.0988175,
+          "Save": 10.4693585
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "median_ms": 465.6057585,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467648.0,
+        "written_bytes": 1467648.0,
+        "phases_ms": {
+          "Selection": 21.984297,
+          "Load": 0.133246,
+          "Scan": 0.0,
+          "Hash": 367.547365,
+          "Index": 17.264988,
+          "Verify": 19.0127405,
+          "Save": 14.175712
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "derived",
+        "median_ms": 440.1444095,
+        "paired_ratio": 1.0077572540173398,
+        "ratio_range": [
+          0.8745280801272127,
+          1.1506329176915908
+        ],
+        "wins": 3,
+        "cache_bytes": 2588969.0,
+        "written_bytes": 2588969.0,
+        "phases_ms": {
+          "Selection": 21.7750665,
+          "Load": 0.159909,
+          "Scan": 0.0,
+          "Hash": 335.471801,
+          "Index": 20.9193785,
+          "Verify": 19.9912735,
+          "Save": 35.809171
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "journal",
+        "median_ms": 458.011013,
+        "paired_ratio": 1.0164459240001085,
+        "ratio_range": [
+          0.9394821797189717,
+          1.088320325998907
+        ],
+        "wins": 2,
+        "cache_bytes": 2588969.0,
+        "written_bytes": 2588969.0,
+        "phases_ms": {
+          "Selection": 21.811287,
+          "Load": 0.1466375,
+          "Scan": 0.0,
+          "Hash": 350.9066675,
+          "Index": 16.9704105,
+          "Verify": 19.04461,
+          "Save": 35.495127
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "median_ms": 106.1049915,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467648.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 21.931468,
+          "Load": 14.4015775,
+          "Scan": 0.0,
+          "Hash": 24.0915015,
+          "Index": 13.7398195,
+          "Verify": 18.6666145,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "derived",
+        "median_ms": 187.853816,
+        "paired_ratio": 1.753884052970757,
+        "ratio_range": [
+          1.5249441330952958,
+          1.963818496201977
+        ],
+        "wins": 0,
+        "cache_bytes": 2588842.0,
+        "written_bytes": 2588842.0,
+        "phases_ms": {
+          "Selection": 21.939877,
+          "Load": 66.7477755,
+          "Scan": 0.0,
+          "Hash": 25.586266,
+          "Index": 0.5115785,
+          "Verify": 19.631716,
+          "Save": 40.9093185
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "journal",
+        "median_ms": 187.6314715,
+        "paired_ratio": 1.7613749755244017,
+        "ratio_range": [
+          1.5218434891873382,
+          1.952690610651917
+        ],
+        "wins": 0,
+        "cache_bytes": 2588842.0,
+        "written_bytes": 2588842.0,
+        "phases_ms": {
+          "Selection": 21.7670255,
+          "Load": 66.456929,
+          "Scan": 0.0,
+          "Hash": 25.429368,
+          "Index": 0.5168395,
+          "Verify": 20.38039,
+          "Save": 41.0699085
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "median_ms": 107.205084,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1467648.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 21.860401,
+          "Load": 14.835712,
+          "Scan": 0.0,
+          "Hash": 26.000583,
+          "Index": 12.4985915,
+          "Verify": 18.305501,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "derived",
+        "median_ms": 147.5768805,
+        "paired_ratio": 1.3976189688934242,
+        "ratio_range": [
+          1.2703858113998983,
+          1.4441533970491456
+        ],
+        "wins": 0,
+        "cache_bytes": 2588969.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 21.7394825,
+          "Load": 68.08762,
+          "Scan": 0.0,
+          "Hash": 24.142701,
+          "Index": 0.519483,
+          "Verify": 19.8765185,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "journal",
+        "median_ms": 147.1841055,
+        "paired_ratio": 1.3727898339074902,
+        "ratio_range": [
+          1.2493244209677565,
+          1.5032524944315444
+        ],
+        "wins": 0,
+        "cache_bytes": 2588969.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 21.798174,
+          "Load": 62.3202455,
+          "Scan": 0.0,
+          "Hash": 25.248996,
+          "Index": 0.558682,
+          "Verify": 20.139336,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "median_ms": 658.892985,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 7334840.0,
+        "written_bytes": 7334840.0,
+        "phases_ms": {
+          "Selection": 118.715066,
+          "Load": 87.6400185,
+          "Scan": 0.0,
+          "Hash": 147.246659,
+          "Index": 61.35431,
+          "Verify": 81.774316,
+          "Save": 88.863174
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "derived",
+        "median_ms": 982.5369975,
+        "paired_ratio": 1.4822408614483522,
+        "ratio_range": [
+          1.4455054130700506,
+          1.590198789714621
+        ],
+        "wins": 0,
+        "cache_bytes": 12975982.5,
+        "written_bytes": 12975982.5,
+        "phases_ms": {
+          "Selection": 114.27002,
+          "Load": 327.899034,
+          "Scan": 0.0,
+          "Hash": 139.2372415,
+          "Index": 5.381241,
+          "Verify": 93.1262115,
+          "Save": 228.7748395
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "journal",
+        "median_ms": 807.904767,
+        "paired_ratio": 1.21767652852553,
+        "ratio_range": [
+          1.1404044916683205,
+          1.291332447965866
+        ],
+        "wins": 0,
+        "cache_bytes": 13497393.5,
+        "written_bytes": 148963.0,
+        "phases_ms": {
+          "Selection": 114.3686055,
+          "Load": 328.432761,
+          "Scan": 0.0,
+          "Hash": 142.7645325,
+          "Index": 5.4657665,
+          "Verify": 81.2031585,
+          "Save": 56.669717
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "compaction",
+        "variant": "checkpoint",
+        "median_ms": 616.163217,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 7334840.0,
+        "written_bytes": 7334840.0,
+        "phases_ms": {
+          "Selection": 106.3879905,
+          "Load": 80.3171505,
+          "Scan": 0.0,
+          "Hash": 135.778519,
+          "Index": 55.464204,
+          "Verify": 82.7830835,
+          "Save": 84.2572885
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "compaction",
+        "variant": "derived",
+        "median_ms": 927.989823,
+        "paired_ratio": 1.531872228353433,
+        "ratio_range": [
+          1.4411380220778365,
+          1.5614554744555043
+        ],
+        "wins": 0,
+        "cache_bytes": 12976104.5,
+        "written_bytes": 12976104.5,
+        "phases_ms": {
+          "Selection": 119.1789405,
+          "Load": 318.9151935,
+          "Scan": 0.0,
+          "Hash": 119.1489705,
+          "Index": 2.61056,
+          "Verify": 90.6946645,
+          "Save": 220.3160935
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "compaction",
+        "variant": "journal",
+        "median_ms": 1039.0169245,
+        "paired_ratio": 1.706228952168058,
+        "ratio_range": [
+          1.6543968271159561,
+          1.735171754380545
+        ],
+        "wins": 0,
+        "cache_bytes": 12976104.5,
+        "written_bytes": 12976104.5,
+        "phases_ms": {
+          "Selection": 110.916944,
+          "Load": 430.3876135,
+          "Scan": 0.0,
+          "Hash": 122.2821815,
+          "Index": 2.669892,
+          "Verify": 89.3359385,
+          "Save": 217.9637405
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "median_ms": 616.4893085,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 7334840.0,
+        "written_bytes": 7334840.0,
+        "phases_ms": {
+          "Selection": 112.342194,
+          "Load": 76.427276,
+          "Scan": 0.0,
+          "Hash": 130.751337,
+          "Index": 59.560254,
+          "Verify": 81.0717845,
+          "Save": 87.534322
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "derived",
+        "median_ms": 936.6797555,
+        "paired_ratio": 1.5262589404349636,
+        "ratio_range": [
+          1.4352382864237747,
+          1.6381958580299936
+        ],
+        "wins": 0,
+        "cache_bytes": 12976023.0,
+        "written_bytes": 12976023.0,
+        "phases_ms": {
+          "Selection": 122.189652,
+          "Load": 318.7243215,
+          "Scan": 0.0,
+          "Hash": 121.8297785,
+          "Index": 2.604663,
+          "Verify": 91.6430055,
+          "Save": 226.082368
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "journal",
+        "median_ms": 777.032181,
+        "paired_ratio": 1.2524762932443134,
+        "ratio_range": [
+          1.2100659003009961,
+          1.3062786582992576
+        ],
+        "wins": 0,
+        "cache_bytes": 12979803.0,
+        "written_bytes": 1080.0,
+        "phases_ms": {
+          "Selection": 113.9867025,
+          "Load": 328.991587,
+          "Scan": 0.0,
+          "Hash": 124.7808135,
+          "Index": 2.633756,
+          "Verify": 86.8192935,
+          "Save": 52.9593435
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "median_ms": 1119.651758,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 7334840.0,
+        "written_bytes": 7334840.0,
+        "phases_ms": {
+          "Selection": 121.2165865,
+          "Load": 0.1745525,
+          "Scan": 0.0,
+          "Hash": 718.5636365,
+          "Index": 68.079939,
+          "Verify": 85.391569,
+          "Save": 64.098549
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "derived",
+        "median_ms": 1218.202427,
+        "paired_ratio": 1.0971370287760553,
+        "ratio_range": [
+          1.0560999386437655,
+          1.117887999665747
+        ],
+        "wins": 0,
+        "cache_bytes": 12976023.0,
+        "written_bytes": 12976023.0,
+        "phases_ms": {
+          "Selection": 113.9261145,
+          "Load": 0.1700365,
+          "Scan": 0.0,
+          "Hash": 715.029889,
+          "Index": 77.4813095,
+          "Verify": 85.578731,
+          "Save": 171.9046545
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "journal",
+        "median_ms": 1220.130518,
+        "paired_ratio": 1.0973982713193668,
+        "ratio_range": [
+          1.0642838955018414,
+          1.1316798645429051
+        ],
+        "wins": 0,
+        "cache_bytes": 12976023.0,
+        "written_bytes": 12976023.0,
+        "phases_ms": {
+          "Selection": 124.992879,
+          "Load": 0.180186,
+          "Scan": 0.0,
+          "Hash": 711.0830645,
+          "Index": 73.27878,
+          "Verify": 87.554411,
+          "Save": 171.33937
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "median_ms": 553.7188005,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 7334840.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 121.7739755,
+          "Load": 90.8282205,
+          "Scan": 0.0,
+          "Hash": 133.9594485,
+          "Index": 58.0903355,
+          "Verify": 82.389727,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "derived",
+        "median_ms": 926.290448,
+        "paired_ratio": 1.671785118233004,
+        "ratio_range": [
+          1.6045510627950306,
+          1.7835732168389846
+        ],
+        "wins": 0,
+        "cache_bytes": 12976093.0,
+        "written_bytes": 12976093.0,
+        "phases_ms": {
+          "Selection": 114.8618535,
+          "Load": 324.942314,
+          "Scan": 0.0,
+          "Hash": 122.37418,
+          "Index": 2.606614,
+          "Verify": 84.887598,
+          "Save": 221.877892
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "journal",
+        "median_ms": 936.0494335,
+        "paired_ratio": 1.7079729056709265,
+        "ratio_range": [
+          1.5642216924093066,
+          1.787233766506567
+        ],
+        "wins": 0,
+        "cache_bytes": 12976093.0,
+        "written_bytes": 12976093.0,
+        "phases_ms": {
+          "Selection": 113.021547,
+          "Load": 321.326683,
+          "Scan": 0.0,
+          "Hash": 127.8061425,
+          "Index": 2.5539445,
+          "Verify": 89.0157925,
+          "Save": 223.6657965
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "median_ms": 540.1706555,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 7334840.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 118.307791,
+          "Load": 87.008374,
+          "Scan": 0.0,
+          "Hash": 135.417216,
+          "Index": 56.2519535,
+          "Verify": 83.8141135,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "derived",
+        "median_ms": 697.2342215,
+        "paired_ratio": 1.323240183553219,
+        "ratio_range": [
+          0.9956029976250991,
+          1.3636669437009896
+        ],
+        "wins": 1,
+        "cache_bytes": 12976023.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 112.261219,
+          "Load": 311.827405,
+          "Scan": 0.0,
+          "Hash": 121.635405,
+          "Index": 2.5306855,
+          "Verify": 89.453679,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "journal",
+        "median_ms": 711.0778275,
+        "paired_ratio": 1.2957682165719913,
+        "ratio_range": [
+          1.0569908475249092,
+          1.5105942394730916
+        ],
+        "wins": 0,
+        "cache_bytes": 12976023.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 111.9712475,
+          "Load": 311.410881,
+          "Scan": 0.0,
+          "Hash": 121.1803655,
+          "Index": 2.5187405,
+          "Verify": 87.1719665,
+          "Save": 0.0
+        }
+      }
+    ]
+  }
+}

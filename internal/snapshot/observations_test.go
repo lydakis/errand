@@ -42,6 +42,19 @@ func TestObservedBuilderLimitsAndVerification(t *testing.T) {
 	if err != nil || warm.Reused != 1 || warm.Hashed != 0 || warm.Changed {
 		t.Fatalf("reuse: %+v %v", warm, err)
 	}
+	// Ignored sibling churn after the build is finalized into the verified
+	// result even when all selected content was reused.
+	if err := os.WriteFile(filepath.Join(root, "dir/ignored"), []byte("churn"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	warmVerified, err := warm.Verify(ctx)
+	if err != nil || !warmVerified.Changed() {
+		t.Fatalf("final changed state: %v %v", warmVerified, err)
+	}
+	warm, err = BuildObservedContext(ctx, root, paths, ObservationOptions{Prior: verifiedCopy(warmVerified), Collect: true, MaxBytes: -1, MaxEntries: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
 	bypass, err := BuildObservedContext(ctx, root, paths, ObservationOptions{Prior: verifiedCopy(verified), Collect: false, MaxBytes: -1, MaxEntries: -1})
 	if err != nil || bypass.batch != nil || bypass.Hashed != 1 || bypass.Reused != 0 {
 		t.Fatalf("bypass: %+v %v", bypass, err)

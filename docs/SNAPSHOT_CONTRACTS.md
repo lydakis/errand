@@ -205,9 +205,14 @@ passing Cabal full-suite rerun after the initial active-writer deadline failure.
 
 ## Next
 
-Compare restoring derived index state and writing changed records against this
-frozen observation implementation. Include loading, validation, compaction and
-recovery costs. Production adoption still requires filesystem eligibility, cache
+The [derived-index comparison](DERIVED_INDEX.md) now records the implementation,
+native measurements and decision for this gate. Neither tested derived storage
+variant is adopted. Next prioritize an observation-only journal against observation
+replacement, then profile loading before separate compact-codec and parallel
+validation comparisons. The selected in-memory representation stays unchanged.
+
+The comparison uses this frozen observation implementation and includes loading,
+validation, compaction and recovery costs. Production adoption still requires filesystem eligibility, cache
 ownership and directory-lifetime checks, early byte admission and selection guards
 through freezing. Whole-file versus delta/chunk transfer remains a later step.
 

@@ -126,8 +126,9 @@ transfer are separate decisions. Neither requires abandoning transactional apply
    changed metadata and bound history/recovery work. Define versioned identity,
    invalidation, cleanup and crash recovery together. Cached observations never
    replace selection checks or proof that the filesystem still matches them.
-   The observation-checkpoint prototype and native measurements are complete;
-   persistence of derived index state and production adoption remain open.
+   Observation and derived-index checkpoint prototypes have native measurements;
+   the current derived storage candidates are rejected on complete preparation
+   cost. Production adoption remains open.
 4. **Optimize large changed files.** Compare whole-file transfer, basis-dependent
    rolling deltas, and content-defined chunks under the same content interface.
    Include cold destinations, shifted insertions, incompressible data, bandwidth
@@ -147,9 +148,9 @@ not sufficient evidence for migrating all of them.
   symlink/case aliases. Advisory cache writes do not change production fsync rules.
   Native paired measurements include cache misses, unchanged restarts and edits,
   with frozen inputs and all earlier candidates retained.
-- **Next step-3 gate:** the shared observation pass and loaded-state ownership
-  handoff have been measured. Next compare restoring derived index
-  state and publishing changed records against the frozen observation prototype.
+- **Current step-3 gate:** the shared observation pass and loaded-state ownership
+  handoff have been measured. The derived-index comparison below measures restoring
+  index state and publishing changed records against the frozen observation prototype.
   Load validation, full rebuild/compaction and recovery costs are part of that
   comparison. The [shared-contract slice](SNAPSHOT_CONTRACTS.md) consolidates the
   native reuse predicate with the in-memory builder and makes checkpoint writers
@@ -175,9 +176,28 @@ not sufficient evidence for migrating all of them.
   the same adaptive engine. Larger trees,
   multiple edit densities and Git-selected fixtures are included. Frozen controls,
   regression checks and rejected allocation behavior remain in the evidence.
-  Persisted derived-index restoration and changed-record publication remain next.
-  The 64 MiB payload limit is enforced after encoding; early byte-size admission
-  remains a bounded follow-up. Native hash-buffer allocation also deserves profiling
+  The [derived-index comparison](DERIVED_INDEX.md) implements opt-in restoration
+  and bounded changed-observation journal variants against this frozen control.
+  Loading includes metadata, topology and derived-hash validation; the comparison
+  also times actual compaction and interrupted-suffix recovery. Production
+  adoption remains a separate decision based on the complete preparation cost.
+  The final native comparison rejects both current derived storage candidates
+  for the larger indexed workloads: their larger load cost exceeds saved index
+  work, including after bounded buffer reuse and coalesced observation replay.
+  Small-fixture results remain mixed. Review follow-ups clarify experimental
+  receipts and reader/writer behavior, and cover byte-boundary publication,
+  damaged middle frames and exact restored-tree diffs. Archived timings stay frozen.
+  Next measure an observation-only journal against observation replacement, including
+  byte-triggered compaction and recovery with prior journal history. Profile load
+  costs, then compare compact encoding and parallel semantic validation separately.
+  The current restore rehashes serially; its lower index phase partly moves work
+  into loading. Follow with exact-generation-check and shared-change-scan candidates
+  while preserving stale-writer, corruption and intermediate-state validation.
+  Storage-mode cleanup belongs with the next additional variant. Retain the selected
+  in-memory representation, production caller path and full adoption gates.
+  The observation control checks its 64 MiB payload limit after encoding; the derived
+  candidate limits its output buffer while encoding. Pre-encoding admission remains
+  a separate follow-up. Native hash-buffer allocation also deserves profiling
   if cold preparation stays material; observed GC counts alone do not explain its
   latency.
 - **Before checkpoint production adoption:** make filesystem eligibility executable,

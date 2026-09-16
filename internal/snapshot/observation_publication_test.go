@@ -50,6 +50,13 @@ func TestObservationPublicationConsumesOnlyCompleteVerifiedBuilds(t *testing.T) 
 	if err != nil || !verified.Valid() || verified.Len() != 1 || verified.At(0).Entry.SHA256 == "mutated" {
 		t.Fatalf("publication: %v %v", verified, err)
 	}
+	if !verified.Changed() {
+		t.Fatal("initial publication lost changed metadata")
+	}
+	first.Changed = false
+	if !verified.Changed() {
+		t.Fatal("verified changed metadata aliases the build")
+	}
 	copy := verified.At(0)
 	copy.Entry.SHA256 = "mutated"
 	if verified.At(0).Entry.SHA256 == copy.Entry.SHA256 {

@@ -1,0 +1,16 @@
+{
+  "control_commit": "aff735ed86409164cb5ef6827a28e198aa058d7e",
+  "archives": {
+    "candidate-inputs.tar.gz": "ea2f182979f18fc4ba67fdf475dc982aaca0c10fc30df7b8ca1affee68a0be5e",
+    "control-inputs.tar.gz": "6cbd8f06a4906819f267c85943003efa93db473c38a94debca7924e68943a219",
+    "initial-inputs.tar.gz": "3cca4356ffb531f423e5689846ff7fb68f0e7709ac1ee4c6e4bdde394b9ea442"
+  },
+  "initial_jobs": {
+    "mini": "mac-mini/01M2M0Z1MP3TD76YSNS5JB84HJ",
+    "cabal": "cabal/01M2M0Z1MP6ZBG0CCA15FEEC23"
+  },
+  "final_jobs": {
+    "mini": "mac-mini/01M2M1H863V81Q8HE9EXP4YXY4",
+    "cabal": "cabal/01M2M1J1C5VG3T9GQSCCF8SZ94"
+  }
+}

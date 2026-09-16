@@ -149,12 +149,16 @@ type VerifiedObservations struct {
 	entries []Observation
 	root    string
 	valid   bool
+	changed bool
 }
 
 func (v VerifiedObservations) Valid() bool          { return v.valid }
 func (v VerifiedObservations) Root() string         { return v.root }
 func (v VerifiedObservations) Len() int             { return len(v.entries) }
 func (v VerifiedObservations) At(i int) Observation { return v.entries[i] }
+
+// Changed is finalized after post-build verification, including directory churn.
+func (v VerifiedObservations) Changed() bool { return v.changed }
 
 // Verify consumes the pending batch, including on failure. It binds newly read
 // metadata/hashes to pre-build observations. Unchanged files use the fresh stat
@@ -191,7 +195,7 @@ func (r *ObservedBuild) Verify(ctx context.Context) (VerifiedObservations, error
 	if err := ctx.Err(); err != nil {
 		return VerifiedObservations{}, err
 	}
-	return VerifiedObservations{entries: entries, root: batch.root, valid: true}, nil
+	return VerifiedObservations{entries: entries, root: batch.root, valid: true, changed: r.Changed}, nil
 }
 
 // sameObservation is the shared advisory reuse rule for native file evidence.
