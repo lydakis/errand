@@ -28,7 +28,7 @@ const frameOverhead = 8 + 32 + 32 // length, previous digest, digest
 // A torn suffix recovers only complete earlier frames. Compaction atomically
 // replaces the file. Readers/writers take nonblocking shared/exclusive locks;
 // a busy cache is expendable and never delays snapshot work.
-func derivedLock(dir string, write bool) (*os.File, error) {
+func (s framedStore) lock(dir string, write bool) (*os.File, error) {
 	if write {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return nil, err
@@ -38,7 +38,7 @@ func derivedLock(dir string, write bool) (*os.File, error) {
 	if write {
 		flags |= unix.O_CREAT
 	}
-	fd, err := unix.Open(filepath.Join(dir, "index.lock"), flags, 0600)
+	fd, err := unix.Open(filepath.Join(dir, s.name+".lock"), flags, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -60,8 +60,8 @@ func derivedLock(dir string, write bool) (*os.File, error) {
 }
 func unlockDerived(f *os.File) { unix.Flock(int(f.Fd()), unix.LOCK_UN); f.Close() }
 
-func readDerivedFile(ctx context.Context, dir string) ([]byte, error) {
-	fd, err := unix.Open(filepath.Join(dir, "index"), unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+func (s framedStore) readFile(ctx context.Context, dir string) ([]byte, error) {
+	fd, err := unix.Open(filepath.Join(dir, s.name), unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -81,26 +81,26 @@ func readDerivedFile(ctx context.Context, dir string) ([]byte, error) {
 	return data, err
 }
 
-func readDerived(ctx context.Context, dir string, key identity) (loaded loadedCheckpoint, status string, size int64, err error) {
+func (s framedStore) load(ctx context.Context, dir string, key identity) (loaded loadedCheckpoint, status string, size int64, err error) {
 	defer func() {
 		if e := ctx.Err(); e != nil {
 			loaded, status, err = loadedCheckpoint{}, "", e
 		}
 	}()
-	lock, e := derivedLock(dir, false)
+	lock, e := s.lock(dir, false)
 	if e != nil {
 		return loadedCheckpoint{}, "missing", 0, nil
 	}
 	defer unlockDerived(lock)
-	data, e := readDerivedFile(ctx, dir)
+	data, e := s.readFile(ctx, dir)
 	if os.IsNotExist(e) {
 		return loadedCheckpoint{}, "missing", 0, nil
 	}
-	if e != nil || !bytes.HasPrefix(data, []byte(derivedMagic)) {
+	if e != nil || !bytes.HasPrefix(data, []byte(s.magic)) {
 		return loadedCheckpoint{}, "corrupt", int64(len(data)), nil
 	}
 	size = int64(len(data))
-	pos, frames := len(derivedMagic), 0
+	pos, frames := len(s.magic), 0
 	baseEnd := 0
 	var chain [32]byte
 	var pending map[string]observationEdit
@@ -124,7 +124,7 @@ func readDerived(ctx context.Context, dir string, key identity) (loaded loadedCh
 		if e != nil || !bytes.Equal(sum[:], remaining[end:end+32]) {
 			break
 		}
-		next, e := decodeDerived(ctx, remaining[40:end], key, loaded, frames > 0)
+		next, e := s.decode(ctx, remaining[40:end], key, loaded, frames > 0)
 		if e != nil {
 			break
 		}
@@ -179,8 +179,8 @@ func readDerived(ctx context.Context, dir string, key identity) (loaded loadedCh
 	return loaded, status, size, err
 }
 
-func derivedFrame(ctx context.Context, payload []byte, previous [32]byte) ([]byte, error) {
-	if len(payload) > maxBytes-len(derivedMagic)-frameOverhead {
+func (s framedStore) frame(ctx context.Context, payload []byte, previous [32]byte) ([]byte, error) {
+	if len(payload) > maxBytes-len(s.magic)-frameOverhead {
 		return nil, fmt.Errorf("checkpoint byte limit")
 	}
 	frame := make([]byte, 0, frameOverhead+len(payload))
@@ -191,19 +191,19 @@ func derivedFrame(ctx context.Context, payload []byte, previous [32]byte) ([]byt
 	return append(frame, sum[:]...), err
 }
 
-func writeDerived(ctx context.Context, dir string, key identity, entries snapshot.VerifiedObservations, state *manifest.Snapshot, prior loadedCheckpoint, journal bool) (int64, bool, error) {
+func (s framedStore) save(ctx context.Context, dir string, key identity, entries snapshot.VerifiedObservations, state *manifest.Snapshot, prior loadedCheckpoint) (int64, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, false, err
 	}
-	delta := journal && prior.state != nil && !prior.recovered && prior.journalRecords < maxJournalRecords
-	payload, err := encodeDerived(ctx, key, entries, state, prior, delta)
+	delta := s.journal && prior.state != nil && !prior.recovered && prior.journalRecords < maxJournalRecords
+	payload, err := s.encode(ctx, key, entries, state, prior, delta)
 	if err != nil {
 		return 0, false, err
 	}
 	previous := prior.chain
 	if delta && (prior.journalBytes+len(payload)+frameOverhead > maxJournalBytes || prior.diskSize+len(payload)+frameOverhead > maxBytes) {
 		delta = false
-		payload, err = encodeDerived(ctx, key, entries, state, prior, false)
+		payload, err = s.encode(ctx, key, entries, state, prior, false)
 		if err != nil {
 			return 0, false, err
 		}
@@ -211,11 +211,11 @@ func writeDerived(ctx context.Context, dir string, key identity, entries snapsho
 	if !delta {
 		previous = [32]byte{}
 	}
-	frame, err := derivedFrame(ctx, payload, previous)
+	frame, err := s.frame(ctx, payload, previous)
 	if err != nil {
 		return 0, false, err
 	}
-	lock, err := derivedLock(dir, true)
+	lock, err := s.lock(dir, true)
 	if err != nil {
 		return 0, false, err
 	}
@@ -227,7 +227,7 @@ func writeDerived(ctx context.Context, dir string, key identity, entries snapsho
 	// Include the read/check cost in measurements. Full replacements are safe
 	// last-writer-wins advisory snapshots; deltas require their exact base.
 	if delta {
-		current, err := readDerivedFile(ctx, dir)
+		current, err := s.readFile(ctx, dir)
 		if err != nil {
 			return 0, false, err
 		}
@@ -238,7 +238,7 @@ func writeDerived(ctx context.Context, dir string, key identity, entries snapsho
 		if sum != prior.diskDigest {
 			return 0, false, fmt.Errorf("checkpoint generation changed")
 		}
-		fd, err := unix.Open(filepath.Join(dir, "index"), unix.O_WRONLY|unix.O_APPEND|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		fd, err := unix.Open(filepath.Join(dir, s.name), unix.O_WRONLY|unix.O_APPEND|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 		if err != nil {
 			return 0, false, err
 		}
@@ -246,7 +246,7 @@ func writeDerived(ctx context.Context, dir string, key identity, entries snapsho
 		n, writeErr := io.Copy(f, contextReader{ctx, bytes.NewReader(frame)})
 		return n, false, errors.Join(writeErr, f.Close(), ctx.Err())
 	}
-	tmp := filepath.Join(dir, ".index.tmp")
+	tmp := filepath.Join(dir, "."+s.name+".tmp")
 	if err := os.Remove(tmp); err != nil && !os.IsNotExist(err) {
 		return 0, false, err
 	}
@@ -255,12 +255,12 @@ func writeDerived(ctx context.Context, dir string, key identity, entries snapsho
 		return 0, false, err
 	}
 	defer os.Remove(tmp)
-	data := append([]byte(derivedMagic), frame...)
+	data := append([]byte(s.magic), frame...)
 	n, writeErr := io.Copy(f, contextReader{ctx, bytes.NewReader(data)})
 	if err := errors.Join(writeErr, f.Close(), ctx.Err()); err != nil {
 		return 0, false, err
 	}
-	if err := os.Rename(tmp, filepath.Join(dir, "index")); err != nil {
+	if err := os.Rename(tmp, filepath.Join(dir, s.name)); err != nil {
 		return 0, false, err
 	}
 	return n, prior.state != nil, nil

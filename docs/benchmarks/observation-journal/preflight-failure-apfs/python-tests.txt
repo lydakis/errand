@@ -1,0 +1,216 @@
+....{"workspace": "successful", "seconds": 0.1}
+......0-push: 0.00s, failed
+0-fetch-large: 0.00s, completed
+............................EEEEEEEEE..............
+======================================================================
+ERROR: test_approved_lightweight_annotated_and_older_tags (test_release_workflow.ReleaseWorkflowTest.test_approved_lightweight_annotated_and_older_tags)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 35, in setUp
+    self.git("init", "-b", "main")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 53, in git
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         "-c", "tag.gpgsign=false", "-C", str(self.root), *args],
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        check=True, capture_output=True, text=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).stdout.strip()
+    ^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-C', '/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/dist/observation-journal/.scratch-sn3c2c_m/tmp70h2v9_u', 'init', '-b', 'main']' returned non-zero exit status 69.
+
+======================================================================
+ERROR: test_branch_with_same_name_cannot_replace_release_tag (test_release_workflow.ReleaseWorkflowTest.test_branch_with_same_name_cannot_replace_release_tag)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 35, in setUp
+    self.git("init", "-b", "main")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 53, in git
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         "-c", "tag.gpgsign=false", "-C", str(self.root), *args],
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        check=True, capture_output=True, text=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).stdout.strip()
+    ^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-C', '/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/dist/observation-journal/.scratch-sn3c2c_m/tmphnfdi3ct', 'init', '-b', 'main']' returned non-zero exit status 69.
+
+======================================================================
+ERROR: test_checkout_verifies_commit_and_selected_tag (test_release_workflow.ReleaseWorkflowTest.test_checkout_verifies_commit_and_selected_tag)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 35, in setUp
+    self.git("init", "-b", "main")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 53, in git
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         "-c", "tag.gpgsign=false", "-C", str(self.root), *args],
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        check=True, capture_output=True, text=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).stdout.strip()
+    ^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-C', '/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/dist/observation-journal/.scratch-sn3c2c_m/tmpepu1wiml', 'init', '-b', 'main']' returned non-zero exit status 69.
+
+======================================================================
+ERROR: test_malformed_or_executable_input_is_rejected (test_release_workflow.ReleaseWorkflowTest.test_malformed_or_executable_input_is_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 35, in setUp
+    self.git("init", "-b", "main")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 53, in git
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         "-c", "tag.gpgsign=false", "-C", str(self.root), *args],
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        check=True, capture_output=True, text=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).stdout.strip()
+    ^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-C', '/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/dist/observation-journal/.scratch-sn3c2c_m/tmp6sx6s8dk', 'init', '-b', 'main']' returned non-zero exit status 69.
+
+======================================================================
+ERROR: test_merged_release_commit_is_approved (test_release_workflow.ReleaseWorkflowTest.test_merged_release_commit_is_approved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 35, in setUp
+    self.git("init", "-b", "main")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 53, in git
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         "-c", "tag.gpgsign=false", "-C", str(self.root), *args],
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        check=True, capture_output=True, text=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).stdout.strip()
+    ^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-C', '/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/dist/observation-journal/.scratch-sn3c2c_m/tmp91rs268b', 'init', '-b', 'main']' returned non-zero exit status 69.
+
+======================================================================
+ERROR: test_remote_lightweight_and_annotated_tags_must_still_match (test_release_workflow.ReleaseWorkflowTest.test_remote_lightweight_and_annotated_tags_must_still_match)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 35, in setUp
+    self.git("init", "-b", "main")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 53, in git
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         "-c", "tag.gpgsign=false", "-C", str(self.root), *args],
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        check=True, capture_output=True, text=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).stdout.strip()
+    ^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-C', '/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/dist/observation-journal/.scratch-sn3c2c_m/tmppwt16akz', 'init', '-b', 'main']' returned non-zero exit status 69.
+
+======================================================================
+ERROR: test_tag_moved_after_resolution_blocks_packaging (test_release_workflow.ReleaseWorkflowTest.test_tag_moved_after_resolution_blocks_packaging)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 35, in setUp
+    self.git("init", "-b", "main")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 53, in git
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         "-c", "tag.gpgsign=false", "-C", str(self.root), *args],
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        check=True, capture_output=True, text=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).stdout.strip()
+    ^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-C', '/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/dist/observation-journal/.scratch-sn3c2c_m/tmp2cylb826', 'init', '-b', 'main']' returned non-zero exit status 69.
+
+======================================================================
+ERROR: test_tag_must_point_to_a_commit_and_main_must_exist (test_release_workflow.ReleaseWorkflowTest.test_tag_must_point_to_a_commit_and_main_must_exist)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 35, in setUp
+    self.git("init", "-b", "main")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 53, in git
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         "-c", "tag.gpgsign=false", "-C", str(self.root), *args],
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        check=True, capture_output=True, text=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).stdout.strip()
+    ^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-C', '/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/dist/observation-journal/.scratch-sn3c2c_m/tmp7si6cpgh', 'init', '-b', 'main']' returned non-zero exit status 69.
+
+======================================================================
+ERROR: test_unmerged_or_missing_tag_cannot_publish_a_commit (test_release_workflow.ReleaseWorkflowTest.test_unmerged_or_missing_tag_cannot_publish_a_commit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 35, in setUp
+    self.git("init", "-b", "main")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/scripts/test_release_workflow.py", line 53, in git
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         "-c", "tag.gpgsign=false", "-C", str(self.root), *args],
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        check=True, capture_output=True, text=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).stdout.strip()
+    ^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-C', '/Users/ody/.errand/jobs/01M2M50DMJXH3EZQ7QKAH4JMZZ/workspace/dist/observation-journal/.scratch-sn3c2c_m/tmpm0csxpi0', 'init', '-b', 'main']' returned non-zero exit status 69.
+
+----------------------------------------------------------------------
+Ran 61 tests in 3.369s
+
+FAILED (errors=9)
+Notarization accepted for darwin_arm64; submission 00000000-0000-0000-0000-000000000002

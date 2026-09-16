@@ -104,6 +104,19 @@ cold controls still have unresolved differences. Actual-caller controls and
 identical-code negative controls are now retained alongside those signals;
 neither supports a blanket regression-free claim.
 
+The [observation-only journal comparison](OBSERVATION_JOURNAL.md) isolates changed
+observation publication from persisted derived-tree loading. It shares framed
+storage and rebuilds the selected index. Native comparisons include frozen and
+same-binary replacement controls, actual byte/record compaction and recovery after
+real history. Writes shrink sharply, but complete preparation remains mixed:
+the 50K cumulative six-edit sequence (journal depths 0–5) has median paired
+ratios of 0.986 on APFS and 0.935 on Btrfs against the same-binary control,
+while byte compaction is 12.0% and 14.5% slower.
+The APFS edit effect is unresolved. Retain this as experimental evidence;
+production adoption remains open. Next measure independently balanced fixed
+history depths, near-full append and a complete compaction cycle, while profiling
+loading, replay and publication before selecting one further storage candidate.
+
 Keep the current content-addressed model. Selection policy determines eligible
 paths, a snapshot describes their state, and the content store resolves their
 bodies. Changing the snapshot representation and changing the unit of body
@@ -126,9 +139,10 @@ transfer are separate decisions. Neither requires abandoning transactional apply
    changed metadata and bound history/recovery work. Define versioned identity,
    invalidation, cleanup and crash recovery together. Cached observations never
    replace selection checks or proof that the filesystem still matches them.
-   Observation and derived-index checkpoint prototypes have native measurements;
-   the current derived storage candidates are rejected on complete preparation
-   cost. Production adoption remains open.
+   Observation replacement, derived-index checkpoints and observation-only journals
+   have native measurements. Derived storage candidates are rejected on complete
+   preparation cost; observation-only journals have workload-dependent results.
+   Production adoption remains open, pending profiling and the adoption gates below.
 4. **Optimize large changed files.** Compare whole-file transfer, basis-dependent
    rolling deltas, and content-defined chunks under the same content interface.
    Include cold destinations, shifted insertions, incompressible data, bandwidth
@@ -187,13 +201,25 @@ not sufficient evidence for migrating all of them.
   Small-fixture results remain mixed. Review follow-ups clarify experimental
   receipts and reader/writer behavior, and cover byte-boundary publication,
   damaged middle frames and exact restored-tree diffs. Archived timings stay frozen.
-  Next measure an observation-only journal against observation replacement, including
-  byte-triggered compaction and recovery with prior journal history. Profile load
-  costs, then compare compact encoding and parallel semantic validation separately.
+  The [observation-only journal comparison](OBSERVATION_JOURNAL.md) now measures
+  those paths against frozen and current observation replacement, including actual
+  byte-triggered compaction and recovery with prior journal history. Sparse-edit
+  writes shrink substantially, but complete results remain mixed and byte compaction
+  regresses on both hosts. Ordinary edits/batches cover cumulative depths 0–5,
+  coupled to execution order, not steady state. Review fixes retain both paired
+  baselines, enforce ordinary receipt/history checks, and cover equal-sized stale
+  generations with shared framed-store regressions.
+  Next measure fixed depths 0/8/31 with independently balanced order, near-full
+  append and a full compaction cycle. Probe selection variation and interference
+  from preceding writers before attributing it to writeback. If needed, add a
+  framed observation replacement control to isolate codec/framing costs.
+  Profile load/replay/publication costs, then select one independently measured
+  candidate, such as compact encoding or parallel
+  semantic validation, where the profiles support it.
   The current restore rehashes serially; its lower index phase partly moves work
   into loading. Follow with exact-generation-check and shared-change-scan candidates
   while preserving stale-writer, corruption and intermediate-state validation.
-  Storage-mode cleanup belongs with the next additional variant. Retain the selected
+  Storage-mode cleanup is included with the observation-journal variant. Retain the selected
   in-memory representation, production caller path and full adoption gates.
   The observation control checks its 64 MiB payload limit after encoding; the derived
   candidate limits its output buffer while encoding. Pre-encoding admission remains

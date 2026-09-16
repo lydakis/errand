@@ -31,7 +31,7 @@ type Result struct {
 	// it is the loaded file size on a hit. Failed writes may report partial bytes.
 	CheckpointBytes int64
 	Written         bool
-	// ReplacedBase reports replacement of an existing derived base, including
+	// ReplacedBase reports replacement of an existing framed base, including
 	// ordinary derived-mode rewrites, journal compaction and suffix recovery.
 	ReplacedBase bool
 	// JournalRecordsLoaded counts transactions replayed before publication.
@@ -107,20 +107,19 @@ func PrepareCurrent(ctx context.Context, root, cache string, opts snapshot.Selec
 // publication with the observation-only control. Neither is a production cache.
 func PrepareDerived(ctx context.Context, root, cache string, opts snapshot.SelectOptions, journal bool) (Result, error) {
 	config := defaultPreparation(false)
-	config.derived, config.journal = true, journal
+	config.store = derivedStore(journal)
 	return prepare(ctx, root, cache, opts, config)
 }
 
 type preparation struct {
-	direct           bool
-	derived, journal bool
-	entryLimit       int
-	identify         func(string, proto.SelectionPolicy, snapshot.SelectOptions) (identity, error)
-	build            func(context.Context, string, snapshot.BuildPaths, snapshot.ObservationOptions) (*snapshot.ObservedBuild, error)
+	store      checkpointStorage
+	entryLimit int
+	identify   func(string, proto.SelectionPolicy, snapshot.SelectOptions) (identity, error)
+	build      func(context.Context, string, snapshot.BuildPaths, snapshot.ObservationOptions) (*snapshot.ObservedBuild, error)
 }
 
 func defaultPreparation(direct bool) preparation {
-	return preparation{direct: direct, entryLimit: maxEntries, identify: checkoutIdentity, build: snapshot.BuildObservedContext}
+	return preparation{store: observationStore{direct: direct}, entryLimit: maxEntries, identify: checkoutIdentity, build: snapshot.BuildObservedContext}
 }
 
 // Per-call dependencies let tests exercise admission boundaries and schedule
@@ -194,11 +193,7 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 	case !collect:
 		r.CacheStatus = "oversized"
 	default:
-		if config.derived {
-			prior, r.CacheStatus, r.CheckpointBytes, err = readDerived(ctx, cache, key)
-		} else {
-			prior, r.CacheStatus, r.CheckpointBytes, err = readCheckpoint(ctx, cache, key, !config.direct)
-		}
+		prior, r.CacheStatus, r.CheckpointBytes, err = config.store.load(ctx, cache, key)
 	}
 	r.Phases.Load = time.Since(start)
 	if err != nil {
@@ -222,7 +217,7 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 	writable := collect && (r.CacheStatus != "hit" || verified.Changed())
 	r.Phases.Hash = time.Since(start)
 	start = time.Now()
-	if (r.CacheStatus == "hit" || r.CacheStatus == "recovered") && !config.direct {
+	if prior.state != nil {
 		r.State = prior.state
 		err = r.State.PrepareUpdates(ctx)
 		if err == nil {
@@ -257,11 +252,7 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 	r.Phases.Verify = time.Since(start)
 	if writable {
 		start = time.Now()
-		if config.derived {
-			r.CheckpointBytes, r.ReplacedBase, err = writeDerived(ctx, cache, key, verified, r.State, prior, config.journal)
-		} else {
-			r.CheckpointBytes, err = writeCheckpoint(ctx, cache, key, verified)
-		}
+		r.CheckpointBytes, r.ReplacedBase, err = config.store.save(ctx, cache, key, verified, r.State, prior)
 		r.Phases.Save = time.Since(start)
 		if err != nil {
 			if ctx.Err() != nil {

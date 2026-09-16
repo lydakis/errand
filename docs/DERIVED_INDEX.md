@@ -203,11 +203,12 @@ part of the hashing. The smaller index phase alone is therefore not a measure of
 CPU work eliminated, and this comparison does not establish that another derived
 representation cannot win.
 
-The next bounded comparison prioritizes an **observation-only journal** that
-rebuilds the selected index. This isolates changed-record writes from the cost of
-carrying the derived image. Keep a frozen observation-replacement control and
-measure complete preparation, byte-triggered and record-triggered compaction,
-and recovery after actual journal history. The current timed recovery case starts
+The subsequent [observation-only journal comparison](OBSERVATION_JOURNAL.md) tests
+a journal that rebuilds the selected index. This isolates changed-record writes from the cost of
+carrying the derived image. It retains frozen and current observation-replacement
+controls and measures complete preparation, byte-triggered and record-triggered
+compaction, and recovery after actual journal history. Results remain mixed and
+do not enable a production cache. This earlier comparison's timed recovery case starts
 from a base without journal records; correctness coverage also exercises recovery
 after complete transactions and a damaged middle frame.
 
@@ -237,10 +238,11 @@ any disk cache becomes a caller default. Large-file transfer stays step 4.
   prefix recovery when a middle transaction is corrupt or truncated. The byte
   boundary tests use synthetic accounting with real publication and restart checks,
   rather than allocating 64 MiB cache fixtures.
-- Next slice: observation-only journal first, then separately measured compact
-  encoding and parallel validation after load profiling. Cheaper generation checks,
-  shared change scanning and storage-mode cleanup belong with their respective
-  measured candidates, not a rewrite of this completed comparison.
+- Completed in the subsequent observation-journal slice: observation-only journal,
+  storage strategy cleanup, byte-compaction timing and recovery with real history.
+  Next profile load/replay/publication before independently comparing compact
+  encoding, parallel validation, cheaper exact generation checks or shared change
+  scanning. Keep this completed comparison's evidence frozen.
 - Deferred: a separate indexed-access versus bulk-copy encoding comparison, and
   native-stamp/cache layout experiments. The storage comparison preserves exact
   stamp equality and avoids mixing either independent variable into its results.

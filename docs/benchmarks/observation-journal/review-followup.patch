@@ -1,0 +1,811 @@
+--- a/experiments/snapshotcheckpoint/derived_test.go
++++ b/experiments/snapshotcheckpoint/derived_test.go
+@@ -3,6 +3,7 @@
+ package snapshotcheckpoint
+ 
+ import (
++	"bytes"
+ 	"context"
+ 	"encoding/binary"
+ 	"fmt"
+@@ -13,18 +14,13 @@
+ 	"github.com/lydakis/errand/internal/snapshot"
+ )
+ 
+-func derivedOracle(t *testing.T, root, cache string, journal bool) Result {
+-	t.Helper()
+-	return framedOracle(t, root, cache, derivedStore(journal))
+-}
+-
+ func framedOracle(t *testing.T, root, cache string, store framedStore) Result {
+ 	t.Helper()
+ 	config := defaultPreparation(false)
+ 	config.store = store
+ 	got, err := prepare(t.Context(), root, cache, snapshot.SelectOptions{}, config)
+ 	if err != nil || got.CacheError != "" {
+-		t.Fatalf("derived: %+v %v", got, err)
++		t.Fatalf("framed checkpoint: %+v %v", got, err)
+ 	}
+ 	want, err := Cold(t.Context(), root, snapshot.SelectOptions{})
+ 	if err != nil {
+@@ -41,15 +37,16 @@
+ 	return got
+ }
+ 
+-func TestDerivedRestartJournalCompactionAndRecovery(t *testing.T) {
+-	for _, journal := range []bool{false, true} {
+-		t.Run(fmt.Sprint(journal), func(t *testing.T) {
+-			root, cache := fixture(t)
+-			seed := derivedOracle(t, root, cache, journal)
++func TestFramedRestartJournalCompactionAndRecovery(t *testing.T) {
++	for _, store := range []framedStore{derivedStore(false), derivedStore(true), observationJournalStore()} {
++		t.Run(fmt.Sprintf("%s/journal=%v", store.name, store.journal), func(t *testing.T) {
++			journal := store.journal
++			root, cache := fixture(t)
++			seed := framedOracle(t, root, cache, store)
+ 			if !seed.Written || seed.Hashed != 3 {
+ 				t.Fatalf("seed %+v", seed)
+ 			}
+-			warm := derivedOracle(t, root, cache, journal)
++			warm := framedOracle(t, root, cache, store)
+ 			if warm.Written || warm.Reused != 3 {
+ 				t.Fatalf("warm %+v", warm)
+ 			}
+@@ -57,7 +54,7 @@
+ 				if err := os.WriteFile(filepath.Join(root, "a"), []byte(fmt.Sprint(i)), 0600); err != nil {
+ 					t.Fatal(err)
+ 				}
+-				got := derivedOracle(t, root, cache, journal)
++				got := framedOracle(t, root, cache, store)
+ 				if !got.Written || got.Hashed != 1 || got.Reused != 2 {
+ 					t.Fatalf("edit %+v", got)
+ 				}
+@@ -78,19 +75,19 @@
+ 			if err := os.Symlink("../b", filepath.Join(root, "nested", "link")); err != nil {
+ 				t.Fatal(err)
+ 			}
+-			derivedOracle(t, root, cache, journal)
++			framedOracle(t, root, cache, store)
+ 			// A torn trailing transaction cannot hide the last verified generation.
+-			f, err := os.OpenFile(filepath.Join(cache, "index"), os.O_WRONLY|os.O_APPEND, 0600)
++			f, err := os.OpenFile(filepath.Join(cache, store.name), os.O_WRONLY|os.O_APPEND, 0600)
+ 			if err != nil {
+ 				t.Fatal(err)
+ 			}
+ 			f.Write([]byte("partial frame"))
+ 			f.Close()
+-			got := derivedOracle(t, root, cache, journal)
++			got := framedOracle(t, root, cache, store)
+ 			if got.CacheStatus != "recovered" || !got.ReplacedBase || !got.Written {
+ 				t.Fatalf("recovery %+v", got)
+ 			}
+-			got = derivedOracle(t, root, cache, journal)
++			got = framedOracle(t, root, cache, store)
+ 			if got.CacheStatus != "hit" || got.Written {
+ 				t.Fatalf("recovered warm %+v", got)
+ 			}
+@@ -98,121 +95,136 @@
+ 	}
+ }
+ 
+-func TestDerivedLargeTreeAndStaleWriter(t *testing.T) {
+-	root, cache := fixture(t)
+-	root, _ = filepath.EvalSymlinks(root)
+-	for i := 0; i < 4200; i++ {
+-		if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("f%05d", i)), []byte("x"), 0600); err != nil {
+-			t.Fatal(err)
+-		}
+-	}
+-	derivedOracle(t, root, cache, true)
+-	if got := derivedOracle(t, root, cache, true); got.CacheStatus != "hit" || got.Hashed != 0 {
+-		t.Fatalf("large restart: %+v", got)
+-	}
+-	_, _, policy, _, err := snapshot.SelectFilesGuarded(root, snapshot.SelectOptions{})
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	key, err := checkoutIdentity(root, policy, snapshot.SelectOptions{})
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	old, status, _, err := derivedStore(true).load(t.Context(), cache, key)
+-	if err != nil || status != "hit" {
+-		t.Fatalf("load %s %v", status, err)
+-	}
+-	if err := os.WriteFile(filepath.Join(root, "f00000"), []byte("y"), 0600); err != nil {
+-		t.Fatal(err)
+-	}
+-	got := derivedOracle(t, root, cache, true)
+-	if got.Hashed != 1 || got.CheckpointBytes >= 10000 {
+-		t.Fatalf("not a small journal append: %+v", got)
+-	}
+-	verified := verifiedFixture(t, root)
+-	before, _ := os.ReadFile(filepath.Join(cache, "index"))
+-	if _, _, err := derivedStore(true).save(t.Context(), cache, key, verified, got.State, old); err == nil {
+-		t.Fatal("stale writer appended")
+-	}
+-	after, _ := os.ReadFile(filepath.Join(cache, "index"))
+-	if string(before) != string(after) {
+-		t.Fatal("stale writer changed checkpoint")
+-	}
+-	ctx, cancel := context.WithCancel(t.Context())
+-	cancel()
+-	if _, err := PrepareDerived(ctx, root, cache, snapshot.SelectOptions{}, true); err != context.Canceled {
+-		t.Fatal(err)
+-	}
+-	derivedOracle(t, root, cache, true)
+-}
+-
+-func TestDerivedRejectsInvalidPublicationAndCorruptBase(t *testing.T) {
+-	root, cache := fixture(t)
+-	got := derivedOracle(t, root, cache, true)
+-	if _, _, err := derivedStore(false).save(t.Context(), cache, identity{Root: root}, snapshot.VerifiedObservations{}, got.State, loadedCheckpoint{}); err == nil {
+-		t.Fatal("accepted invalid batch")
+-	}
+-	file := filepath.Join(cache, "index")
+-	data, err := os.ReadFile(file)
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	data[len(data)/2] ^= 1
+-	if err := os.WriteFile(file, data, 0600); err != nil {
+-		t.Fatal(err)
+-	}
+-	got = derivedOracle(t, root, cache, true)
+-	if got.CacheStatus != "corrupt" || got.Reused != 0 {
+-		t.Fatalf("corruption reused: %+v", got)
+-	}
+-}
+-
+-func TestDerivedBusyCacheStillReturnsFreshSnapshot(t *testing.T) {
+-	root, cache := fixture(t)
+-	derivedOracle(t, root, cache, true)
+-	lock, err := derivedStore(true).lock(cache, true)
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	defer unlockDerived(lock)
+-	got, err := PrepareDerived(t.Context(), root, cache, snapshot.SelectOptions{}, true)
+-	if err != nil || got.State == nil || got.Reused != 0 || got.Hashed != 3 || got.Written || got.CacheError == "" {
+-		t.Fatalf("busy cache blocked fresh result: %+v %v", got, err)
++func TestFramedLargeTreeAndStaleWriter(t *testing.T) {
++	for _, store := range []framedStore{derivedStore(true), observationJournalStore()} {
++		t.Run(store.name, func(t *testing.T) {
++			root, cache := fixture(t)
++			root, _ = filepath.EvalSymlinks(root)
++			for i := 0; i < 4200; i++ {
++				if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("f%05d", i)), []byte("x"), 0600); err != nil {
++					t.Fatal(err)
++				}
++			}
++			framedOracle(t, root, cache, store)
++			if got := framedOracle(t, root, cache, store); got.CacheStatus != "hit" || got.Hashed != 0 {
++				t.Fatalf("large restart: %+v", got)
++			}
++			_, _, policy, _, err := snapshot.SelectFilesGuarded(root, snapshot.SelectOptions{})
++			if err != nil {
++				t.Fatal(err)
++			}
++			key, err := checkoutIdentity(root, policy, snapshot.SelectOptions{})
++			if err != nil {
++				t.Fatal(err)
++			}
++			old, status, _, err := store.load(t.Context(), cache, key)
++			if err != nil || status != "hit" {
++				t.Fatalf("load %s %v", status, err)
++			}
++			if err := os.WriteFile(filepath.Join(root, "f00000"), []byte("y"), 0600); err != nil {
++				t.Fatal(err)
++			}
++			got := framedOracle(t, root, cache, store)
++			if got.Hashed != 1 || got.CheckpointBytes >= 10000 {
++				t.Fatalf("not a small journal append: %+v", got)
++			}
++			verified := verifiedFixture(t, root)
++			before, _ := os.ReadFile(filepath.Join(cache, store.name))
++			if _, _, err := store.save(t.Context(), cache, key, verified, got.State, old); err == nil {
++				t.Fatal("stale writer appended")
++			}
++			after, _ := os.ReadFile(filepath.Join(cache, store.name))
++			if string(before) != string(after) {
++				t.Fatal("stale writer changed checkpoint")
++			}
++			ctx, cancel := context.WithCancel(t.Context())
++			cancel()
++			config := defaultPreparation(false)
++			config.store = store
++			if _, err := prepare(ctx, root, cache, snapshot.SelectOptions{}, config); err != context.Canceled {
++				t.Fatal(err)
++			}
++			framedOracle(t, root, cache, store)
++		})
++	}
++}
++
++func TestFramedRejectsInvalidPublicationAndCorruptBase(t *testing.T) {
++	for _, store := range []framedStore{derivedStore(true), observationJournalStore()} {
++		t.Run(store.name, func(t *testing.T) {
++			root, cache := fixture(t)
++			got := framedOracle(t, root, cache, store)
++			if _, _, err := store.save(t.Context(), cache, identity{Root: root}, snapshot.VerifiedObservations{}, got.State, loadedCheckpoint{}); err == nil {
++				t.Fatal("accepted invalid batch")
++			}
++			file := filepath.Join(cache, store.name)
++			data, err := os.ReadFile(file)
++			if err != nil {
++				t.Fatal(err)
++			}
++			data[len(data)/2] ^= 1
++			if err := os.WriteFile(file, data, 0600); err != nil {
++				t.Fatal(err)
++			}
++			got = framedOracle(t, root, cache, store)
++			if got.CacheStatus != "corrupt" || got.Reused != 0 {
++				t.Fatalf("corruption reused: %+v", got)
++			}
++		})
++	}
++}
++
++func TestFramedBusyCacheStillReturnsFreshSnapshot(t *testing.T) {
++	for _, store := range []framedStore{derivedStore(true), observationJournalStore()} {
++		t.Run(store.name, func(t *testing.T) {
++			root, cache := fixture(t)
++			framedOracle(t, root, cache, store)
++			lock, err := store.lock(cache, true)
++			if err != nil {
++				t.Fatal(err)
++			}
++			defer unlockDerived(lock)
++			config := defaultPreparation(false)
++			config.store = store
++			got, err := prepare(t.Context(), root, cache, snapshot.SelectOptions{}, config)
++			if err != nil || got.State == nil || got.Reused != 0 || got.Hashed != 3 || got.Written || got.CacheError == "" {
++				t.Fatalf("busy cache blocked fresh result: %+v %v", got, err)
++			}
++		})
+ 	}
+ }
+ 
+ func TestJournalCoalescesObservationEditsAcrossRestarts(t *testing.T) {
+-	root, cache := fixture(t)
+-	derivedOracle(t, root, cache, true)
+-	// Both a preexisting entry and a journal-only entry are deleted, recreated
+-	// with different metadata, and deleted again before any compaction.
+-	for _, name := range []string{"a", "new"} {
+-		file := filepath.Join(root, name)
+-		for step := 0; step < 6; step++ {
+-			var err error
+-			if step%2 == 0 {
+-				err = os.WriteFile(file, []byte(fmt.Sprint(name, step)), 0600)
+-			} else {
+-				err = os.Remove(file)
+-			}
+-			if err != nil {
+-				t.Fatal(err)
+-			}
+-			got := derivedOracle(t, root, cache, true)
+-			if got.CacheStatus != "hit" || !got.Written || got.ReplacedBase {
+-				t.Fatalf("unexpected rebuild: %+v", got)
+-			}
+-		}
+-	}
+-	got := derivedOracle(t, root, cache, true)
+-	if got.Written || got.Hashed != 0 {
+-		t.Fatalf("replayed state was not reusable: %+v", got)
+-	}
+-}
+-
+-func loadDerivedFixture(t *testing.T, root, cache string) (loadedCheckpoint, identity) {
+-	t.Helper()
+-	return loadFramedFixture(t, root, cache, derivedStore(true))
++	for _, store := range []framedStore{derivedStore(true), observationJournalStore()} {
++		t.Run(store.name, func(t *testing.T) {
++			root, cache := fixture(t)
++			framedOracle(t, root, cache, store)
++			// Both a preexisting entry and a journal-only entry are deleted, recreated
++			// with different metadata, and deleted again before any compaction.
++			for _, name := range []string{"a", "new"} {
++				file := filepath.Join(root, name)
++				for step := 0; step < 6; step++ {
++					var err error
++					if step%2 == 0 {
++						err = os.WriteFile(file, []byte(fmt.Sprint(name, step)), 0600)
++					} else {
++						err = os.Remove(file)
++					}
++					if err != nil {
++						t.Fatal(err)
++					}
++					got := framedOracle(t, root, cache, store)
++					if got.CacheStatus != "hit" || !got.Written || got.ReplacedBase {
++						t.Fatalf("unexpected rebuild: %+v", got)
++					}
++				}
++			}
++			got := framedOracle(t, root, cache, store)
++			if got.Written || got.Hashed != 0 {
++				t.Fatalf("replayed state was not reusable: %+v", got)
++			}
++		})
++	}
+ }
+ 
+ func loadFramedFixture(t *testing.T, root, cache string, store framedStore) (loadedCheckpoint, identity) {
+@@ -283,7 +295,6 @@
+ 					})
+ 				}
+ 			}
+-
+ 		})
+ 	}
+ }
+@@ -340,7 +351,52 @@
+ 					}
+ 				})
+ 			}
+-
+-		})
+-	}
+-}
++		})
++	}
++}
++
++// Equal length is not a generation identity. Collect two real verified base
++// publications of the same size, allowing native stamp encoding widths to vary.
++func TestFramedRejectsEqualSizedDifferentGeneration(t *testing.T) {
++	for _, store := range []framedStore{derivedStore(true), observationJournalStore()} {
++		t.Run(store.name, func(t *testing.T) {
++			root, cache := fixture(t)
++			replacement := store
++			replacement.journal = false
++			seen := make(map[int]loadedCheckpoint)
++			for i := 0; i < 16; i++ {
++				if err := os.WriteFile(filepath.Join(root, "a"), []byte{byte('A' + i)}, 0600); err != nil {
++					t.Fatal(err)
++				}
++				current := framedOracle(t, root, cache, replacement)
++				loaded, key := loadFramedFixture(t, root, cache, store)
++				old, found := seen[loaded.diskSize]
++				if !found {
++					seen[loaded.diskSize] = loaded
++					continue
++				}
++				if old.diskDigest == loaded.diskDigest {
++					t.Fatal("fixture did not change generation")
++				}
++				file := filepath.Join(cache, store.name)
++				before, err := os.ReadFile(file)
++				if err != nil {
++					t.Fatal(err)
++				}
++				verified := verifiedFixture(t, key.Root)
++				if _, _, err := store.save(t.Context(), cache, key, verified, current.State, old); err == nil {
++					t.Fatal("accepted stale append after equal-sized replacement")
++				}
++				after, err := os.ReadFile(file)
++				if err != nil || !bytes.Equal(before, after) {
++					t.Fatal("stale append changed cache")
++				}
++				if got := framedOracle(t, root, cache, store); got.Written || got.Hashed != 0 {
++					t.Fatalf("replacement no longer reusable: %+v", got)
++				}
++				return
++			}
++			t.Fatal("could not construct equal-sized valid generations")
++		})
++	}
++}
+--- a/experiments/snapshotcheckpoint/observation_journal_test.go
++++ b/experiments/snapshotcheckpoint/observation_journal_test.go
+@@ -15,7 +15,7 @@
+ 	"github.com/lydakis/errand/internal/snapshot"
+ )
+ 
+-func TestObservationJournalRebuildsIndexAndRejectsStaleAppend(t *testing.T) {
++func TestObservationJournalFormatAndStampOnlyReplay(t *testing.T) {
+ 	root, cache := fixture(t)
+ 	s := observationJournalStore()
+ 	for i := 0; i < 4200; i++ {
+@@ -47,18 +47,7 @@
+ 	if got.Hashed != 1 || got.CheckpointBytes >= 10000 || got.ReplacedBase {
+ 		t.Fatalf("append: %+v", got)
+ 	}
+-	before, err := os.ReadFile(filepath.Join(cache, s.name))
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+ 	verified := verifiedFixture(t, key.Root)
+-	if _, _, err := s.save(t.Context(), cache, key, verified, got.State, old); err == nil {
+-		t.Fatal("accepted stale append")
+-	}
+-	after, err := os.ReadFile(filepath.Join(cache, s.name))
+-	if err != nil || !bytes.Equal(before, after) {
+-		t.Fatal("stale append changed cache")
+-	}
+ 	// A stamp-only edit must survive the journal even though tree metadata is equal.
+ 	if err := os.WriteFile(filepath.Join(root, "a"), []byte("new body"), 0600); err != nil {
+ 		t.Fatal(err)
+@@ -84,42 +73,3 @@
+ 		t.Fatal(err)
+ 	}
+ }
+-
+-func TestObservationJournalCompactsStructuralHistory(t *testing.T) {
+-	root, cache := fixture(t)
+-	s := observationJournalStore()
+-	framedOracle(t, root, cache, s)
+-	// Delete/recreate a journal-only entry and an entry from the base.
+-	for i := 0; i <= maxJournalRecords; i++ {
+-		name := "a"
+-		if i%4 < 2 {
+-			name = "new"
+-		}
+-		file := filepath.Join(root, name)
+-		var err error
+-		if i%2 == 0 {
+-			err = os.WriteFile(file, []byte(fmt.Sprint(i)), 0600)
+-		} else {
+-			err = os.Remove(file)
+-		}
+-		if err != nil {
+-			t.Fatal(err)
+-		}
+-		got := framedOracle(t, root, cache, s)
+-		if got.JournalRecordsLoaded != i || got.ReplacedBase != (i == maxJournalRecords) {
+-			t.Fatalf("history: %+v", got)
+-		}
+-	}
+-	lock, err := s.lock(cache, true)
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	got, err := PrepareObservationJournal(t.Context(), root, cache, snapshot.SelectOptions{})
+-	unlockDerived(lock)
+-	if err != nil || got.Reused != 0 || got.Written || got.CacheError == "" {
+-		t.Fatalf("busy: %+v %v", got, err)
+-	}
+-	if got := framedOracle(t, root, cache, s); got.Hashed != 0 || got.Written {
+-		t.Fatalf("post-compaction reuse: %+v", got)
+-	}
+-}
+--- a/scripts/benchmark_derived_index.py
++++ b/scripts/benchmark_derived_index.py
+@@ -35,15 +35,21 @@
+             raise RuntimeError("Timed sample did not replay the full journal before replacement")
+ 
+ 
+-def summarize(samples, variants=VARIANTS):
++def summarize(samples, variants=VARIANTS, baseline_variant="checkpoint"):
+     rows = []
+     for fixture, scenario in sorted({(s["fixture"], s["scenario"]) for s in samples}):
+         selected = [s for s in samples if (s["fixture"], s["scenario"]) == (fixture, scenario)]
+-        baseline = {s["round"]: s for s in selected if s["variant"] == "checkpoint"}
++        pairs = {(s["variant"], s["round"]): s for s in selected}
++        if len(pairs) != len(selected):
++            raise ValueError(f"Duplicate pairs in {fixture}/{scenario}")
++        rounds = {s["round"] for s in selected}
++        if any((v, r) not in pairs for v in (*variants, baseline_variant) for r in rounds):
++            raise ValueError(f"Missing pairs in {fixture}/{scenario}")
++        baseline = {r: pairs[baseline_variant, r] for r in rounds}
+         for variant in variants:
+             group = [s for s in selected if s["variant"] == variant]
+             ratios = [s["Total"]/baseline[s["round"]]["Total"] for s in group]
+-            rows.append(dict(fixture=fixture, scenario=scenario, variant=variant,
++            rows.append(dict(fixture=fixture, scenario=scenario, variant=variant, baseline=baseline_variant,
+                              median_ms=statistics.median(s["Total"] for s in group)/1e6,
+                              paired_ratio=statistics.median(ratios),
+                              ratio_range=[min(ratios), max(ratios)], wins=sum(r < 1 for r in ratios),
+--- a/scripts/benchmark_observation_journal.py
++++ b/scripts/benchmark_observation_journal.py
+@@ -1,6 +1,7 @@
+ #!/usr/bin/env python3
+ """Compare frozen/current observation replacement with an observation-only journal."""
+ import argparse
++import struct
+ import hashlib
+ import json
+ import os
+@@ -17,9 +18,46 @@
+ CONTROL_ARCHIVE = "428f18dfa11841cb0acdee10b97ce959306d8fcc90b57b1b451d1f0b9dffd98a"
+ VARIANTS = ("checkpoint", "replacement", "observation-journal")
+ JOURNAL_LIMIT = 8 << 20
+-
+-
+-def validate_sample(sample, files, edits, scenario, variant):
++FILE_LIMIT = 64 << 20
++RECORD_LIMIT = 32
++MAGIC = b"ERRAND-OBS-JOURNAL-1\n"
++
++
++def journal_layout(path):
++    """Read framing outside timers, independently of the probe's receipts."""
++    size = path.stat().st_size
++    ends = []
++    with path.open("rb") as stream:
++        if stream.read(len(MAGIC)) != MAGIC:
++            raise RuntimeError("Unexpected observation journal format")
++        while stream.tell() < size:
++            length = stream.read(8)
++            if len(length) != 8:
++                raise RuntimeError("Incomplete journal frame")
++            stream.seek(struct.unpack("<Q", length)[0] + 64, 1)
++            if stream.tell() > size:
++                raise RuntimeError("Incomplete journal payload")
++            ends.append(stream.tell())
++    if not ends:
++        raise RuntimeError("Missing journal base")
++    return dict(records=len(ends)-1, base_bytes=ends[0], cache_bytes=size,
++                journal_bytes=size-ends[0])
++
++
++def append_budget(edits):
++    # An explicit workload ceiling, checked after every ordinary append. Reset
++    # untimed before either byte limit becomes ambiguous; dedicated cases time
++    # byte compaction. This is not an estimate used by the storage implementation.
++    return 4096 + 2048 * edits
++
++
++def needs_reseed(before, edits):
++    return (before["records"] < RECORD_LIMIT and
++            (before["journal_bytes"] + append_budget(edits) > JOURNAL_LIMIT or
++             before["cache_bytes"] + append_budget(edits) > FILE_LIMIT))
++
++
++def validate_sample(sample, files, edits, scenario, variant, before=None, after=None):
+     result = sample["Result"]
+     journal = variant == "observation-journal"
+     miss, recovery = scenario == "miss", journal and scenario == "recovery"
+@@ -28,6 +66,26 @@
+                     Written=miss or edits != 0 or recovery, CacheError="",
+                     CacheStatus="missing" if miss else "recovered" if recovery else "hit",
+                     ReplacedBase=replaced)
++    if journal and scenario in ("edit", "batch"):
++        if before is None or after is None or needs_reseed(before, edits):
++            raise RuntimeError("Ordinary sample needs bounded, independently recorded history")
++        records = before["records"]
++        if not 0 <= records <= RECORD_LIMIT:
++            raise RuntimeError("Unexpected journal depth")
++        expected["JournalRecordsLoaded"] = records
++        expected["ReplacedBase"] = records == RECORD_LIMIT
++        written = result.get("CheckpointBytes", 0)
++        if records == RECORD_LIMIT:
++            valid = after["records"] == 0 and written == after["cache_bytes"]
++        else:
++            valid = (after["records"] == records + 1 and
++                     after["base_bytes"] == before["base_bytes"] and
++                     0 < written <= append_budget(edits) and
++                     written == after["cache_bytes"] - before["cache_bytes"] and
++                     after["journal_bytes"] <= JOURNAL_LIMIT and
++                     after["cache_bytes"] <= FILE_LIMIT)
++        if not valid:
++            raise RuntimeError("Publication receipt does not match journal growth or compaction")
+     if journal and scenario in ("records", "bytes", "recovery"):
+         expected["JournalRecordsLoaded"] = {"records": 32, "bytes": 1, "recovery": 4}[scenario]
+     if any(result.get(k) != v for k, v in expected.items()):
+@@ -129,12 +187,12 @@
+                     if scenario in ("records", "bytes", "recovery"):
+                         v = "observation-journal"
+                         cache_file(v).unlink()
+-                        invoke(v, out/"journal-base.json")
++                        invoke(v, out/f"base-{label}-{scenario}-{number}.json")
+                         base_bytes = cache_file(v).stat().st_size
+                         steps, fill_edits = {"records": (32, 1), "bytes": (1, 30000), "recovery": (4, 1)}[scenario]
+                         for step in range(steps):
+                             mutate(f"fill-{number}-{step}", fill_edits)
+-                            fill = invoke(v, out/"journal-fill.json")
++                            fill = invoke(v, out/f"fill-{label}-{scenario}-{number}-{step}.json")
+                             result = fill["Result"]
+                             if result["CacheError"] or result["CacheStatus"] != "hit" or not result["Written"] or result["ReplacedBase"] or result["JournalRecordsLoaded"] != step:
+                                 raise RuntimeError(f"Unexpected journal history during setup: {result}")
+@@ -143,17 +201,28 @@
+                         if scenario == "bytes" and not JOURNAL_LIMIT/2 < setup["journal_bytes"] < JOURNAL_LIMIT:
+                             raise RuntimeError(f"Fixture does not straddle journal byte limit: {setup}")
+                         for v in VARIANTS[:2]:
+-                            invoke(v, out/"control-catchup.json")
++                            invoke(v, out/f"catchup-{label}-{scenario}-{number}-{v}.json")
+                     if scenario == "recovery":
+                         with cache_file("observation-journal").open("ab") as f:
+                             f.write(b"interrupted transaction")
++                    before = None
++                    if scenario in ("edit", "batch"):
++                        v = "observation-journal"
++                        before = journal_layout(cache_file(v))
++                        if needs_reseed(before, edits):
++                            cache_file(v).unlink()
++                            invoke(v, out/f"reseed-{label}-{scenario}-{number}.json")
++                            before = journal_layout(cache_file(v))
++                            setup["byte_budget_reseed"] = True
++                        setup["prior_history"] = before
+                     mutate(f"{scenario}-{number}", edits)
+                     run(["sync"], source, env, out/"sync.txt")
+                     hashes = []
+                     for position, v in enumerate(benchmark_order(VARIANTS, number), 1):
+                         report["active"] = dict(fixture=label, scenario=scenario, round=number, position=position, variant=v, edits=edits)
+                         sample = invoke(v, out/f"{label}-{scenario}-{number}-{v}.json")
+-                        validate_sample(sample, count+int(not git), edits, scenario, v)
++                        after = journal_layout(cache_file(v)) if v == "observation-journal" and before else None
++                        validate_sample(sample, count+int(not git), edits, scenario, v, before, after)
+                         sample.update(report["active"], setup=setup, cache_bytes=cache_file(v).stat().st_size)
+                         hashes.append(sample["Hash"])
+                         report["samples"].append(sample)
+@@ -163,6 +232,7 @@
+                     (out/"report.json").write_text(json.dumps(report, indent=2)+"\n")
+                 print(f"{label}: {scenario} complete", flush=True)
+         report["summary"] = summarize(report["samples"], VARIANTS)
++        report["replacement_summary"] = summarize(report["samples"], VARIANTS, baseline_variant="replacement")
+         report["final_source_sha256"] = candidate_digest(source, out)
+         report["final_harness_inputs"] = harness_inputs(source/"scripts")
+         if report["final_source_sha256"] != report["source_sha256"] or report["final_harness_inputs"] != report["harness_inputs"]:
+--- /dev/null
++++ b/scripts/summarize_observation_journal.py
+@@ -0,0 +1,46 @@
++#!/usr/bin/env python3
++"""Recompute paired journal comparisons from retained samples, without rerunning them."""
++import argparse
++import hashlib
++import json
++from pathlib import Path
++
++from benchmark_derived_index import summarize
++from benchmark_observation_journal import VARIANTS
++
++
++def analyze(report):
++    samples = report["samples"]
++    summaries = {baseline: summarize(samples, VARIANTS, baseline_variant=baseline)
++                 for baseline in ("checkpoint", "replacement")}
++    histories = []
++    for fixture, scenario in sorted({(s["fixture"], s["scenario"]) for s in samples
++                                     if s["scenario"] in ("edit", "batch")}):
++        group = sorted((s for s in samples if (s["fixture"], s["scenario"], s["variant"]) ==
++                        (fixture, scenario, "observation-journal")), key=lambda s: s["round"])
++        histories.append(dict(fixture=fixture, scenario=scenario,
++                              rounds=[s["round"] for s in group],
++                              loaded_records=[s["Result"]["JournalRecordsLoaded"] for s in group],
++                              positions=[s["position"] for s in group]))
++    return dict(summaries=summaries, ordinary_histories=histories)
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("report", type=Path)
++    parser.add_argument("--output", type=Path, required=True)
++    args = parser.parse_args()
++    raw = args.report.read_bytes()
++    result = analyze(json.loads(raw))
++    result["report_sha256"] = hashlib.sha256(raw).hexdigest()
++    directory = Path(__file__).resolve().parent
++    result["analysis_inputs"] = {name: hashlib.sha256((directory/name).read_bytes()).hexdigest()
++                                 for name in ("summarize_observation_journal.py", "benchmark_derived_index.py",
++                                              "benchmark_observation_journal.py")}
++    # Never overwrite a report or an earlier analysis artifact.
++    with args.output.open("x") as output:
++        output.write(json.dumps(result, indent=2)+"\n")
++
++
++if __name__ == "__main__":
++    main()
+--- a/scripts/test_observation_journal.py
++++ b/scripts/test_observation_journal.py
+@@ -1,9 +1,79 @@
++import struct
++import tempfile
++from pathlib import Path
+ import unittest
+ 
+-from benchmark_observation_journal import validate_sample
++from benchmark_derived_index import summarize
++from benchmark_observation_journal import (
++    FILE_LIMIT, JOURNAL_LIMIT, MAGIC, VARIANTS, append_budget, journal_layout,
++    needs_reseed, validate_sample,
++)
++from summarize_observation_journal import analyze
++
++
++def layout(records, journal_bytes=1000, base_bytes=8000):
++    return dict(records=records, base_bytes=base_bytes, journal_bytes=journal_bytes,
++                cache_bytes=base_bytes+journal_bytes)
+ 
+ 
+ class JournalCampaignReceipts(unittest.TestCase):
++    def test_ordinary_edit_requires_actual_history_and_bounded_publication(self):
++        for scenario in ("edit", "batch"):
++            before, after = layout(1), layout(2, 2000)
++            result = dict(Hashed=1, Reused=99, Written=True, CacheError="", CacheStatus="hit",
++                          ReplacedBase=False, JournalRecordsLoaded=1, CheckpointBytes=1000)
++            validate_sample({"Result": result}, 100, 1, scenario, "observation-journal", before, after)
++            for key, value in (("ReplacedBase", True), ("JournalRecordsLoaded", 0),
++                               ("CheckpointBytes", 8000000), ("CheckpointBytes", 999)):
++                with self.subTest(scenario=scenario, key=key, value=value), self.assertRaises(RuntimeError):
++                    validate_sample({"Result": dict(result, **{key: value})}, 100, 1,
++                                    scenario, "observation-journal", before, after)
++            with self.assertRaises(RuntimeError):
++                validate_sample({"Result": result}, 100, 1, scenario, "observation-journal",
++                                before, layout(1, 2000))
++            with self.assertRaises(RuntimeError):
++                validate_sample({"Result": result}, 100, 1, scenario, "observation-journal")
++
++    def test_long_campaign_requires_record_compaction_and_exact_replacement_bytes(self):
++        before, after = layout(32, 32000), layout(0, 0)
++        result = dict(Hashed=1, Reused=99, Written=True, CacheError="", CacheStatus="hit",
++                      ReplacedBase=True, JournalRecordsLoaded=32, CheckpointBytes=8000)
++        validate_sample({"Result": result}, 100, 1, "edit", "observation-journal", before, after)
++        for key, value in (("ReplacedBase", False), ("CheckpointBytes", 7999),
++                           ("JournalRecordsLoaded", 31)):
++            with self.subTest(key=key), self.assertRaises(RuntimeError):
++                validate_sample({"Result": dict(result, **{key: value})}, 100, 1, "edit",
++                                "observation-journal", before, after)
++        with self.assertRaises(RuntimeError):
++            validate_sample({"Result": result}, 100, 1, "edit", "replacement")
++
++    def test_ordinary_history_reseeds_before_either_byte_budget_becomes_ambiguous(self):
++        budget = append_budget(1000)
++        for before in (layout(1, JOURNAL_LIMIT-budget),
++                       layout(1, 1000, FILE_LIMIT-budget-1000)):
++            self.assertFalse(needs_reseed(before, 1000))
++            larger = dict(before, journal_bytes=before["journal_bytes"]+1,
++                          cache_bytes=before["cache_bytes"]+1)
++            self.assertTrue(needs_reseed(larger, 1000))
++            # The independently known record limit still times real compaction.
++            self.assertFalse(needs_reseed(dict(larger, records=32), 1000))
++            with self.assertRaises(RuntimeError):
++                validate_sample({"Result": {}}, 10000, 1000, "batch",
++                                "observation-journal", larger, layout(0, 0))
++
++    def test_layout_counts_real_frames_and_rejects_incomplete_files(self):
++        def frame(body):
++            return struct.pack("<Q", len(body)) + bytes(32) + body + bytes(32)
++        base, delta = frame(b"base"), frame(b"edit")
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory)/"observations"
++            path.write_bytes(MAGIC+base+delta)
++            self.assertEqual(journal_layout(path), layout(1, len(delta), len(MAGIC)+len(base)))
++            for data in (MAGIC, MAGIC+base+b"short", MAGIC+base+delta[:-1]):
++                path.write_bytes(data)
++                with self.assertRaises(RuntimeError):
++                    journal_layout(path)
++
+     def test_compaction_and_history_recovery_cannot_silently_fall_back(self):
+         for scenario, edits, records in (("records", 1, 32), ("bytes", 60, 1), ("recovery", 0, 4)):
+             result = dict(Hashed=edits, Reused=100-edits, Written=True, CacheError="",
+@@ -17,5 +87,38 @@
+                                     100, edits, scenario, "observation-journal")
+ 
+ 
++class JournalPairedSummaries(unittest.TestCase):
++    def samples(self):
++        samples = []
++        for variant, totals in zip(VARIANTS, ((10, 100, 1000), (100, 10, 1000), (20, 20, 1000))):
++            for number, total in enumerate(totals):
++                samples.append(dict(fixture="fixture", scenario="edit", variant=variant,
++                                    round=number, position=1, Total=total, cache_bytes=100,
++                                    Result=dict(CheckpointBytes=10, Written=True, Phases={"Load": 1},
++                                                JournalRecordsLoaded=number)))
++        return samples
++
++    def test_both_controls_use_matching_round_ratios_and_retain_history(self):
++        result = analyze({"samples": self.samples()})
++        for baseline in ("checkpoint", "replacement"):
++            row = result["summaries"][baseline][-1]
++            self.assertEqual(row["baseline"], baseline)
++            self.assertEqual(row["paired_ratio"], 1)  # Not 20/100, the ratio of medians.
++            self.assertEqual(row["ratio_range"], [0.2, 2])
++            self.assertEqual(row["wins"], 1)
++        self.assertEqual(result["ordinary_histories"][0]["loaded_records"], [0, 1, 2])
++        # A different frozen control must not change the same-binary comparison.
++        samples = self.samples()
++        samples[0]["Total"] = 100
++        self.assertNotEqual(summarize(samples, VARIANTS)[-1]["paired_ratio"],
++                            summarize(samples, VARIANTS, "replacement")[-1]["paired_ratio"])
++
++    def test_missing_and_duplicate_pairs_fail_instead_of_biasing_ratios(self):
++        samples = self.samples()
++        for invalid in (samples[1:], samples+[samples[0]]):
++            with self.assertRaises(ValueError):
++                analyze({"samples": invalid})
++
++
+ if __name__ == "__main__":
+     unittest.main()

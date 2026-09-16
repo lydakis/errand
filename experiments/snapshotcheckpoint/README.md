@@ -12,6 +12,12 @@ and `journal` probe modes. The contract below describes the observation control;
 the comparison document records the new format, validation, bounded journal,
 compaction and recovery behavior. Production callers remain unchanged.
 
+The [observation-only journal comparison](../../docs/OBSERVATION_JOURNAL.md) adds
+`observation-journal`, reusing the same bounded journal without persisting derived
+index nodes. Storage strategies keep format/publication choices out of the shared
+preparation path. It compares frozen and current observation replacement controls,
+including real byte/record compaction and recovery after prior transactions.
+
 ## Contract
 
 - Each call runs `snapshot.SelectFilesGuarded` again and stats every selected path.

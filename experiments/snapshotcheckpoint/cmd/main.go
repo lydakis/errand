@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	root, cache, mode := flag.String("root", "", "fixture root"), flag.String("cache", "", "private cache directory"), flag.String("mode", "cold", "cold, checkpoint, current, derived, or journal")
+	root, cache, mode := flag.String("root", "", "fixture root"), flag.String("cache", "", "private cache directory"), flag.String("mode", "cold", "cold, checkpoint, current, derived, journal, or observation-journal")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -33,6 +33,8 @@ func main() {
 		result, err = checkpoint.Prepare(ctx, *root, *cache, snapshot.SelectOptions{})
 	case "derived", "journal":
 		result, err = checkpoint.PrepareDerived(ctx, *root, *cache, snapshot.SelectOptions{}, *mode == "journal")
+	case "observation-journal":
+		result, err = checkpoint.PrepareObservationJournal(ctx, *root, *cache, snapshot.SelectOptions{})
 	default:
 		err = fmt.Errorf("unknown mode %q", *mode)
 	}

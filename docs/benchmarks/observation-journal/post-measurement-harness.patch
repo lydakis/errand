@@ -1,0 +1,29 @@
+--- a/scripts/benchmark_observation_journal.py
++++ b/scripts/benchmark_observation_journal.py
+@@ -28,6 +28,10 @@
+                     Written=miss or edits != 0 or recovery, CacheError="",
+                     CacheStatus="missing" if miss else "recovered" if recovery else "hit",
+                     ReplacedBase=replaced)
++    if journal and scenario in ("edit", "batch"):
++        # Longer campaigns can compact ordinary edits too. Dedicated cases below
++        # still require the exact history and replacement that they claim to time.
++        expected.pop("ReplacedBase")
+     if journal and scenario in ("records", "bytes", "recovery"):
+         expected["JournalRecordsLoaded"] = {"records": 32, "bytes": 1, "recovery": 4}[scenario]
+     if any(result.get(k) != v for k, v in expected.items()):
+--- a/scripts/test_observation_journal.py
++++ b/scripts/test_observation_journal.py
+@@ -4,6 +4,13 @@
+ 
+ 
+ class JournalCampaignReceipts(unittest.TestCase):
++    def test_long_campaign_can_compact_an_ordinary_edit(self):
++        result = dict(Hashed=1, Reused=99, Written=True, CacheError="",
++                      CacheStatus="hit", ReplacedBase=True, JournalRecordsLoaded=32)
++        validate_sample({"Result": result}, 100, 1, "edit", "observation-journal")
++        with self.assertRaises(RuntimeError):
++            validate_sample({"Result": result}, 100, 1, "edit", "replacement")
++
+     def test_compaction_and_history_recovery_cannot_silently_fall_back(self):
+         for scenario, edits, records in (("records", 1, 32), ("bytes", 60, 1), ("recovery", 0, 4)):
+             result = dict(Hashed=edits, Reused=100-edits, Written=True, CacheError="",

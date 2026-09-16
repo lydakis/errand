@@ -48,7 +48,7 @@ func TestAdmissionUsesExpandedGitSelection(t *testing.T) {
 		t.Fatalf("raw selection: %v %v", paths, err)
 	}
 	for _, direct := range []bool{false, true} {
-		config.direct = direct
+		config.store = observationStore{direct: direct}
 		got, err := prepare(ctx, root, cache, snapshot.SelectOptions{}, config)
 		if err != nil {
 			t.Fatal(err)

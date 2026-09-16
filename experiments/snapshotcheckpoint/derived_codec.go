@@ -35,7 +35,7 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 
-func encodeDerived(ctx context.Context, key identity, entries snapshot.VerifiedObservations, state *manifest.Snapshot, prior loadedCheckpoint, delta bool) ([]byte, error) {
+func (s framedStore) encode(ctx context.Context, key identity, entries snapshot.VerifiedObservations, state *manifest.Snapshot, prior loadedCheckpoint, delta bool) ([]byte, error) {
 	if !entries.Valid() || entries.Root() != key.Root || entries.Len() > maxEntries {
 		return nil, fmt.Errorf("verified checkpoint observations required")
 	}
@@ -46,7 +46,7 @@ func encodeDerived(ctx context.Context, key identity, entries snapshot.VerifiedO
 	if delta {
 		edits, err = observationDifferences(ctx, prior.Entries, entries)
 		h.Count = len(edits)
-	} else {
+	} else if s.index {
 		index, err = state.CheckpointIndex(ctx)
 		h.IndexCount, h.IndexVersion, h.Fallback = len(index.Nodes), index.Version, index.Fallback
 	}
@@ -122,7 +122,7 @@ func observationDifferences(ctx context.Context, before []observation, after sna
 	return edits, nil
 }
 
-func decodeDerived(ctx context.Context, payload []byte, key identity, prior loadedCheckpoint, delta bool) (loadedCheckpoint, error) {
+func (s framedStore) decode(ctx context.Context, payload []byte, key identity, prior loadedCheckpoint, delta bool) (loadedCheckpoint, error) {
 	d := gob.NewDecoder(contextReader{ctx, bytes.NewReader(payload)})
 	var h derivedHeader
 	if err := d.Decode(&h); err != nil {
@@ -133,6 +133,9 @@ func decodeDerived(ctx context.Context, payload []byte, key identity, prior load
 	}
 	if !delta && h.Count > maxEntries || delta && (h.IndexCount != 0 || h.IndexVersion != 0 || h.Fallback) {
 		return loadedCheckpoint{}, fmt.Errorf("invalid derived checkpoint counts")
+	}
+	if !s.index && (h.IndexCount != 0 || h.IndexVersion != 0 || h.Fallback) {
+		return loadedCheckpoint{}, fmt.Errorf("derived state in observation-only checkpoint")
 	}
 	var entries []observation
 	var edits []observationEdit
@@ -208,7 +211,11 @@ func decodeDerived(ctx context.Context, payload []byte, key identity, prior load
 		for i := range entries {
 			m.Entries[i] = entries[i].Entry
 		}
-		state, err = manifest.RestoreIndex(ctx, m, index)
+		if s.index {
+			state, err = manifest.RestoreIndex(ctx, m, index)
+		} else {
+			state, err = manifest.New(ctx, m)
+		}
 	}
 	if err != nil {
 		return loadedCheckpoint{}, err

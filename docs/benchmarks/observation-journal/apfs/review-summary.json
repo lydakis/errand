@@ -1,0 +1,3840 @@
+{
+  "summaries": {
+    "checkpoint": [
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 50.8163125,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 20.034458,
+          "Load": 0.8228125,
+          "Scan": 0.0,
+          "Hash": 14.54125,
+          "Index": 0.52975,
+          "Verify": 13.9477495,
+          "Save": 0.8600215
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 43.324125,
+        "paired_ratio": 0.8946782237800568,
+        "ratio_range": [
+          0.5563864159322108,
+          1.490135005247261
+        ],
+        "wins": 3,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 16.522125,
+          "Load": 0.6278955,
+          "Scan": 0.0,
+          "Hash": 11.335062,
+          "Index": 0.4972715,
+          "Verify": 13.55925,
+          "Save": 0.8437295
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 45.2802505,
+        "paired_ratio": 1.118265000337359,
+        "ratio_range": [
+          0.6050283023432984,
+          1.4662026113991742
+        ],
+        "wins": 2,
+        "cache_bytes": 723219.0,
+        "written_bytes": 160952.0,
+        "phases_ms": {
+          "Selection": 16.355729,
+          "Load": 3.5598745,
+          "Scan": 0.0,
+          "Hash": 10.84075,
+          "Index": 0.5040415,
+          "Verify": 14.0761875,
+          "Save": 1.2046045
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 36.8083125,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 19.334187,
+          "Load": 0.6518335,
+          "Scan": 0.0,
+          "Hash": 1.7565625,
+          "Index": 0.0235835,
+          "Verify": 13.992063,
+          "Save": 0.7170415
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 36.053792,
+        "paired_ratio": 1.1083178503947209,
+        "ratio_range": [
+          0.6385048499910593,
+          1.5291209650490558
+        ],
+        "wins": 3,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 17.886354,
+          "Load": 0.685104,
+          "Scan": 0.0,
+          "Hash": 1.8861665,
+          "Index": 0.024458,
+          "Verify": 14.573812,
+          "Save": 0.630396
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 43.082021,
+        "paired_ratio": 1.2580700494022459,
+        "ratio_range": [
+          0.7023298420127891,
+          1.7126620614557457
+        ],
+        "wins": 1,
+        "cache_bytes": 163670.5,
+        "written_bytes": 1081.0,
+        "phases_ms": {
+          "Selection": 21.7641255,
+          "Load": 1.0654165,
+          "Scan": 0.0,
+          "Hash": 2.747229,
+          "Index": 0.0349585,
+          "Verify": 16.7355,
+          "Save": 0.341771
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 58.5119585,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 25.465042,
+          "Load": 0.097583,
+          "Scan": 0.0,
+          "Hash": 15.608375,
+          "Index": 0.136479,
+          "Verify": 15.967125,
+          "Save": 0.6024995
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 50.8640835,
+        "paired_ratio": 0.9225338046503465,
+        "ratio_range": [
+          0.5036624721969329,
+          1.4695643893663257
+        ],
+        "wins": 4,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 21.8023545,
+          "Load": 0.085875,
+          "Scan": 0.0,
+          "Hash": 13.2095835,
+          "Index": 0.120438,
+          "Verify": 15.7270835,
+          "Save": 0.616375
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 63.119167,
+        "paired_ratio": 1.1006368204928376,
+        "ratio_range": [
+          0.6820322259734767,
+          1.4856929038281848
+        ],
+        "wins": 2,
+        "cache_bytes": 159887.0,
+        "written_bytes": 159887.0,
+        "phases_ms": {
+          "Selection": 27.852479,
+          "Load": 0.1637085,
+          "Scan": 0.0,
+          "Hash": 17.4269795,
+          "Index": 0.156437,
+          "Verify": 16.164354,
+          "Save": 0.652792
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "records",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 49.8329785,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 26.1521045,
+          "Load": 0.930625,
+          "Scan": 0.0,
+          "Hash": 2.741208,
+          "Index": 0.034708,
+          "Verify": 18.7790625,
+          "Save": 0.761396
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "records",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 47.488208,
+        "paired_ratio": 1.0041375516919298,
+        "ratio_range": [
+          0.5983622281493891,
+          1.5450213245442708
+        ],
+        "wins": 3,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 25.4341875,
+          "Load": 0.8765415,
+          "Scan": 0.0,
+          "Hash": 2.5530415,
+          "Index": 0.0361875,
+          "Verify": 16.9004585,
+          "Save": 0.738646
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "records",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 50.319333,
+        "paired_ratio": 1.0599057946633614,
+        "ratio_range": [
+          0.6595485322589085,
+          1.9123515132078848
+        ],
+        "wins": 3,
+        "cache_bytes": 159887.0,
+        "written_bytes": 159887.0,
+        "phases_ms": {
+          "Selection": 25.3919995,
+          "Load": 2.880021,
+          "Scan": 0.0,
+          "Hash": 2.421916,
+          "Index": 0.022396,
+          "Verify": 18.2222085,
+          "Save": 0.8711875
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 45.218979,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 23.104708,
+          "Load": 0.9102915,
+          "Scan": 0.0,
+          "Hash": 2.46775,
+          "Index": 0.017396,
+          "Verify": 17.7879165,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 36.068625,
+        "paired_ratio": 0.9173957724652522,
+        "ratio_range": [
+          0.5585303576807359,
+          1.389057614619662
+        ],
+        "wins": 4,
+        "cache_bytes": 159787.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 18.5675,
+          "Load": 0.7041875,
+          "Scan": 0.0,
+          "Hash": 1.873958,
+          "Index": 0.014688,
+          "Verify": 14.841292,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 37.944729,
+        "paired_ratio": 1.097751612940213,
+        "ratio_range": [
+          0.5213666389148975,
+          1.2868948577443629
+        ],
+        "wins": 1,
+        "cache_bytes": 159887.0,
+        "written_bytes": 159887.0,
+        "phases_ms": {
+          "Selection": 19.5859165,
+          "Load": 0.8932085,
+          "Scan": 0.0,
+          "Hash": 2.00525,
+          "Index": 0.0135,
+          "Verify": 14.3280625,
+          "Save": 0.7011245
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 46.561479,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 23.67875,
+          "Load": 0.8729585,
+          "Scan": 0.0,
+          "Hash": 2.5898125,
+          "Index": 0.016833,
+          "Verify": 18.685375,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 42.349125,
+        "paired_ratio": 0.8885364515445955,
+        "ratio_range": [
+          0.5170902481221002,
+          1.7465976507946235
+        ],
+        "wins": 4,
+        "cache_bytes": 159787.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 21.9515625,
+          "Load": 0.8625205,
+          "Scan": 0.0,
+          "Hash": 2.524625,
+          "Index": 0.016166,
+          "Verify": 16.6509165,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 42.7204585,
+        "paired_ratio": 0.9904326643143885,
+        "ratio_range": [
+          0.5951483106299286,
+          1.7363019226856216
+        ],
+        "wins": 3,
+        "cache_bytes": 159887.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 22.4913545,
+          "Load": 0.91125,
+          "Scan": 0.0,
+          "Hash": 2.1646665,
+          "Index": 0.0157085,
+          "Verify": 16.6786875,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 311.424375,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 127.2266045,
+          "Load": 4.924021,
+          "Scan": 0.0,
+          "Hash": 22.375854,
+          "Index": 2.7214795,
+          "Verify": 145.941125,
+          "Save": 3.7832085
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 300.9715205,
+        "paired_ratio": 0.9776897810159816,
+        "ratio_range": [
+          0.8014463667956617,
+          1.1747775167896253
+        ],
+        "wins": 3,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 128.0242085,
+          "Load": 4.856396,
+          "Scan": 0.0,
+          "Hash": 22.4625,
+          "Index": 2.76225,
+          "Verify": 122.971396,
+          "Save": 3.8115835
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 299.255,
+        "paired_ratio": 0.9953548737699218,
+        "ratio_range": [
+          0.8188524802490232,
+          1.0844783666482298
+        ],
+        "wins": 3,
+        "cache_bytes": 2206194.5,
+        "written_bytes": 164953.0,
+        "phases_ms": {
+          "Selection": 112.782479,
+          "Load": 11.453979,
+          "Scan": 0.0,
+          "Hash": 22.793396,
+          "Index": 1.087833,
+          "Verify": 139.2341665,
+          "Save": 2.183146
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 287.939583,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 113.3707285,
+          "Load": 4.784438,
+          "Scan": 0.0,
+          "Hash": 11.934729,
+          "Index": 2.0177915,
+          "Verify": 149.6041875,
+          "Save": 3.824396
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 247.3016245,
+        "paired_ratio": 0.8483947514647994,
+        "ratio_range": [
+          0.7694769321709813,
+          1.0950648641952954
+        ],
+        "wins": 5,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 111.0249165,
+          "Load": 4.8386665,
+          "Scan": 0.0,
+          "Hash": 12.0338745,
+          "Index": 2.16425,
+          "Verify": 98.843667,
+          "Save": 3.861188
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 265.542958,
+        "paired_ratio": 0.9894160856155576,
+        "ratio_range": [
+          0.705153911521941,
+          1.1364012776288743
+        ],
+        "wins": 4,
+        "cache_bytes": 1632660.0,
+        "written_bytes": 1086.0,
+        "phases_ms": {
+          "Selection": 120.4818125,
+          "Load": 7.7349585,
+          "Scan": 0.0,
+          "Hash": 12.0326875,
+          "Index": 0.113583,
+          "Verify": 114.0351245,
+          "Save": 1.523271
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 385.374104,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 120.3077085,
+          "Load": 0.0665415,
+          "Scan": 0.0,
+          "Hash": 121.4844795,
+          "Index": 3.0002085,
+          "Verify": 140.9794585,
+          "Save": 3.6476455
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 382.338,
+        "paired_ratio": 0.9880210076449374,
+        "ratio_range": [
+          0.9197255758741919,
+          1.1198174741750695
+        ],
+        "wins": 4,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 120.7026875,
+          "Load": 0.0648545,
+          "Scan": 0.0,
+          "Hash": 121.804375,
+          "Index": 2.812125,
+          "Verify": 137.811542,
+          "Save": 3.5944375
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 356.304583,
+        "paired_ratio": 0.9290743059131694,
+        "ratio_range": [
+          0.8428131898149098,
+          0.9997845140766795
+        ],
+        "wins": 6,
+        "cache_bytes": 1628859.0,
+        "written_bytes": 1628859.0,
+        "phases_ms": {
+          "Selection": 102.1564375,
+          "Load": 0.104312,
+          "Scan": 0.0,
+          "Hash": 121.614167,
+          "Index": 2.914479,
+          "Verify": 116.604875,
+          "Save": 3.8867295
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "records",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 309.6550625,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 129.2115415,
+          "Load": 4.8880005,
+          "Scan": 0.0,
+          "Hash": 12.197729,
+          "Index": 1.8583955,
+          "Verify": 140.2580205,
+          "Save": 3.7959795
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "records",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 291.1804165,
+        "paired_ratio": 1.031969541086168,
+        "ratio_range": [
+          0.8868881002915109,
+          1.1348508108478323
+        ],
+        "wins": 3,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 132.982,
+          "Load": 4.8486665,
+          "Scan": 0.0,
+          "Hash": 12.2715415,
+          "Index": 1.9607085,
+          "Verify": 139.373563,
+          "Save": 3.7713545
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "records",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 268.5668335,
+        "paired_ratio": 0.930692168899232,
+        "ratio_range": [
+          0.8369542583261258,
+          1.0426858703696757
+        ],
+        "wins": 5,
+        "cache_bytes": 1628859.0,
+        "written_bytes": 1628859.0,
+        "phases_ms": {
+          "Selection": 119.541771,
+          "Load": 8.1319165,
+          "Scan": 0.0,
+          "Hash": 12.1615625,
+          "Index": 0.111667,
+          "Verify": 115.2804375,
+          "Save": 3.796479
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 289.1168125,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 118.254625,
+          "Load": 4.9115205,
+          "Scan": 0.0,
+          "Hash": 12.002083,
+          "Index": 1.944167,
+          "Verify": 144.612521,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 277.1332705,
+        "paired_ratio": 0.9567591155912976,
+        "ratio_range": [
+          0.7949518182619628,
+          1.170468796573916
+        ],
+        "wins": 4,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 124.8338125,
+          "Load": 4.8846665,
+          "Scan": 0.0,
+          "Hash": 12.1994795,
+          "Index": 2.107333,
+          "Verify": 112.393,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 278.211709,
+        "paired_ratio": 0.9918844610182154,
+        "ratio_range": [
+          0.845631787079057,
+          1.119878608776948
+        ],
+        "wins": 4,
+        "cache_bytes": 1628859.0,
+        "written_bytes": 1628859.0,
+        "phases_ms": {
+          "Selection": 123.7906045,
+          "Load": 7.7687705,
+          "Scan": 0.0,
+          "Hash": 12.4118125,
+          "Index": 0.108521,
+          "Verify": 122.057167,
+          "Save": 4.0806665
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 270.906396,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 118.0669795,
+          "Load": 4.7968125,
+          "Scan": 0.0,
+          "Hash": 11.985396,
+          "Index": 2.094333,
+          "Verify": 131.589687,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 254.152375,
+        "paired_ratio": 0.9598743774355363,
+        "ratio_range": [
+          0.742651531367064,
+          1.0962843360078098
+        ],
+        "wins": 5,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 104.574646,
+          "Load": 4.8478335,
+          "Scan": 0.0,
+          "Hash": 12.316354,
+          "Index": 1.8985,
+          "Verify": 115.0733955,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 284.7224375,
+        "paired_ratio": 1.0274613141663698,
+        "ratio_range": [
+          0.8454032764879954,
+          1.2689630634085272
+        ],
+        "wins": 2,
+        "cache_bytes": 1628859.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 114.3582085,
+          "Load": 5.5860415,
+          "Scan": 0.0,
+          "Hash": 11.8360625,
+          "Index": 2.1564795,
+          "Verify": 159.324021,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 103.0395,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 39.1568335,
+          "Load": 5.6088125,
+          "Scan": 0.0,
+          "Hash": 25.267812,
+          "Index": 2.944833,
+          "Verify": 23.2308545,
+          "Save": 3.336208
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 88.8140625,
+        "paired_ratio": 0.9560870012580913,
+        "ratio_range": [
+          0.6829518568295961,
+          1.3748067092984984
+        ],
+        "wins": 3,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 27.956979,
+          "Load": 4.77025,
+          "Scan": 0.0,
+          "Hash": 23.962708,
+          "Index": 2.9516875,
+          "Verify": 23.186417,
+          "Save": 3.380375
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 95.86525,
+        "paired_ratio": 0.987547310918153,
+        "ratio_range": [
+          0.7750185771180002,
+          1.4095277961609947
+        ],
+        "wins": 3,
+        "cache_bytes": 2206935.5,
+        "written_bytes": 164955.0,
+        "phases_ms": {
+          "Selection": 28.044063,
+          "Load": 11.128729,
+          "Scan": 0.0,
+          "Hash": 23.9076665,
+          "Index": 1.0684165,
+          "Verify": 23.32,
+          "Save": 2.0629795
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 97.183958,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 45.6380415,
+          "Load": 6.0014375,
+          "Scan": 0.0,
+          "Hash": 14.690042,
+          "Index": 2.2634585,
+          "Verify": 23.474625,
+          "Save": 3.7513125
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 83.4949585,
+        "paired_ratio": 0.8705126320468125,
+        "ratio_range": [
+          0.6991080039734248,
+          1.2366714343427572
+        ],
+        "wins": 5,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 32.2345625,
+          "Load": 5.0645835,
+          "Scan": 0.0,
+          "Hash": 13.4818955,
+          "Index": 2.1893335,
+          "Verify": 23.1745625,
+          "Save": 3.647021
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 81.4645625,
+        "paired_ratio": 0.8813198492915283,
+        "ratio_range": [
+          0.7147838740642372,
+          1.113521921270628
+        ],
+        "wins": 5,
+        "cache_bytes": 1633401.0,
+        "written_bytes": 1088.0,
+        "phases_ms": {
+          "Selection": 32.3760415,
+          "Load": 7.866459,
+          "Scan": 0.0,
+          "Hash": 13.3385,
+          "Index": 0.1292915,
+          "Verify": 23.515625,
+          "Save": 1.175271
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 210.7749375,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 51.2486455,
+          "Load": 0.0642915,
+          "Scan": 0.0,
+          "Hash": 126.719833,
+          "Index": 2.606521,
+          "Verify": 23.6044165,
+          "Save": 3.5038755
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 193.6830415,
+        "paired_ratio": 0.9316840131361003,
+        "ratio_range": [
+          0.8087665215357815,
+          1.1205641734057876
+        ],
+        "wins": 5,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 36.9712085,
+          "Load": 0.059271,
+          "Scan": 0.0,
+          "Hash": 123.306,
+          "Index": 2.6147705,
+          "Verify": 23.751875,
+          "Save": 3.549354
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 196.953104,
+        "paired_ratio": 0.9108620121325708,
+        "ratio_range": [
+          0.8573975733526191,
+          1.1198956737184078
+        ],
+        "wins": 5,
+        "cache_bytes": 1629593.0,
+        "written_bytes": 1629593.0,
+        "phases_ms": {
+          "Selection": 39.320604,
+          "Load": 0.0804165,
+          "Scan": 0.0,
+          "Hash": 124.0805,
+          "Index": 2.674729,
+          "Verify": 23.425563,
+          "Save": 3.7436465
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "records",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 77.475813,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 26.864396,
+          "Load": 4.618854,
+          "Scan": 0.0,
+          "Hash": 13.600563,
+          "Index": 2.111438,
+          "Verify": 23.4030835,
+          "Save": 3.6482085
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "records",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 85.8345625,
+        "paired_ratio": 1.0654366503686754,
+        "ratio_range": [
+          0.9392829240366263,
+          1.147738289935904
+        ],
+        "wins": 2,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 33.887604,
+          "Load": 5.5167085,
+          "Scan": 0.0,
+          "Hash": 13.9466875,
+          "Index": 2.233291,
+          "Verify": 23.511375,
+          "Save": 3.713125
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "records",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 83.0099585,
+        "paired_ratio": 0.9900256558778642,
+        "ratio_range": [
+          0.7212555609154152,
+          1.437657042520387
+        ],
+        "wins": 3,
+        "cache_bytes": 1629593.0,
+        "written_bytes": 1629593.0,
+        "phases_ms": {
+          "Selection": 31.255188,
+          "Load": 8.6493125,
+          "Scan": 0.0,
+          "Hash": 13.206166,
+          "Index": 0.132604,
+          "Verify": 23.211396,
+          "Save": 3.670959
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 78.675354,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 31.557958,
+          "Load": 5.2894795,
+          "Scan": 0.0,
+          "Hash": 13.905562,
+          "Index": 2.093771,
+          "Verify": 23.137688,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 82.0366255,
+        "paired_ratio": 1.016287931475192,
+        "ratio_range": [
+          0.7214133261726766,
+          1.2596639632445186
+        ],
+        "wins": 3,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 34.437396,
+          "Load": 5.2448335,
+          "Scan": 0.0,
+          "Hash": 13.4373125,
+          "Index": 2.380854,
+          "Verify": 23.249167,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 89.7727495,
+        "paired_ratio": 1.1841150744526208,
+        "ratio_range": [
+          0.7000312252836394,
+          1.413466271249865
+        ],
+        "wins": 2,
+        "cache_bytes": 1629593.0,
+        "written_bytes": 1629593.0,
+        "phases_ms": {
+          "Selection": 37.670625,
+          "Load": 8.5089795,
+          "Scan": 0.0,
+          "Hash": 13.426521,
+          "Index": 0.1287085,
+          "Verify": 23.514521,
+          "Save": 3.5801665
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 73.852542,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 27.493375,
+          "Load": 4.8119375,
+          "Scan": 0.0,
+          "Hash": 13.110604,
+          "Index": 2.141042,
+          "Verify": 23.471271,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 79.3805,
+        "paired_ratio": 1.0777847732182404,
+        "ratio_range": [
+          0.7417515695587449,
+          1.506364231769829
+        ],
+        "wins": 2,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 32.265583,
+          "Load": 4.962625,
+          "Scan": 0.0,
+          "Hash": 13.7465415,
+          "Index": 1.921396,
+          "Verify": 23.5762915,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 84.6373955,
+        "paired_ratio": 1.108613380734189,
+        "ratio_range": [
+          0.7612500686339586,
+          1.2866790892968516
+        ],
+        "wins": 2,
+        "cache_bytes": 1629593.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 31.2293965,
+          "Load": 5.7010625,
+          "Scan": 0.0,
+          "Hash": 14.088208,
+          "Index": 1.9500215,
+          "Verify": 23.6574375,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 300.0043335,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 99.307854,
+          "Load": 21.151021,
+          "Scan": 0.0,
+          "Hash": 72.105542,
+          "Index": 10.896021,
+          "Verify": 66.1793335,
+          "Save": 15.449958
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 294.096479,
+        "paired_ratio": 0.9825503429875564,
+        "ratio_range": [
+          0.8953810513552238,
+          1.113095647208116
+        ],
+        "wins": 4,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 94.262854,
+          "Load": 21.309063,
+          "Scan": 0.0,
+          "Hash": 71.3437085,
+          "Index": 11.0076875,
+          "Verify": 65.8525005,
+          "Save": 15.5330625
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 288.9753125,
+        "paired_ratio": 0.9777099474815837,
+        "ratio_range": [
+          0.873833241125673,
+          1.092005008996788
+        ],
+        "wins": 3,
+        "cache_bytes": 8719830.0,
+        "written_bytes": 164954.0,
+        "phases_ms": {
+          "Selection": 91.375167,
+          "Load": 38.70175,
+          "Scan": 0.0,
+          "Hash": 70.8525,
+          "Index": 1.741375,
+          "Verify": 64.8103335,
+          "Save": 7.2189375
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "bytes",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 651.951396,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142835.0,
+        "written_bytes": 8142835.0,
+        "phases_ms": {
+          "Selection": 95.2116245,
+          "Load": 21.7173125,
+          "Scan": 0.0,
+          "Hash": 389.1369585,
+          "Index": 44.7640415,
+          "Verify": 68.044208,
+          "Save": 16.642729
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "bytes",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 630.8295625,
+        "paired_ratio": 0.9776747802706747,
+        "ratio_range": [
+          0.9369731887496726,
+          1.0253765582097147
+        ],
+        "wins": 5,
+        "cache_bytes": 8142835.0,
+        "written_bytes": 8142835.0,
+        "phases_ms": {
+          "Selection": 73.31025,
+          "Load": 21.873375,
+          "Scan": 0.0,
+          "Hash": 383.6638335,
+          "Index": 44.872229,
+          "Verify": 68.244479,
+          "Save": 15.8190625
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "bytes",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 703.520416,
+        "paired_ratio": 1.076534876613576,
+        "ratio_range": [
+          1.0431445853210246,
+          1.1534226374585088
+        ],
+        "wins": 0,
+        "cache_bytes": 8142935.0,
+        "written_bytes": 8142935.0,
+        "phases_ms": {
+          "Selection": 74.5207715,
+          "Load": 89.41325,
+          "Scan": 0.0,
+          "Hash": 386.3894585,
+          "Index": 36.4369995,
+          "Verify": 67.380125,
+          "Save": 29.625125
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 282.237937,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 92.7760835,
+          "Load": 21.39675,
+          "Scan": 0.0,
+          "Hash": 62.9629585,
+          "Index": 10.089146,
+          "Verify": 65.4481245,
+          "Save": 15.9159165
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 269.282708,
+        "paired_ratio": 1.0211853554376678,
+        "ratio_range": [
+          0.8876623478606184,
+          1.0486888401020753
+        ],
+        "wins": 2,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 80.7437085,
+          "Load": 21.273417,
+          "Scan": 0.0,
+          "Hash": 62.273583,
+          "Index": 10.305375,
+          "Verify": 65.348333,
+          "Save": 16.6460415
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 260.8493545,
+        "paired_ratio": 0.9369750850381826,
+        "ratio_range": [
+          0.8751614575032005,
+          1.1156010031697388
+        ],
+        "wins": 4,
+        "cache_bytes": 8146473.5,
+        "written_bytes": 1087.0,
+        "phases_ms": {
+          "Selection": 77.93975,
+          "Load": 33.6323125,
+          "Scan": 0.0,
+          "Hash": 62.389333,
+          "Index": 0.6831465,
+          "Verify": 66.033062,
+          "Save": 5.6182915
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 823.208646,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 84.646125,
+          "Load": 0.067333,
+          "Scan": 0.0,
+          "Hash": 612.6095415,
+          "Index": 13.385625,
+          "Verify": 66.927979,
+          "Save": 17.218854
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 810.5745,
+        "paired_ratio": 0.9851513835986729,
+        "ratio_range": [
+          0.9375479599085124,
+          1.0392727231146286
+        ],
+        "wins": 3,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 73.6389165,
+          "Load": 0.067062,
+          "Scan": 0.0,
+          "Hash": 612.1810205,
+          "Index": 13.4639795,
+          "Verify": 66.5750415,
+          "Save": 17.088458
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 818.441354,
+        "paired_ratio": 1.001632195103859,
+        "ratio_range": [
+          0.9519404258769648,
+          1.0329129254846754
+        ],
+        "wins": 2,
+        "cache_bytes": 8142669.0,
+        "written_bytes": 8142669.0,
+        "phases_ms": {
+          "Selection": 94.0795415,
+          "Load": 0.093083,
+          "Scan": 0.0,
+          "Hash": 608.212625,
+          "Index": 13.473729,
+          "Verify": 66.6051875,
+          "Save": 17.8572915
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "records",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 271.96175,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 80.579083,
+          "Load": 21.186625,
+          "Scan": 0.0,
+          "Hash": 63.5418955,
+          "Index": 10.161521,
+          "Verify": 65.543,
+          "Save": 15.7809165
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "records",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 287.9317295,
+        "paired_ratio": 1.056098848897842,
+        "ratio_range": [
+          0.9018052944552303,
+          1.1019920901760214
+        ],
+        "wins": 2,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 96.327583,
+          "Load": 21.731167,
+          "Scan": 0.0,
+          "Hash": 61.137542,
+          "Index": 10.2995625,
+          "Verify": 64.934937,
+          "Save": 17.401875
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "records",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 276.217375,
+        "paired_ratio": 1.0095009608793357,
+        "ratio_range": [
+          0.9469690484825409,
+          1.105361916823384
+        ],
+        "wins": 3,
+        "cache_bytes": 8142669.0,
+        "written_bytes": 8142669.0,
+        "phases_ms": {
+          "Selection": 76.605354,
+          "Load": 35.2559585,
+          "Scan": 0.0,
+          "Hash": 62.341438,
+          "Index": 0.6975835,
+          "Verify": 64.8426665,
+          "Save": 17.137146
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 263.289458,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 88.7630625,
+          "Load": 21.235708,
+          "Scan": 0.0,
+          "Hash": 63.7886665,
+          "Index": 10.1055205,
+          "Verify": 65.841917,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 249.8023335,
+        "paired_ratio": 0.9735789018743205,
+        "ratio_range": [
+          0.8731614570163786,
+          1.1288370094690965
+        ],
+        "wins": 4,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 77.040833,
+          "Load": 21.2658335,
+          "Scan": 0.0,
+          "Hash": 61.6215415,
+          "Index": 10.1618545,
+          "Verify": 65.9135625,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 289.1301665,
+        "paired_ratio": 1.0638592577908415,
+        "ratio_range": [
+          0.9452450193703366,
+          1.226906125379057
+        ],
+        "wins": 1,
+        "cache_bytes": 8142669.0,
+        "written_bytes": 8142669.0,
+        "phases_ms": {
+          "Selection": 94.3097915,
+          "Load": 34.493125,
+          "Scan": 0.0,
+          "Hash": 62.099979,
+          "Index": 0.6741665,
+          "Verify": 65.4820835,
+          "Save": 17.2797505
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "baseline": "checkpoint",
+        "median_ms": 255.047604,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 75.136854,
+          "Load": 21.4065205,
+          "Scan": 0.0,
+          "Hash": 63.829479,
+          "Index": 10.163854,
+          "Verify": 65.260437,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "replacement",
+        "baseline": "checkpoint",
+        "median_ms": 248.515479,
+        "paired_ratio": 0.956399110873802,
+        "ratio_range": [
+          0.8612090681365319,
+          1.1236087289204613
+        ],
+        "wins": 4,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 74.541792,
+          "Load": 21.4382085,
+          "Scan": 0.0,
+          "Hash": 62.436562,
+          "Index": 10.079479,
+          "Verify": 64.966396,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "observation-journal",
+        "baseline": "checkpoint",
+        "median_ms": 260.054541,
+        "paired_ratio": 1.0068070219176175,
+        "ratio_range": [
+          0.8786071615429952,
+          1.1088017549803189
+        ],
+        "wins": 3,
+        "cache_bytes": 8142669.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 84.0838335,
+          "Load": 23.696896,
+          "Scan": 0.0,
+          "Hash": 62.1300835,
+          "Index": 10.1158335,
+          "Verify": 65.4708125,
+          "Save": 0.0
+        }
+      }
+    ],
+    "replacement": [
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 50.8163125,
+        "paired_ratio": 1.2100844810148073,
+        "ratio_range": [
+          0.6710801346714675,
+          1.7973120323660785
+        ],
+        "wins": 3,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 20.034458,
+          "Load": 0.8228125,
+          "Scan": 0.0,
+          "Hash": 14.54125,
+          "Index": 0.52975,
+          "Verify": 13.9477495,
+          "Save": 0.8600215
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 43.324125,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 16.522125,
+          "Load": 0.6278955,
+          "Scan": 0.0,
+          "Hash": 11.335062,
+          "Index": 0.4972715,
+          "Verify": 13.55925,
+          "Save": 0.8437295
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "batch",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 45.2802505,
+        "paired_ratio": 1.1075241778992004,
+        "ratio_range": [
+          0.7254631216854307,
+          2.2092518379985897
+        ],
+        "wins": 2,
+        "cache_bytes": 723219.0,
+        "written_bytes": 160952.0,
+        "phases_ms": {
+          "Selection": 16.355729,
+          "Load": 3.5598745,
+          "Scan": 0.0,
+          "Hash": 10.84075,
+          "Index": 0.5040415,
+          "Verify": 14.0761875,
+          "Save": 1.2046045
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 36.8083125,
+        "paired_ratio": 0.9118725787966827,
+        "ratio_range": [
+          0.653970498643918,
+          1.5661588162000688
+        ],
+        "wins": 3,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 19.334187,
+          "Load": 0.6518335,
+          "Scan": 0.0,
+          "Hash": 1.7565625,
+          "Index": 0.0235835,
+          "Verify": 13.992063,
+          "Save": 0.7170415
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 36.053792,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 17.886354,
+          "Load": 0.685104,
+          "Scan": 0.0,
+          "Hash": 1.8861665,
+          "Index": 0.024458,
+          "Verify": 14.573812,
+          "Save": 0.630396
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "edit",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 43.082021,
+        "paired_ratio": 1.2073703653678807,
+        "ratio_range": [
+          0.4593029969936078,
+          2.2044028643119584
+        ],
+        "wins": 1,
+        "cache_bytes": 163670.5,
+        "written_bytes": 1081.0,
+        "phases_ms": {
+          "Selection": 21.7641255,
+          "Load": 1.0654165,
+          "Scan": 0.0,
+          "Hash": 2.747229,
+          "Index": 0.0349585,
+          "Verify": 16.7355,
+          "Save": 0.341771
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 58.5119585,
+        "paired_ratio": 1.08501081878648,
+        "ratio_range": [
+          0.6804737561932884,
+          1.985456640511819
+        ],
+        "wins": 2,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 25.465042,
+          "Load": 0.097583,
+          "Scan": 0.0,
+          "Hash": 15.608375,
+          "Index": 0.136479,
+          "Verify": 15.967125,
+          "Save": 0.6024995
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 50.8640835,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 21.8023545,
+          "Load": 0.085875,
+          "Scan": 0.0,
+          "Hash": 13.2095835,
+          "Index": 0.120438,
+          "Verify": 15.7270835,
+          "Save": 0.616375
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "miss",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 63.119167,
+        "paired_ratio": 1.3372752402402004,
+        "ratio_range": [
+          0.7286115139046703,
+          1.6847175663207556
+        ],
+        "wins": 2,
+        "cache_bytes": 159887.0,
+        "written_bytes": 159887.0,
+        "phases_ms": {
+          "Selection": 27.852479,
+          "Load": 0.1637085,
+          "Scan": 0.0,
+          "Hash": 17.4269795,
+          "Index": 0.156437,
+          "Verify": 16.164354,
+          "Save": 0.652792
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "records",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 49.8329785,
+        "paired_ratio": 0.9984144657290579,
+        "ratio_range": [
+          0.647240257538171,
+          1.671228484947644
+        ],
+        "wins": 3,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 26.1521045,
+          "Load": 0.930625,
+          "Scan": 0.0,
+          "Hash": 2.741208,
+          "Index": 0.034708,
+          "Verify": 18.7790625,
+          "Save": 0.761396
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "records",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 47.488208,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 159787.0,
+        "phases_ms": {
+          "Selection": 25.4341875,
+          "Load": 0.8765415,
+          "Scan": 0.0,
+          "Hash": 2.5530415,
+          "Index": 0.0361875,
+          "Verify": 16.9004585,
+          "Save": 0.738646
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "records",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 50.319333,
+        "paired_ratio": 1.2837106597849888,
+        "ratio_range": [
+          0.6227958548216516,
+          1.6199319323157957
+        ],
+        "wins": 2,
+        "cache_bytes": 159887.0,
+        "written_bytes": 159887.0,
+        "phases_ms": {
+          "Selection": 25.3919995,
+          "Load": 2.880021,
+          "Scan": 0.0,
+          "Hash": 2.421916,
+          "Index": 0.022396,
+          "Verify": 18.2222085,
+          "Save": 0.8711875
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 45.218979,
+        "paired_ratio": 1.0902787274221657,
+        "ratio_range": [
+          0.7199125432056396,
+          1.7904129762121446
+        ],
+        "wins": 2,
+        "cache_bytes": 159787.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 23.104708,
+          "Load": 0.9102915,
+          "Scan": 0.0,
+          "Hash": 2.46775,
+          "Index": 0.017396,
+          "Verify": 17.7879165,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 36.068625,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 18.5675,
+          "Load": 0.7041875,
+          "Scan": 0.0,
+          "Hash": 1.873958,
+          "Index": 0.014688,
+          "Verify": 14.841292,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "recovery",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 37.944729,
+        "paired_ratio": 1.1590496101303132,
+        "ratio_range": [
+          0.5600604554058453,
+          2.0413185332474386
+        ],
+        "wins": 2,
+        "cache_bytes": 159887.0,
+        "written_bytes": 159887.0,
+        "phases_ms": {
+          "Selection": 19.5859165,
+          "Load": 0.8932085,
+          "Scan": 0.0,
+          "Hash": 2.00525,
+          "Index": 0.0135,
+          "Verify": 14.3280625,
+          "Save": 0.7011245
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 46.561479,
+        "paired_ratio": 1.1259460604035918,
+        "ratio_range": [
+          0.5725417067548699,
+          1.93389839323342
+        ],
+        "wins": 2,
+        "cache_bytes": 159787.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 23.67875,
+          "Load": 0.8729585,
+          "Scan": 0.0,
+          "Hash": 2.5898125,
+          "Index": 0.016833,
+          "Verify": 18.685375,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 42.349125,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 159787.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 21.9515625,
+          "Load": 0.8625205,
+          "Scan": 0.0,
+          "Hash": 2.524625,
+          "Index": 0.016166,
+          "Verify": 16.6509165,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "1000-32-ignore",
+        "scenario": "unchanged",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 42.7204585,
+        "paired_ratio": 1.036337431501299,
+        "ratio_range": [
+          0.6302302069697404,
+          1.8838414464947235
+        ],
+        "wins": 3,
+        "cache_bytes": 159887.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 22.4913545,
+          "Load": 0.91125,
+          "Scan": 0.0,
+          "Hash": 2.1646665,
+          "Index": 0.0157085,
+          "Verify": 16.6786875,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 311.424375,
+        "paired_ratio": 1.02773972270877,
+        "ratio_range": [
+          0.8512250070402704,
+          1.2477441304003838
+        ],
+        "wins": 3,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 127.2266045,
+          "Load": 4.924021,
+          "Scan": 0.0,
+          "Hash": 22.375854,
+          "Index": 2.7214795,
+          "Verify": 145.941125,
+          "Save": 3.7832085
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 300.9715205,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 128.0242085,
+          "Load": 4.856396,
+          "Scan": 0.0,
+          "Hash": 22.4625,
+          "Index": 2.76225,
+          "Verify": 122.971396,
+          "Save": 3.8115835
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "batch",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 299.255,
+        "paired_ratio": 0.9518237282345334,
+        "ratio_range": [
+          0.7912447813761382,
+          1.3531515165315242
+        ],
+        "wins": 4,
+        "cache_bytes": 2206194.5,
+        "written_bytes": 164953.0,
+        "phases_ms": {
+          "Selection": 112.782479,
+          "Load": 11.453979,
+          "Scan": 0.0,
+          "Hash": 22.793396,
+          "Index": 1.087833,
+          "Verify": 139.2341665,
+          "Save": 2.183146
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 287.939583,
+        "paired_ratio": 1.179328764452788,
+        "ratio_range": [
+          0.9131879148865274,
+          1.2995841177182883
+        ],
+        "wins": 1,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 113.3707285,
+          "Load": 4.784438,
+          "Scan": 0.0,
+          "Hash": 11.934729,
+          "Index": 2.0177915,
+          "Verify": 149.6041875,
+          "Save": 3.824396
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 247.3016245,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 111.0249165,
+          "Load": 4.8386665,
+          "Scan": 0.0,
+          "Hash": 12.0338745,
+          "Index": 2.16425,
+          "Verify": 98.843667,
+          "Save": 3.861188
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "edit",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 265.542958,
+        "paired_ratio": 1.0420798469216166,
+        "ratio_range": [
+          0.9007273696654836,
+          1.3712197191683093
+        ],
+        "wins": 3,
+        "cache_bytes": 1632660.0,
+        "written_bytes": 1086.0,
+        "phases_ms": {
+          "Selection": 120.4818125,
+          "Load": 7.7349585,
+          "Scan": 0.0,
+          "Hash": 12.0326875,
+          "Index": 0.113583,
+          "Verify": 114.0351245,
+          "Save": 1.523271
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 385.374104,
+        "paired_ratio": 1.0121386087087418,
+        "ratio_range": [
+          0.8930026750445782,
+          1.0872808435815302
+        ],
+        "wins": 2,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 120.3077085,
+          "Load": 0.0665415,
+          "Scan": 0.0,
+          "Hash": 121.4844795,
+          "Index": 3.0002085,
+          "Verify": 140.9794585,
+          "Save": 3.6476455
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 382.338,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 120.7026875,
+          "Load": 0.0648545,
+          "Scan": 0.0,
+          "Hash": 121.804375,
+          "Index": 2.812125,
+          "Verify": 137.811542,
+          "Save": 3.5944375
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "miss",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 356.304583,
+        "paired_ratio": 0.9240490330401161,
+        "ratio_range": [
+          0.8562591730653426,
+          0.9770170161924416
+        ],
+        "wins": 6,
+        "cache_bytes": 1628859.0,
+        "written_bytes": 1628859.0,
+        "phases_ms": {
+          "Selection": 102.1564375,
+          "Load": 0.104312,
+          "Scan": 0.0,
+          "Hash": 121.614167,
+          "Index": 2.914479,
+          "Verify": 116.604875,
+          "Save": 3.8867295
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "records",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 309.6550625,
+        "paired_ratio": 0.9708574733647363,
+        "ratio_range": [
+          0.8811730938033281,
+          1.127537960731811
+        ],
+        "wins": 3,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 129.2115415,
+          "Load": 4.8880005,
+          "Scan": 0.0,
+          "Hash": 12.197729,
+          "Index": 1.8583955,
+          "Verify": 140.2580205,
+          "Save": 3.7959795
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "records",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 291.1804165,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 1628759.0,
+        "phases_ms": {
+          "Selection": 132.982,
+          "Load": 4.8486665,
+          "Scan": 0.0,
+          "Hash": 12.2715415,
+          "Index": 1.9607085,
+          "Verify": 139.373563,
+          "Save": 3.7713545
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "records",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 268.5668335,
+        "paired_ratio": 0.9081420089834001,
+        "ratio_range": [
+          0.854939261148479,
+          1.0172793673189588
+        ],
+        "wins": 5,
+        "cache_bytes": 1628859.0,
+        "written_bytes": 1628859.0,
+        "phases_ms": {
+          "Selection": 119.541771,
+          "Load": 8.1319165,
+          "Scan": 0.0,
+          "Hash": 12.1615625,
+          "Index": 0.111667,
+          "Verify": 115.2804375,
+          "Save": 3.796479
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 289.1168125,
+        "paired_ratio": 1.0451957699826475,
+        "ratio_range": [
+          0.854358529614035,
+          1.2579378737523272
+        ],
+        "wins": 2,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 118.254625,
+          "Load": 4.9115205,
+          "Scan": 0.0,
+          "Hash": 12.002083,
+          "Index": 1.944167,
+          "Verify": 144.612521,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 277.1332705,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 124.8338125,
+          "Load": 4.8846665,
+          "Scan": 0.0,
+          "Hash": 12.1994795,
+          "Index": 2.107333,
+          "Verify": 112.393,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "recovery",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 278.211709,
+        "paired_ratio": 1.0377670939106198,
+        "ratio_range": [
+          0.8542061920273267,
+          1.2377444844134884
+        ],
+        "wins": 3,
+        "cache_bytes": 1628859.0,
+        "written_bytes": 1628859.0,
+        "phases_ms": {
+          "Selection": 123.7906045,
+          "Load": 7.7687705,
+          "Scan": 0.0,
+          "Hash": 12.4118125,
+          "Index": 0.108521,
+          "Verify": 122.057167,
+          "Save": 4.0806665
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 270.906396,
+        "paired_ratio": 1.0419449312063642,
+        "ratio_range": [
+          0.9121721137068916,
+          1.3465265440969496
+        ],
+        "wins": 1,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 118.0669795,
+          "Load": 4.7968125,
+          "Scan": 0.0,
+          "Hash": 11.985396,
+          "Index": 2.094333,
+          "Verify": 131.589687,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 254.152375,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1628759.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 104.574646,
+          "Load": 4.8478335,
+          "Scan": 0.0,
+          "Hash": 12.316354,
+          "Index": 1.8985,
+          "Verify": 115.0733955,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-git",
+        "scenario": "unchanged",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 284.7224375,
+        "paired_ratio": 1.0920402117112822,
+        "ratio_range": [
+          0.7711532936487864,
+          1.3610485924788218
+        ],
+        "wins": 2,
+        "cache_bytes": 1628859.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 114.3582085,
+          "Load": 5.5860415,
+          "Scan": 0.0,
+          "Hash": 11.8360625,
+          "Index": 2.1564795,
+          "Verify": 159.324021,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 103.0395,
+        "paired_ratio": 1.0633541922227594,
+        "ratio_range": [
+          0.7273749780507361,
+          1.4642320538408182
+        ],
+        "wins": 3,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 39.1568335,
+          "Load": 5.6088125,
+          "Scan": 0.0,
+          "Hash": 25.267812,
+          "Index": 2.944833,
+          "Verify": 23.2308545,
+          "Save": 3.336208
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 88.8140625,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 27.956979,
+          "Load": 4.77025,
+          "Scan": 0.0,
+          "Hash": 23.962708,
+          "Index": 2.9516875,
+          "Verify": 23.186417,
+          "Save": 3.380375
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "batch",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 95.86525,
+        "paired_ratio": 1.1145833454251752,
+        "ratio_range": [
+          0.7405618165316566,
+          1.4993704271212798
+        ],
+        "wins": 2,
+        "cache_bytes": 2206935.5,
+        "written_bytes": 164955.0,
+        "phases_ms": {
+          "Selection": 28.044063,
+          "Load": 11.128729,
+          "Scan": 0.0,
+          "Hash": 23.9076665,
+          "Index": 1.0684165,
+          "Verify": 23.32,
+          "Save": 2.0629795
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 97.183958,
+        "paired_ratio": 1.1487531165600906,
+        "ratio_range": [
+          0.8086222194753461,
+          1.4303941512848322
+        ],
+        "wins": 1,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 45.6380415,
+          "Load": 6.0014375,
+          "Scan": 0.0,
+          "Hash": 14.690042,
+          "Index": 2.2634585,
+          "Verify": 23.474625,
+          "Save": 3.7513125
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 83.4949585,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 32.2345625,
+          "Load": 5.0645835,
+          "Scan": 0.0,
+          "Hash": 13.4818955,
+          "Index": 2.1893335,
+          "Verify": 23.1745625,
+          "Save": 3.647021
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "edit",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 81.4645625,
+        "paired_ratio": 0.9387917472139578,
+        "ratio_range": [
+          0.8670003819420321,
+          1.3421230583580164
+        ],
+        "wins": 4,
+        "cache_bytes": 1633401.0,
+        "written_bytes": 1088.0,
+        "phases_ms": {
+          "Selection": 32.3760415,
+          "Load": 7.866459,
+          "Scan": 0.0,
+          "Hash": 13.3385,
+          "Index": 0.1292915,
+          "Verify": 23.515625,
+          "Save": 1.175271
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 210.7749375,
+        "paired_ratio": 1.0769956052294778,
+        "ratio_range": [
+          0.8924076137118049,
+          1.2364507844625934
+        ],
+        "wins": 1,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 51.2486455,
+          "Load": 0.0642915,
+          "Scan": 0.0,
+          "Hash": 126.719833,
+          "Index": 2.606521,
+          "Verify": 23.6044165,
+          "Save": 3.5038755
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 193.6830415,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 36.9712085,
+          "Load": 0.059271,
+          "Scan": 0.0,
+          "Hash": 123.306,
+          "Index": 2.6147705,
+          "Verify": 23.751875,
+          "Save": 3.549354
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "miss",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 196.953104,
+        "paired_ratio": 1.0035882933155253,
+        "ratio_range": [
+          0.8645288304105545,
+          1.0829012712409432
+        ],
+        "wins": 2,
+        "cache_bytes": 1629593.0,
+        "written_bytes": 1629593.0,
+        "phases_ms": {
+          "Selection": 39.320604,
+          "Load": 0.0804165,
+          "Scan": 0.0,
+          "Hash": 124.0805,
+          "Index": 2.674729,
+          "Verify": 23.425563,
+          "Save": 3.7436465
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "records",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 77.475813,
+        "paired_ratio": 0.9399066102264169,
+        "ratio_range": [
+          0.8712787651755047,
+          1.0646419459031986
+        ],
+        "wins": 4,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 26.864396,
+          "Load": 4.618854,
+          "Scan": 0.0,
+          "Hash": 13.600563,
+          "Index": 2.111438,
+          "Verify": 23.4030835,
+          "Save": 3.6482085
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "records",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 85.8345625,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 1629493.0,
+        "phases_ms": {
+          "Selection": 33.887604,
+          "Load": 5.5167085,
+          "Scan": 0.0,
+          "Hash": 13.9466875,
+          "Index": 2.233291,
+          "Verify": 23.511375,
+          "Save": 3.713125
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "records",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 83.0099585,
+        "paired_ratio": 1.0076180379825403,
+        "ratio_range": [
+          0.7678789238664906,
+          1.2526000527530308
+        ],
+        "wins": 3,
+        "cache_bytes": 1629593.0,
+        "written_bytes": 1629593.0,
+        "phases_ms": {
+          "Selection": 31.255188,
+          "Load": 8.6493125,
+          "Scan": 0.0,
+          "Hash": 13.206166,
+          "Index": 0.132604,
+          "Verify": 23.211396,
+          "Save": 3.670959
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 78.675354,
+        "paired_ratio": 0.9892765280939995,
+        "ratio_range": [
+          0.7938625134788315,
+          1.3861679064140842
+        ],
+        "wins": 3,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 31.557958,
+          "Load": 5.2894795,
+          "Scan": 0.0,
+          "Hash": 13.905562,
+          "Index": 2.093771,
+          "Verify": 23.137688,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 82.0366255,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 34.437396,
+          "Load": 5.2448335,
+          "Scan": 0.0,
+          "Hash": 13.4373125,
+          "Index": 2.380854,
+          "Verify": 23.249167,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "recovery",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 89.7727495,
+        "paired_ratio": 1.0462293523939392,
+        "ratio_range": [
+          0.8877619658050593,
+          1.3764740358670542
+        ],
+        "wins": 3,
+        "cache_bytes": 1629593.0,
+        "written_bytes": 1629593.0,
+        "phases_ms": {
+          "Selection": 37.670625,
+          "Load": 8.5089795,
+          "Scan": 0.0,
+          "Hash": 13.426521,
+          "Index": 0.1287085,
+          "Verify": 23.514521,
+          "Save": 3.5801665
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 73.852542,
+        "paired_ratio": 0.9281115025980348,
+        "ratio_range": [
+          0.6638500695313901,
+          1.3481602750026975
+        ],
+        "wins": 4,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 27.493375,
+          "Load": 4.8119375,
+          "Scan": 0.0,
+          "Hash": 13.110604,
+          "Index": 2.141042,
+          "Verify": 23.471271,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 79.3805,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 1629493.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 32.265583,
+          "Load": 4.962625,
+          "Scan": 0.0,
+          "Hash": 13.7465415,
+          "Index": 1.921396,
+          "Verify": 23.5762915,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "10000-4096-ignore",
+        "scenario": "unchanged",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 84.6373955,
+        "paired_ratio": 1.068542781005002,
+        "ratio_range": [
+          0.694407711037959,
+          1.173348319622473
+        ],
+        "wins": 2,
+        "cache_bytes": 1629593.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 31.2293965,
+          "Load": 5.7010625,
+          "Scan": 0.0,
+          "Hash": 14.088208,
+          "Index": 1.9500215,
+          "Verify": 23.6574375,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 300.0043335,
+        "paired_ratio": 1.017838419670899,
+        "ratio_range": [
+          0.8983953917241665,
+          1.1168429335045988
+        ],
+        "wins": 2,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 99.307854,
+          "Load": 21.151021,
+          "Scan": 0.0,
+          "Hash": 72.105542,
+          "Index": 10.896021,
+          "Verify": 66.1793335,
+          "Save": 15.449958
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 294.096479,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 94.262854,
+          "Load": 21.309063,
+          "Scan": 0.0,
+          "Hash": 71.3437085,
+          "Index": 11.0076875,
+          "Verify": 65.8525005,
+          "Save": 15.5330625
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "batch",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 288.9753125,
+        "paired_ratio": 0.9951646389952933,
+        "ratio_range": [
+          0.897250090256412,
+          1.119577833332405
+        ],
+        "wins": 3,
+        "cache_bytes": 8719830.0,
+        "written_bytes": 164954.0,
+        "phases_ms": {
+          "Selection": 91.375167,
+          "Load": 38.70175,
+          "Scan": 0.0,
+          "Hash": 70.8525,
+          "Index": 1.741375,
+          "Verify": 64.8103335,
+          "Save": 7.2189375
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "bytes",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 651.951396,
+        "paired_ratio": 1.02308130159807,
+        "ratio_range": [
+          0.9752514741959563,
+          1.0672663978084926
+        ],
+        "wins": 1,
+        "cache_bytes": 8142835.0,
+        "written_bytes": 8142835.0,
+        "phases_ms": {
+          "Selection": 95.2116245,
+          "Load": 21.7173125,
+          "Scan": 0.0,
+          "Hash": 389.1369585,
+          "Index": 44.7640415,
+          "Verify": 68.044208,
+          "Save": 16.642729
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "bytes",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 630.8295625,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142835.0,
+        "written_bytes": 8142835.0,
+        "phases_ms": {
+          "Selection": 73.31025,
+          "Load": 21.873375,
+          "Scan": 0.0,
+          "Hash": 383.6638335,
+          "Index": 44.872229,
+          "Verify": 68.244479,
+          "Save": 15.8190625
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "bytes",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 703.520416,
+        "paired_ratio": 1.1195916528114984,
+        "ratio_range": [
+          1.0744068716537138,
+          1.1617362177077537
+        ],
+        "wins": 0,
+        "cache_bytes": 8142935.0,
+        "written_bytes": 8142935.0,
+        "phases_ms": {
+          "Selection": 74.5207715,
+          "Load": 89.41325,
+          "Scan": 0.0,
+          "Hash": 386.3894585,
+          "Index": 36.4369995,
+          "Verify": 67.380125,
+          "Save": 29.625125
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 282.237937,
+        "paired_ratio": 0.9793243760546285,
+        "ratio_range": [
+          0.9535716999740971,
+          1.1265544859598133
+        ],
+        "wins": 4,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 92.7760835,
+          "Load": 21.39675,
+          "Scan": 0.0,
+          "Hash": 62.9629585,
+          "Index": 10.089146,
+          "Verify": 65.4481245,
+          "Save": 15.9159165
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 269.282708,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 80.7437085,
+          "Load": 21.273417,
+          "Scan": 0.0,
+          "Hash": 62.273583,
+          "Index": 10.305375,
+          "Verify": 65.348333,
+          "Save": 16.6460415
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "edit",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 260.8493545,
+        "paired_ratio": 0.9859397262593326,
+        "ratio_range": [
+          0.8345291987831355,
+          1.101715577344845
+        ],
+        "wins": 3,
+        "cache_bytes": 8146473.5,
+        "written_bytes": 1087.0,
+        "phases_ms": {
+          "Selection": 77.93975,
+          "Load": 33.6323125,
+          "Scan": 0.0,
+          "Hash": 62.389333,
+          "Index": 0.6831465,
+          "Verify": 66.033062,
+          "Save": 5.6182915
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 823.208646,
+        "paired_ratio": 1.0154107362759892,
+        "ratio_range": [
+          0.9622113404487987,
+          1.066612101739928
+        ],
+        "wins": 3,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 84.646125,
+          "Load": 0.067333,
+          "Scan": 0.0,
+          "Hash": 612.6095415,
+          "Index": 13.385625,
+          "Verify": 66.927979,
+          "Save": 17.218854
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 810.5745,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 73.6389165,
+          "Load": 0.067062,
+          "Scan": 0.0,
+          "Hash": 612.1810205,
+          "Index": 13.4639795,
+          "Verify": 66.5750415,
+          "Save": 17.088458
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "miss",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 818.441354,
+        "paired_ratio": 1.0146830460977954,
+        "ratio_range": [
+          0.9489667561836473,
+          1.0673994550313728
+        ],
+        "wins": 2,
+        "cache_bytes": 8142669.0,
+        "written_bytes": 8142669.0,
+        "phases_ms": {
+          "Selection": 94.0795415,
+          "Load": 0.093083,
+          "Scan": 0.0,
+          "Hash": 608.212625,
+          "Index": 13.473729,
+          "Verify": 66.6051875,
+          "Save": 17.8572915
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "records",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 271.96175,
+        "paired_ratio": 0.9470776333272632,
+        "ratio_range": [
+          0.907447529718902,
+          1.1088868142031567
+        ],
+        "wins": 4,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 80.579083,
+          "Load": 21.186625,
+          "Scan": 0.0,
+          "Hash": 63.5418955,
+          "Index": 10.161521,
+          "Verify": 65.543,
+          "Save": 15.7809165
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "records",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 287.9317295,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 8142569.0,
+        "phases_ms": {
+          "Selection": 96.327583,
+          "Load": 21.731167,
+          "Scan": 0.0,
+          "Hash": 61.137542,
+          "Index": 10.2995625,
+          "Verify": 64.934937,
+          "Save": 17.401875
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "records",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 276.217375,
+        "paired_ratio": 0.985228812236055,
+        "ratio_range": [
+          0.9097739713355028,
+          1.1013102691246375
+        ],
+        "wins": 3,
+        "cache_bytes": 8142669.0,
+        "written_bytes": 8142669.0,
+        "phases_ms": {
+          "Selection": 76.605354,
+          "Load": 35.2559585,
+          "Scan": 0.0,
+          "Hash": 62.341438,
+          "Index": 0.6975835,
+          "Verify": 64.8426665,
+          "Save": 17.137146
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 263.289458,
+        "paired_ratio": 1.02714005461028,
+        "ratio_range": [
+          0.885867482738106,
+          1.1452635614689555
+        ],
+        "wins": 2,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 88.7630625,
+          "Load": 21.235708,
+          "Scan": 0.0,
+          "Hash": 63.7886665,
+          "Index": 10.1055205,
+          "Verify": 65.841917,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 249.8023335,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 77.040833,
+          "Load": 21.2658335,
+          "Scan": 0.0,
+          "Hash": 61.6215415,
+          "Index": 10.1618545,
+          "Verify": 65.9135625,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "recovery",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 289.1301665,
+        "paired_ratio": 1.1249652327848634,
+        "ratio_range": [
+          0.9722325268688647,
+          1.2135599649437832
+        ],
+        "wins": 1,
+        "cache_bytes": 8142669.0,
+        "written_bytes": 8142669.0,
+        "phases_ms": {
+          "Selection": 94.3097915,
+          "Load": 34.493125,
+          "Scan": 0.0,
+          "Hash": 62.099979,
+          "Index": 0.6741665,
+          "Verify": 65.4820835,
+          "Save": 17.2797505
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "checkpoint",
+        "baseline": "replacement",
+        "median_ms": 255.047604,
+        "paired_ratio": 1.0464714867242029,
+        "ratio_range": [
+          0.8899895259453691,
+          1.16115823323108
+        ],
+        "wins": 2,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 75.136854,
+          "Load": 21.4065205,
+          "Scan": 0.0,
+          "Hash": 63.829479,
+          "Index": 10.163854,
+          "Verify": 65.260437,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "replacement",
+        "baseline": "replacement",
+        "median_ms": 248.515479,
+        "paired_ratio": 1.0,
+        "ratio_range": [
+          1.0,
+          1.0
+        ],
+        "wins": 0,
+        "cache_bytes": 8142569.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 74.541792,
+          "Load": 21.4382085,
+          "Scan": 0.0,
+          "Hash": 62.436562,
+          "Index": 10.079479,
+          "Verify": 64.966396,
+          "Save": 0.0
+        }
+      },
+      {
+        "fixture": "50000-128-ignore",
+        "scenario": "unchanged",
+        "variant": "observation-journal",
+        "baseline": "replacement",
+        "median_ms": 260.054541,
+        "paired_ratio": 1.01165682086764,
+        "ratio_range": [
+          0.9040311893976817,
+          1.153634774092875
+        ],
+        "wins": 3,
+        "cache_bytes": 8142669.0,
+        "written_bytes": 0.0,
+        "phases_ms": {
+          "Selection": 84.0838335,
+          "Load": 23.696896,
+          "Scan": 0.0,
+          "Hash": 62.1300835,
+          "Index": 10.1158335,
+          "Verify": 65.4708125,
+          "Save": 0.0
+        }
+      }
+    ]
+  },
+  "ordinary_histories": [
+    {
+      "fixture": "1000-32-ignore",
+      "scenario": "batch",
+      "rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "loaded_records": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "positions": [
+        3,
+        2,
+        1,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "fixture": "1000-32-ignore",
+      "scenario": "edit",
+      "rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "loaded_records": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "positions": [
+        3,
+        2,
+        1,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "fixture": "10000-4096-git",
+      "scenario": "batch",
+      "rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "loaded_records": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "positions": [
+        3,
+        2,
+        1,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "fixture": "10000-4096-git",
+      "scenario": "edit",
+      "rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "loaded_records": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "positions": [
+        3,
+        2,
+        1,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "fixture": "10000-4096-ignore",
+      "scenario": "batch",
+      "rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "loaded_records": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "positions": [
+        3,
+        2,
+        1,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "fixture": "10000-4096-ignore",
+      "scenario": "edit",
+      "rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "loaded_records": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "positions": [
+        3,
+        2,
+        1,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "fixture": "50000-128-ignore",
+      "scenario": "batch",
+      "rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "loaded_records": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "positions": [
+        3,
+        2,
+        1,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "fixture": "50000-128-ignore",
+      "scenario": "edit",
+      "rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "loaded_records": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "positions": [
+        3,
+        2,
+        1,
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "report_sha256": "d707c4397c8bb78409ec5778635ce4708a48c272b10f62ff27e0a7622f593e30",
+  "analysis_inputs": {
+    "summarize_observation_journal.py": "1e457a84b95bad13cfaea0419f2c88433f640b00cd0002f1448ea17fd8ef9e33",
+    "benchmark_derived_index.py": "6bddd84c7c1ed0e14f5fdfbcbdd4a072dce7a23628460fd4367b9c3461c6d21a",
+    "benchmark_observation_journal.py": "21e09b71d16ac66fe140f8b1fb75808abf21fa5978d67334fc4057c025c951cf"
+  }
+}

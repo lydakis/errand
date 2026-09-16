@@ -35,15 +35,21 @@ def validate_sample(sample, files, edits, scenario, variant):
             raise RuntimeError("Timed sample did not replay the full journal before replacement")
 
 
-def summarize(samples):
+def summarize(samples, variants=VARIANTS, baseline_variant="checkpoint"):
     rows = []
     for fixture, scenario in sorted({(s["fixture"], s["scenario"]) for s in samples}):
         selected = [s for s in samples if (s["fixture"], s["scenario"]) == (fixture, scenario)]
-        baseline = {s["round"]: s for s in selected if s["variant"] == "checkpoint"}
-        for variant in VARIANTS:
+        pairs = {(s["variant"], s["round"]): s for s in selected}
+        if len(pairs) != len(selected):
+            raise ValueError(f"Duplicate pairs in {fixture}/{scenario}")
+        rounds = {s["round"] for s in selected}
+        if any((v, r) not in pairs for v in (*variants, baseline_variant) for r in rounds):
+            raise ValueError(f"Missing pairs in {fixture}/{scenario}")
+        baseline = {r: pairs[baseline_variant, r] for r in rounds}
+        for variant in variants:
             group = [s for s in selected if s["variant"] == variant]
             ratios = [s["Total"]/baseline[s["round"]]["Total"] for s in group]
-            rows.append(dict(fixture=fixture, scenario=scenario, variant=variant,
+            rows.append(dict(fixture=fixture, scenario=scenario, variant=variant, baseline=baseline_variant,
                              median_ms=statistics.median(s["Total"] for s in group)/1e6,
                              paired_ratio=statistics.median(ratios),
                              ratio_range=[min(ratios), max(ratios)], wins=sum(r < 1 for r in ratios),

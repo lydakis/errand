@@ -1,0 +1,4 @@
+ok  	github.com/lydakis/errand/internal/manifest	2.882s
+ok  	github.com/lydakis/errand/internal/snapshot	5.585s
+ok  	github.com/lydakis/errand/experiments/snapshotcheckpoint	20.719s
+?   	github.com/lydakis/errand/experiments/snapshotcheckpoint/cmd	[no test files]
