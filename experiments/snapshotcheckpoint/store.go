@@ -12,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lydakis/errand/internal/archive"
+	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/proto"
 	"golang.org/x/sys/unix"
 )
@@ -21,31 +21,36 @@ const magic = "ERRAND-OBS-2\n"
 const maxBytes = 64 << 20
 const maxEntries = 200000
 
+type loadedCheckpoint struct {
+	checkpoint
+	state *manifest.Snapshot
+}
+
 // The bounded, checksummed payload is disposable after machine failure. Its
 // private directory belongs to the caller, not to repository configuration.
-func readCheckpoint(ctx context.Context, dir string, key identity) (cp checkpoint, status string, size int64, err error) {
+func readCheckpoint(ctx context.Context, dir string, key identity, restore bool) (loaded loadedCheckpoint, status string, size int64, err error) {
 	// Cancellation is not cache corruption and must not start a cold rebuild.
 	defer func() {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			cp, status, err = checkpoint{}, "", ctxErr
+			loaded, status, err = loadedCheckpoint{}, "", ctxErr
 		}
 	}()
 	if err := ctx.Err(); err != nil {
-		return checkpoint{}, "", 0, err
+		return loadedCheckpoint{}, "", 0, err
 	}
 	fd, err := unix.Open(filepath.Join(dir, "checkpoint"), unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	if err != nil {
-		return checkpoint{}, "missing", 0, nil
+		return loadedCheckpoint{}, "missing", 0, nil
 	}
 	f := os.NewFile(uintptr(fd), "checkpoint")
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() > maxBytes {
-		return checkpoint{}, "corrupt", 0, nil
+		return loadedCheckpoint{}, "corrupt", 0, nil
 	}
 	data, err := io.ReadAll(contextReader{ctx, io.LimitReader(f, maxBytes+1)})
 	size = int64(len(data))
-	bad := func() (checkpoint, string, int64, error) { return checkpoint{}, "corrupt", size, nil }
+	bad := func() (loadedCheckpoint, string, int64, error) { return loadedCheckpoint{}, "corrupt", size, nil }
 	if err != nil || len(data) > maxBytes || len(data) < len(magic)+sha256.Size || !bytes.HasPrefix(data, []byte(magic)) {
 		return bad()
 	}
@@ -54,24 +59,33 @@ func readCheckpoint(ctx context.Context, dir string, key identity) (cp checkpoin
 	if err != nil || !bytes.Equal(sum[:], data[len(data)-sha256.Size:]) {
 		return bad()
 	}
-	cp, err = decodeCheckpoint(ctx, bytes.NewReader(payload))
+	cp, err := decodeCheckpoint(ctx, bytes.NewReader(payload))
 	if err != nil {
 		return bad()
 	}
 	if cp.Identity != key {
-		return checkpoint{}, "identity", size, nil
+		return loadedCheckpoint{}, "identity", size, nil
 	}
-	m := proto.Manifest{Entries: make([]proto.ManifestEntry, len(cp.Entries))}
+	var m proto.Manifest
+	if len(cp.Entries) != 0 {
+		m.Entries = make([]proto.ManifestEntry, len(cp.Entries))
+	}
 	for i, entry := range cp.Entries {
 		if err := ctx.Err(); err != nil {
-			return checkpoint{}, "", size, err
+			return loadedCheckpoint{}, "", size, err
 		}
 		m.Entries[i] = entry.Entry
 	}
-	if err := archive.ValidateSortedContext(ctx, m); err != nil {
+	loaded.checkpoint = cp
+	if restore {
+		loaded.state, err = manifest.New(ctx, m)
+	} else {
+		err = manifest.Validate(ctx, m)
+	}
+	if err != nil {
 		return bad()
 	}
-	return cp, "hit", size, nil
+	return loaded, "hit", size, nil
 }
 
 func writeCheckpoint(ctx context.Context, dir string, cp checkpoint) (int64, error) {

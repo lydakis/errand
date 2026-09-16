@@ -11,10 +11,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"time"
 
@@ -23,6 +21,7 @@ import (
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
+// Scan remains zero for the shared pass; retained frozen reports used it separately.
 type Phases struct{ Selection, Load, Scan, Hash, Index, Verify, Save time.Duration }
 type Result struct {
 	State                   *manifest.Snapshot
@@ -38,16 +37,13 @@ type identity struct {
 	Device, Inode              uint64
 	Policy                     [32]byte
 }
-type observation struct {
-	Entry proto.ManifestEntry
-	Stamp stamp
-}
+type observation = snapshot.Observation
 type checkpoint struct {
 	Identity identity
 	Entries  []observation
 }
 
-// Cold is the f459bb2 selection/build/index path, shared with the comparator.
+// Cold uses ordinary selection/build/index without checkpoint observations.
 // It deliberately includes PrepareUpdates so both paths return a ready index.
 func Cold(ctx context.Context, root string, opts snapshot.SelectOptions) (r Result, err error) {
 	start := time.Now()
@@ -87,16 +83,32 @@ func Cold(ctx context.Context, root string, opts snapshot.SelectOptions) (r Resu
 	return r, err
 }
 
-// Prepare reopens a bounded checkpoint and checks every selected path. Changed
-// paths use the existing snapshot builder; updates use the existing adaptive
-// manifest engine. Callers must still freeze/verify shipped bodies normally.
-func Prepare(ctx context.Context, root, cache string, opts snapshot.SelectOptions) (r Result, err error) {
-	return prepare(ctx, root, cache, opts, snapshot.BuildBoundedContext)
+// Prepare reopens a bounded checkpoint and builds all selected metadata through
+// the shared builder. Callers must still freeze/verify shipped bodies normally.
+func Prepare(ctx context.Context, root, cache string, opts snapshot.SelectOptions) (Result, error) {
+	return prepare(ctx, root, cache, opts, defaultPreparation(false))
 }
 
-// A per-call builder boundary lets tests schedule real source changes between
-// construction and verification without global hooks or timing assumptions.
-func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOptions, build func(context.Context, string, []string, int64, int) (proto.Manifest, error)) (r Result, err error) {
+// PrepareCurrent compares direct current-state construction against restoring
+// prior state and applying edits. Both return the same ready adaptive index.
+func PrepareCurrent(ctx context.Context, root, cache string, opts snapshot.SelectOptions) (Result, error) {
+	return prepare(ctx, root, cache, opts, defaultPreparation(true))
+}
+
+type preparation struct {
+	direct     bool
+	entryLimit int
+	identify   func(string, proto.SelectionPolicy, snapshot.SelectOptions) (identity, error)
+	build      func(context.Context, string, snapshot.BuildPaths, snapshot.ObservationOptions) (*snapshot.ObservedBuild, error)
+}
+
+func defaultPreparation(direct bool) preparation {
+	return preparation{direct: direct, entryLimit: maxEntries, identify: checkoutIdentity, build: snapshot.BuildObservedContext}
+}
+
+// Per-call dependencies let tests exercise admission boundaries and schedule
+// source changes without global hooks or timing assumptions.
+func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOptions, config preparation) (r Result, err error) {
 	if err = ctx.Err(); err != nil {
 		return
 	}
@@ -153,94 +165,42 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 	if err != nil {
 		return r, err
 	}
+	preparedPaths := snapshot.PrepareBuildPaths(paths)
 	r.Phases.Selection = time.Since(start)
 	start = time.Now()
-	key, err := checkoutIdentity(root, policy, opts)
-	if err != nil {
-		cold, coldErr := Cold(ctx, root, opts)
-		cold.CacheStatus, cold.CacheError = "unsupported", err.Error()
-		return cold, coldErr
+	key, keyErr := config.identify(root, policy, opts)
+	var prior loadedCheckpoint
+	collect := keyErr == nil && preparedPaths.Len() <= config.entryLimit
+	switch {
+	case keyErr != nil:
+		r.CacheStatus, r.CacheError = "unsupported", keyErr.Error()
+	case !collect:
+		r.CacheStatus = "oversized"
+	default:
+		prior, r.CacheStatus, r.CheckpointBytes, err = readCheckpoint(ctx, cache, key, !config.direct)
 	}
-	prior, status, size, err := readCheckpoint(ctx, cache, key)
-	r.CacheStatus, r.CheckpointBytes = status, size
 	r.Phases.Load = time.Since(start)
 	if err != nil {
 		return r, err
 	}
 	start = time.Now()
-	selected := make(map[string]bool, len(paths))
-	for _, name := range paths {
-		selected[name] = true
-		for p := path.Dir(name); p != "." && p != "/"; p = path.Dir(p) {
-			selected[p] = true
-		}
-	}
-	paths = make([]string, 0, len(selected))
-	for name := range selected {
-		paths = append(paths, name)
-	}
-	slices.Sort(paths)
-	next := checkpoint{Identity: key, Entries: make([]observation, len(paths))}
-	positions := make(map[string]int, len(paths))
-	var changed []string
-	writable := status != "hit" || len(paths) != len(prior.Entries)
-	oldIndex := 0
-	for i, name := range paths {
-		if err = ctx.Err(); err != nil {
-			return r, err
-		}
-		info, e := os.Lstat(filepath.Join(root, filepath.FromSlash(name)))
-		if e != nil {
-			return r, e
-		}
-		stamp, e := fingerprint(info)
-		if e != nil {
-			return r, e
-		}
-		positions[name] = i
-		next.Entries[i].Stamp = stamp
-		for oldIndex < len(prior.Entries) && prior.Entries[oldIndex].Entry.Path < name {
-			oldIndex++
-		}
-		if oldIndex < len(prior.Entries) && prior.Entries[oldIndex].Entry.Path == name && prior.Entries[oldIndex].Stamp == stamp {
-			next.Entries[i].Entry = prior.Entries[oldIndex].Entry
-			if info.Mode().IsRegular() {
-				r.Reused++
-			}
-		} else {
-			changed = append(changed, name)
-			writable = true
-			if info.Mode().IsRegular() {
-				r.Hashed++
-			}
-		}
-	}
-	r.Phases.Scan = time.Since(start)
-	start = time.Now()
-	part, err := build(ctx, root, changed, -1, -1)
+	built, err := config.build(ctx, root, preparedPaths, snapshot.ObservationOptions{
+		Prior: prior.Entries, Collect: collect, MaxBytes: -1, MaxEntries: -1,
+	})
 	if err != nil {
 		return r, err
 	}
-	for _, entry := range part.Entries {
-		i, ok := positions[entry.Path]
-		if !ok {
-			return r, fmt.Errorf("builder returned unselected path %q", entry.Path)
-		}
-		info, e := os.Lstat(filepath.Join(root, filepath.FromSlash(entry.Path)))
-		if e != nil {
-			return r, e
-		}
-		after, e := fingerprint(info)
-		if e != nil || !matchesPrepared(next.Entries[i].Stamp, after, entry) {
-			return r, fmt.Errorf("source changed while preparing %q", entry.Path)
-		}
-		next.Entries[i].Entry = entry
-		next.Entries[i].Stamp = after
+	r.Hashed, r.Reused = built.Hashed, built.Reused
+	if err = built.Verify(ctx, root); err != nil {
+		return r, err
 	}
+	next := checkpoint{Identity: key, Entries: built.Observations}
+	writable := collect && (r.CacheStatus != "hit" || built.Changed)
 	r.Phases.Hash = time.Since(start)
 	start = time.Now()
-	if status == "hit" {
-		r.State, err = stateOf(ctx, prior)
+	if r.CacheStatus == "hit" && !config.direct {
+		r.State = prior.state
+		err = r.State.PrepareUpdates(ctx)
 		if err == nil {
 			edits := differences(prior.Entries, next.Entries)
 			if len(edits) != 0 {
@@ -248,7 +208,10 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 			}
 		}
 	} else {
-		r.State, err = stateOf(ctx, next)
+		r.State, err = manifest.New(ctx, built.Manifest)
+		if err == nil {
+			err = r.State.PrepareUpdates(ctx)
+		}
 	}
 	r.Phases.Index = time.Since(start)
 	if err != nil {
@@ -258,9 +221,11 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 	if err = guard.Verify(); err != nil {
 		return r, err
 	}
-	now, err := checkoutIdentity(root, policy, opts)
-	if err != nil || key != now {
-		return r, fmt.Errorf("checkout identity changed during preparation")
+	if keyErr == nil {
+		now, identityErr := config.identify(root, policy, opts)
+		if identityErr != nil || key != now {
+			return r, fmt.Errorf("checkout identity changed during preparation")
+		}
 	}
 	if err = ctx.Err(); err != nil {
 		return r, err
@@ -290,7 +255,7 @@ func checkoutIdentity(root string, policy proto.SelectionPolicy, opts snapshot.S
 	if !info.IsDir() {
 		return identity{}, fmt.Errorf("source root is not a directory")
 	}
-	s, err := fingerprint(info)
+	s, err := snapshot.Fingerprint(info)
 	if err != nil {
 		return identity{}, err
 	}
@@ -307,23 +272,6 @@ func checkoutIdentity(root string, policy proto.SelectionPolicy, opts snapshot.S
 		Options snapshot.SelectOptions
 	}{policy, opts})
 	return identity{Root: root, OS: runtime.GOOS, Boot: boot, Filesystem: filesystem, Device: s.Device, Inode: s.Inode, Policy: sha256.Sum256(data)}, err
-}
-
-func stateOf(ctx context.Context, cp checkpoint) (*manifest.Snapshot, error) {
-	// The cold builder emits nil for an empty selection. Preserve that wire
-	// representation: JSON null and [] have different root hashes.
-	var m proto.Manifest
-	if len(cp.Entries) != 0 {
-		m.Entries = make([]proto.ManifestEntry, len(cp.Entries))
-	}
-	for i, e := range cp.Entries {
-		m.Entries[i] = e.Entry
-	}
-	s, err := manifest.New(ctx, m)
-	if err == nil {
-		err = s.PrepareUpdates(ctx)
-	}
-	return s, err
 }
 
 func differences(before, after []observation) []manifest.Edit {

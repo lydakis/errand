@@ -164,7 +164,7 @@ func TestBootIdentityNonregularCacheAndConcurrentWriters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cp, status, _, err := readCheckpoint(context.Background(), cache, key)
+	cp, status, _, err := readCheckpoint(context.Background(), cache, key, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestBootIdentityNonregularCacheAndConcurrentWriters(t *testing.T) {
 		t.Fatal(status)
 	}
 	cp.Identity.Boot = "previous boot"
-	if _, err := writeCheckpoint(context.Background(), cache, cp); err != nil {
+	if _, err := writeCheckpoint(context.Background(), cache, cp.checkpoint); err != nil {
 		t.Fatal(err)
 	}
 	if got := oracle(t, root, cache); got.CacheStatus != "identity" || got.Reused != 0 {
@@ -191,13 +191,13 @@ func TestBootIdentityNonregularCacheAndConcurrentWriters(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Go(func() {
-			var other checkpoint = cp
+			other := cp.checkpoint
 			other.Identity.Boot = key.Boot
 			_, err := writeCheckpoint(context.Background(), cache, other)
 			if err != nil && err != unix.EWOULDBLOCK && err != unix.EAGAIN {
 				t.Error(err)
 			}
-			if _, status, _, err := readCheckpoint(context.Background(), cache, key); status != "hit" || err != nil {
+			if _, status, _, err := readCheckpoint(context.Background(), cache, key, true); status != "hit" || err != nil {
 				t.Errorf("concurrent read: %s %v", status, err)
 			}
 		})

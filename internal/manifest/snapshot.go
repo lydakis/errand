@@ -45,23 +45,38 @@ type Snapshot struct {
 }
 
 func New(ctx context.Context, m proto.Manifest) (*Snapshot, error) {
-	if err := archive.ValidateSortedContext(ctx, m); err != nil {
+	size, err := validate(ctx, m)
+	if err != nil {
 		return nil, err
+	}
+	return &Snapshot{entries: slices.Clone(m.Entries), size: size, count: len(m.Entries)}, ctx.Err()
+}
+
+// Validate checks the same metadata invariants as New without retaining a copy.
+// It does not confer ownership or validate live filesystem contents.
+func Validate(ctx context.Context, m proto.Manifest) error {
+	_, err := validate(ctx, m)
+	return err
+}
+
+func validate(ctx context.Context, m proto.Manifest) (int64, error) {
+	if err := archive.ValidateSortedContext(ctx, m); err != nil {
+		return 0, err
 	}
 	var size int64
 	for _, e := range m.Entries {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return 0, err
 		}
 		if e.Path == "." {
-			return nil, fmt.Errorf("manifest paths must be strictly sorted and relative")
+			return 0, fmt.Errorf("manifest paths must be strictly sorted and relative")
 		}
 		if e.Size > math.MaxInt64-size {
-			return nil, fmt.Errorf("manifest byte total overflows")
+			return 0, fmt.Errorf("manifest byte total overflows")
 		}
 		size += e.Size
 	}
-	return &Snapshot{entries: slices.Clone(m.Entries), size: size, count: len(m.Entries)}, ctx.Err()
+	return size, ctx.Err()
 }
 
 func (s *Snapshot) Bytes() int64 { return s.size }

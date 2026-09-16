@@ -1,0 +1,12 @@
+{
+  "base_archive": "final-inputs.tar.gz",
+  "base_source_sha256": "180f6a412606723f1e57449b4de03ee3b57dde69f153f67d0f5e6acf63abf2d2",
+  "source_sha256": "e0f9a20093231a4fc8b7d3d0e59491a516ae7eb759a7b499f5ce1c45136cdc27",
+  "additional_go_sources": {
+    "builder-fixed-control/mixed-checkpoint.go": "a4e0d1a190f0526c859af6cd4c37d8db0306520a8bfed9a537b7881eef9a6093",
+    "builder-fixed-control/mixed-snapshot.go": "bdd82b6faaa47ac8997b4b0ba71049a7e634692fccace4a673199f91f5b0177d",
+    "builder-fixed-control/mixed-main.go": "20b0438a16fee3bb45d5c35ee82c46382dc79fab530c82b4d53575461cc4af0f"
+  },
+  "origin": "fixed-control-apfs/logs.tar.gz (identical Go files in fixed-control-btrfs)",
+  "note": "The control preceded the matrix and retained these diagnostic overlays. They are included by the broad inventory but are outside the explicitly compiled packages."
+}

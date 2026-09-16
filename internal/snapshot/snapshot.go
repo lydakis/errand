@@ -703,6 +703,10 @@ func BuildBoundedContext(ctx context.Context, root string, paths []string, maxBy
 }
 
 func buildBoundedContext(ctx context.Context, root string, paths []string, maxBytes int64, maxEntries int, builder *Builder) (proto.Manifest, error) {
+	return buildSelectedContext(ctx, root, expandPaths(paths), maxBytes, maxEntries, builder, nil)
+}
+
+func expandPaths(paths []string) []string {
 	selected := make(map[string]struct{}, len(paths))
 	for _, rel := range paths {
 		selected[rel] = struct{}{}
@@ -715,7 +719,20 @@ func buildBoundedContext(ctx context.Context, root string, paths []string, maxBy
 		paths = append(paths, rel)
 	}
 	sort.Strings(paths)
+	return paths
+}
+
+func buildSelectedContext(ctx context.Context, root string, paths []string, maxBytes int64, maxEntries int, builder *Builder, observed *ObservedBuild) (proto.Manifest, error) {
 	var m proto.Manifest
+	// Native comparisons found eager allocation slower for ordinary cold builds.
+	// Keep their growth policy; reserve capacity only for observation builds.
+	if observed != nil && observed.collect && len(paths) != 0 {
+		capacity := len(paths)
+		if maxEntries >= 0 {
+			capacity = min(capacity, maxEntries)
+		}
+		m.Entries = make([]proto.ManifestEntry, 0, capacity)
+	}
 	var bytes int64
 	for _, rel := range paths {
 		if err := ctx.Err(); err != nil {
@@ -729,13 +746,17 @@ func buildBoundedContext(ctx context.Context, root string, paths []string, maxBy
 		if err != nil {
 			return m, err
 		}
+		prior, err := observed.lookup(rel, fi)
+		if err != nil {
+			return m, err
+		}
 		e := proto.ManifestEntry{Path: rel, Mode: uint32(fi.Mode().Perm())}
 		switch {
 		case fi.Mode().IsDir():
 			e.Type = proto.EntryDir
 		case fi.Mode()&fs.ModeSymlink != 0:
 			e.Type = proto.EntrySymlink
-			target, err := os.Readlink(abs)
+			target, err := readSymlinkTarget(abs, prior)
 			if err != nil {
 				return m, err
 			}
@@ -747,7 +768,12 @@ func buildBoundedContext(ctx context.Context, root string, paths []string, maxBy
 				return m, fmt.Errorf("snapshot: %w: files exceed %d bytes", ErrByteLimitExceeded, maxBytes)
 			}
 			bytes += e.Size
-			sum, err := builder.hash(ctx, abs, fi)
+			var sum string
+			if prior != nil {
+				sum = prior.Entry.SHA256
+			} else {
+				sum, err = builder.hash(ctx, abs, fi)
+			}
 			if err != nil {
 				return m, err
 			}
@@ -755,10 +781,18 @@ func buildBoundedContext(ctx context.Context, root string, paths []string, maxBy
 		default:
 			return m, fmt.Errorf("snapshot: %s: unsupported file type %v", rel, fi.Mode())
 		}
+		observed.record(e, prior != nil)
 		m.Entries = append(m.Entries, e)
 	}
-	sort.Slice(m.Entries, func(i, j int) bool { return m.Entries[i].Path < m.Entries[j].Path })
+	// expandPaths already sorted and deduplicated the traversal.
 	return m, nil
+}
+
+func readSymlinkTarget(abs string, prior *Observation) (string, error) {
+	if prior != nil {
+		return prior.Entry.Target, nil
+	}
+	return os.Readlink(abs)
 }
 
 // Pack writes the manifest's entries as a tar stream, verifying each file

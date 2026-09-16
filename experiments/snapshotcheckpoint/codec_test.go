@@ -79,7 +79,7 @@ func TestCancelledCacheIOPreservesGeneration(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, status, _, err := readCheckpoint(ctx, dir, cp.Identity); !errors.Is(err, context.Canceled) || status != "" {
+	if _, status, _, err := readCheckpoint(ctx, dir, cp.Identity, true); !errors.Is(err, context.Canceled) || status != "" {
 		t.Fatalf("cancelled load became a cache miss: %q %v", status, err)
 	}
 	if _, err := writeCheckpoint(ctx, dir, cp); !errors.Is(err, context.Canceled) {

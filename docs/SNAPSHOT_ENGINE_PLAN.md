@@ -90,6 +90,20 @@ of ignored directory churn and relative-root cache misses. It adds cancellation
 through checkpoint I/O, checks both benchmark modes, and reports execution position.
 These are corrections to the isolated prototype, not production adoption.
 
+The [shared-builder comparison](SNAPSHOT_CHECKPOINT_BUILDER.md) now collects
+observations during ordinary entry construction and carries validated loaded
+metadata into index preparation. It compares prior-state updates with direct
+current-state construction on larger and Git-selected fixtures. The
+[review follow-up](SNAPSHOT_CHECKPOINT_BUILDER_REVIEW.md) removes unused prior-state
+construction from the direct comparator. Corrected native measurements remain
+mixed across workloads, so updates remain the default. Eager allocation for
+ordinary builds was rejected after native regression
+checks; their existing slice-growth policy is retained. Disk checkpoint adoption
+remains gated separately from this shared implementation work. Separate-binary
+cold controls still have unresolved differences. Actual-caller controls and
+identical-code negative controls are now retained alongside those signals;
+neither supports a blanket regression-free claim.
+
 Keep the current content-addressed model. Selection policy determines eligible
 paths, a snapshot describes their state, and the content store resolves their
 bodies. Changing the snapshot representation and changing the unit of body
@@ -133,21 +147,33 @@ not sufficient evidence for migrating all of them.
   symlink/case aliases. Advisory cache writes do not change production fsync rules.
   Native paired measurements include cache misses, unchanged restarts and edits,
   with frozen inputs and all earlier candidates retained.
-- **Next step-3 gate:** measure collecting observations during the ordinary builder
-  to avoid duplicate miss-path stat work. Then compare restoring derived index
+- **Next step-3 gate:** the shared observation pass and loaded-state ownership
+  handoff have been measured. Next compare restoring derived index
   state and publishing changed records against the frozen observation prototype.
   Load validation, full rebuild/compaction and recovery costs are part of that
-  comparison. Full stat inventory and selection verification remain separate costs;
+  comparison. Consolidate the native reuse predicate with the in-memory builder
+  and strengthen the verified-publication type boundary before adding consumers;
+  preserve session ownership, unsupported-platform behavior and pack verification.
+  These are measured prerequisites for the next slice, not reasons to replace the
+  adaptive representation. Full stat inventory and selection verification remain separate costs;
   neither storage change can be assumed to remove them. Integrate only after those
   gates, preserving the selection guard through freezing and testing every caller.
-- **Include in that next measured slice:** share native observation and ancestor
-  rules with the builder; bypass unsupported and oversized caches without duplicate
-  preparation; compare direct construction of current state against rebuilding
-  prior state and applying edits. Both keep the adaptive contiguous/Merkle engine.
-  Compare removal of duplicate validation/copies through a validated ownership
-  boundary. Add larger entry counts, multiple edit densities and Git-selected
-  fixtures before selecting a storage design. Preserve this frozen prototype as
-  the comparison control rather than changing representation without measurement.
+- **Completed in the shared-builder slice:** native observations and ancestor
+  expansion use the ordinary builder pass; unsupported identity and over-limit
+  observation counts avoid duplicate preparation; validated loaded snapshots are
+  reused without repeat validation/copying. Review fixes bind reused symlink targets
+  to their stamps, compute each fingerprint once, use one explicit admission
+  decision before loading, and retain metadata-only validation for the direct
+  comparator. Regression coverage includes Git ancestor ceilings, unsupported
+  empty/nonempty selections, and corrupt direct loads. Corrected comparisons use
+  the same adaptive engine. Larger trees,
+  multiple edit densities and Git-selected fixtures are included. Frozen controls,
+  regression checks and rejected allocation behavior remain in the evidence.
+  Persisted derived-index restoration and changed-record publication remain next.
+  The 64 MiB payload limit is enforced after encoding; early byte-size admission
+  remains a bounded follow-up. Native hash-buffer allocation also deserves profiling
+  if cold preparation stays material; observed GC counts alone do not explain its
+  latency.
 - **Before checkpoint production adoption:** make filesystem eligibility executable,
   verify cache ownership/permissions, and bind cache operations to validated
   directory handles or controlled locations. Account for mount aliases as well as

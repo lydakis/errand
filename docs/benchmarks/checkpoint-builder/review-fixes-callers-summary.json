@@ -1,0 +1,104 @@
+{
+  "apfs": {
+    "ephemeral-job": {
+      "baseline_ms": 516.6569025,
+      "candidate_ms": 520.656653,
+      "paired_median": 1.006187803532065,
+      "wins": 2,
+      "n": 8
+    },
+    "fetch-ephemeral": {
+      "baseline_ms": 101.277014,
+      "candidate_ms": 102.08336800000001,
+      "paired_median": 1.001408704260657,
+      "wins": 4,
+      "n": 8
+    },
+    "fetch-persistent": {
+      "baseline_ms": 200.9345905,
+      "candidate_ms": 201.766528,
+      "paired_median": 1.0137514926157483,
+      "wins": 2,
+      "n": 8
+    },
+    "push": {
+      "baseline_ms": 484.99832649999996,
+      "candidate_ms": 485.88307,
+      "paired_median": 1.0038537227037998,
+      "wins": 2,
+      "n": 8
+    },
+    "watch": {
+      "baseline_ms": 309.091417,
+      "candidate_ms": 308.37931249999997,
+      "paired_median": 1.0007388778514024,
+      "wins": 4,
+      "n": 8
+    },
+    "workspace-create": {
+      "baseline_ms": 539.635215,
+      "candidate_ms": 542.466847,
+      "paired_median": 1.0013199769853502,
+      "wins": 4,
+      "n": 8
+    },
+    "disabled-observations": {
+      "baseline_ms": 33.1073265,
+      "candidate_ms": 33.150264,
+      "paired_median": 1.0019695018486896,
+      "wins": 2,
+      "n": 8
+    }
+  },
+  "btrfs": {
+    "ephemeral-job": {
+      "baseline_ms": 712.2818605,
+      "candidate_ms": 724.705953,
+      "paired_median": 1.0301675335030782,
+      "wins": 2,
+      "n": 8
+    },
+    "fetch-ephemeral": {
+      "baseline_ms": 88.620596,
+      "candidate_ms": 89.07509300000001,
+      "paired_median": 0.991042169854459,
+      "wins": 5,
+      "n": 8
+    },
+    "fetch-persistent": {
+      "baseline_ms": 209.3203915,
+      "candidate_ms": 203.9698085,
+      "paired_median": 0.9845306848549422,
+      "wins": 5,
+      "n": 8
+    },
+    "push": {
+      "baseline_ms": 797.208656,
+      "candidate_ms": 781.069267,
+      "paired_median": 0.9860886676842454,
+      "wins": 5,
+      "n": 8
+    },
+    "watch": {
+      "baseline_ms": 387.41857600000003,
+      "candidate_ms": 375.3206615,
+      "paired_median": 0.9609603704019787,
+      "wins": 5,
+      "n": 8
+    },
+    "workspace-create": {
+      "baseline_ms": 1742.872088,
+      "candidate_ms": 1652.546214,
+      "paired_median": 0.925432219680125,
+      "wins": 5,
+      "n": 8
+    },
+    "disabled-observations": {
+      "baseline_ms": 347.4101095,
+      "candidate_ms": 363.65706750000004,
+      "paired_median": 1.0441483064580357,
+      "wins": 2,
+      "n": 8
+    }
+  }
+}

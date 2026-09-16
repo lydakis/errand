@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
@@ -77,8 +76,8 @@ func TestPreparationRevalidatesRelevantChanges(t *testing.T) {
 			must(os.WriteFile(file, []byte("after!"), 0600))
 			// Use the real builder, then mutate the filesystem at its verification
 			// boundary. The per-call seam avoids timing races and global hooks.
-			build := func(ctx context.Context, root string, paths []string, bytes int64, entries int) (proto.Manifest, error) {
-				part, err := snapshot.BuildBoundedContext(ctx, root, paths, bytes, entries)
+			build := func(ctx context.Context, root string, paths snapshot.BuildPaths, opts snapshot.ObservationOptions) (*snapshot.ObservedBuild, error) {
+				part, err := snapshot.BuildObservedContext(ctx, root, paths, opts)
 				if err != nil {
 					return part, err
 				}
@@ -98,7 +97,9 @@ func TestPreparationRevalidatesRelevantChanges(t *testing.T) {
 				}
 				return part, nil
 			}
-			got, err := prepare(context.Background(), root, cache, snapshot.SelectOptions{}, build)
+			config := defaultPreparation(false)
+			config.build = build
+			got, err := prepare(context.Background(), root, cache, snapshot.SelectOptions{}, config)
 			if name != "ignored-on-miss" && name != "ignored-on-hit" {
 				if err == nil {
 					t.Fatal("accepted a relevant source change")

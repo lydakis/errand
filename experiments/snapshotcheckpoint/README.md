@@ -1,7 +1,9 @@
 # Restart checkpoint experiment
 
-This is the first bounded prototype for snapshot roadmap step 3. Production
-callers are unchanged from `f459bb2`. The experiment measures whether preserving
+This is the bounded prototype for snapshot roadmap step 3. The
+[shared-builder follow-up](../../docs/SNAPSHOT_CHECKPOINT_BUILDER.md) moves observation
+collection into ordinary entry construction; production callers still do not use
+disk checkpoints. The experiment measures whether preserving
 source observations pays for checkpoint loading, fresh selection/stat work,
 index reconstruction and publication in a new process.
 
@@ -15,7 +17,7 @@ index reconstruction and publication in a new process.
   preparation instead of trusting the checkpoint.
 - Entries retain native identity, size, full mode, mtime and ctime; APFS also retains
   birth time. Only matching observations reuse metadata and body hashes. Changed
-  paths use the existing snapshot builder, with pre/post stat checks before their
+  paths use the shared snapshot builder, with pre/post stat checks before their
   observations can be published. Directory checks retain identity/type/mode but
   permit timestamp/size churn from ignored siblings; fresh selection checks still
   reject changed membership. The trust assumption is native local filesystem
@@ -57,8 +59,8 @@ ordinary pack/materialization checks. No production caller consumes this API yet
 ## Measurement
 
 `scripts/benchmark_snapshot_checkpoint.py --output OUT --rounds 6` builds one probe
-binary and alternates fresh processes using `Cold` and `Prepare`. `Cold` calls the
-unchanged selection/build/index implementation from `f459bb2`; both modes prepare
+binary and alternates fresh processes using `Cold` and `Prepare`. `Cold` calls ordinary selection/build/index without observations; the follow-up
+driver builds the original comparator from frozen inputs. Both modes prepare
 the same adaptive index and compute the same wire root. Thus this compares
 preparation strategies in the same binary, not released CLI startup performance.
 
@@ -96,3 +98,29 @@ Then integrate at the shared preparation boundary, retain the post-freeze select
 guard, and measure ordinary push, both fetch modes, watch restart, workspace creation
 and ephemeral submission. Initial populations and already-running watch sessions
 need separate policies; existing in-memory reuse should not pay disk costs each edit.
+
+## Shared-builder follow-up
+
+The follow-up uses `scripts/benchmark_checkpoint_builder.py`, with a configurable
+multiple of eight balanced four-way rounds and a separate eight-pair ordinary
+builder control. It compares the frozen
+`5866129` checkpoint to `Prepare` (restore validated prior state and apply edits)
+and `PrepareCurrent` (construct current state directly). Both use the same adaptive
+index. No derived tree format is changed. The prototype default remains `Prepare`;
+the [review follow-up](../../docs/SNAPSHOT_CHECKPOINT_BUILDER_REVIEW.md) corrects an
+asymmetry in the first strategy comparison before drawing further conclusions.
+
+The loader carries the immutable snapshot created during validation into the
+update path; the direct path validates metadata without constructing that unused
+snapshot. `BuildPaths` expands and owns the sorted selection before admission.
+Unsupported identity and over-limit expanded selections skip checkpoint loading
+and use ordinary hashing/allocation without collecting or publishing observations.
+Collection is explicit, including for an empty selection. Full payload byte
+limits remain enforced by the writer. Fresh selection and post-freeze verification
+remain production integration gates.
+
+`scripts/benchmark_checkpoint_callers.py` adds native loopback controls for push,
+watch, both fetch modes, workspace creation and ephemeral job submission, plus a
+same-binary disabled-observation control. Its fixture and module inputs must match
+the frozen baseline; the small allowed set of changed regression-test files is
+recorded explicitly.

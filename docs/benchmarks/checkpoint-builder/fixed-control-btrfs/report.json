@@ -1,0 +1,2686 @@
+{
+  "samples": [
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4008875,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 202108009,
+          "Index": 324191,
+          "Verify": 4294283,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1087124,
+      "Total": 211826982,
+      "AllocBytes": 36231440,
+      "Mallocs": 25226,
+      "NumGC": 10,
+      "pair": 0,
+      "position": 1,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4168219,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 230120145,
+          "Index": 257676,
+          "Verify": 4658120,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1058441,
+      "Total": 240267402,
+      "AllocBytes": 36236312,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 0,
+      "position": 2,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3909026,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 229461183,
+          "Index": 457297,
+          "Verify": 4665519,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1057319,
+      "Total": 239557649,
+      "AllocBytes": 36237360,
+      "Mallocs": 25233,
+      "NumGC": 10,
+      "pair": 0,
+      "position": 3,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3810010,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 235931204,
+          "Index": 230637,
+          "Verify": 5194599,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1132615,
+      "Total": 246304510,
+      "AllocBytes": 36231968,
+      "Mallocs": 25226,
+      "NumGC": 10,
+      "pair": 1,
+      "position": 1,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3777028,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 215626115,
+          "Index": 391618,
+          "Verify": 4465459,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1302901,
+      "Total": 225570173,
+      "AllocBytes": 36231416,
+      "Mallocs": 25225,
+      "NumGC": 10,
+      "pair": 1,
+      "position": 2,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3965199,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 246134135,
+          "Index": 320186,
+          "Verify": 4929261,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1058514,
+      "Total": 256413312,
+      "AllocBytes": 36239680,
+      "Mallocs": 25229,
+      "NumGC": 10,
+      "pair": 1,
+      "position": 3,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3999079,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 221761742,
+          "Index": 181168,
+          "Verify": 4400663,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1113829,
+      "Total": 231463167,
+      "AllocBytes": 36230968,
+      "Mallocs": 25221,
+      "NumGC": 10,
+      "pair": 2,
+      "position": 1,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4113568,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 244533734,
+          "Index": 598485,
+          "Verify": 4734728,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1024717,
+      "Total": 255011506,
+      "AllocBytes": 36236616,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 2,
+      "position": 2,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4000729,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 221290797,
+          "Index": 269223,
+          "Verify": 5282567,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1092334,
+      "Total": 231940958,
+      "AllocBytes": 36232592,
+      "Mallocs": 25229,
+      "NumGC": 10,
+      "pair": 2,
+      "position": 3,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3999460,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 286384626,
+          "Index": 317477,
+          "Verify": 5629137,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1029257,
+      "Total": 297369585,
+      "AllocBytes": 36230968,
+      "Mallocs": 25222,
+      "NumGC": 10,
+      "pair": 3,
+      "position": 1,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3804467,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 221055389,
+          "Index": 246822,
+          "Verify": 5033164,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1120390,
+      "Total": 231265786,
+      "AllocBytes": 36233344,
+      "Mallocs": 25230,
+      "NumGC": 10,
+      "pair": 3,
+      "position": 2,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4298924,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 240499962,
+          "Index": 171439,
+          "Verify": 5913832,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1096853,
+      "Total": 251984850,
+      "AllocBytes": 36231232,
+      "Mallocs": 25225,
+      "NumGC": 10,
+      "pair": 3,
+      "position": 3,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3817949,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 231134643,
+          "Index": 238371,
+          "Verify": 5110490,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1179865,
+      "Total": 241485917,
+      "AllocBytes": 36236744,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 4,
+      "position": 1,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3901993,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 275093825,
+          "Index": 307875,
+          "Verify": 5723724,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1127846,
+      "Total": 286163776,
+      "AllocBytes": 36230328,
+      "Mallocs": 25222,
+      "NumGC": 10,
+      "pair": 4,
+      "position": 2,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4182912,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 205881863,
+          "Index": 172179,
+          "Verify": 4383154,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1066376,
+      "Total": 215690893,
+      "AllocBytes": 36231408,
+      "Mallocs": 25228,
+      "NumGC": 10,
+      "pair": 4,
+      "position": 3,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4160575,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 255038822,
+          "Index": 298291,
+          "Verify": 5077500,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1034752,
+      "Total": 265616065,
+      "AllocBytes": 36230320,
+      "Mallocs": 25225,
+      "NumGC": 10,
+      "pair": 5,
+      "position": 1,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4267869,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 221989720,
+          "Index": 265454,
+          "Verify": 4412410,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1157863,
+      "Total": 232097642,
+      "AllocBytes": 36236616,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 5,
+      "position": 2,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4190373,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 243535050,
+          "Index": 177670,
+          "Verify": 5217199,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1523573,
+      "Total": 254650757,
+      "AllocBytes": 36241816,
+      "Mallocs": 25235,
+      "NumGC": 10,
+      "pair": 5,
+      "position": 3,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4070640,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 262212519,
+          "Index": 520399,
+          "Verify": 5052184,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1270083,
+      "Total": 273129815,
+      "AllocBytes": 36231280,
+      "Mallocs": 25225,
+      "NumGC": 10,
+      "pair": 6,
+      "position": 1,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4279723,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 235575588,
+          "Index": 334074,
+          "Verify": 5111673,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1078981,
+      "Total": 246386829,
+      "AllocBytes": 36236424,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 6,
+      "position": 2,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3943866,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 223408052,
+          "Index": 264903,
+          "Verify": 4254906,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1063000,
+      "Total": 232941956,
+      "AllocBytes": 36231656,
+      "Mallocs": 25223,
+      "NumGC": 10,
+      "pair": 6,
+      "position": 3,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3998568,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 268309720,
+          "Index": 353615,
+          "Verify": 4424591,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1021710,
+      "Total": 278114392,
+      "AllocBytes": 36233488,
+      "Mallocs": 25231,
+      "NumGC": 10,
+      "pair": 7,
+      "position": 1,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4221131,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 226959716,
+          "Index": 269831,
+          "Verify": 4408619,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1101371,
+      "Total": 236969777,
+      "AllocBytes": 36232376,
+      "Mallocs": 25226,
+      "NumGC": 10,
+      "pair": 7,
+      "position": 2,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4472730,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 220708487,
+          "Index": 250428,
+          "Verify": 4975582,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1385453,
+      "Total": 231797752,
+      "AllocBytes": 36230336,
+      "Mallocs": 25224,
+      "NumGC": 10,
+      "pair": 7,
+      "position": 3,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4129413,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 204430143,
+          "Index": 192460,
+          "Verify": 4337849,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1028875,
+      "Total": 214125730,
+      "AllocBytes": 36231048,
+      "Mallocs": 25222,
+      "NumGC": 10,
+      "pair": 8,
+      "position": 1,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4023325,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 218821948,
+          "Index": 216532,
+          "Verify": 4244995,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1035221,
+      "Total": 228346737,
+      "AllocBytes": 36237752,
+      "Mallocs": 25234,
+      "NumGC": 10,
+      "pair": 8,
+      "position": 2,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3690538,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 240662239,
+          "Index": 327094,
+          "Verify": 4561996,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1119222,
+      "Total": 250365464,
+      "AllocBytes": 36230592,
+      "Mallocs": 25222,
+      "NumGC": 10,
+      "pair": 8,
+      "position": 3,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3959278,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 206899757,
+          "Index": 254326,
+          "Verify": 4484324,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1035076,
+      "Total": 216640778,
+      "AllocBytes": 36235648,
+      "Mallocs": 25229,
+      "NumGC": 10,
+      "pair": 9,
+      "position": 1,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4005493,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 235707433,
+          "Index": 303402,
+          "Verify": 4736920,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1212240,
+      "Total": 245971490,
+      "AllocBytes": 36238616,
+      "Mallocs": 25234,
+      "NumGC": 10,
+      "pair": 9,
+      "position": 2,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3826250,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 245311039,
+          "Index": 170590,
+          "Verify": 4275079,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1035922,
+      "Total": 254622600,
+      "AllocBytes": 36236520,
+      "Mallocs": 25231,
+      "NumGC": 10,
+      "pair": 9,
+      "position": 3,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4449933,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 251859138,
+          "Index": 291732,
+          "Verify": 5182795,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1150071,
+      "Total": 262938835,
+      "AllocBytes": 36232400,
+      "Mallocs": 25229,
+      "NumGC": 10,
+      "pair": 10,
+      "position": 1,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4150242,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 242422488,
+          "Index": 359007,
+          "Verify": 5339771,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1181017,
+      "Total": 253459182,
+      "AllocBytes": 36230488,
+      "Mallocs": 25220,
+      "NumGC": 10,
+      "pair": 10,
+      "position": 2,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4265755,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 242131045,
+          "Index": 296119,
+          "Verify": 4562872,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1179188,
+      "Total": 252440410,
+      "AllocBytes": 36237704,
+      "Mallocs": 25233,
+      "NumGC": 10,
+      "pair": 10,
+      "position": 3,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3876067,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 205692533,
+          "Index": 209934,
+          "Verify": 4012392,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1031504,
+      "Total": 214827491,
+      "AllocBytes": 36238456,
+      "Mallocs": 25238,
+      "NumGC": 10,
+      "pair": 11,
+      "position": 1,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4211909,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 212690684,
+          "Index": 234113,
+          "Verify": 4472334,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1078893,
+      "Total": 222693101,
+      "AllocBytes": 36235496,
+      "Mallocs": 25228,
+      "NumGC": 10,
+      "pair": 11,
+      "position": 2,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3927295,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 230294643,
+          "Index": 217461,
+          "Verify": 4400340,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1143912,
+      "Total": 239990622,
+      "AllocBytes": 36237056,
+      "Mallocs": 25230,
+      "NumGC": 10,
+      "pair": 11,
+      "position": 3,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3954972,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 247192377,
+          "Index": 484909,
+          "Verify": 5262902,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1134378,
+      "Total": 258035969,
+      "AllocBytes": 36230848,
+      "Mallocs": 25225,
+      "NumGC": 10,
+      "pair": 12,
+      "position": 1,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3707266,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 223511534,
+          "Index": 261214,
+          "Verify": 4743540,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1044914,
+      "Total": 233274323,
+      "AllocBytes": 36237080,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 12,
+      "position": 2,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3976737,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 250235488,
+          "Index": 295311,
+          "Verify": 5352076,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1046557,
+      "Total": 260914243,
+      "AllocBytes": 36231128,
+      "Mallocs": 25223,
+      "NumGC": 10,
+      "pair": 12,
+      "position": 3,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4018798,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 225754906,
+          "Index": 171077,
+          "Verify": 4745317,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1090045,
+      "Total": 235784701,
+      "AllocBytes": 36236568,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 13,
+      "position": 1,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4255165,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 246004321,
+          "Index": 322168,
+          "Verify": 4002964,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1033966,
+      "Total": 255626512,
+      "AllocBytes": 36231224,
+      "Mallocs": 25224,
+      "NumGC": 10,
+      "pair": 13,
+      "position": 2,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4159351,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 202134860,
+          "Index": 205974,
+          "Verify": 4380574,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1192894,
+      "Total": 212078551,
+      "AllocBytes": 36236376,
+      "Mallocs": 25233,
+      "NumGC": 10,
+      "pair": 13,
+      "position": 3,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4140818,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 231436866,
+          "Index": 271169,
+          "Verify": 5128095,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1058292,
+      "Total": 242043206,
+      "AllocBytes": 36237664,
+      "Mallocs": 25233,
+      "NumGC": 10,
+      "pair": 14,
+      "position": 1,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4026631,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 247745108,
+          "Index": 171744,
+          "Verify": 4136034,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1032227,
+      "Total": 257115558,
+      "AllocBytes": 36231872,
+      "Mallocs": 25226,
+      "NumGC": 10,
+      "pair": 14,
+      "position": 2,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4239232,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 242634561,
+          "Index": 276758,
+          "Verify": 5634476,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1434056,
+      "Total": 254225059,
+      "AllocBytes": 36230544,
+      "Mallocs": 25222,
+      "NumGC": 10,
+      "pair": 14,
+      "position": 3,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3808963,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 237750640,
+          "Index": 251936,
+          "Verify": 5269717,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1190182,
+      "Total": 248279928,
+      "AllocBytes": 36231496,
+      "Mallocs": 25226,
+      "NumGC": 10,
+      "pair": 15,
+      "position": 1,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4289922,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 235733025,
+          "Index": 346841,
+          "Verify": 4351006,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1201636,
+      "Total": 245926838,
+      "AllocBytes": 36232912,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 15,
+      "position": 2,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4270303,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 305352869,
+          "Index": 333114,
+          "Verify": 4345068,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1077040,
+      "Total": 315384974,
+      "AllocBytes": 36236120,
+      "Mallocs": 25230,
+      "NumGC": 10,
+      "pair": 15,
+      "position": 3,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3936048,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 238792816,
+          "Index": 245822,
+          "Verify": 4780803,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1042426,
+      "Total": 248803200,
+      "AllocBytes": 36236328,
+      "Mallocs": 25230,
+      "NumGC": 10,
+      "pair": 16,
+      "position": 1,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4014803,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 251621954,
+          "Index": 311839,
+          "Verify": 5428421,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1145142,
+      "Total": 262530738,
+      "AllocBytes": 36230968,
+      "Mallocs": 25221,
+      "NumGC": 10,
+      "pair": 16,
+      "position": 2,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4158430,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 254793219,
+          "Index": 194019,
+          "Verify": 4430823,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1100133,
+      "Total": 264681512,
+      "AllocBytes": 36231168,
+      "Mallocs": 25225,
+      "NumGC": 10,
+      "pair": 16,
+      "position": 3,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3964636,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 236095474,
+          "Index": 290700,
+          "Verify": 5113961,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1262620,
+      "Total": 246733349,
+      "AllocBytes": 36232512,
+      "Mallocs": 25228,
+      "NumGC": 10,
+      "pair": 17,
+      "position": 1,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3892083,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 234546587,
+          "Index": 258726,
+          "Verify": 5282614,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1061729,
+      "Total": 245047175,
+      "AllocBytes": 36232240,
+      "Mallocs": 25229,
+      "NumGC": 10,
+      "pair": 17,
+      "position": 2,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4000934,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 228338832,
+          "Index": 404900,
+          "Verify": 4648312,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1044480,
+      "Total": 238449310,
+      "AllocBytes": 36237664,
+      "Mallocs": 25231,
+      "NumGC": 10,
+      "pair": 17,
+      "position": 3,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3701768,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 241419478,
+          "Index": 175849,
+          "Verify": 4508356,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1066692,
+      "Total": 250875830,
+      "AllocBytes": 36236536,
+      "Mallocs": 25231,
+      "NumGC": 10,
+      "pair": 18,
+      "position": 1,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3946383,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 243042695,
+          "Index": 312104,
+          "Verify": 4897589,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1420117,
+      "Total": 253623309,
+      "AllocBytes": 36236520,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 18,
+      "position": 2,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4054003,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 264699744,
+          "Index": 386184,
+          "Verify": 5087489,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1064119,
+      "Total": 275302074,
+      "AllocBytes": 36237120,
+      "Mallocs": 25230,
+      "NumGC": 10,
+      "pair": 18,
+      "position": 3,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4028289,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 251495109,
+          "Index": 329807,
+          "Verify": 5813301,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1076915,
+      "Total": 262748859,
+      "AllocBytes": 36230928,
+      "Mallocs": 25226,
+      "NumGC": 10,
+      "pair": 19,
+      "position": 1,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3982483,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 242343688,
+          "Index": 178463,
+          "Verify": 4172838,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1029107,
+      "Total": 251712833,
+      "AllocBytes": 36231768,
+      "Mallocs": 25224,
+      "NumGC": 10,
+      "pair": 19,
+      "position": 2,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3899620,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 231059717,
+          "Index": 225311,
+          "Verify": 4336329,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1046321,
+      "Total": 240571582,
+      "AllocBytes": 36237640,
+      "Mallocs": 25233,
+      "NumGC": 10,
+      "pair": 19,
+      "position": 3,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4231039,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 261089915,
+          "Index": 297001,
+          "Verify": 5216312,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1095721,
+      "Total": 271938126,
+      "AllocBytes": 36232600,
+      "Mallocs": 25225,
+      "NumGC": 10,
+      "pair": 20,
+      "position": 1,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4018320,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 226976690,
+          "Index": 257633,
+          "Verify": 3965398,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1082839,
+      "Total": 236306640,
+      "AllocBytes": 36231280,
+      "Mallocs": 25226,
+      "NumGC": 10,
+      "pair": 20,
+      "position": 2,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4271213,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 246210905,
+          "Index": 326179,
+          "Verify": 4329504,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1064916,
+      "Total": 256208304,
+      "AllocBytes": 36236456,
+      "Mallocs": 25231,
+      "NumGC": 10,
+      "pair": 20,
+      "position": 3,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4242182,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 236819293,
+          "Index": 605653,
+          "Verify": 4220344,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1149514,
+      "Total": 247044790,
+      "AllocBytes": 36230280,
+      "Mallocs": 25222,
+      "NumGC": 10,
+      "pair": 21,
+      "position": 1,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4170967,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 236623952,
+          "Index": 369545,
+          "Verify": 4841807,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1082819,
+      "Total": 247095415,
+      "AllocBytes": 36233040,
+      "Mallocs": 25230,
+      "NumGC": 10,
+      "pair": 21,
+      "position": 2,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3795944,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 241580411,
+          "Index": 247102,
+          "Verify": 4231569,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1044317,
+      "Total": 250903510,
+      "AllocBytes": 36230528,
+      "Mallocs": 25226,
+      "NumGC": 10,
+      "pair": 21,
+      "position": 3,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3677843,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 239700110,
+          "Index": 300393,
+          "Verify": 5578882,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1453177,
+      "Total": 250716636,
+      "AllocBytes": 36236664,
+      "Mallocs": 25233,
+      "NumGC": 10,
+      "pair": 22,
+      "position": 1,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3985739,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 220239558,
+          "Index": 203831,
+          "Verify": 4149394,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1068324,
+      "Total": 229654190,
+      "AllocBytes": 36232232,
+      "Mallocs": 25224,
+      "NumGC": 10,
+      "pair": 22,
+      "position": 2,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4066894,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 256634419,
+          "Index": 308215,
+          "Verify": 5924960,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1527226,
+      "Total": 268467326,
+      "AllocBytes": 36230864,
+      "Mallocs": 25225,
+      "NumGC": 10,
+      "pair": 22,
+      "position": 3,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4193227,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 246041493,
+          "Index": 284596,
+          "Verify": 4938885,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1048084,
+      "Total": 256511267,
+      "AllocBytes": 36237768,
+      "Mallocs": 25236,
+      "NumGC": 10,
+      "pair": 23,
+      "position": 1,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4264610,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 260106668,
+          "Index": 211858,
+          "Verify": 4518930,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1031328,
+      "Total": 270146810,
+      "AllocBytes": 36236280,
+      "Mallocs": 25231,
+      "NumGC": 10,
+      "pair": 23,
+      "position": 2,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4083390,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 295129380,
+          "Index": 773386,
+          "Verify": 4630091,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1047241,
+      "Total": 305671401,
+      "AllocBytes": 36230632,
+      "Mallocs": 25222,
+      "NumGC": 10,
+      "pair": 23,
+      "position": 3,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4600584,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 221772656,
+          "Index": 444824,
+          "Verify": 5017644,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1186516,
+      "Total": 233027846,
+      "AllocBytes": 36232288,
+      "Mallocs": 25230,
+      "NumGC": 10,
+      "pair": 24,
+      "position": 1,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 5703130,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 261560194,
+          "Index": 300511,
+          "Verify": 4980353,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1155273,
+      "Total": 273705569,
+      "AllocBytes": 36238616,
+      "Mallocs": 25234,
+      "NumGC": 10,
+      "pair": 24,
+      "position": 2,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3835421,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 211107055,
+          "Index": 191784,
+          "Verify": 4160412,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1045704,
+      "Total": 220347850,
+      "AllocBytes": 36237616,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 24,
+      "position": 3,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4087771,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 248096581,
+          "Index": 250099,
+          "Verify": 4912879,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1121440,
+      "Total": 258472915,
+      "AllocBytes": 36236232,
+      "Mallocs": 25233,
+      "NumGC": 10,
+      "pair": 25,
+      "position": 1,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3796995,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 226763848,
+          "Index": 258057,
+          "Verify": 4714379,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1343221,
+      "Total": 236888137,
+      "AllocBytes": 36235840,
+      "Mallocs": 25226,
+      "NumGC": 10,
+      "pair": 25,
+      "position": 2,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3922427,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 221875867,
+          "Index": 173513,
+          "Verify": 5133570,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1147547,
+      "Total": 232256786,
+      "AllocBytes": 36236200,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 25,
+      "position": 3,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3995949,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 245656859,
+          "Index": 226910,
+          "Verify": 4374536,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1030349,
+      "Total": 255291874,
+      "AllocBytes": 36236448,
+      "Mallocs": 25229,
+      "NumGC": 10,
+      "pair": 26,
+      "position": 1,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4211364,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 220217366,
+          "Index": 315067,
+          "Verify": 5227527,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1227164,
+      "Total": 231204327,
+      "AllocBytes": 36236440,
+      "Mallocs": 25232,
+      "NumGC": 10,
+      "pair": 26,
+      "position": 2,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4136572,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 251956277,
+          "Index": 829756,
+          "Verify": 6239773,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1139784,
+      "Total": 264309293,
+      "AllocBytes": 36231328,
+      "Mallocs": 25226,
+      "NumGC": 10,
+      "pair": 26,
+      "position": 3,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4042197,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 245854750,
+          "Index": 283207,
+          "Verify": 4356462,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1053627,
+      "Total": 255597926,
+      "AllocBytes": 36235456,
+      "Mallocs": 25225,
+      "NumGC": 10,
+      "pair": 27,
+      "position": 1,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4057207,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 231942099,
+          "Index": 198152,
+          "Verify": 3930191,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1074844,
+      "Total": 241207458,
+      "AllocBytes": 36231184,
+      "Mallocs": 25225,
+      "NumGC": 10,
+      "pair": 27,
+      "position": 2,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3833231,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 242361722,
+          "Index": 318771,
+          "Verify": 6876350,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1512399,
+      "Total": 254909376,
+      "AllocBytes": 36241864,
+      "Mallocs": 25234,
+      "NumGC": 10,
+      "pair": 27,
+      "position": 3,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4364784,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 200594867,
+          "Index": 177676,
+          "Verify": 4392251,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1056618,
+      "Total": 210590546,
+      "AllocBytes": 36236728,
+      "Mallocs": 25234,
+      "NumGC": 10,
+      "pair": 28,
+      "position": 1,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4209319,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 219468424,
+          "Index": 243538,
+          "Verify": 4463014,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1021895,
+      "Total": 229413573,
+      "AllocBytes": 36235552,
+      "Mallocs": 25227,
+      "NumGC": 10,
+      "pair": 28,
+      "position": 2,
+      "variant": "shared"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 4080257,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 231549122,
+          "Index": 176673,
+          "Verify": 4227426,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1118548,
+      "Total": 241156875,
+      "AllocBytes": 36237320,
+      "Mallocs": 25234,
+      "NumGC": 10,
+      "pair": 28,
+      "position": 3,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3951773,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 230283195,
+          "Index": 294477,
+          "Verify": 4551772,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1095472,
+      "Total": 240182760,
+      "AllocBytes": 36230208,
+      "Mallocs": 25223,
+      "NumGC": 10,
+      "pair": 29,
+      "position": 1,
+      "variant": "legacy-b"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3860739,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 237033573,
+          "Index": 266489,
+          "Verify": 4675321,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1125205,
+      "Total": 246966667,
+      "AllocBytes": 36232064,
+      "Mallocs": 25228,
+      "NumGC": 10,
+      "pair": 29,
+      "position": 2,
+      "variant": "legacy-a"
+    },
+    {
+      "Result": {
+        "State": null,
+        "Phases": {
+          "Selection": 3784576,
+          "Load": 0,
+          "Scan": 0,
+          "Hash": 230753494,
+          "Index": 338847,
+          "Verify": 3868219,
+          "Save": 0
+        },
+        "Reused": 0,
+        "Hashed": 1001,
+        "CheckpointBytes": 0,
+        "Written": false,
+        "CacheStatus": "",
+        "CacheError": ""
+      },
+      "Hash": "56a970b8d241b37599b4666cf4bdfdecec96ff0f9af75911055d6d04b57ecf81",
+      "Wire": 1273949,
+      "Total": 240025723,
+      "AllocBytes": 36232040,
+      "Mallocs": 25224,
+      "NumGC": 10,
+      "pair": 29,
+      "position": 3,
+      "variant": "shared"
+    }
+  ],
+  "source_sha256": "180f6a412606723f1e57449b4de03ee3b57dde69f153f67d0f5e6acf63abf2d2",
+  "harness_inputs": {
+    "benchmark.py": "a7bb143e87fbc1d07d8db5cf4286891edc41960b839f7f4c4933d06188610aa0",
+    "benchmark_checkpoint_builder.py": "3c5dbd8d436354965f90f39af0644b3faa26a24ac111e7b510897320af32cf77",
+    "benchmark_materialization.py": "ae57c393005f66d0aac8c7952847aa783f61e2d2a7acedfcc87161fbbbda1aa5",
+    "benchmark_push.py": "a7bad0dbcd2aa76a67c8624668b874f5469a492342407a6c697970cf67b54f36",
+    "benchmark_snapshot_checkpoint.py": "1acc78cec9fe5878fb84cbfed729549c023d7aaef48b6615cf50ae4d335ffdbd",
+    "benchmark_snapshot_index.py": "0bc23ea3c6035b9df4d92c4cae4d94b8a07c013a800aa243dc72f5dc198f8eae",
+    "benchmark_snapshot_integration.py": "9f642c54650caf902bc25257909a5b4f6371d9a3a752604ac5c246e1b437208d",
+    "benchmark_watch.py": "801a41916418ab6f76c18b7bed21e12bc2764eba775bd9ad333e9a60b21e68d6",
+    "homebrew_formula.py": "138ceda430ed970b6ee331989f3578030cd8950169b71e32155877dd79a51a75",
+    "notarize_macos.py": "886505d735c11dd1d7f8ea0b9eb1e7068c2022fb2e5cc77a1542cb782793f83e",
+    "prepare_homebrew_update.py": "ebf3959689d4a7bc393e9e7e4f0a4ca43ce40209feb0f17f2b9f6c276c9045d6",
+    "profile_materialization_paths.py": "2968132c95e5791ee64b6be38500988cc29332ccd0e7e7c4fae464bf10ffaef5",
+    "profile_transfer_latency.py": "895440f06ebcf90d21f4f7c14a9f33dc5bbfa49279f0661b82d8bdebf6637eab",
+    "snapshot_provenance.py": "32c2a01bda02fe7bc0f6ea08ca553ae844cee8c9b642fac23f53633c8c3d1266",
+    "summarize_snapshot_benchmarks.py": "2da0c00175c0f119a1bcc308339a0cae1be6806b5effc313d6c7fe8096fea1fd",
+    "test_benchmark.py": "965bd5afaa6f5c5ea44582dc2740f5ab4a47a44b97d46a8c9754b8bc714ee804",
+    "test_benchmark_push.py": "51865970a05b6c42e4a4412f2839259e4a50a5156f74131d986898f6a47fc04c",
+    "test_benchmark_scratch.py": "83f616a27cc8436426073ae1bdcbc9a3afb03ff709b023d6be98d6c32c478304",
+    "test_checkpoint_builder.py": "8c5485db192dbc30e67b5caea3cc0232850ba2dc112ca7ceab4853591a4ddf9f",
+    "test_homebrew_formula.py": "870b8b6d3d3d5495ca12f0c364801e77b833d0afb93d7a23daab28fd91a143cd",
+    "test_materialization_diagnostics.py": "af15cd1cae3833b2df88a9c0ac47942ca808832c5e196a8ef6f9b80fc6b19ba4",
+    "test_notarize_macos.py": "123665dae9d05eba4a069822cb597aea42fc426eb17e06234a32f1bfcec7a74f",
+    "test_prepare_homebrew_update.py": "a9f6cbd056883dc253eafd1193fd259cb3529f23c38caa1b607b9c92d88cde94",
+    "test_release_workflow.py": "95dc7a430dd746f4ea019fa8027cceddad4862f547b5bbd4b38ee3ac432a3dbf",
+    "test_snapshot_benchmark_order.py": "f98272552afa947523112a1d0059d36d5a6747ca9dfcdab595a51fbd262e4d01",
+    "test_snapshot_checkpoint.py": "2f042f91cbe69e7598fcab9e70c0f6a030c1b4470067c2c54cca5b0c788bce34",
+    "test_snapshot_provenance.py": "f952d707b0f37d12b17b1a1163f1200251a51dcf2c42db401456f020ce134b37",
+    "test_snapshot_summary.py": "25cdd7decb3ddf74eabce4fa392fdfb141c6f0520d2e7107442569d44810b2fa"
+  },
+  "script_sha256": "297e16d6b3dfd4fd999fc48178d57e365e2acc53bfb7a5cc0c7ec8871f466ae9",
+  "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+  "status": "complete",
+  "filesystem": "btrfs",
+  "overlays": {
+    "mixed-snapshot.go": "bdd82b6faaa47ac8997b4b0ba71049a7e634692fccace4a673199f91f5b0177d",
+    "mixed-main.go": "20b0438a16fee3bb45d5c35ee82c46382dc79fab530c82b4d53575461cc4af0f",
+    "mixed-checkpoint.go": "a4e0d1a190f0526c859af6cd4c37d8db0306520a8bfed9a537b7881eef9a6093"
+  },
+  "binary_sha256": "a14b096a89a6944476dc2e51fcd86d57d36af22fee2dd0f04f9bdb40ff6519c9",
+  "final_source_sha256": "180f6a412606723f1e57449b4de03ee3b57dde69f153f67d0f5e6acf63abf2d2",
+  "final_harness_inputs": {
+    "benchmark.py": "a7bb143e87fbc1d07d8db5cf4286891edc41960b839f7f4c4933d06188610aa0",
+    "benchmark_checkpoint_builder.py": "3c5dbd8d436354965f90f39af0644b3faa26a24ac111e7b510897320af32cf77",
+    "benchmark_materialization.py": "ae57c393005f66d0aac8c7952847aa783f61e2d2a7acedfcc87161fbbbda1aa5",
+    "benchmark_push.py": "a7bad0dbcd2aa76a67c8624668b874f5469a492342407a6c697970cf67b54f36",
+    "benchmark_snapshot_checkpoint.py": "1acc78cec9fe5878fb84cbfed729549c023d7aaef48b6615cf50ae4d335ffdbd",
+    "benchmark_snapshot_index.py": "0bc23ea3c6035b9df4d92c4cae4d94b8a07c013a800aa243dc72f5dc198f8eae",
+    "benchmark_snapshot_integration.py": "9f642c54650caf902bc25257909a5b4f6371d9a3a752604ac5c246e1b437208d",
+    "benchmark_watch.py": "801a41916418ab6f76c18b7bed21e12bc2764eba775bd9ad333e9a60b21e68d6",
+    "homebrew_formula.py": "138ceda430ed970b6ee331989f3578030cd8950169b71e32155877dd79a51a75",
+    "notarize_macos.py": "886505d735c11dd1d7f8ea0b9eb1e7068c2022fb2e5cc77a1542cb782793f83e",
+    "prepare_homebrew_update.py": "ebf3959689d4a7bc393e9e7e4f0a4ca43ce40209feb0f17f2b9f6c276c9045d6",
+    "profile_materialization_paths.py": "2968132c95e5791ee64b6be38500988cc29332ccd0e7e7c4fae464bf10ffaef5",
+    "profile_transfer_latency.py": "895440f06ebcf90d21f4f7c14a9f33dc5bbfa49279f0661b82d8bdebf6637eab",
+    "snapshot_provenance.py": "32c2a01bda02fe7bc0f6ea08ca553ae844cee8c9b642fac23f53633c8c3d1266",
+    "summarize_snapshot_benchmarks.py": "2da0c00175c0f119a1bcc308339a0cae1be6806b5effc313d6c7fe8096fea1fd",
+    "test_benchmark.py": "965bd5afaa6f5c5ea44582dc2740f5ab4a47a44b97d46a8c9754b8bc714ee804",
+    "test_benchmark_push.py": "51865970a05b6c42e4a4412f2839259e4a50a5156f74131d986898f6a47fc04c",
+    "test_benchmark_scratch.py": "83f616a27cc8436426073ae1bdcbc9a3afb03ff709b023d6be98d6c32c478304",
+    "test_checkpoint_builder.py": "8c5485db192dbc30e67b5caea3cc0232850ba2dc112ca7ceab4853591a4ddf9f",
+    "test_homebrew_formula.py": "870b8b6d3d3d5495ca12f0c364801e77b833d0afb93d7a23daab28fd91a143cd",
+    "test_materialization_diagnostics.py": "af15cd1cae3833b2df88a9c0ac47942ca808832c5e196a8ef6f9b80fc6b19ba4",
+    "test_notarize_macos.py": "123665dae9d05eba4a069822cb597aea42fc426eb17e06234a32f1bfcec7a74f",
+    "test_prepare_homebrew_update.py": "a9f6cbd056883dc253eafd1193fd259cb3529f23c38caa1b607b9c92d88cde94",
+    "test_release_workflow.py": "95dc7a430dd746f4ea019fa8027cceddad4862f547b5bbd4b38ee3ac432a3dbf",
+    "test_snapshot_benchmark_order.py": "f98272552afa947523112a1d0059d36d5a6747ca9dfcdab595a51fbd262e4d01",
+    "test_snapshot_checkpoint.py": "2f042f91cbe69e7598fcab9e70c0f6a030c1b4470067c2c54cca5b0c788bce34",
+    "test_snapshot_provenance.py": "f952d707b0f37d12b17b1a1163f1200251a51dcf2c42db401456f020ce134b37",
+    "test_snapshot_summary.py": "25cdd7decb3ddf74eabce4fa392fdfb141c6f0520d2e7107442569d44810b2fa"
+  }
+}

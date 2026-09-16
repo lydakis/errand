@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	root, cache, mode := flag.String("root", "", "fixture root"), flag.String("cache", "", "private cache directory"), flag.String("mode", "cold", "cold or checkpoint")
+	root, cache, mode := flag.String("root", "", "fixture root"), flag.String("cache", "", "private cache directory"), flag.String("mode", "cold", "cold, checkpoint, or current")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -27,6 +27,8 @@ func main() {
 	switch *mode {
 	case "cold":
 		result, err = checkpoint.Cold(ctx, *root, snapshot.SelectOptions{})
+	case "current":
+		result, err = checkpoint.PrepareCurrent(ctx, *root, *cache, snapshot.SelectOptions{})
 	case "checkpoint":
 		result, err = checkpoint.Prepare(ctx, *root, *cache, snapshot.SelectOptions{})
 	default:

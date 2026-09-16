@@ -1,0 +1,23 @@
+ok  	github.com/lydakis/errand/cmd/errand	18.684s
+ok  	github.com/lydakis/errand/experiments/snapshotcheckpoint	3.513s
+?   	github.com/lydakis/errand/experiments/snapshotcheckpoint/cmd	[no test files]
+ok  	github.com/lydakis/errand/experiments/snapshotindex	4.481s
+ok  	github.com/lydakis/errand/internal/archive	0.014s
+ok  	github.com/lydakis/errand/internal/changes	1.393s
+ok  	github.com/lydakis/errand/internal/client	9.566s
+ok  	github.com/lydakis/errand/internal/config	0.146s
+ok  	github.com/lydakis/errand/internal/daemon	13.970s
+?   	github.com/lydakis/errand/internal/fsidentity	[no test files]
+ok  	github.com/lydakis/errand/internal/logio	0.058s
+ok  	github.com/lydakis/errand/internal/manifest	1.076s
+ok  	github.com/lydakis/errand/internal/namedcache	0.240s
+ok  	github.com/lydakis/errand/internal/pathpolicy	0.641s
+ok  	github.com/lydakis/errand/internal/placement	0.002s
+ok  	github.com/lydakis/errand/internal/proto	0.003s
+ok  	github.com/lydakis/errand/internal/serviceruntime	0.075s
+ok  	github.com/lydakis/errand/internal/setup	16.092s
+ok  	github.com/lydakis/errand/internal/snapshot	2.098s
+ok  	github.com/lydakis/errand/internal/tailnet	0.015s
+?   	github.com/lydakis/errand/internal/tomlconfig	[no test files]
+ok  	github.com/lydakis/errand/internal/unixpeer	0.004s
+ok  	github.com/lydakis/errand/internal/workspace	0.021s
