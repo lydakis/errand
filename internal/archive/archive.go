@@ -21,6 +21,14 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+// ContentMismatchError reports file bytes that disagree with the manifest.
+// Filesystem failures remain separate errors, even when validation also fails.
+type ContentMismatchError struct{ Path string }
+
+func (e *ContentMismatchError) Error() string {
+	return fmt.Sprintf("archive: %q does not match manifest hash", e.Path)
+}
+
 // Validate checks manifest-level path safety before any byte is written:
 // clean relative paths only, no duplicates, no entry routed through a
 // symlink, and symlink targets that resolve inside the workspace.
@@ -246,8 +254,10 @@ func ExtractWith(r io.Reader, dest string, m proto.Manifest, maxBytes int64, opt
 				return err
 			}
 			if n != e.Size || hex.EncodeToString(h.Sum(nil)) != e.SHA256 {
-				f.Close()
-				return fmt.Errorf("archive: %q does not match manifest hash", name)
+				if err := f.Close(); err != nil {
+					return err
+				}
+				return &ContentMismatchError{Path: name}
 			}
 			if err := f.Chmod(os.FileMode(e.Mode)); err != nil {
 				f.Close()

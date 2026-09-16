@@ -3,6 +3,7 @@ package changes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 
@@ -22,7 +23,15 @@ func CopyTransferSource(ctx context.Context, source, destination string, m proto
 	go func() { err := snapshot.PackContext(ctx, pw, source, m); pw.CloseWithError(err); done <- err }()
 	err := archive.Extract(pr, destination, m, max)
 	pr.CloseWithError(err)
-	err = errors.Join(err, <-done)
+	packErr := <-done
+	// The two ends can independently reject the same changing source bytes.
+	// Only translate a pure content mismatch; never discard a destination I/O
+	// failure or a separate pack failure in favor of unlimited source retries.
+	if _, mismatch := err.(*archive.ContentMismatchError); mismatch &&
+		(packErr == nil || packErr == err || snapshot.IsSourceChanged(packErr)) {
+		return fmt.Errorf("%v: %w", err, snapshot.ErrSourceChanged)
+	}
+	err = errors.Join(err, packErr)
 	if err != nil {
 		return err
 	}

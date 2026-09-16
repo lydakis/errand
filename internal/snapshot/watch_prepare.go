@@ -180,7 +180,7 @@ func captureExplicitSelection(root string, opts SelectOptions, m proto.Manifest,
 		return nil, err
 	}
 	if !slices.Equal(policyLines(data), policy.Ignore) {
-		return nil, fmt.Errorf("snapshot: explicit policy changed during preparation; retry")
+		return nil, sourceChangedf("snapshot: explicit policy changed during preparation; retry")
 	}
 	directories := map[string]fs.FileInfo{}
 	names := map[string]bool{".": true}
@@ -198,7 +198,7 @@ func captureExplicitSelection(root string, opts SelectOptions, m proto.Manifest,
 			return nil, err
 		}
 		if !info.IsDir() {
-			return nil, fmt.Errorf("snapshot: selected directory %q was replaced", name)
+			return nil, sourceChangedf("snapshot: selected directory %q was replaced", name)
 		}
 		if _, _, ok := changeStamp(info); !ok {
 			return nil, nil
@@ -217,15 +217,18 @@ func (e *explicitSelectionEvidence) verify() error {
 	// preliminary selection-only check as well.
 	gi, _ := gitInfo(e.root)
 	if gi != e.gi {
-		return fmt.Errorf("snapshot: repository metadata changed after manifest construction; retry")
+		return sourceChangedf("snapshot: repository metadata changed after manifest construction; retry")
 	}
 	return e.verifyPolicy()
 }
 
 func (e *explicitSelectionEvidence) verifyPolicy() error {
 	data, err := os.ReadFile(filepath.Join(e.root, ".errandignore"))
-	if err != nil || !bytes.Equal(data, e.ignore) {
-		return fmt.Errorf("snapshot: selection policy changed after manifest construction; retry")
+	if err != nil {
+		return sourceReadError(err)
+	}
+	if !bytes.Equal(data, e.ignore) {
+		return sourceChangedf("snapshot: selection policy changed after manifest construction; retry")
 	}
 	return nil
 }
@@ -242,8 +245,11 @@ func (e *explicitSelectionEvidence) verifySelection() error {
 	}
 	for name, old := range e.directories {
 		info, err := os.Lstat(filepath.Join(e.root, filepath.FromSlash(name)))
-		if err != nil || !sameDirectoryEvidence(old, info) {
-			return fmt.Errorf("snapshot: selected directory %q changed after manifest construction; retry", name)
+		if err != nil {
+			return sourceReadError(err)
+		}
+		if !sameDirectoryEvidence(old, info) {
+			return sourceChangedf("snapshot: selected directory %q changed after manifest construction; retry", name)
 		}
 	}
 	// Match full selection's before/after policy check. An in-place policy

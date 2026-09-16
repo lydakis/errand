@@ -6,8 +6,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
-	"syscall"
 	"time"
 
 	"github.com/lydakis/errand/internal/changes"
@@ -71,10 +69,10 @@ func WatchPush(ctx context.Context, opts PushOptions, report func(PushWatchEvent
 	}
 	defer watch.Close()
 	opts.watchState.watcher = watch
-	return runPushWatch(ctx, opts, watch, report)
+	return runPushWatch(ctx, opts, watch, PushChanges, report)
 }
 
-func runPushWatch(ctx context.Context, opts PushOptions, watch *snapshot.Watch, report func(PushWatchEvent) error) error {
+func runPushWatch(ctx context.Context, opts PushOptions, watch *snapshot.Watch, push func(PushOptions) (proto.PushResult, error), report func(PushWatchEvent) error) error {
 	const debounce = 5 * time.Millisecond
 	const maxBatchDelay = 25 * time.Millisecond
 	const resampleDelay = 50 * time.Millisecond
@@ -157,7 +155,7 @@ func runPushWatch(ctx context.Context, opts PushOptions, watch *snapshot.Watch, 
 			go func() {
 				var stats TransferStats
 				opts.Stats = &stats
-				result, err := PushChanges(opts)
+				result, err := push(opts)
 				completed <- PushWatchEvent{State: "receipt", Result: &result, Stats: stats, Err: err}
 			}()
 		case event := <-completed:
@@ -165,23 +163,21 @@ func runPushWatch(ctx context.Context, opts PushOptions, watch *snapshot.Watch, 
 			visible := normalizeWatchResult(&event)
 			var sourceError *pushSourceError
 			if errors.As(event.Err, &sourceError) {
-				// An active writer has not provided a stable snapshot yet. Count
-				// failures only when no new source event arrived during the pass.
-				if watch.Generation() != generation && !permanentWatchSourceError(sourceError) {
-					sourceRetries = 0
+				watch.InvalidatePreparation()
+				// Only proven mutation gets unlimited resampling. Unknown errors
+				// stay bounded, even when mutations occur between those failures.
+				mutation := snapshot.IsSourceChanged(sourceError)
+				if mutation || sourceRetries < 3 {
+					if !mutation {
+						sourceRetries++
+					}
+					retryAt = time.Now().Add(resampleDelay)
+					timer.Reset(resampleDelay)
+					if err := status("resampling", nil); err != nil {
+						return err
+					}
+					continue
 				}
-				if opts.watchState != nil && opts.watchState.watcher != nil {
-					opts.watchState.watcher.InvalidatePreparation()
-				}
-			}
-			if sourceError != nil && sourceRetries < 3 {
-				sourceRetries++
-				retryAt = time.Now().Add(resampleDelay)
-				timer.Reset(resampleDelay)
-				if err := status("resampling", nil); err != nil {
-					return err
-				}
-				continue
 			}
 			if visible {
 				if err := report(event); err != nil {
@@ -189,7 +185,7 @@ func runPushWatch(ctx context.Context, opts PushOptions, watch *snapshot.Watch, 
 				}
 			}
 			if event.Err != nil {
-				if !retryableWatchError(event.Err) {
+				if sourceError != nil || !retryableWatchError(event.Err) {
 					return event.Err
 				}
 				if err := status("reconnecting", event.Err); err != nil {
@@ -232,12 +228,4 @@ func retryableWatchError(err error) bool {
 	}
 	var network net.Error
 	return errors.As(err, &network) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
-}
-
-// Storage and access failures do not become transient just because another
-// selected file is changing. Keep their retry budget bounded during churn.
-func permanentWatchSourceError(err error) bool {
-	return errors.Is(err, os.ErrPermission) || errors.Is(err, syscall.ENOSPC) ||
-		errors.Is(err, syscall.EDQUOT) || errors.Is(err, syscall.EROFS) ||
-		errors.Is(err, syscall.EIO) || errors.Is(err, syscall.EMFILE) || errors.Is(err, syscall.ENFILE)
 }

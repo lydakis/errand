@@ -2,7 +2,6 @@ package snapshot
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"os"
 
@@ -49,11 +48,11 @@ func (b *Builder) hash(ctx context.Context, path string, info fs.FileInfo) (stri
 	}
 	after, err := os.Lstat(path)
 	if err != nil {
-		return "", err
+		return "", sourceReadError(err)
 	}
 	s, ns, _ := changeStamp(after)
 	if !os.SameFile(info, after) || info.Mode() != after.Mode() || info.Size() != after.Size() || !info.ModTime().Equal(after.ModTime()) || supported && (s != seconds || ns != nanos) {
-		return "", fmt.Errorf("snapshot: %s changed while hashing", path)
+		return "", sourceChangedf("snapshot: %s changed while hashing", path)
 	}
 	if supported {
 		b.next[path] = fileHash{info, seconds, nanos, hash}

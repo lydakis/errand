@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -24,7 +25,14 @@ func BenchmarkWatchPhases(b *testing.B) { benchmarkPushPhases(b, true) }
 type watchWorkload struct {
 	count       int
 	nested, git bool
+	burst       bool
 	edit        string
+}
+
+// BenchmarkWatchBurst measures recovery and convergence during sustained writes
+// on the same 10k-file tree as the steady-state watch benchmark.
+func BenchmarkWatchBurst(b *testing.B) {
+	benchmarkPushWorkload(b, true, watchWorkload{count: 10000, burst: true})
 }
 
 func BenchmarkWatchWorkloads(b *testing.B) {
@@ -124,7 +132,14 @@ func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 	stage.Store(0)
 	apply.Store(0)
 	negotiation.Store(0)
-	var elapsed time.Duration
+	cpuNow := func() time.Duration {
+		var usage syscall.Rusage
+		if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
+			b.Fatal(err)
+		}
+		return time.Duration(usage.Utime.Sec+usage.Stime.Sec)*time.Second + time.Duration(usage.Utime.Usec+usage.Stime.Usec)*time.Microsecond
+	}
+	var elapsed, cpu time.Duration
 	currentName, expectedBody := nameFor(0), ""
 	verify := func() {
 		if expectedBody == "" {
@@ -135,7 +150,29 @@ func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 			b.Fatalf("delivery %s: %q %v", currentName, actual, err)
 		}
 	}
+	type writeResult struct {
+		err      error
+		finished time.Time
+	}
+	writerDone := make(chan writeResult, 1)
+	var settled time.Duration
 	edit := func(count int) error {
+		if workload.burst {
+			expectedBody = fmt.Sprintf("settled-%d", count)
+			final := expectedBody
+			go func() {
+				for i := range 400 {
+					if err := os.WriteFile(filepath.Join(root, currentName), []byte(fmt.Sprintf("burst-%d", i)), 0600); err != nil {
+						writerDone <- writeResult{err, time.Now()}
+						return
+					}
+					time.Sleep(5 * time.Millisecond)
+				}
+				err := os.WriteFile(filepath.Join(root, currentName), []byte(final), 0600)
+				writerDone <- writeResult{err, time.Now()}
+			}()
+			return nil
+		}
 		if workload.edit == "rename" {
 			next := nameFor(0)
 			if count%2 == 0 {
@@ -159,12 +196,17 @@ func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 		return os.WriteFile(target, []byte(expectedBody), 0600)
 	}
 	if watch {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		count := 0
 		var started time.Time
+		var cpuStarted time.Duration
+		var resamples int
 		b.StopTimer()
 		err := client.WatchPush(ctx, opts, func(event client.PushWatchEvent) error {
+			if event.State == "resampling" {
+				resamples++
+			}
 			if event.Result == nil {
 				return nil
 			}
@@ -172,8 +214,23 @@ func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 				return event.Err
 			}
 			if !started.IsZero() {
+				if workload.burst {
+					actual, err := os.ReadFile(filepath.Join(state, "workspaces", ws.ID, "data", currentName))
+					if err != nil {
+						return err
+					}
+					if string(actual) != expectedBody {
+						return nil
+					}
+					done := <-writerDone
+					if done.err != nil {
+						return done.err
+					}
+					settled += time.Since(done.finished)
+				}
 				verify()
 				elapsed += time.Since(started)
+				cpu += cpuNow() - cpuStarted
 				count++
 			}
 			if count == b.N {
@@ -188,11 +245,16 @@ func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 				b.StartTimer()
 			}
 			started = time.Now()
+			cpuStarted = cpuNow()
 			return edit(count)
 		})
 		if err != nil {
 			b.Fatal(err)
 		}
+		if count != b.N {
+			b.Fatalf("delivered %d of %d edits", count, b.N)
+		}
+		b.ReportMetric(float64(resamples)/float64(b.N), "resamples/op")
 	} else {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -202,10 +264,12 @@ func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 			}
 			b.StartTimer()
 			started := time.Now()
+			cpuStarted := cpuNow()
 			if _, err := client.PushChanges(opts); err != nil {
 				b.Fatal(err)
 			}
 			elapsed += time.Since(started)
+			cpu += cpuNow() - cpuStarted
 			b.StopTimer()
 			verify()
 			b.StartTimer()
@@ -214,6 +278,10 @@ func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 	}
 	b.StopTimer()
 	ms := float64(b.N) * float64(time.Millisecond)
+	b.ReportMetric(float64(cpu)/ms, "cpu-ms/op")
+	if workload.burst {
+		b.ReportMetric(float64(settled)/ms, "settle-ms/op")
+	}
 	b.ReportMetric(float64(stage.Load())/ms, "stage-ms/op")
 	b.ReportMetric(float64(apply.Load())/ms, "apply-ms/op")
 	b.ReportMetric(float64(negotiation.Load())/ms, "negotiate-ms/op")

@@ -101,7 +101,7 @@ func SelectFilesWithOptions(root string, opts SelectOptions) ([]string, GitInfo,
 			return nil, gi, proto.SelectionPolicy{}, fmt.Errorf("snapshot: re-reading .errandignore: %w", err)
 		}
 		if !bytes.Equal(data, after) {
-			return nil, gi, proto.SelectionPolicy{}, fmt.Errorf("snapshot: .errandignore changed while selecting files")
+			return nil, gi, proto.SelectionPolicy{}, sourceChangedf("snapshot: .errandignore changed while selecting files")
 		}
 		return paths, gi, policy, nil
 	} else if !os.IsNotExist(err) {
@@ -159,7 +159,7 @@ func (g *SelectionGuard) Verify() (err error) {
 	if gitInfo != g.gitInfo || !slices.Equal(paths, g.paths) || policy.Prefix != g.policy.Prefix ||
 		policy.CaseFold != g.policy.CaseFold ||
 		!slices.Equal(policy.Ignore, g.policy.Ignore) {
-		return fmt.Errorf("snapshot: selection policy changed after manifest construction; retry")
+		return sourceChangedf("snapshot: selection policy changed after manifest construction; retry")
 	}
 	return nil
 }
@@ -328,7 +328,7 @@ func stableGitSelection(root string, listGitFiles func(string) ([]string, error)
 	}
 	if !slices.Equal(paths, afterPaths) || policy.Prefix != afterPolicy.Prefix ||
 		policy.CaseFold != afterPolicy.CaseFold || !slices.Equal(policy.Ignore, afterPolicy.Ignore) {
-		return nil, proto.SelectionPolicy{}, fmt.Errorf("Git selection policy changed while selecting files")
+		return nil, proto.SelectionPolicy{}, sourceChangedf("Git selection policy changed while selecting files")
 	}
 	return paths, policy, nil
 }
@@ -744,7 +744,7 @@ func buildSelectedContext(ctx context.Context, root string, paths []string, maxB
 		abs := filepath.Join(root, filepath.FromSlash(rel))
 		fi, err := os.Lstat(abs)
 		if err != nil {
-			return m, err
+			return m, sourceReadError(err)
 		}
 		prior, err := observed.lookup(rel, fi)
 		if err != nil {
@@ -848,8 +848,11 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 		switch e.Type {
 		case proto.EntryDir:
 			fi, err := rootFS.Lstat(e.Path)
-			if err != nil || !fi.IsDir() || uint32(fi.Mode().Perm()) != expectedMode {
-				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
+			if err != nil {
+				return sourceReadError(err)
+			}
+			if !fi.IsDir() || uint32(fi.Mode().Perm()) != expectedMode {
+				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			hdr.Typeflag = tar.TypeDir
 			hdr.Name += "/"
@@ -858,12 +861,18 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			}
 		case proto.EntrySymlink:
 			fi, err := rootFS.Lstat(e.Path)
-			if err != nil || fi.Mode()&fs.ModeSymlink == 0 || uint32(fi.Mode().Perm()) != expectedMode {
-				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
+			if err != nil {
+				return sourceReadError(err)
+			}
+			if fi.Mode()&fs.ModeSymlink == 0 || uint32(fi.Mode().Perm()) != expectedMode {
+				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			target, err := rootFS.Readlink(e.Path)
-			if err != nil || target != e.Target {
-				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
+			if err != nil {
+				return sourceReadError(err)
+			}
+			if target != e.Target {
+				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			hdr.Typeflag = tar.TypeSymlink
 			hdr.Linkname = e.Target
@@ -873,19 +882,22 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 		case proto.EntryFile:
 			fi, err := rootFS.Lstat(e.Path)
 			if err != nil {
-				return fmt.Errorf("snapshot: %s vanished during pack: %w", e.Path, err)
+				return fmt.Errorf("snapshot: %s vanished during pack: %w", e.Path, sourceReadError(err))
 			}
 			if !fi.Mode().IsRegular() || fi.Size() != e.Size || uint32(fi.Mode().Perm()) != expectedMode {
-				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
+				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			f, err := rootFS.Open(e.Path)
 			if err != nil {
-				return fmt.Errorf("snapshot: %s changed during pack; retry: %w", e.Path, err)
+				return fmt.Errorf("snapshot: opening %s during pack: %w", e.Path, sourceReadError(err))
 			}
 			opened, err := f.Stat()
-			if err != nil || !opened.Mode().IsRegular() || opened.Size() != e.Size || uint32(opened.Mode().Perm()) != expectedMode {
+			if err != nil {
+				return errors.Join(err, f.Close())
+			}
+			if !opened.Mode().IsRegular() || opened.Size() != e.Size || uint32(opened.Mode().Perm()) != expectedMode {
 				f.Close()
-				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
+				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			h := sha256.New()
 			var dest io.Writer = h
@@ -913,10 +925,13 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if closeErr != nil {
 				return closeErr
 			}
+			if statErr != nil {
+				return statErr
+			}
 			if n != e.Size || hex.EncodeToString(h.Sum(nil)) != e.SHA256 ||
-				extraN != 0 || extraErr != io.EOF || statErr != nil || !closed.Mode().IsRegular() ||
+				extraN != 0 || extraErr != io.EOF || !closed.Mode().IsRegular() ||
 				closed.Size() != e.Size || uint32(closed.Mode().Perm()) != expectedMode {
-				return fmt.Errorf("snapshot: %s changed during pack; retry", e.Path)
+				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 		}
 	}
@@ -938,7 +953,7 @@ func hashFileSized(path string, size int64, mode fs.FileMode) (string, error) {
 func hashFileSizedContext(ctx context.Context, path string, size int64, mode fs.FileMode) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return "", sourceReadError(err)
 	}
 	defer f.Close()
 	h := sha256.New()
@@ -947,8 +962,11 @@ func hashFileSizedContext(ctx context.Context, path string, size int64, mode fs.
 		return "", err
 	}
 	after, statErr := f.Stat()
-	if n != size || statErr != nil || after.Size() != size || after.Mode() != mode {
-		return "", fmt.Errorf("snapshot: %s changed during hashing; retry", path)
+	if statErr != nil {
+		return "", statErr
+	}
+	if n != size || after.Size() != size || after.Mode() != mode {
+		return "", sourceChangedf("snapshot: %s changed during hashing; retry", path)
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
