@@ -21,19 +21,31 @@ type checkpointHeader struct {
 	Count    int
 }
 
-func encodeCheckpoint(ctx context.Context, w io.Writer, cp checkpoint) error {
+// observationRecords allows encoding verified batches without exposing mutable
+// storage or allocating another full manifest-sized copy.
+type observationRecords interface {
+	Len() int
+	At(int) observation
+}
+
+func encodeRecords(ctx context.Context, w io.Writer, key identity, entries observationRecords) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	encoder := gob.NewEncoder(w)
-	if err := encoder.Encode(checkpointHeader{cp.Identity, len(cp.Entries)}); err != nil {
+	if err := encoder.Encode(checkpointHeader{key, entries.Len()}); err != nil {
 		return err
 	}
-	for start := 0; start < len(cp.Entries); start += codecBatch {
+	batch := make([]observation, min(codecBatch, entries.Len()))
+	for start := 0; start < entries.Len(); start += codecBatch {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := encoder.Encode(cp.Entries[start:min(start+codecBatch, len(cp.Entries))]); err != nil {
+		batch = batch[:min(codecBatch, entries.Len()-start)]
+		for i := range batch {
+			batch[i] = entries.At(start + i)
+		}
+		if err := encoder.Encode(batch); err != nil {
 			return err
 		}
 	}

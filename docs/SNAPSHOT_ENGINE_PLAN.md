@@ -151,13 +151,19 @@ not sufficient evidence for migrating all of them.
   handoff have been measured. Next compare restoring derived index
   state and publishing changed records against the frozen observation prototype.
   Load validation, full rebuild/compaction and recovery costs are part of that
-  comparison. Consolidate the native reuse predicate with the in-memory builder
-  and strengthen the verified-publication type boundary before adding consumers;
-  preserve session ownership, unsupported-platform behavior and pack verification.
-  These are measured prerequisites for the next slice, not reasons to replace the
+  comparison. The [shared-contract slice](SNAPSHOT_CONTRACTS.md) consolidates the
+  native reuse predicate with the in-memory builder and makes checkpoint writers
+  accept only verified observations. It preserves session ownership,
+  unsupported-platform behavior and pack verification.
+  These are prerequisites for the next slice, not reasons to replace the
   adaptive representation. Full stat inventory and selection verification remain separate costs;
   neither storage change can be assumed to remove them. Integrate only after those
   gates, preserving the selection guard through freezing and testing every caller.
+- **Next comparison controls from shared-contract review:** isolate inline stamp
+  storage and hash-cache locality without weakening exact native-evidence equality;
+  compare concrete indexed encoding with bounded bulk copying; and evaluate
+  finalized `Changed` metadata on the verified result when extending publication.
+  Keep pre-review frozen results distinct from the accessor/fallback cleanup.
 - **Completed in the shared-builder slice:** native observations and ancestor
   expansion use the ordinary builder pass; unsupported identity and over-limit
   observation counts avoid duplicate preparation; validated loaded snapshots are

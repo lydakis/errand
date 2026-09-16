@@ -1,0 +1,506 @@
+{
+  "apfs": {
+    "report": "docs/benchmarks/snapshot-contracts/apfs/report.json",
+    "source_sha256": "51745e3f52a5cb79d868c00d2afc34ad5befbd905c1b21c23b309686f579cdb2",
+    "commands": {
+      "ephemeral-job": {
+        "baseline_ms": 527.1148825,
+        "candidate_ms": 529.1325275,
+        "paired_ratio": 0.9997809956170705,
+        "range": [
+          0.9725772922292442,
+          1.0127098238697139
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "fetch-ephemeral": {
+        "baseline_ms": 99.786791,
+        "candidate_ms": 99.432104,
+        "paired_ratio": 0.9983454081062544,
+        "range": [
+          0.9475750986361064,
+          1.064630237458342
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "fetch-persistent": {
+        "baseline_ms": 198.884132,
+        "candidate_ms": 198.608202,
+        "paired_ratio": 1.0104133864341178,
+        "range": [
+          0.9760349185514885,
+          1.1030915570296502
+        ],
+        "wins": 3,
+        "pairs": 8
+      },
+      "first-edit": {
+        "baseline_ms": 23.1021255,
+        "candidate_ms": 22.985743,
+        "paired_ratio": 0.9929211449305686,
+        "range": [
+          0.9660666744151991,
+          1.0200099051914058
+        ],
+        "wins": 5,
+        "pairs": 8
+      },
+      "push": {
+        "baseline_ms": 483.433312,
+        "candidate_ms": 486.2923465,
+        "paired_ratio": 1.012894147590976,
+        "range": [
+          0.9750788395673783,
+          1.0504954946918075
+        ],
+        "wins": 2,
+        "pairs": 8
+      },
+      "reconcile": {
+        "baseline_ms": 211.8415975,
+        "candidate_ms": 205.5979095,
+        "paired_ratio": 0.9980071509346751,
+        "range": [
+          0.8857190105523481,
+          1.0989943129637612
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "retained-edit": {
+        "baseline_ms": 22.5997015,
+        "candidate_ms": 22.557944,
+        "paired_ratio": 0.9974113843457683,
+        "range": [
+          0.9616992140667776,
+          1.089316946615894
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "watch": {
+        "baseline_ms": 308.8130625,
+        "candidate_ms": 307.577792,
+        "paired_ratio": 0.985489841839609,
+        "range": [
+          0.8703372988954161,
+          1.0256514958986482
+        ],
+        "wins": 5,
+        "pairs": 8
+      },
+      "workspace-create": {
+        "baseline_ms": 548.086424,
+        "candidate_ms": 542.123,
+        "paired_ratio": 0.9982174344607948,
+        "range": [
+          0.9725337547266903,
+          1.0046581345878856
+        ],
+        "wins": 5,
+        "pairs": 8
+      }
+    },
+    "later_commands": {
+      "ephemeral-job": {
+        "baseline_ms": 529.269153,
+        "candidate_ms": 529.152125,
+        "paired_ratio": 0.9997809956170705,
+        "range": [
+          0.9725772922292442,
+          1.0114909496133784
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "fetch-ephemeral": {
+        "baseline_ms": 99.786791,
+        "candidate_ms": 99.432104,
+        "paired_ratio": 0.9983454081062544,
+        "range": [
+          0.9643842587279969,
+          1.064630237458342
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "fetch-persistent": {
+        "baseline_ms": 199.719285,
+        "candidate_ms": 198.608202,
+        "paired_ratio": 1.00013667088261,
+        "range": [
+          0.9760349185514885,
+          1.0204252649709247
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "first-edit": {
+        "baseline_ms": 23.1021255,
+        "candidate_ms": 23.0749585,
+        "paired_ratio": 0.9929211449305686,
+        "range": [
+          0.9804561994707031,
+          1.0200099051914058
+        ],
+        "wins": 4,
+        "pairs": 6
+      },
+      "push": {
+        "baseline_ms": 483.433312,
+        "candidate_ms": 488.462111,
+        "paired_ratio": 1.012894147590976,
+        "range": [
+          0.9750788395673783,
+          1.0504954946918075
+        ],
+        "wins": 1,
+        "pairs": 6
+      },
+      "reconcile": {
+        "baseline_ms": 211.8415975,
+        "candidate_ms": 204.784528,
+        "paired_ratio": 1.0039764884890876,
+        "range": [
+          0.8857190105523481,
+          1.0989943129637612
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "retained-edit": {
+        "baseline_ms": 22.6227225,
+        "candidate_ms": 22.557944,
+        "paired_ratio": 0.9928138875518289,
+        "range": [
+          0.9616992140667776,
+          1.0674392928647578
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "watch": {
+        "baseline_ms": 306.104243,
+        "candidate_ms": 307.7537495,
+        "paired_ratio": 0.9926001562586881,
+        "range": [
+          0.8703372988954161,
+          1.0256514958986482
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "workspace-create": {
+        "baseline_ms": 550.6824235,
+        "candidate_ms": 544.740965,
+        "paired_ratio": 0.9982174344607948,
+        "range": [
+          0.9725337547266903,
+          1.0046581345878856
+        ],
+        "wins": 4,
+        "pairs": 6
+      }
+    },
+    "checkpoints": {
+      "current": {
+        "baseline_ms": 284.2677085,
+        "candidate_ms": 281.4348335,
+        "paired_ratio": 0.9886863084741486,
+        "range": [
+          0.886919965021364,
+          1.1390777641610834
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "edit": {
+        "baseline_ms": 293.500438,
+        "candidate_ms": 292.89925,
+        "paired_ratio": 1.011370154669553,
+        "range": [
+          0.8957026268916377,
+          1.1439457961948292
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "miss": {
+        "baseline_ms": 876.929292,
+        "candidate_ms": 862.2389795,
+        "paired_ratio": 0.9894143502066706,
+        "range": [
+          0.9511831388559525,
+          1.0470452391584284
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "unchanged": {
+        "baseline_ms": 269.182375,
+        "candidate_ms": 278.348375,
+        "paired_ratio": 1.0216913495325195,
+        "range": [
+          0.8741111432034091,
+          1.142288103230531
+        ],
+        "wins": 3,
+        "pairs": 8
+      }
+    }
+  },
+  "btrfs": {
+    "report": "docs/benchmarks/snapshot-contracts/btrfs/report.json",
+    "source_sha256": "51745e3f52a5cb79d868c00d2afc34ad5befbd905c1b21c23b309686f579cdb2",
+    "commands": {
+      "ephemeral-job": {
+        "baseline_ms": 731.385765,
+        "candidate_ms": 722.8185705,
+        "paired_ratio": 0.9947887668379496,
+        "range": [
+          0.89478135049118,
+          1.0529337974884132
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "fetch-ephemeral": {
+        "baseline_ms": 92.896508,
+        "candidate_ms": 92.0806745,
+        "paired_ratio": 0.9801020050733629,
+        "range": [
+          0.9324373819405075,
+          1.4896254399376794
+        ],
+        "wins": 5,
+        "pairs": 8
+      },
+      "fetch-persistent": {
+        "baseline_ms": 207.868054,
+        "candidate_ms": 201.558731,
+        "paired_ratio": 0.9899781563033241,
+        "range": [
+          0.7801709138177944,
+          1.2891743199758372
+        ],
+        "wins": 5,
+        "pairs": 8
+      },
+      "first-edit": {
+        "baseline_ms": 5.219672,
+        "candidate_ms": 5.4379215,
+        "paired_ratio": 1.0434726894148971,
+        "range": [
+          0.7629486448506629,
+          1.2864933376212575
+        ],
+        "wins": 3,
+        "pairs": 8
+      },
+      "push": {
+        "baseline_ms": 792.604073,
+        "candidate_ms": 793.7684195,
+        "paired_ratio": 0.9723916395189423,
+        "range": [
+          0.8159282430237682,
+          1.130002451667922
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "reconcile": {
+        "baseline_ms": 223.5608075,
+        "candidate_ms": 219.474386,
+        "paired_ratio": 0.9772896061550047,
+        "range": [
+          0.9032596515519367,
+          1.232937897076995
+        ],
+        "wins": 5,
+        "pairs": 8
+      },
+      "retained-edit": {
+        "baseline_ms": 5.595591,
+        "candidate_ms": 5.7755475,
+        "paired_ratio": 1.0023795461632516,
+        "range": [
+          0.7799133763059531,
+          1.9815848852425046
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "watch": {
+        "baseline_ms": 375.492668,
+        "candidate_ms": 373.779868,
+        "paired_ratio": 0.9977644161630139,
+        "range": [
+          0.8522466050313989,
+          1.510841401504432
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "workspace-create": {
+        "baseline_ms": 1745.1411855,
+        "candidate_ms": 1619.082064,
+        "paired_ratio": 0.9042056477659721,
+        "range": [
+          0.8473439825793039,
+          1.2283339672819724
+        ],
+        "wins": 5,
+        "pairs": 8
+      }
+    },
+    "later_commands": {
+      "ephemeral-job": {
+        "baseline_ms": 727.2921545,
+        "candidate_ms": 732.657762,
+        "paired_ratio": 1.0184827993774423,
+        "range": [
+          0.9144582942469686,
+          1.0529337974884132
+        ],
+        "wins": 2,
+        "pairs": 6
+      },
+      "fetch-ephemeral": {
+        "baseline_ms": 92.896508,
+        "candidate_ms": 103.455008,
+        "paired_ratio": 1.0388138685169377,
+        "range": [
+          0.9324373819405075,
+          1.4896254399376794
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "fetch-persistent": {
+        "baseline_ms": 203.614132,
+        "candidate_ms": 201.0362655,
+        "paired_ratio": 0.9787200623664847,
+        "range": [
+          0.7801709138177944,
+          1.2891743199758372
+        ],
+        "wins": 5,
+        "pairs": 6
+      },
+      "first-edit": {
+        "baseline_ms": 5.1272,
+        "candidate_ms": 5.4379215,
+        "paired_ratio": 1.0605991508183572,
+        "range": [
+          0.7629486448506629,
+          1.2864933376212575
+        ],
+        "wins": 1,
+        "pairs": 6
+      },
+      "push": {
+        "baseline_ms": 815.567564,
+        "candidate_ms": 798.418,
+        "paired_ratio": 0.9656409843504925,
+        "range": [
+          0.8159282430237682,
+          1.130002451667922
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "reconcile": {
+        "baseline_ms": 223.5608075,
+        "candidate_ms": 219.474386,
+        "paired_ratio": 0.9486761989222237,
+        "range": [
+          0.9032596515519367,
+          1.232937897076995
+        ],
+        "wins": 4,
+        "pairs": 6
+      },
+      "retained-edit": {
+        "baseline_ms": 5.595591,
+        "candidate_ms": 5.6091995,
+        "paired_ratio": 1.0023795461632516,
+        "range": [
+          0.7799133763059531,
+          1.2094803666376446
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "watch": {
+        "baseline_ms": 376.781157,
+        "candidate_ms": 369.045575,
+        "paired_ratio": 0.9775701390460985,
+        "range": [
+          0.8522466050313989,
+          1.510841401504432
+        ],
+        "wins": 4,
+        "pairs": 6
+      },
+      "workspace-create": {
+        "baseline_ms": 1756.184776,
+        "candidate_ms": 1619.082064,
+        "paired_ratio": 0.9042056477659721,
+        "range": [
+          0.8548233680794304,
+          1.1240624844804772
+        ],
+        "wins": 4,
+        "pairs": 6
+      }
+    },
+    "checkpoints": {
+      "current": {
+        "baseline_ms": 535.853869,
+        "candidate_ms": 556.5312145,
+        "paired_ratio": 1.0413722113315866,
+        "range": [
+          0.708084370967842,
+          1.8764975371545307
+        ],
+        "wins": 2,
+        "pairs": 8
+      },
+      "edit": {
+        "baseline_ms": 624.7861375,
+        "candidate_ms": 625.3023045,
+        "paired_ratio": 0.9940870280057454,
+        "range": [
+          0.9381052433122674,
+          1.071870041513789
+        ],
+        "wins": 5,
+        "pairs": 8
+      },
+      "miss": {
+        "baseline_ms": 1121.0670055,
+        "candidate_ms": 1142.519822,
+        "paired_ratio": 1.0066494583790688,
+        "range": [
+          0.941433907305704,
+          1.1091006085398
+        ],
+        "wins": 3,
+        "pairs": 8
+      },
+      "unchanged": {
+        "baseline_ms": 536.2871615,
+        "candidate_ms": 540.06856,
+        "paired_ratio": 0.9942344355960467,
+        "range": [
+          0.9654279598422981,
+          1.1438761911965454
+        ],
+        "wins": 5,
+        "pairs": 8
+      }
+    }
+  }
+}

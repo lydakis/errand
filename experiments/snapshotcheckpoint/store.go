@@ -14,6 +14,7 @@ import (
 
 	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/snapshot"
 	"golang.org/x/sys/unix"
 )
 
@@ -88,16 +89,19 @@ func readCheckpoint(ctx context.Context, dir string, key identity, restore bool)
 	return loaded, "hit", size, nil
 }
 
-func writeCheckpoint(ctx context.Context, dir string, cp checkpoint) (int64, error) {
+func writeCheckpoint(ctx context.Context, dir string, key identity, entries snapshot.VerifiedObservations) (int64, error) {
+	if !entries.Valid() || entries.Root() != key.Root {
+		return 0, fmt.Errorf("checkpoint requires verified observations for its source root")
+	}
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	if len(cp.Entries) > maxEntries {
+	if entries.Len() > maxEntries {
 		return 0, fmt.Errorf("checkpoint entry limit")
 	}
 	var buffer bytes.Buffer
 	buffer.WriteString(magic)
-	if err := encodeCheckpoint(ctx, &buffer, cp); err != nil {
+	if err := encodeRecords(ctx, &buffer, key, entries); err != nil {
 		return 0, err
 	}
 	if buffer.Len()+sha256.Size > maxBytes {

@@ -70,8 +70,11 @@ func TestWatchPrepareInvalidatesHashesEvenWhenStatEvidenceMatches(t *testing.T) 
 			// Simulate a filesystem returning identical stat evidence for two
 			// same-size writes, without relying on the host's timestamp resolution.
 			old := b.hashes[name]
-			old.info, _ = os.Lstat(name)
-			old.seconds, old.nanos, _ = changeStamp(old.info)
+			info, err := os.Lstat(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			old.stamp, _ = Fingerprint(info)
 			b.hashes[name] = old
 			if reconcile {
 				w.InvalidatePreparation()

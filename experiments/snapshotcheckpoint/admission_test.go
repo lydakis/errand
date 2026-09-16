@@ -127,7 +127,7 @@ func TestDirectLoadValidatesWithoutRestoringSnapshot(t *testing.T) {
 		{{Entry: proto.ManifestEntry{Path: "a", Type: proto.EntryFile, Size: math.MaxInt64, SHA256: strings.Repeat("0", 64)}}, {Entry: proto.ManifestEntry{Path: "b", Type: proto.EntryFile, Size: 1, SHA256: strings.Repeat("0", 64)}}},
 		{{Entry: proto.ManifestEntry{Path: "b", Type: proto.EntryDir}}, {Entry: proto.ManifestEntry{Path: "a", Type: proto.EntryDir}}},
 	} {
-		if _, err := writeCheckpoint(ctx, cache, checkpoint{Identity: key, Entries: entries}); err != nil {
+		if _, err := writeRawCheckpoint(ctx, cache, checkpoint{Identity: key, Entries: entries}); err != nil {
 			t.Fatal(err)
 		}
 		for _, restore := range []bool{false, true} {

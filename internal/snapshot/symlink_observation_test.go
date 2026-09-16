@@ -20,14 +20,15 @@ func TestReusedSymlinkKeepsTargetBoundToStamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := first.Verify(ctx, root); err != nil {
+	verified, err := first.Verify(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Lstat(link)
 	if err != nil {
 		t.Fatal(err)
 	}
-	build := &ObservedBuild{prior: first.Observations, collect: true}
+	build := &ObservedBuild{prior: verifiedCopy(verified), collect: true}
 	prior, err := build.lookup("link", info)
 	if err != nil || prior == nil {
 		t.Fatalf("lookup: %v %v", prior, err)

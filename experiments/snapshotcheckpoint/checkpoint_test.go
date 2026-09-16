@@ -172,7 +172,7 @@ func TestBootIdentityNonregularCacheAndConcurrentWriters(t *testing.T) {
 		t.Fatal(status)
 	}
 	cp.Identity.Boot = "previous boot"
-	if _, err := writeCheckpoint(context.Background(), cache, cp.checkpoint); err != nil {
+	if _, err := writeRawCheckpoint(context.Background(), cache, cp.checkpoint); err != nil {
 		t.Fatal(err)
 	}
 	if got := oracle(t, root, cache); got.CacheStatus != "identity" || got.Reused != 0 {
@@ -188,12 +188,11 @@ func TestBootIdentityNonregularCacheAndConcurrentWriters(t *testing.T) {
 	if got := oracle(t, root, cache); got.CacheStatus != "corrupt" || !got.Written {
 		t.Fatalf("fifo: %+v", got)
 	}
+	verified := verifiedFixture(t, root)
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Go(func() {
-			other := cp.checkpoint
-			other.Identity.Boot = key.Boot
-			_, err := writeCheckpoint(context.Background(), cache, other)
+			_, err := writeCheckpoint(context.Background(), cache, key, verified)
 			if err != nil && err != unix.EWOULDBLOCK && err != unix.EAGAIN {
 				t.Error(err)
 			}

@@ -17,9 +17,8 @@ type Builder struct {
 	next   map[string]fileHash
 }
 type fileHash struct {
-	info           fs.FileInfo
-	seconds, nanos int64
-	hash           string
+	stamp ObservationStamp
+	hash  string
 }
 
 func (b *Builder) Build(root string, paths []string) (proto.Manifest, error) {
@@ -36,9 +35,10 @@ func (b *Builder) hash(ctx context.Context, path string, info fs.FileInfo) (stri
 	if b == nil {
 		return hashFileSizedContext(ctx, path, info.Size(), info.Mode())
 	}
-	seconds, nanos, supported := changeStamp(info)
+	stamp, stampErr := Fingerprint(info)
+	supported := stampErr == nil
 	old, ok := b.hashes[path]
-	if supported && ok && os.SameFile(old.info, info) && old.info.Mode() == info.Mode() && old.info.Size() == info.Size() && old.info.ModTime().Equal(info.ModTime()) && old.seconds == seconds && old.nanos == nanos {
+	if supported && ok && sameObservation(old.stamp, stamp) {
 		b.next[path] = old
 		return old.hash, nil
 	}
@@ -50,12 +50,18 @@ func (b *Builder) hash(ctx context.Context, path string, info fs.FileInfo) (stri
 	if err != nil {
 		return "", sourceReadError(err)
 	}
-	s, ns, _ := changeStamp(after)
-	if !os.SameFile(info, after) || info.Mode() != after.Mode() || info.Size() != after.Size() || !info.ModTime().Equal(after.ModTime()) || supported && (s != seconds || ns != nanos) {
+	afterStamp, afterErr := Fingerprint(after)
+	var unchanged bool
+	if supported {
+		unchanged = afterErr == nil && sameObservation(stamp, afterStamp)
+	} else {
+		unchanged = os.SameFile(info, after) && info.Mode() == after.Mode() && info.Size() == after.Size() && info.ModTime().Equal(after.ModTime())
+	}
+	if !unchanged {
 		return "", sourceChangedf("snapshot: %s changed while hashing", path)
 	}
 	if supported {
-		b.next[path] = fileHash{info, seconds, nanos, hash}
+		b.next[path] = fileHash{stamp, hash}
 	}
 	return hash, nil
 }

@@ -191,10 +191,13 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 		return r, err
 	}
 	r.Hashed, r.Reused = built.Hashed, built.Reused
-	if err = built.Verify(ctx, root); err != nil {
-		return r, err
+	var verified snapshot.VerifiedObservations
+	if collect {
+		verified, err = built.Verify(ctx)
+		if err != nil {
+			return r, err
+		}
 	}
-	next := checkpoint{Identity: key, Entries: built.Observations}
 	writable := collect && (r.CacheStatus != "hit" || built.Changed)
 	r.Phases.Hash = time.Since(start)
 	start = time.Now()
@@ -202,7 +205,7 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 		r.State = prior.state
 		err = r.State.PrepareUpdates(ctx)
 		if err == nil {
-			edits := differences(prior.Entries, next.Entries)
+			edits := differences(prior.Entries, verified)
 			if len(edits) != 0 {
 				r.State, err = r.State.Update(ctx, edits)
 			}
@@ -233,7 +236,7 @@ func prepare(ctx context.Context, root, cache string, opts snapshot.SelectOption
 	r.Phases.Verify = time.Since(start)
 	if writable {
 		start = time.Now()
-		r.CheckpointBytes, err = writeCheckpoint(ctx, cache, next)
+		r.CheckpointBytes, err = writeCheckpoint(ctx, cache, key, verified)
 		r.Phases.Save = time.Since(start)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -274,23 +277,31 @@ func checkoutIdentity(root string, policy proto.SelectionPolicy, opts snapshot.S
 	return identity{Root: root, OS: runtime.GOOS, Boot: boot, Filesystem: filesystem, Device: s.Device, Inode: s.Inode, Policy: sha256.Sum256(data)}, err
 }
 
-func differences(before, after []observation) []manifest.Edit {
+func differences(before []observation, after snapshot.VerifiedObservations) []manifest.Edit {
 	var edits []manifest.Edit
-	i, j := 0, 0
-	for i < len(before) || j < len(after) {
-		if i < len(before) && (j == len(after) || before[i].Entry.Path < after[j].Entry.Path) {
+	i, j, count := 0, 0, after.Len()
+	for i < len(before) && j < count {
+		entry := after.At(j).Entry
+		switch {
+		case before[i].Entry.Path < entry.Path:
 			edits = append(edits, manifest.Edit{Entry: before[i].Entry, Delete: true})
 			i++
-		} else if j < len(after) && (i == len(before) || after[j].Entry.Path < before[i].Entry.Path) {
-			edits = append(edits, manifest.Edit{Entry: after[j].Entry})
+		case entry.Path < before[i].Entry.Path:
+			edits = append(edits, manifest.Edit{Entry: entry})
 			j++
-		} else {
-			if before[i].Entry != after[j].Entry {
-				edits = append(edits, manifest.Edit{Entry: after[j].Entry})
+		default:
+			if before[i].Entry != entry {
+				edits = append(edits, manifest.Edit{Entry: entry})
 			}
 			i++
 			j++
 		}
+	}
+	for ; i < len(before); i++ {
+		edits = append(edits, manifest.Edit{Entry: before[i].Entry, Delete: true})
+	}
+	for ; j < count; j++ {
+		edits = append(edits, manifest.Edit{Entry: after.At(j).Entry})
 	}
 	return edits
 }

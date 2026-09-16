@@ -38,11 +38,19 @@ func TestSearchSourceRejectsSymlinkTraversalAndRebinding(t *testing.T) {
 			t.Fatalf("accepted unsafe path %q", name)
 		}
 	}
+	// The traversal checks above require search-only permissions. Restore write
+	// access for the rebinding fixture: macOS may reject renaming a 0100 directory.
+	if err := os.Chmod(filepath.Join(dir, "parent"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	err = withSearchSourceParent(root, "parent/file", func(*os.File, string) error {
 		if err := os.Rename(filepath.Join(dir, "parent"), filepath.Join(dir, "old")); err != nil {
-			return err
+			t.Fatalf("setting up parent rebinding: %v", err)
 		}
-		return os.Mkdir(filepath.Join(dir, "parent"), 0100)
+		if err := os.Mkdir(filepath.Join(dir, "parent"), 0100); err != nil {
+			t.Fatalf("setting up replacement parent: %v", err)
+		}
+		return nil
 	})
 	if err == nil || !strings.Contains(err.Error(), "changed") {
 		t.Fatalf("accepted rebound parent: %v", err)

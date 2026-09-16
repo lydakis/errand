@@ -1,0 +1,196 @@
+{
+  "apfs": {
+    "report": "docs/benchmarks/snapshot-contracts/review-apfs/report.json",
+    "source_sha256": "b03f7719740bc65f6f40e4fa20361582d61ebc69fa146c86c2b35d3908ddc449",
+    "commands": {
+      "differences-edit": {
+        "baseline_ms": 1.67915,
+        "candidate_ms": 0.5479265,
+        "paired_ratio": 0.3260880533703517,
+        "range": [
+          0.324252916479437,
+          0.32726746478218977
+        ],
+        "wins": 8,
+        "pairs": 8
+      },
+      "differences-unchanged": {
+        "baseline_ms": 1.6789785,
+        "candidate_ms": 0.547877,
+        "paired_ratio": 0.3262499799654581,
+        "range": [
+          0.3233394349458349,
+          0.32792587255128086
+        ],
+        "wins": 8,
+        "pairs": 8
+      },
+      "first-edit": {
+        "baseline_ms": 147.2770835,
+        "candidate_ms": 143.61425,
+        "paired_ratio": 0.9909261966636609,
+        "range": [
+          0.918754830351437,
+          1.0243150427198895
+        ],
+        "wins": 5,
+        "pairs": 8
+      },
+      "retained-edit": {
+        "baseline_ms": 147.7539025,
+        "candidate_ms": 146.145472,
+        "paired_ratio": 0.999255200955343,
+        "range": [
+          0.9411253786941292,
+          1.0334444616692728
+        ],
+        "wins": 4,
+        "pairs": 8
+      }
+    },
+    "later_commands": {
+      "differences-edit": {
+        "baseline_ms": 1.68076,
+        "candidate_ms": 0.5484305,
+        "paired_ratio": 0.3263839229000305,
+        "range": [
+          0.324252916479437,
+          0.32726746478218977
+        ],
+        "wins": 6,
+        "pairs": 6
+      },
+      "differences-unchanged": {
+        "baseline_ms": 1.6789785,
+        "candidate_ms": 0.5484905,
+        "paired_ratio": 0.3262499799654581,
+        "range": [
+          0.3233394349458349,
+          0.32792587255128086
+        ],
+        "wins": 6,
+        "pairs": 6
+      },
+      "first-edit": {
+        "baseline_ms": 151.181125,
+        "candidate_ms": 147.836479,
+        "paired_ratio": 0.9943455271320142,
+        "range": [
+          0.918754830351437,
+          1.0243150427198895
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "retained-edit": {
+        "baseline_ms": 150.9184445,
+        "candidate_ms": 148.665528,
+        "paired_ratio": 1.0027146733510763,
+        "range": [
+          0.9411253786941292,
+          1.0334444616692728
+        ],
+        "wins": 3,
+        "pairs": 6
+      }
+    },
+    "checkpoints": {}
+  },
+  "btrfs": {
+    "report": "docs/benchmarks/snapshot-contracts/review-btrfs/report.json",
+    "source_sha256": "b03f7719740bc65f6f40e4fa20361582d61ebc69fa146c86c2b35d3908ddc449",
+    "commands": {
+      "differences-edit": {
+        "baseline_ms": 0.603078,
+        "candidate_ms": 0.1969365,
+        "paired_ratio": 0.3250621589639554,
+        "range": [
+          0.28810847389953215,
+          0.3497100543582618
+        ],
+        "wins": 8,
+        "pairs": 8
+      },
+      "differences-unchanged": {
+        "baseline_ms": 0.6262995,
+        "candidate_ms": 0.201639,
+        "paired_ratio": 0.320676991936797,
+        "range": [
+          0.2890933334920739,
+          0.44565461061206446
+        ],
+        "wins": 8,
+        "pairs": 8
+      },
+      "first-edit": {
+        "baseline_ms": 5.3248255,
+        "candidate_ms": 5.259221,
+        "paired_ratio": 1.0086247811445368,
+        "range": [
+          0.7257695183796845,
+          1.3029343845384702
+        ],
+        "wins": 4,
+        "pairs": 8
+      },
+      "retained-edit": {
+        "baseline_ms": 5.581057,
+        "candidate_ms": 5.549099,
+        "paired_ratio": 1.0240909855704987,
+        "range": [
+          0.6574817817443576,
+          1.1101526796671377
+        ],
+        "wins": 3,
+        "pairs": 8
+      }
+    },
+    "later_commands": {
+      "differences-edit": {
+        "baseline_ms": 0.6051615,
+        "candidate_ms": 0.196045,
+        "paired_ratio": 0.3179225209409502,
+        "range": [
+          0.28810847389953215,
+          0.3497100543582618
+        ],
+        "wins": 6,
+        "pairs": 6
+      },
+      "differences-unchanged": {
+        "baseline_ms": 0.629791,
+        "candidate_ms": 0.2024265,
+        "paired_ratio": 0.32879973765705894,
+        "range": [
+          0.2890933334920739,
+          0.44565461061206446
+        ],
+        "wins": 6,
+        "pairs": 6
+      },
+      "first-edit": {
+        "baseline_ms": 5.258184,
+        "candidate_ms": 5.259221,
+        "paired_ratio": 1.0086247811445368,
+        "range": [
+          0.7257695183796845,
+          1.283780944008198
+        ],
+        "wins": 3,
+        "pairs": 6
+      },
+      "retained-edit": {
+        "baseline_ms": 5.533628,
+        "candidate_ms": 5.549099,
+        "paired_ratio": 1.0240909855704987,
+        "range": [
+          0.9051817458785052,
+          1.1101526796671377
+        ],
+        "wins": 2,
+        "pairs": 6
+      }
+    },
+    "checkpoints": {}
+  }
+}

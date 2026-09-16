@@ -46,14 +46,22 @@ type ObservationOptions struct {
 // verification remains the caller's responsibility, including after freezing.
 type ObservedBuild struct {
 	Manifest       proto.Manifest
-	Observations   []Observation
+	batch          *pendingObservations
 	Hashed, Reused int
 	Changed        bool
 	collect        bool
 	prior          []Observation
 	cursor         int
 	currentStamp   ObservationStamp
-	pending        []int
+}
+
+// Copies share consumption state. Published batches have no mutable alias
+// reachable through a copied build value. Builds are used serially.
+type pendingObservations struct {
+	entries []Observation
+	pending []int
+	root    string
+	ready   bool
 }
 
 // BuildObservedContext accepts sorted, validated, identity-matched advisory
@@ -65,14 +73,24 @@ func BuildObservedContext(ctx context.Context, root string, paths BuildPaths, op
 	}
 	r := &ObservedBuild{collect: opts.Collect}
 	if opts.Collect {
+		absoluteRoot, err := filepath.Abs(root)
+		if err != nil {
+			return nil, err
+		}
 		r.prior = opts.Prior
 		r.Changed = paths.Len() != len(opts.Prior)
-		r.Observations = make([]Observation, 0, paths.Len())
+		r.batch = &pendingObservations{entries: make([]Observation, 0, paths.Len()), root: absoluteRoot}
 	}
 	m, err := buildSelectedContext(ctx, root, paths.paths, opts.MaxBytes, opts.MaxEntries, nil, r)
 	r.Manifest = m
 	r.prior = nil
-	return r, err
+	if err != nil {
+		return nil, err
+	}
+	if r.batch != nil {
+		r.batch.ready = true
+	}
+	return r, nil
 }
 
 // lookup and record run consecutively for one entry in the serialized builder.
@@ -92,7 +110,7 @@ func (r *ObservedBuild) lookup(name string, info fs.FileInfo) (*Observation, err
 	}
 	if r.cursor < len(r.prior) {
 		old := &r.prior[r.cursor]
-		if old.Entry.Path == name && old.Stamp == s {
+		if old.Entry.Path == name && sameObservation(old.Stamp, s) {
 			return old, nil
 		}
 	}
@@ -117,42 +135,71 @@ func (r *ObservedBuild) record(entry proto.ManifestEntry, reused bool) {
 		r.Changed = true
 	}
 	if !reused || entry.Type == proto.EntryDir {
-		r.pending = append(r.pending, len(r.Observations))
+		r.batch.pending = append(r.batch.pending, len(r.batch.entries))
 	}
-	r.Observations = append(r.Observations, Observation{entry, r.currentStamp})
+	r.batch.entries = append(r.batch.entries, Observation{entry, r.currentStamp})
 }
 
-// Verify binds newly read metadata/hashes to their pre-build observations.
-// Unchanged regular files need only the fresh stat done by the builder. Ignored
-// sibling churn can change directory timestamps without changing its metadata.
-func (r *ObservedBuild) Verify(ctx context.Context, root string) error {
-	for _, i := range r.pending {
+// VerifiedObservations is an immutable, root-bound batch of advisory observations.
+// Only a completed build followed by successful Verify can produce a valid batch.
+// At returns a value: callers cannot mutate the backing observations. Verification
+// does not freeze files or authorize selection; guards and packed-body checks remain
+// the caller's responsibility.
+type VerifiedObservations struct {
+	entries []Observation
+	root    string
+	valid   bool
+}
+
+func (v VerifiedObservations) Valid() bool          { return v.valid }
+func (v VerifiedObservations) Root() string         { return v.root }
+func (v VerifiedObservations) Len() int             { return len(v.entries) }
+func (v VerifiedObservations) At(i int) Observation { return v.entries[i] }
+
+// Verify consumes the pending batch, including on failure. It binds newly read
+// metadata/hashes to pre-build observations. Unchanged files use the fresh stat
+// already done by the builder. Ignored sibling churn may change directory stamps.
+func (r *ObservedBuild) Verify(ctx context.Context) (VerifiedObservations, error) {
+	if r == nil || r.batch == nil || !r.batch.ready {
+		return VerifiedObservations{}, fmt.Errorf("snapshot: no pending observations to verify")
+	}
+	batch := r.batch
+	batch.ready = false
+	entries, pending := batch.entries, batch.pending
+	batch.entries, batch.pending = nil, nil
+	for _, i := range pending {
 		if err := ctx.Err(); err != nil {
-			return err
+			return VerifiedObservations{}, err
 		}
-		e := &r.Observations[i]
-		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(e.Entry.Path)))
+		e := &entries[i]
+		info, err := os.Lstat(filepath.Join(batch.root, filepath.FromSlash(e.Entry.Path)))
 		if err != nil {
-			return err
+			return VerifiedObservations{}, err
 		}
 		after, err := Fingerprint(info)
 		if err != nil {
-			return err
+			return VerifiedObservations{}, err
 		}
 		if !matchesPrepared(e.Stamp, after, e.Entry) {
-			return fmt.Errorf("source changed while preparing %q", e.Entry.Path)
+			return VerifiedObservations{}, fmt.Errorf("source changed while preparing %q", e.Entry.Path)
 		}
 		if e.Stamp != after {
 			r.Changed = true
 		}
 		e.Stamp = after
 	}
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return VerifiedObservations{}, err
+	}
+	return VerifiedObservations{entries: entries, root: batch.root, valid: true}, nil
 }
+
+// sameObservation is the shared advisory reuse rule for native file evidence.
+func sameObservation(before, after ObservationStamp) bool { return before == after }
 
 func matchesPrepared(before, after ObservationStamp, entry proto.ManifestEntry) bool {
 	if entry.Type != proto.EntryDir {
-		return before == after
+		return sameObservation(before, after)
 	}
 	return fs.FileMode(before.Mode).IsDir() && fs.FileMode(after.Mode).IsDir() &&
 		before.Device == after.Device && before.Inode == after.Inode &&

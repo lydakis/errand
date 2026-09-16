@@ -31,24 +31,25 @@ func TestObservedBuilderLimitsAndVerification(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := first.Verify(ctx, root); err != nil {
+	verified, err := first.Verify(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first.Observations) != 2 || first.Hashed != 1 {
+	if len(verifiedCopy(verified)) != 2 || first.Hashed != 1 {
 		t.Fatalf("missing ancestor or body: %+v", first)
 	}
-	warm, err := BuildObservedContext(ctx, root, paths, ObservationOptions{Prior: first.Observations, Collect: true, MaxBytes: -1, MaxEntries: -1})
+	warm, err := BuildObservedContext(ctx, root, paths, ObservationOptions{Prior: verifiedCopy(verified), Collect: true, MaxBytes: -1, MaxEntries: -1})
 	if err != nil || warm.Reused != 1 || warm.Hashed != 0 || warm.Changed {
 		t.Fatalf("reuse: %+v %v", warm, err)
 	}
-	bypass, err := BuildObservedContext(ctx, root, paths, ObservationOptions{Prior: first.Observations, Collect: false, MaxBytes: -1, MaxEntries: -1})
-	if err != nil || len(bypass.Observations) != 0 || bypass.Hashed != 1 || bypass.Reused != 0 {
+	bypass, err := BuildObservedContext(ctx, root, paths, ObservationOptions{Prior: verifiedCopy(verified), Collect: false, MaxBytes: -1, MaxEntries: -1})
+	if err != nil || bypass.batch != nil || bypass.Hashed != 1 || bypass.Reused != 0 {
 		t.Fatalf("bypass: %+v %v", bypass, err)
 	}
 	if bypass.Manifest.RootHash() != first.Manifest.RootHash() {
 		t.Fatal("bypass changed snapshot")
 	}
-	for _, prior := range [][]Observation{nil, first.Observations} {
+	for _, prior := range [][]Observation{nil, verifiedCopy(verified)} {
 		if _, err := BuildObservedContext(ctx, root, paths, ObservationOptions{Prior: prior, Collect: true, MaxBytes: 5, MaxEntries: -1}); !errors.Is(err, ErrByteLimitExceeded) {
 			t.Fatalf("byte limit: %v", err)
 		}
@@ -59,7 +60,17 @@ func TestObservedBuilderLimitsAndVerification(t *testing.T) {
 	if err := os.WriteFile(file, []byte("after!"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := first.Verify(ctx, root); err == nil {
+	if _, err := warm.Verify(ctx); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := BuildObservedContext(ctx, root, paths, ObservationOptions{Collect: true, MaxBytes: -1, MaxEntries: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("again!"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fresh.Verify(ctx); err == nil {
 		t.Fatal("accepted changed body")
 	}
 	cancelled, cancel := context.WithCancel(ctx)
@@ -108,4 +119,12 @@ func BenchmarkObservationBypass(b *testing.B) {
 			}
 		})
 	}
+}
+
+func verifiedCopy(v VerifiedObservations) []Observation {
+	result := make([]Observation, v.Len())
+	for i := range result {
+		result[i] = v.At(i)
+	}
+	return result
 }

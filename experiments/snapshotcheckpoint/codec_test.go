@@ -69,8 +69,10 @@ func TestCheckpointCodecCancellationAndBounds(t *testing.T) {
 
 func TestCancelledCacheIOPreservesGeneration(t *testing.T) {
 	dir := t.TempDir()
-	cp := checkpoint{}
-	if _, err := writeCheckpoint(context.Background(), dir, cp); err != nil {
+	root, _ := fixture(t)
+	verified := verifiedFixture(t, root)
+	key := identity{Root: verified.Root()}
+	if _, err := writeCheckpoint(context.Background(), dir, key, verified); err != nil {
 		t.Fatal(err)
 	}
 	before, err := os.ReadFile(filepath.Join(dir, "checkpoint"))
@@ -79,10 +81,10 @@ func TestCancelledCacheIOPreservesGeneration(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, status, _, err := readCheckpoint(ctx, dir, cp.Identity, true); !errors.Is(err, context.Canceled) || status != "" {
+	if _, status, _, err := readCheckpoint(ctx, dir, key, true); !errors.Is(err, context.Canceled) || status != "" {
 		t.Fatalf("cancelled load became a cache miss: %q %v", status, err)
 	}
-	if _, err := writeCheckpoint(ctx, dir, cp); !errors.Is(err, context.Canceled) {
+	if _, err := writeCheckpoint(ctx, dir, key, verified); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	after, err := os.ReadFile(filepath.Join(dir, "checkpoint"))
