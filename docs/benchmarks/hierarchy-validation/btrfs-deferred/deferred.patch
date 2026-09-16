@@ -1,0 +1,46 @@
+--- a/internal/manifest/snapshot.go
++++ b/internal/manifest/snapshot.go
+@@ -251,7 +251,6 @@
+ 	count := s.count
+ 	changed := false
+ 	structural := false
+-	preservesHierarchy := true
+ 	for i, e := range ordered {
+ 		if err := ctx.Err(); err != nil {
+ 			return nil, err
+@@ -264,7 +263,6 @@
+ 		}
+ 		if old, ok := s.Lookup(e.Entry.Path); ok {
+ 			structural = structural || e.Delete
+-			preservesHierarchy = preservesHierarchy && !e.Delete && old.Type == e.Entry.Type
+ 			if e.Delete {
+ 				count--
+ 			}
+@@ -272,7 +270,6 @@
+ 			changed = changed || e.Delete || old != e.Entry
+ 		} else {
+ 			structural = true
+-			preservesHierarchy = false
+ 			if !e.Delete {
+ 				count++
+ 			}
+@@ -293,6 +290,19 @@
+ 			return nil, fmt.Errorf("manifest byte total overflows")
+ 		}
+ 		size += e.Size
++	}
++	preservesHierarchy := !structural
++	if preservesHierarchy {
++		for _, edit := range ordered {
++			if err := ctx.Err(); err != nil {
++				return nil, err
++			}
++			old, _ := s.Lookup(edit.Entry.Path)
++			if old.Type != edit.Entry.Type {
++				preservesHierarchy = false
++				break
++			}
++		}
+ 	}
+ 	// Both small inventories and height-limited trees use the same validated
+ 	// array update. Internal reads borrow immutable views instead of cloning.

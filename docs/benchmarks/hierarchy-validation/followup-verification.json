@@ -1,0 +1,96 @@
+{
+  "baseline": "dd9fb846bd600eeb4e0e984926bd8e4da54c7328",
+  "baseline_archive_sha256": "da592f9fca320f016ab211d9879d595d43d5c306036e8937defc7de8f4422bcb",
+  "baseline_archive_matches_git": true,
+  "selected_boundary_variant_matches_working_tree": true,
+  "caller_archives_match_working_tree": true,
+  "caller_source_identical_across_hosts": true,
+  "production_diff": {
+    "internal/archive/archive.go": {
+      "baseline": "3565e5509238d687eb57d9d1ca2fba179c2cb415e7d444798708c3bce3eeb535",
+      "candidate": "8f418cee86c94614f9c110cf1aefb338a2f81e080cfcc33d141db038fb541ecc",
+      "patch": "--- baseline/internal/archive/archive.go\n+++ candidate/internal/archive/archive.go\n@@ -335,3 +335,18 @@\n func typeMismatch(name string) error {\n \treturn fmt.Errorf(\"archive: %q disagrees with manifest about type or target\", name)\n }\n+\n+// ValidateEntry checks one path and its metadata, including symlink containment.\n+// It does not establish ordering, uniqueness, or relationships between entries.\n+func ValidateEntry(e proto.ManifestEntry) error {\n+\tif err := checkRelPath(e.Path); err != nil {\n+\t\treturn err\n+\t}\n+\tif err := validateEntry(e); err != nil {\n+\t\treturn err\n+\t}\n+\tif e.Type == proto.EntrySymlink {\n+\t\treturn checkSymlinkTarget(e.Path, e.Target)\n+\t}\n+\treturn nil\n+}\n"
+    },
+    "internal/manifest/snapshot.go": {
+      "baseline": "9be13008a4fd22ae50090f00b29829ba1b611f32df3899fbd33f1f7c161b4dec",
+      "candidate": "9ff2f069e486a1472370d53f1c0e157c6cac50d09c07f64474a97cf26b7aecad",
+      "patch": "--- baseline/internal/manifest/snapshot.go\n+++ candidate/internal/manifest/snapshot.go\n@@ -251,6 +251,7 @@\n \tcount := s.count\n \tchanged := false\n \tstructural := false\n+\ttypesChanged := false\n \tfor i, e := range ordered {\n \t\tif err := ctx.Err(); err != nil {\n \t\t\treturn nil, err\n@@ -263,6 +264,7 @@\n \t\t}\n \t\tif old, ok := s.Lookup(e.Entry.Path); ok {\n \t\t\tstructural = structural || e.Delete\n+\t\t\ttypesChanged = typesChanged || old.Type != e.Entry.Type\n \t\t\tif e.Delete {\n \t\t\t\tcount--\n \t\t\t}\n@@ -279,8 +281,13 @@\n \t\t\treplacements.Entries = append(replacements.Entries, e.Entry)\n \t\t}\n \t}\n-\tif err := archive.ValidateSortedContext(ctx, replacements); err != nil {\n-\t\treturn nil, err\n+\tfor _, e := range replacements.Entries {\n+\t\tif err := ctx.Err(); err != nil {\n+\t\t\treturn nil, err\n+\t\t}\n+\t\tif err := archive.ValidateEntry(e); err != nil {\n+\t\t\treturn nil, err\n+\t\t}\n \t}\n \tif !changed {\n \t\treturn s, ctx.Err()\n@@ -291,6 +298,7 @@\n \t\t}\n \t\tsize += e.Size\n \t}\n+\tpreservesHierarchy := !structural && !typesChanged\n \t// Both small inventories and height-limited trees use the same validated\n \t// array update. Internal reads borrow immutable views instead of cloning.\n \tflatUpdate := func(noIndex bool) (*Snapshot, error) {\n@@ -304,8 +312,10 @@\n \t\t}\n \t\tnext := &Snapshot{entries: m.Entries, size: size, count: count}\n \t\tnext.noIndex.Store(noIndex)\n-\t\tif err := next.validateReplacements(ctx, replacements.Entries); err != nil {\n-\t\t\treturn nil, err\n+\t\tif !preservesHierarchy {\n+\t\t\tif err := next.validateReplacements(ctx, replacements.Entries); err != nil {\n+\t\t\t\treturn nil, err\n+\t\t\t}\n \t\t}\n \t\treturn next, ctx.Err()\n \t}\n@@ -348,8 +358,13 @@\n \tif root != nil {\n \t\tnext.count = root.count\n \t}\n-\tif err := next.validateReplacements(ctx, replacements.Entries); err != nil {\n-\t\treturn nil, err\n+\t// A validated base remains hierarchically valid when every path and type is\n+\t// preserved. Metadata, paths and totals were still checked above. Membership\n+\t// preservation alone (structural == false) does not rule out type changes.\n+\tif !preservesHierarchy {\n+\t\tif err := next.validateReplacements(ctx, replacements.Entries); err != nil {\n+\t\t\treturn nil, err\n+\t\t}\n \t}\n \treturn next, ctx.Err()\n }\n"
+    }
+  },
+  "local_python_tests": {
+    "command": "python3 -m unittest discover -s scripts -p 'test_*.py'",
+    "tests": 76,
+    "passed": true
+  },
+  "native_verification": {
+    "ordinary_packages": [
+      "internal/manifest",
+      "internal/archive",
+      "internal/snapshot",
+      "internal/changes",
+      "internal/client",
+      "internal/daemon",
+      "cmd/errand",
+      "experiments/snapshotcheckpoint/..."
+    ],
+    "race_packages": [
+      "internal/manifest",
+      "internal/archive",
+      "internal/snapshot",
+      "internal/changes",
+      "experiments/snapshotcheckpoint/..."
+    ],
+    "vet": "same scope as ordinary tests",
+    "scope_note": "Final caller campaigns check baseline and selected candidate on both hosts; boundary campaigns omit client, daemon and CLI from ordinary tests and vet."
+  },
+  "checked": [
+    {
+      "campaign": "apfs-alternatives",
+      "status": "complete",
+      "samples": 216,
+      "source_sha256": "7584700c3cce33bc3cda9532a6b0c1d756698032d249fd83b964a8b4224d5aee",
+      "archive_verified": true,
+      "raw_samples_complete": true
+    },
+    {
+      "campaign": "btrfs-alternatives",
+      "status": "complete",
+      "samples": 216,
+      "source_sha256": "7584700c3cce33bc3cda9532a6b0c1d756698032d249fd83b964a8b4224d5aee",
+      "archive_verified": true,
+      "raw_samples_complete": true
+    },
+    {
+      "campaign": "apfs-boundaries",
+      "status": "complete",
+      "samples": 432,
+      "source_sha256": "7b72880eb71e5c6bc74d9e998a892f9ca097e4a94500b9a5ee561d5031cb85d1",
+      "archive_verified": true,
+      "raw_samples_complete": true
+    },
+    {
+      "campaign": "btrfs-boundaries",
+      "status": "complete",
+      "samples": 432,
+      "source_sha256": "7b72880eb71e5c6bc74d9e998a892f9ca097e4a94500b9a5ee561d5031cb85d1",
+      "archive_verified": true,
+      "raw_samples_complete": true
+    },
+    {
+      "campaign": "apfs-callers",
+      "status": "complete",
+      "samples": 216,
+      "source_sha256": "0dfbc62b1490d62537f5111f467bdec4572b755307548ba008989427082be593",
+      "archive_verified": true,
+      "raw_samples_complete": true
+    },
+    {
+      "campaign": "btrfs-callers",
+      "status": "complete",
+      "samples": 216,
+      "source_sha256": "0dfbc62b1490d62537f5111f467bdec4572b755307548ba008989427082be593",
+      "archive_verified": true,
+      "raw_samples_complete": true
+    }
+  ]
+}

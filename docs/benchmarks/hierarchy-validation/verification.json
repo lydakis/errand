@@ -1,0 +1,47 @@
+{
+  "baseline": "dd9fb846bd600eeb4e0e984926bd8e4da54c7328",
+  "baseline_archive_matches_git": true,
+  "final_inputs_match_working_tree": true,
+  "checked": [
+    {
+      "campaign": "apfs",
+      "source_sha256": "ad628a07e7bd3f07c72c4c18da84d5571af9704e50673cb3dd97c0b4ee6735e8",
+      "status": "complete"
+    },
+    {
+      "campaign": "apfs-final",
+      "source_sha256": "f8a7f49168a6320e993c7cbc015d4425f345b8ef8296c2dad73f29717e7e3c7c",
+      "status": "complete"
+    },
+    {
+      "campaign": "apfs-mismatch",
+      "source_sha256": "c10cfb6af30962324420f654fd466beb59a48058e065123c124feda26314275e",
+      "status": "complete"
+    },
+    {
+      "campaign": "btrfs",
+      "source_sha256": "ad628a07e7bd3f07c72c4c18da84d5571af9704e50673cb3dd97c0b4ee6735e8",
+      "status": "complete"
+    },
+    {
+      "campaign": "btrfs-controls",
+      "source_sha256": "c10cfb6af30962324420f654fd466beb59a48058e065123c124feda26314275e",
+      "status": "complete"
+    },
+    {
+      "campaign": "btrfs-deferred",
+      "source_sha256": "c10cfb6af30962324420f654fd466beb59a48058e065123c124feda26314275e",
+      "status": "complete"
+    },
+    {
+      "campaign": "btrfs-final",
+      "source_sha256": "f8a7f49168a6320e993c7cbc015d4425f345b8ef8296c2dad73f29717e7e3c7c",
+      "status": "complete"
+    },
+    {
+      "campaign": "btrfs-mismatch",
+      "source_sha256": "c10cfb6af30962324420f654fd466beb59a48058e065123c124feda26314275e",
+      "status": "complete"
+    }
+  ]
+}

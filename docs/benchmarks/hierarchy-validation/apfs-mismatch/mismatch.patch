@@ -1,0 +1,36 @@
+--- a/internal/manifest/snapshot.go
++++ b/internal/manifest/snapshot.go
+@@ -251,7 +251,7 @@
+ 	count := s.count
+ 	changed := false
+ 	structural := false
+-	preservesHierarchy := true
++	typesChanged := false
+ 	for i, e := range ordered {
+ 		if err := ctx.Err(); err != nil {
+ 			return nil, err
+@@ -264,7 +264,7 @@
+ 		}
+ 		if old, ok := s.Lookup(e.Entry.Path); ok {
+ 			structural = structural || e.Delete
+-			preservesHierarchy = preservesHierarchy && !e.Delete && old.Type == e.Entry.Type
++			typesChanged = typesChanged || old.Type != e.Entry.Type
+ 			if e.Delete {
+ 				count--
+ 			}
+@@ -272,7 +272,6 @@
+ 			changed = changed || e.Delete || old != e.Entry
+ 		} else {
+ 			structural = true
+-			preservesHierarchy = false
+ 			if !e.Delete {
+ 				count++
+ 			}
+@@ -294,6 +293,7 @@
+ 		}
+ 		size += e.Size
+ 	}
++	preservesHierarchy := !structural && !typesChanged
+ 	// Both small inventories and height-limited trees use the same validated
+ 	// array update. Internal reads borrow immutable views instead of cloning.
+ 	flatUpdate := func(noIndex bool) (*Snapshot, error) {

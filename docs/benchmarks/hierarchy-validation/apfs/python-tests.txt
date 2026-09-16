@@ -1,0 +1,9 @@
+....{"workspace": "successful", "seconds": 0.1}
+......0-push: 0.00s, failed
+0-fetch-large: 0.00s, completed
+...............................................................
+----------------------------------------------------------------------
+Ran 73 tests in 4.606s
+
+OK
+Notarization accepted for darwin_arm64; submission 00000000-0000-0000-0000-000000000002

@@ -1,0 +1,1 @@
+ok  	github.com/lydakis/errand/internal/manifest	0.579s

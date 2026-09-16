@@ -251,6 +251,7 @@ func (s *Snapshot) Update(ctx context.Context, edits []Edit) (*Snapshot, error) 
 	count := s.count
 	changed := false
 	structural := false
+	typesChanged := false
 	for i, e := range ordered {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -263,6 +264,7 @@ func (s *Snapshot) Update(ctx context.Context, edits []Edit) (*Snapshot, error) 
 		}
 		if old, ok := s.Lookup(e.Entry.Path); ok {
 			structural = structural || e.Delete
+			typesChanged = typesChanged || old.Type != e.Entry.Type
 			if e.Delete {
 				count--
 			}
@@ -279,8 +281,13 @@ func (s *Snapshot) Update(ctx context.Context, edits []Edit) (*Snapshot, error) 
 			replacements.Entries = append(replacements.Entries, e.Entry)
 		}
 	}
-	if err := archive.ValidateSortedContext(ctx, replacements); err != nil {
-		return nil, err
+	for _, e := range replacements.Entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if err := archive.ValidateEntry(e); err != nil {
+			return nil, err
+		}
 	}
 	if !changed {
 		return s, ctx.Err()
@@ -291,6 +298,7 @@ func (s *Snapshot) Update(ctx context.Context, edits []Edit) (*Snapshot, error) 
 		}
 		size += e.Size
 	}
+	preservesHierarchy := !structural && !typesChanged
 	// Both small inventories and height-limited trees use the same validated
 	// array update. Internal reads borrow immutable views instead of cloning.
 	flatUpdate := func(noIndex bool) (*Snapshot, error) {
@@ -304,8 +312,10 @@ func (s *Snapshot) Update(ctx context.Context, edits []Edit) (*Snapshot, error) 
 		}
 		next := &Snapshot{entries: m.Entries, size: size, count: count}
 		next.noIndex.Store(noIndex)
-		if err := next.validateReplacements(ctx, replacements.Entries); err != nil {
-			return nil, err
+		if !preservesHierarchy {
+			if err := next.validateReplacements(ctx, replacements.Entries); err != nil {
+				return nil, err
+			}
 		}
 		return next, ctx.Err()
 	}
@@ -348,8 +358,13 @@ func (s *Snapshot) Update(ctx context.Context, edits []Edit) (*Snapshot, error) 
 	if root != nil {
 		next.count = root.count
 	}
-	if err := next.validateReplacements(ctx, replacements.Entries); err != nil {
-		return nil, err
+	// A validated base remains hierarchically valid when every path and type is
+	// preserved. Metadata, paths and totals were still checked above. Membership
+	// preservation alone (structural == false) does not rule out type changes.
+	if !preservesHierarchy {
+		if err := next.validateReplacements(ctx, replacements.Entries); err != nil {
+			return nil, err
+		}
 	}
 	return next, ctx.Err()
 }

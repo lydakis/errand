@@ -335,3 +335,18 @@ func ExtractWith(r io.Reader, dest string, m proto.Manifest, maxBytes int64, opt
 func typeMismatch(name string) error {
 	return fmt.Errorf("archive: %q disagrees with manifest about type or target", name)
 }
+
+// ValidateEntry checks one path and its metadata, including symlink containment.
+// It does not establish ordering, uniqueness, or relationships between entries.
+func ValidateEntry(e proto.ManifestEntry) error {
+	if err := checkRelPath(e.Path); err != nil {
+		return err
+	}
+	if err := validateEntry(e); err != nil {
+		return err
+	}
+	if e.Type == proto.EntrySymlink {
+		return checkSymlinkTarget(e.Path, e.Target)
+	}
+	return nil
+}

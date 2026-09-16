@@ -1,0 +1,7 @@
+errand: workspace root /Users/lydakis/.codex/worktrees/e1dd/errand (from current directory)
+errand: command workdir /Users/lydakis/.codex/worktrees/e1dd/errand
+errand: snapshot contains 1088 files, 90793270 bytes
+errand: shipping 16 of 1088 files (2641521 bytes; the rest is cached on the runner)
+errand: job cabal/01M2NCMSMF0JTZNN17RN6FEWFD (1088 files, commit dd9fb846bd60-dirty)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+ok  	github.com/lydakis/errand/internal/manifest	1.012s

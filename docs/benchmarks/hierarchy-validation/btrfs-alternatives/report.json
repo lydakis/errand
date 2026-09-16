@@ -1,0 +1,5345 @@
+{
+  "baseline": "dd9fb846bd600eeb4e0e984926bd8e4da54c7328",
+  "mode": "alternatives",
+  "rounds": 12,
+  "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+  "source_sha256": "7584700c3cce33bc3cda9532a6b0c1d756698032d249fd83b964a8b4224d5aee",
+  "harness_inputs": {
+    "benchmark.py": "a7bb143e87fbc1d07d8db5cf4286891edc41960b839f7f4c4933d06188610aa0",
+    "benchmark_checkpoint_builder.py": "3c5dbd8d436354965f90f39af0644b3faa26a24ac111e7b510897320af32cf77",
+    "benchmark_checkpoint_callers.py": "7697c87175b6e0bfad0af6c000eee02b6ce7afe441b891b2cd1360243e6b5f24",
+    "benchmark_contract_review.py": "9d31bc152f756024fbce0aed8b7b1cae31437cc8332aa30e51d3d6f5577042b7",
+    "benchmark_derived_index.py": "6bddd84c7c1ed0e14f5fdfbcbdd4a072dce7a23628460fd4367b9c3461c6d21a",
+    "benchmark_hierarchy_followup.py": "4323163d998b9cde50bd0c4e84ed392a85e706fcf0045a99dee2a1cc64fbb060",
+    "benchmark_hierarchy_validation.py": "f00c23b265fdf5832f057e1cfc33ccec4b1c5eb72820624fd54d1b881b5084f6",
+    "benchmark_journal_depth.py": "92a5ed80c3d71d150a51b2a048fa0f71412000c211e9ab58a775bc5dbfca9815",
+    "benchmark_materialization.py": "ae57c393005f66d0aac8c7952847aa783f61e2d2a7acedfcc87161fbbbda1aa5",
+    "benchmark_observation_journal.py": "21e09b71d16ac66fe140f8b1fb75808abf21fa5978d67334fc4057c025c951cf",
+    "benchmark_push.py": "a7bad0dbcd2aa76a67c8624668b874f5469a492342407a6c697970cf67b54f36",
+    "benchmark_snapshot_checkpoint.py": "1acc78cec9fe5878fb84cbfed729549c023d7aaef48b6615cf50ae4d335ffdbd",
+    "benchmark_snapshot_contracts.py": "71cd59e6ad5da64dd058472f9fbb2f9e06a417cee743d7146a43d750b228e4de",
+    "benchmark_snapshot_index.py": "0bc23ea3c6035b9df4d92c4cae4d94b8a07c013a800aa243dc72f5dc198f8eae",
+    "benchmark_snapshot_integration.py": "9f642c54650caf902bc25257909a5b4f6371d9a3a752604ac5c246e1b437208d",
+    "benchmark_watch.py": "801a41916418ab6f76c18b7bed21e12bc2764eba775bd9ad333e9a60b21e68d6",
+    "hierarchy_inputs.py": "b580cec46645d3e26068355344aeb735da36ec5e21a7638e186cd1171fd83d0b",
+    "homebrew_formula.py": "138ceda430ed970b6ee331989f3578030cd8950169b71e32155877dd79a51a75",
+    "journal_depth_cases.py": "524cec2ae6a186afddfcea7b862a4c4c4f1af0c20a47f5bcc697b3c5ab132d07",
+    "notarize_macos.py": "886505d735c11dd1d7f8ea0b9eb1e7068c2022fb2e5cc77a1542cb782793f83e",
+    "prepare_homebrew_update.py": "ebf3959689d4a7bc393e9e7e4f0a4ca43ce40209feb0f17f2b9f6c276c9045d6",
+    "profile_materialization_paths.py": "2968132c95e5791ee64b6be38500988cc29332ccd0e7e7c4fae464bf10ffaef5",
+    "profile_transfer_latency.py": "895440f06ebcf90d21f4f7c14a9f33dc5bbfa49279f0661b82d8bdebf6637eab",
+    "snapshot_provenance.py": "32c2a01bda02fe7bc0f6ea08ca553ae844cee8c9b642fac23f53633c8c3d1266",
+    "summarize_journal_depth.py": "ab5afe15e482917983a73529ceefadbc8883cd221ce5f815a0813f49f0415d93",
+    "summarize_observation_journal.py": "1e457a84b95bad13cfaea0419f2c88433f640b00cd0002f1448ea17fd8ef9e33",
+    "summarize_snapshot_benchmarks.py": "2da0c00175c0f119a1bcc308339a0cae1be6806b5effc313d6c7fe8096fea1fd",
+    "test_benchmark.py": "965bd5afaa6f5c5ea44582dc2740f5ab4a47a44b97d46a8c9754b8bc714ee804",
+    "test_benchmark_push.py": "51865970a05b6c42e4a4412f2839259e4a50a5156f74131d986898f6a47fc04c",
+    "test_benchmark_scratch.py": "83f616a27cc8436426073ae1bdcbc9a3afb03ff709b023d6be98d6c32c478304",
+    "test_checkpoint_builder.py": "8c5485db192dbc30e67b5caea3cc0232850ba2dc112ca7ceab4853591a4ddf9f",
+    "test_derived_index.py": "0bc1a05aba5d223bf4fa9ca01624c1584765d6c9b30c39c171b7e6c52b681daf",
+    "test_hierarchy_evidence.py": "1cd7a2faf689adf8fed23e6513981b186d8ca1f205852d5950446e9f1c5b09a9",
+    "test_hierarchy_validation.py": "114c3e1c5f298290ca28b7c85197c10d23708fead0784758165977dfe6d33565",
+    "test_homebrew_formula.py": "870b8b6d3d3d5495ca12f0c364801e77b833d0afb93d7a23daab28fd91a143cd",
+    "test_journal_depth.py": "b0c8bb341b1f84e286ce4d7742f80b3ed4e94b9e8ca65a644a706ec757176466",
+    "test_materialization_diagnostics.py": "af15cd1cae3833b2df88a9c0ac47942ca808832c5e196a8ef6f9b80fc6b19ba4",
+    "test_notarize_macos.py": "123665dae9d05eba4a069822cb597aea42fc426eb17e06234a32f1bfcec7a74f",
+    "test_observation_journal.py": "13a9ca71935476ccfce613f50c306fcac12c8d591b4cefe946ed54883bc91a70",
+    "test_prepare_homebrew_update.py": "a9f6cbd056883dc253eafd1193fd259cb3529f23c38caa1b607b9c92d88cde94",
+    "test_release_workflow.py": "95dc7a430dd746f4ea019fa8027cceddad4862f547b5bbd4b38ee3ac432a3dbf",
+    "test_snapshot_benchmark_order.py": "f98272552afa947523112a1d0059d36d5a6747ca9dfcdab595a51fbd262e4d01",
+    "test_snapshot_checkpoint.py": "2f042f91cbe69e7598fcab9e70c0f6a030c1b4470067c2c54cca5b0c788bce34",
+    "test_snapshot_contracts.py": "f6e1df693d31c9e7245f149d11f72729675431528daa9c6c49efba142d7455d0",
+    "test_snapshot_provenance.py": "f952d707b0f37d12b17b1a1163f1200251a51dcf2c42db401456f020ce134b37",
+    "test_snapshot_summary.py": "25cdd7decb3ddf74eabce4fa392fdfb141c6f0520d2e7107442569d44810b2fa"
+  },
+  "samples": [
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3950,
+      "round": 0,
+      "metrics": {
+        "ns/op": 129730.0,
+        "B/op": 140568.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.5654182110447437,
+      "load_before": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ],
+      "load_after": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4260,
+      "round": 0,
+      "metrics": {
+        "ns/op": 122904.0,
+        "B/op": 124584.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5652203859062865,
+      "load_before": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ],
+      "load_after": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4248,
+      "round": 0,
+      "metrics": {
+        "ns/op": 102868.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.46509179403074086,
+      "load_before": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ],
+      "load_after": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 2770,
+      "round": 0,
+      "metrics": {
+        "ns/op": 218342.0,
+        "B/op": 141952.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.6659637799020857,
+      "load_before": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ],
+      "load_after": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3097,
+      "round": 0,
+      "metrics": {
+        "ns/op": 164152.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5655855250079185,
+      "load_before": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ],
+      "load_after": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3744,
+      "round": 0,
+      "metrics": {
+        "ns/op": 176327.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.7157477490836754,
+      "load_before": [
+        1.4072265625,
+        1.1767578125,
+        0.75390625
+      ],
+      "load_after": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1762,
+      "round": 0,
+      "metrics": {
+        "ns/op": 369357.0,
+        "B/op": 142033.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.7159527309704572,
+      "load_before": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ],
+      "load_after": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1788,
+      "round": 0,
+      "metrics": {
+        "ns/op": 289691.0,
+        "B/op": 126051.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5657340961042792,
+      "load_before": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ],
+      "load_after": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1900,
+      "round": 0,
+      "metrics": {
+        "ns/op": 287645.0,
+        "B/op": 124406.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.6156539070652798,
+      "load_before": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ],
+      "load_after": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1536,
+      "round": 0,
+      "metrics": {
+        "ns/op": 269193.0,
+        "B/op": 80696.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.5152229720260948,
+      "load_before": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ],
+      "load_after": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1848,
+      "round": 0,
+      "metrics": {
+        "ns/op": 216319.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.515112193999812,
+      "load_before": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ],
+      "load_after": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1959,
+      "round": 0,
+      "metrics": {
+        "ns/op": 213337.0,
+        "B/op": 64458.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5150196349713951,
+      "load_before": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ],
+      "load_after": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 440,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1020445.0,
+        "B/op": 245699.0,
+        "allocs/op": 869.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.6152303500566632,
+      "load_before": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ],
+      "load_after": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 469,
+      "round": 0,
+      "metrics": {
+        "ns/op": 905474.0,
+        "B/op": 229804.0,
+        "allocs/op": 862.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.565064060036093,
+      "load_before": [
+        1.37451171875,
+        1.17333984375,
+        0.75537109375
+      ],
+      "load_after": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 442,
+      "round": 0,
+      "metrics": {
+        "ns/op": 995199.0,
+        "B/op": 216206.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.6151776630431414,
+      "load_before": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ],
+      "load_after": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 232,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1713795.0,
+        "B/op": 448857.0,
+        "allocs/op": 1847.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.6652581309899688,
+      "load_before": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ],
+      "load_after": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 211,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1745346.0,
+        "B/op": 432495.0,
+        "allocs/op": 1838.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.6659187700133771,
+      "load_before": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ],
+      "load_after": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 186,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1661893.0,
+        "B/op": 419449.0,
+        "allocs/op": 1827.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5660282309399918,
+      "load_before": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ],
+      "load_after": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3770,
+      "round": 1,
+      "metrics": {
+        "ns/op": 141821.0,
+        "B/op": 140569.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.5653635460184887,
+      "load_before": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ],
+      "load_after": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4671,
+      "round": 1,
+      "metrics": {
+        "ns/op": 100406.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5155094830552116,
+      "load_before": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ],
+      "load_after": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4363,
+      "round": 1,
+      "metrics": {
+        "ns/op": 133662.0,
+        "B/op": 124585.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.6157792169833556,
+      "load_before": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ],
+      "load_after": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3045,
+      "round": 1,
+      "metrics": {
+        "ns/op": 162813.0,
+        "B/op": 141952.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.5651725649368018,
+      "load_before": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ],
+      "load_after": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3672,
+      "round": 1,
+      "metrics": {
+        "ns/op": 145871.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5651780869811773,
+      "load_before": [
+        1.34423828125,
+        1.17041015625,
+        0.7568359375
+      ],
+      "load_after": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3195,
+      "round": 1,
+      "metrics": {
+        "ns/op": 165701.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5650546129327267,
+      "load_before": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ],
+      "load_after": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1788,
+      "round": 1,
+      "metrics": {
+        "ns/op": 293492.0,
+        "B/op": 142032.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.5651252740062773,
+      "load_before": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ],
+      "load_after": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1946,
+      "round": 1,
+      "metrics": {
+        "ns/op": 288416.0,
+        "B/op": 124406.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.6156513300957158,
+      "load_before": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ],
+      "load_after": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1748,
+      "round": 1,
+      "metrics": {
+        "ns/op": 292040.0,
+        "B/op": 126045.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.565603606053628,
+      "load_before": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ],
+      "load_after": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1728,
+      "round": 1,
+      "metrics": {
+        "ns/op": 216234.0,
+        "B/op": 80696.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.4648843980394304,
+      "load_before": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ],
+      "load_after": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1947,
+      "round": 1,
+      "metrics": {
+        "ns/op": 199836.0,
+        "B/op": 64456.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.464811890036799,
+      "load_before": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ],
+      "load_after": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1519,
+      "round": 1,
+      "metrics": {
+        "ns/op": 206601.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.41485860804095864,
+      "load_before": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ],
+      "load_after": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 381,
+      "round": 1,
+      "metrics": {
+        "ns/op": 893436.0,
+        "B/op": 245670.0,
+        "allocs/op": 869.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.5654427480185404,
+      "load_before": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ],
+      "load_after": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 494,
+      "round": 1,
+      "metrics": {
+        "ns/op": 855520.0,
+        "B/op": 216174.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5651103499112651,
+      "load_before": [
+        1.31640625,
+        1.16748046875,
+        0.75830078125
+      ],
+      "load_after": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 417,
+      "round": 1,
+      "metrics": {
+        "ns/op": 949596.0,
+        "B/op": 229564.0,
+        "allocs/op": 861.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.565106263034977,
+      "load_before": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ],
+      "load_after": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 216,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1996849.0,
+        "B/op": 448571.0,
+        "allocs/op": 1845.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.665283260983415,
+      "load_before": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ],
+      "load_after": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 217,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1474206.0,
+        "B/op": 419048.0,
+        "allocs/op": 1825.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5654169979970902,
+      "load_before": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ],
+      "load_after": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 223,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1536764.0,
+        "B/op": 432787.0,
+        "allocs/op": 1839.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.6156380090396851,
+      "load_before": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ],
+      "load_after": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4663,
+      "round": 2,
+      "metrics": {
+        "ns/op": 113534.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.5660290849627927,
+      "load_before": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ],
+      "load_after": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3764,
+      "round": 2,
+      "metrics": {
+        "ns/op": 146476.0,
+        "B/op": 140568.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.6158438409911469,
+      "load_before": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ],
+      "load_after": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4368,
+      "round": 2,
+      "metrics": {
+        "ns/op": 124197.0,
+        "B/op": 124584.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5655526570044458,
+      "load_before": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ],
+      "load_after": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3073,
+      "round": 2,
+      "metrics": {
+        "ns/op": 132877.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.46526149299461395,
+      "load_before": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ],
+      "load_after": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3169,
+      "round": 2,
+      "metrics": {
+        "ns/op": 161615.0,
+        "B/op": 141952.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.5655390989268199,
+      "load_before": [
+        1.291015625,
+        1.16455078125,
+        0.759765625
+      ],
+      "load_after": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3151,
+      "round": 2,
+      "metrics": {
+        "ns/op": 156874.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5150973979616538,
+      "load_before": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ],
+      "load_after": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1950,
+      "round": 2,
+      "metrics": {
+        "ns/op": 297508.0,
+        "B/op": 124406.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.6152922690380365,
+      "load_before": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ],
+      "load_after": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1719,
+      "round": 2,
+      "metrics": {
+        "ns/op": 248004.0,
+        "B/op": 142035.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.4649671108927578,
+      "load_before": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ],
+      "load_after": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1807,
+      "round": 2,
+      "metrics": {
+        "ns/op": 320857.0,
+        "B/op": 126044.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.615305254003033,
+      "load_before": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ],
+      "load_after": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1854,
+      "round": 2,
+      "metrics": {
+        "ns/op": 201663.0,
+        "B/op": 64456.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.46500795194879174,
+      "load_before": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ],
+      "load_after": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1747,
+      "round": 2,
+      "metrics": {
+        "ns/op": 231283.0,
+        "B/op": 80699.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.5150114739080891,
+      "load_before": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ],
+      "load_after": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1678,
+      "round": 2,
+      "metrics": {
+        "ns/op": 208082.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.4652361780172214,
+      "load_before": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ],
+      "load_after": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 460,
+      "round": 2,
+      "metrics": {
+        "ns/op": 891980.0,
+        "B/op": 216277.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.5652172940317541,
+      "load_before": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ],
+      "load_after": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 417,
+      "round": 2,
+      "metrics": {
+        "ns/op": 881740.0,
+        "B/op": 245548.0,
+        "allocs/op": 868.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.5150429300265387,
+      "load_before": [
+        1.267578125,
+        1.16162109375,
+        0.76123046875
+      ],
+      "load_after": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 428,
+      "round": 2,
+      "metrics": {
+        "ns/op": 881853.0,
+        "B/op": 229702.0,
+        "allocs/op": 862.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5656211810419336,
+      "load_before": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ],
+      "load_after": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 235,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1473973.0,
+        "B/op": 419352.0,
+        "allocs/op": 1827.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.5651416139444336,
+      "load_before": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ],
+      "load_after": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 201,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1899310.0,
+        "B/op": 448675.0,
+        "allocs/op": 1846.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.6652970259310678,
+      "load_before": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ],
+      "load_after": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 224,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1657323.0,
+        "B/op": 432831.0,
+        "allocs/op": 1839.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.6151951809879392,
+      "load_before": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ],
+      "load_after": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4304,
+      "round": 3,
+      "metrics": {
+        "ns/op": 93958.0,
+        "B/op": 124329.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.46585655002854764,
+      "load_before": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ],
+      "load_after": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3852,
+      "round": 3,
+      "metrics": {
+        "ns/op": 141376.0,
+        "B/op": 124584.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5651306139770895,
+      "load_before": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ],
+      "load_after": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3894,
+      "round": 3,
+      "metrics": {
+        "ns/op": 132133.0,
+        "B/op": 140568.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5653302361024544,
+      "load_before": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ],
+      "load_after": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3607,
+      "round": 3,
+      "metrics": {
+        "ns/op": 160889.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.6153298299759626,
+      "load_before": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ],
+      "load_after": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3321,
+      "round": 3,
+      "metrics": {
+        "ns/op": 151179.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5654099100502208,
+      "load_before": [
+        1.24609375,
+        1.15869140625,
+        0.7626953125
+      ],
+      "load_after": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 2971,
+      "round": 3,
+      "metrics": {
+        "ns/op": 160328.0,
+        "B/op": 141952.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5153892450034618,
+      "load_before": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ],
+      "load_after": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1674,
+      "round": 3,
+      "metrics": {
+        "ns/op": 259214.0,
+        "B/op": 124408.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.46529990097042173,
+      "load_before": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ],
+      "load_after": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1764,
+      "round": 3,
+      "metrics": {
+        "ns/op": 243998.0,
+        "B/op": 126043.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.4649071949534118,
+      "load_before": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ],
+      "load_after": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1724,
+      "round": 3,
+      "metrics": {
+        "ns/op": 330269.0,
+        "B/op": 142032.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.6153940699296072,
+      "load_before": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ],
+      "load_after": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1758,
+      "round": 3,
+      "metrics": {
+        "ns/op": 209381.0,
+        "B/op": 64456.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.4650404959684238,
+      "load_before": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ],
+      "load_after": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1795,
+      "round": 3,
+      "metrics": {
+        "ns/op": 209562.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.46500654402188957,
+      "load_before": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ],
+      "load_after": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1886,
+      "round": 3,
+      "metrics": {
+        "ns/op": 238291.0,
+        "B/op": 80696.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5659279510146007,
+      "load_before": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ],
+      "load_after": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 513,
+      "round": 3,
+      "metrics": {
+        "ns/op": 833147.0,
+        "B/op": 216078.0,
+        "allocs/op": 848.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.5651918749790639,
+      "load_before": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ],
+      "load_after": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 438,
+      "round": 3,
+      "metrics": {
+        "ns/op": 844865.0,
+        "B/op": 229701.0,
+        "allocs/op": 862.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5149371779989451,
+      "load_before": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ],
+      "load_after": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 440,
+      "round": 3,
+      "metrics": {
+        "ns/op": 855020.0,
+        "B/op": 245699.0,
+        "allocs/op": 869.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5149371000006795,
+      "load_before": [
+        1.22607421875,
+        1.15576171875,
+        0.76416015625
+      ],
+      "load_after": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 218,
+      "round": 3,
+      "metrics": {
+        "ns/op": 1638546.0,
+        "B/op": 419068.0,
+        "allocs/op": 1825.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.6151262399507686,
+      "load_before": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ],
+      "load_after": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 208,
+      "round": 3,
+      "metrics": {
+        "ns/op": 1541903.0,
+        "B/op": 432465.0,
+        "allocs/op": 1838.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5650686799781397,
+      "load_before": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ],
+      "load_after": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 212,
+      "round": 3,
+      "metrics": {
+        "ns/op": 1666142.0,
+        "B/op": 448492.0,
+        "allocs/op": 1845.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.6157295189332217,
+      "load_before": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ],
+      "load_after": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4136,
+      "round": 4,
+      "metrics": {
+        "ns/op": 99622.0,
+        "B/op": 124584.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.4653797310311347,
+      "load_before": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ],
+      "load_after": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4628,
+      "round": 4,
+      "metrics": {
+        "ns/op": 114456.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.565543876029551,
+      "load_before": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ],
+      "load_after": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4038,
+      "round": 4,
+      "metrics": {
+        "ns/op": 128026.0,
+        "B/op": 140568.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5654499978991225,
+      "load_before": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ],
+      "load_after": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3091,
+      "round": 4,
+      "metrics": {
+        "ns/op": 182750.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.6157462919363752,
+      "load_before": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ],
+      "load_after": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3669,
+      "round": 4,
+      "metrics": {
+        "ns/op": 165069.0,
+        "B/op": 124329.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.6658866100478917,
+      "load_before": [
+        1.2880859375,
+        1.169921875,
+        0.77099609375
+      ],
+      "load_after": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3150,
+      "round": 4,
+      "metrics": {
+        "ns/op": 192246.0,
+        "B/op": 141952.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.6657673539593816,
+      "load_before": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ],
+      "load_after": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1825,
+      "round": 4,
+      "metrics": {
+        "ns/op": 329690.0,
+        "B/op": 126046.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.6658630829770118,
+      "load_before": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ],
+      "load_after": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1825,
+      "round": 4,
+      "metrics": {
+        "ns/op": 288622.0,
+        "B/op": 124406.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5651877539930865,
+      "load_before": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ],
+      "load_after": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1753,
+      "round": 4,
+      "metrics": {
+        "ns/op": 268927.0,
+        "B/op": 142032.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5150636020116508,
+      "load_before": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ],
+      "load_after": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1900,
+      "round": 4,
+      "metrics": {
+        "ns/op": 207831.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5148829170502722,
+      "load_before": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ],
+      "load_after": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1444,
+      "round": 4,
+      "metrics": {
+        "ns/op": 240627.0,
+        "B/op": 64456.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.464891136973165,
+      "load_before": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ],
+      "load_after": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1689,
+      "round": 4,
+      "metrics": {
+        "ns/op": 235226.0,
+        "B/op": 80696.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5154777510324493,
+      "load_before": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ],
+      "load_after": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 444,
+      "round": 4,
+      "metrics": {
+        "ns/op": 923224.0,
+        "B/op": 229713.0,
+        "allocs/op": 862.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5654878689674661,
+      "load_before": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ],
+      "load_after": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 452,
+      "round": 4,
+      "metrics": {
+        "ns/op": 837140.0,
+        "B/op": 216175.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.515064497012645,
+      "load_before": [
+        1.2646484375,
+        1.1669921875,
+        0.7724609375
+      ],
+      "load_after": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 440,
+      "round": 4,
+      "metrics": {
+        "ns/op": 937677.0,
+        "B/op": 245699.0,
+        "allocs/op": 869.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5649856340605766,
+      "load_before": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ],
+      "load_after": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 218,
+      "round": 4,
+      "metrics": {
+        "ns/op": 1530917.0,
+        "B/op": 432578.0,
+        "allocs/op": 1838.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.6154370569856837,
+      "load_before": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ],
+      "load_after": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 252,
+      "round": 4,
+      "metrics": {
+        "ns/op": 1548035.0,
+        "B/op": 419350.0,
+        "allocs/op": 1826.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.6153951539890841,
+      "load_before": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ],
+      "load_after": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 211,
+      "round": 4,
+      "metrics": {
+        "ns/op": 1858912.0,
+        "B/op": 448477.0,
+        "allocs/op": 1845.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.6653022820828483,
+      "load_before": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ],
+      "load_after": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3780,
+      "round": 5,
+      "metrics": {
+        "ns/op": 124757.0,
+        "B/op": 124584.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5159129989333451,
+      "load_before": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ],
+      "load_after": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3690,
+      "round": 5,
+      "metrics": {
+        "ns/op": 125559.0,
+        "B/op": 140568.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.5156306939898059,
+      "load_before": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ],
+      "load_after": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4502,
+      "round": 5,
+      "metrics": {
+        "ns/op": 102341.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.515422884025611,
+      "load_before": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ],
+      "load_after": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3198,
+      "round": 5,
+      "metrics": {
+        "ns/op": 174305.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.6160476750228554,
+      "load_before": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ],
+      "load_after": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3178,
+      "round": 5,
+      "metrics": {
+        "ns/op": 161425.0,
+        "B/op": 141953.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.5658661710331216,
+      "load_before": [
+        1.2431640625,
+        1.1640625,
+        0.77392578125
+      ],
+      "load_after": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3410,
+      "round": 5,
+      "metrics": {
+        "ns/op": 176911.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.6661438338924199,
+      "load_before": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ],
+      "load_after": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1774,
+      "round": 5,
+      "metrics": {
+        "ns/op": 287643.0,
+        "B/op": 126047.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5654102829284966,
+      "load_before": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ],
+      "load_after": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1754,
+      "round": 5,
+      "metrics": {
+        "ns/op": 327454.0,
+        "B/op": 142032.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.6153698220150545,
+      "load_before": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ],
+      "load_after": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1912,
+      "round": 5,
+      "metrics": {
+        "ns/op": 253066.0,
+        "B/op": 124404.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5149619139265269,
+      "load_before": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ],
+      "load_after": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1804,
+      "round": 5,
+      "metrics": {
+        "ns/op": 206403.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.4649257230339572,
+      "load_before": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ],
+      "load_after": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1456,
+      "round": 5,
+      "metrics": {
+        "ns/op": 256767.0,
+        "B/op": 80696.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.4650492249056697,
+      "load_before": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ],
+      "load_after": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1814,
+      "round": 5,
+      "metrics": {
+        "ns/op": 215479.0,
+        "B/op": 64458.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5151681290008128,
+      "load_before": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ],
+      "load_after": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 458,
+      "round": 5,
+      "metrics": {
+        "ns/op": 862594.0,
+        "B/op": 229757.0,
+        "allocs/op": 862.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5663628650363535,
+      "load_before": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ],
+      "load_after": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 426,
+      "round": 5,
+      "metrics": {
+        "ns/op": 912730.0,
+        "B/op": 245689.0,
+        "allocs/op": 869.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.5651522709522396,
+      "load_before": [
+        1.2236328125,
+        1.1611328125,
+        0.775390625
+      ],
+      "load_after": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 446,
+      "round": 5,
+      "metrics": {
+        "ns/op": 839737.0,
+        "B/op": 216184.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5651101669063792,
+      "load_before": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ],
+      "load_after": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 212,
+      "round": 5,
+      "metrics": {
+        "ns/op": 1680723.0,
+        "B/op": 432507.0,
+        "allocs/op": 1838.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.6155542869819328,
+      "load_before": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ],
+      "load_after": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 229,
+      "round": 5,
+      "metrics": {
+        "ns/op": 1684120.0,
+        "B/op": 448872.0,
+        "allocs/op": 1847.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.6153790779644623,
+      "load_before": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ],
+      "load_after": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 248,
+      "round": 5,
+      "metrics": {
+        "ns/op": 1658472.0,
+        "B/op": 419336.0,
+        "allocs/op": 1827.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.6161226080730557,
+      "load_before": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ],
+      "load_after": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3812,
+      "round": 6,
+      "metrics": {
+        "ns/op": 135746.0,
+        "B/op": 140568.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.5655939889838919,
+      "load_before": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ],
+      "load_after": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4024,
+      "round": 6,
+      "metrics": {
+        "ns/op": 128780.0,
+        "B/op": 124584.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5653479390311986,
+      "load_before": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ],
+      "load_after": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4526,
+      "round": 6,
+      "metrics": {
+        "ns/op": 124513.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.6153245769673958,
+      "load_before": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ],
+      "load_after": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3127,
+      "round": 6,
+      "metrics": {
+        "ns/op": 201471.0,
+        "B/op": 141952.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.66555244801566,
+      "load_before": [
+        1.3662109375,
+        1.19189453125,
+        0.78759765625
+      ],
+      "load_after": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3136,
+      "round": 6,
+      "metrics": {
+        "ns/op": 163144.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5652798080118373,
+      "load_before": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ],
+      "load_after": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3595,
+      "round": 6,
+      "metrics": {
+        "ns/op": 169076.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.6657087099738419,
+      "load_before": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ],
+      "load_after": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1754,
+      "round": 6,
+      "metrics": {
+        "ns/op": 340565.0,
+        "B/op": 142035.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.6652767229825258,
+      "load_before": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ],
+      "load_after": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1750,
+      "round": 6,
+      "metrics": {
+        "ns/op": 258498.0,
+        "B/op": 126046.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5150949640665203,
+      "load_before": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ],
+      "load_after": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1906,
+      "round": 6,
+      "metrics": {
+        "ns/op": 257267.0,
+        "B/op": 124405.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5651902440004051,
+      "load_before": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ],
+      "load_after": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1650,
+      "round": 6,
+      "metrics": {
+        "ns/op": 279947.0,
+        "B/op": 80696.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.5651967980666086,
+      "load_before": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ],
+      "load_after": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1588,
+      "round": 6,
+      "metrics": {
+        "ns/op": 231536.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5153706040000543,
+      "load_before": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ],
+      "load_after": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1927,
+      "round": 6,
+      "metrics": {
+        "ns/op": 216420.0,
+        "B/op": 64456.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5150162000209093,
+      "load_before": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ],
+      "load_after": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 430,
+      "round": 6,
+      "metrics": {
+        "ns/op": 920404.0,
+        "B/op": 245673.0,
+        "allocs/op": 869.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.5649961261078715,
+      "load_before": [
+        1.4970703125,
+        1.22216796875,
+        0.7998046875
+      ],
+      "load_after": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 380,
+      "round": 6,
+      "metrics": {
+        "ns/op": 934792.0,
+        "B/op": 229699.0,
+        "allocs/op": 862.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5149359529605135,
+      "load_before": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ],
+      "load_after": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 470,
+      "round": 6,
+      "metrics": {
+        "ns/op": 857646.0,
+        "B/op": 216280.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5650445900391787,
+      "load_before": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ],
+      "load_after": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 225,
+      "round": 6,
+      "metrics": {
+        "ns/op": 1636932.0,
+        "B/op": 448837.0,
+        "allocs/op": 1847.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.6152239519869909,
+      "load_before": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ],
+      "load_after": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 201,
+      "round": 6,
+      "metrics": {
+        "ns/op": 1957086.0,
+        "B/op": 432693.0,
+        "allocs/op": 1839.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.6652496050810441,
+      "load_before": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ],
+      "load_after": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 254,
+      "round": 6,
+      "metrics": {
+        "ns/op": 1527990.0,
+        "B/op": 419366.0,
+        "allocs/op": 1827.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.6152683249674737,
+      "load_before": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ],
+      "load_after": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4093,
+      "round": 7,
+      "metrics": {
+        "ns/op": 106671.0,
+        "B/op": 140568.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.46508159895893186,
+      "load_before": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ],
+      "load_after": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4570,
+      "round": 7,
+      "metrics": {
+        "ns/op": 109046.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5150500369491056,
+      "load_before": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ],
+      "load_after": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4107,
+      "round": 7,
+      "metrics": {
+        "ns/op": 124293.0,
+        "B/op": 124585.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5650044761132449,
+      "load_before": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ],
+      "load_after": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 2766,
+      "round": 7,
+      "metrics": {
+        "ns/op": 180461.0,
+        "B/op": 141952.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.566061784978956,
+      "load_before": [
+        1.45703125,
+        1.21826171875,
+        0.80126953125
+      ],
+      "load_after": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3507,
+      "round": 7,
+      "metrics": {
+        "ns/op": 168516.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.6156888770638034,
+      "load_before": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3204,
+      "round": 7,
+      "metrics": {
+        "ns/op": 190324.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.6744317930424586,
+      "load_before": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1753,
+      "round": 7,
+      "metrics": {
+        "ns/op": 313370.0,
+        "B/op": 142032.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.615926505997777,
+      "load_before": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1498,
+      "round": 7,
+      "metrics": {
+        "ns/op": 227221.0,
+        "B/op": 124410.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.4153647560160607,
+      "load_before": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1778,
+      "round": 7,
+      "metrics": {
+        "ns/op": 263326.0,
+        "B/op": 126046.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5195339189376682,
+      "load_before": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1795,
+      "round": 7,
+      "metrics": {
+        "ns/op": 273654.0,
+        "B/op": 80696.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.6155428680358455,
+      "load_before": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1941,
+      "round": 7,
+      "metrics": {
+        "ns/op": 214844.0,
+        "B/op": 64458.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5150896849809214,
+      "load_before": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1780,
+      "round": 7,
+      "metrics": {
+        "ns/op": 212769.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.46492280799429864,
+      "load_before": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 469,
+      "round": 7,
+      "metrics": {
+        "ns/op": 897924.0,
+        "B/op": 245788.0,
+        "allocs/op": 869.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.6152123829815537,
+      "load_before": [
+        1.5009765625,
+        1.2314453125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 483,
+      "round": 7,
+      "metrics": {
+        "ns/op": 817885.0,
+        "B/op": 216187.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.565407841000706,
+      "load_before": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 424,
+      "round": 7,
+      "metrics": {
+        "ns/op": 971591.0,
+        "B/op": 229686.0,
+        "allocs/op": 862.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5653086269740015,
+      "load_before": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 231,
+      "round": 7,
+      "metrics": {
+        "ns/op": 1799411.0,
+        "B/op": 448863.0,
+        "allocs/op": 1847.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 0,
+      "elapsed": 0.665223149000667,
+      "load_before": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 230,
+      "round": 7,
+      "metrics": {
+        "ns/op": 1480785.0,
+        "B/op": 419373.0,
+        "allocs/op": 1827.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5650096799945459,
+      "load_before": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 212,
+      "round": 7,
+      "metrics": {
+        "ns/op": 1831327.0,
+        "B/op": 432512.0,
+        "allocs/op": 1838.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.6652741000289097,
+      "load_before": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4634,
+      "round": 8,
+      "metrics": {
+        "ns/op": 90790.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.46609769703354686,
+      "load_before": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3998,
+      "round": 8,
+      "metrics": {
+        "ns/op": 137652.0,
+        "B/op": 140569.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.6160320759518072,
+      "load_before": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4125,
+      "round": 8,
+      "metrics": {
+        "ns/op": 112498.0,
+        "B/op": 124584.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5154302989831194,
+      "load_before": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3439,
+      "round": 8,
+      "metrics": {
+        "ns/op": 118137.0,
+        "B/op": 124329.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.46502745198085904,
+      "load_before": [
+        1.46044921875,
+        1.2275390625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3039,
+      "round": 8,
+      "metrics": {
+        "ns/op": 173509.0,
+        "B/op": 141953.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.5651150209596381,
+      "load_before": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ],
+      "load_after": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3351,
+      "round": 8,
+      "metrics": {
+        "ns/op": 161498.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5650942190550268,
+      "load_before": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ],
+      "load_after": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1921,
+      "round": 8,
+      "metrics": {
+        "ns/op": 249165.0,
+        "B/op": 124407.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.5149144680472091,
+      "load_before": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ],
+      "load_after": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1527,
+      "round": 8,
+      "metrics": {
+        "ns/op": 431188.0,
+        "B/op": 142033.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.7162573200184852,
+      "load_before": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ],
+      "load_after": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1633,
+      "round": 8,
+      "metrics": {
+        "ns/op": 334865.0,
+        "B/op": 126047.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.6157269140239805,
+      "load_before": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ],
+      "load_after": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 2000,
+      "round": 8,
+      "metrics": {
+        "ns/op": 192220.0,
+        "B/op": 64456.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.4649107069708407,
+      "load_before": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ],
+      "load_after": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1513,
+      "round": 8,
+      "metrics": {
+        "ns/op": 263110.0,
+        "B/op": 80696.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.5150858910055831,
+      "load_before": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ],
+      "load_after": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1737,
+      "round": 8,
+      "metrics": {
+        "ns/op": 244262.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5150392110226676,
+      "load_before": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ],
+      "load_after": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 456,
+      "round": 8,
+      "metrics": {
+        "ns/op": 870646.0,
+        "B/op": 216223.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.5649960869923234,
+      "load_before": [
+        1.34326171875,
+        1.20703125,
+        0.80517578125
+      ],
+      "load_after": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 415,
+      "round": 8,
+      "metrics": {
+        "ns/op": 863434.0,
+        "B/op": 245580.0,
+        "allocs/op": 868.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.5149851380847394,
+      "load_before": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ],
+      "load_after": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 445,
+      "round": 8,
+      "metrics": {
+        "ns/op": 843231.0,
+        "B/op": 229715.0,
+        "allocs/op": 862.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.5655185909708962,
+      "load_before": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ],
+      "load_after": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 229,
+      "round": 8,
+      "metrics": {
+        "ns/op": 1672628.0,
+        "B/op": 419364.0,
+        "allocs/op": 1827.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.6153064389945939,
+      "load_before": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ],
+      "load_after": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 206,
+      "round": 8,
+      "metrics": {
+        "ns/op": 1641601.0,
+        "B/op": 448520.0,
+        "allocs/op": 1845.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.6156292390078306,
+      "load_before": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ],
+      "load_after": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 225,
+      "round": 8,
+      "metrics": {
+        "ns/op": 1627987.0,
+        "B/op": 432848.0,
+        "allocs/op": 1839.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 2,
+      "elapsed": 0.6153401960618794,
+      "load_before": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ],
+      "load_after": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4581,
+      "round": 9,
+      "metrics": {
+        "ns/op": 122797.0,
+        "B/op": 124329.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.6156460680067539,
+      "load_before": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ],
+      "load_after": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4242,
+      "round": 9,
+      "metrics": {
+        "ns/op": 116037.0,
+        "B/op": 124585.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5151685030432418,
+      "load_before": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ],
+      "load_after": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3750,
+      "round": 9,
+      "metrics": {
+        "ns/op": 137416.0,
+        "B/op": 140569.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5655360510572791,
+      "load_before": [
+        1.3154296875,
+        1.203125,
+        0.806640625
+      ],
+      "load_after": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3550,
+      "round": 9,
+      "metrics": {
+        "ns/op": 147521.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.5655884039588273,
+      "load_before": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3224,
+      "round": 9,
+      "metrics": {
+        "ns/op": 170037.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.6155236740596592,
+      "load_before": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 2788,
+      "round": 9,
+      "metrics": {
+        "ns/op": 238731.0,
+        "B/op": 141952.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.7162059049587697,
+      "load_before": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1909,
+      "round": 9,
+      "metrics": {
+        "ns/op": 278298.0,
+        "B/op": 124406.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.5652027850737795,
+      "load_before": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1814,
+      "round": 9,
+      "metrics": {
+        "ns/op": 329946.0,
+        "B/op": 126045.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.6658420939929783,
+      "load_before": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1738,
+      "round": 9,
+      "metrics": {
+        "ns/op": 285280.0,
+        "B/op": 142035.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5652126159984618,
+      "load_before": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1782,
+      "round": 9,
+      "metrics": {
+        "ns/op": 252780.0,
+        "B/op": 64456.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.5652333329198882,
+      "load_before": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1700,
+      "round": 9,
+      "metrics": {
+        "ns/op": 222037.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5150869049830362,
+      "load_before": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1692,
+      "round": 9,
+      "metrics": {
+        "ns/op": 230437.0,
+        "B/op": 80696.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5154337150743231,
+      "load_before": [
+        1.2900390625,
+        1.19970703125,
+        0.80810546875
+      ],
+      "load_after": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 428,
+      "round": 9,
+      "metrics": {
+        "ns/op": 912400.0,
+        "B/op": 216190.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.5652025330346078,
+      "load_before": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 409,
+      "round": 9,
+      "metrics": {
+        "ns/op": 898985.0,
+        "B/op": 229546.0,
+        "allocs/op": 861.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.5154071550350636,
+      "load_before": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 421,
+      "round": 9,
+      "metrics": {
+        "ns/op": 972686.0,
+        "B/op": 245599.0,
+        "allocs/op": 869.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5651181100402027,
+      "load_before": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 226,
+      "round": 9,
+      "metrics": {
+        "ns/op": 1594494.0,
+        "B/op": 419365.0,
+        "allocs/op": 1827.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 0,
+      "elapsed": 0.6156035040039569,
+      "load_before": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 229,
+      "round": 9,
+      "metrics": {
+        "ns/op": 1654579.0,
+        "B/op": 432886.0,
+        "allocs/op": 1840.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 1,
+      "elapsed": 0.6155861420556903,
+      "load_before": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 231,
+      "round": 9,
+      "metrics": {
+        "ns/op": 1909523.0,
+        "B/op": 448863.0,
+        "allocs/op": 1847.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.6652589869918302,
+      "load_before": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4014,
+      "round": 10,
+      "metrics": {
+        "ns/op": 111938.0,
+        "B/op": 124584.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5150343209970742,
+      "load_before": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4480,
+      "round": 10,
+      "metrics": {
+        "ns/op": 111264.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5152061909902841,
+      "load_before": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3703,
+      "round": 10,
+      "metrics": {
+        "ns/op": 150512.0,
+        "B/op": 140568.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.6156519539654255,
+      "load_before": [
+        1.2666015625,
+        1.1962890625,
+        0.8095703125
+      ],
+      "load_after": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3220,
+      "round": 10,
+      "metrics": {
+        "ns/op": 157707.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5660951390163973,
+      "load_before": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ],
+      "load_after": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3691,
+      "round": 10,
+      "metrics": {
+        "ns/op": 133576.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5156413649674505,
+      "load_before": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ],
+      "load_after": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3207,
+      "round": 10,
+      "metrics": {
+        "ns/op": 251160.0,
+        "B/op": 141952.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.8663563570007682,
+      "load_before": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ],
+      "load_after": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1390,
+      "round": 10,
+      "metrics": {
+        "ns/op": 283745.0,
+        "B/op": 126046.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.46523452806286514,
+      "load_before": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ],
+      "load_after": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1812,
+      "round": 10,
+      "metrics": {
+        "ns/op": 254067.0,
+        "B/op": 124408.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5153978680027649,
+      "load_before": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ],
+      "load_after": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1708,
+      "round": 10,
+      "metrics": {
+        "ns/op": 285281.0,
+        "B/op": 142031.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5653185319388285,
+      "load_before": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ],
+      "load_after": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1662,
+      "round": 10,
+      "metrics": {
+        "ns/op": 237042.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5152844490949064,
+      "load_before": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ],
+      "load_after": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 2029,
+      "round": 10,
+      "metrics": {
+        "ns/op": 233476.0,
+        "B/op": 64456.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.5653322649886832,
+      "load_before": [
+        1.2451171875,
+        1.19287109375,
+        0.81103515625
+      ],
+      "load_after": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1766,
+      "round": 10,
+      "metrics": {
+        "ns/op": 258824.0,
+        "B/op": 80696.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5652958509745076,
+      "load_before": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ],
+      "load_after": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 435,
+      "round": 10,
+      "metrics": {
+        "ns/op": 832271.0,
+        "B/op": 229665.0,
+        "allocs/op": 862.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5149348059203476,
+      "load_before": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ],
+      "load_after": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 469,
+      "round": 10,
+      "metrics": {
+        "ns/op": 948876.0,
+        "B/op": 216292.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.6153137449873611,
+      "load_before": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ],
+      "load_after": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 382,
+      "round": 10,
+      "metrics": {
+        "ns/op": 982285.0,
+        "B/op": 245677.0,
+        "allocs/op": 869.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.5654144600266591,
+      "load_before": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ],
+      "load_after": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 235,
+      "round": 10,
+      "metrics": {
+        "ns/op": 1523096.0,
+        "B/op": 432871.0,
+        "allocs/op": 1840.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.6154679750325158,
+      "load_before": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ],
+      "load_after": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 219,
+      "round": 10,
+      "metrics": {
+        "ns/op": 1530101.0,
+        "B/op": 419073.0,
+        "allocs/op": 1825.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 1,
+      "elapsed": 0.6156555390916765,
+      "load_before": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ],
+      "load_after": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 229,
+      "round": 10,
+      "metrics": {
+        "ns/op": 1534603.0,
+        "B/op": 448875.0,
+        "allocs/op": 1847.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 2,
+      "elapsed": 0.6155538379680365,
+      "load_before": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ],
+      "load_after": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 3660,
+      "round": 11,
+      "metrics": {
+        "ns/op": 132414.0,
+        "B/op": 124584.0,
+        "allocs/op": 17.0
+      },
+      "case": "update-1000-repeated",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5150509099476039,
+      "load_before": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ],
+      "load_after": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4084,
+      "round": 11,
+      "metrics": {
+        "ns/op": 150288.0,
+        "B/op": 140568.0,
+        "allocs/op": 24.0
+      },
+      "case": "update-1000-repeated",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.66540418099612,
+      "load_before": [
+        1.22509765625,
+        1.189453125,
+        0.8125
+      ],
+      "load_after": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/repeated",
+      "iterations": 4843,
+      "round": 11,
+      "metrics": {
+        "ns/op": 78963.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-repeated",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.4148366409353912,
+      "load_before": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ],
+      "load_after": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3282,
+      "round": 11,
+      "metrics": {
+        "ns/op": 190433.0,
+        "B/op": 125968.0,
+        "allocs/op": 22.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.665581093984656,
+      "load_before": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ],
+      "load_after": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 2877,
+      "round": 11,
+      "metrics": {
+        "ns/op": 231694.0,
+        "B/op": 141952.0,
+        "allocs/op": 29.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.7157933179987594,
+      "load_before": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ],
+      "load_after": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/dispersed",
+      "iterations": 3409,
+      "round": 11,
+      "metrics": {
+        "ns/op": 144401.0,
+        "B/op": 124328.0,
+        "allocs/op": 15.0
+      },
+      "case": "update-1000-dispersed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5150938319275156,
+      "load_before": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ],
+      "load_after": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1778,
+      "round": 11,
+      "metrics": {
+        "ns/op": 308501.0,
+        "B/op": 126048.0,
+        "allocs/op": 23.0
+      },
+      "case": "update-1000-mixed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.6155900040175766,
+      "load_before": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ],
+      "load_after": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1756,
+      "round": 11,
+      "metrics": {
+        "ns/op": 409474.0,
+        "B/op": 142033.0,
+        "allocs/op": 30.0
+      },
+      "case": "update-1000-mixed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.7660337260458618,
+      "load_before": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ],
+      "load_after": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/1000/mixed",
+      "iterations": 1828,
+      "round": 11,
+      "metrics": {
+        "ns/op": 258127.0,
+        "B/op": 124404.0,
+        "allocs/op": 16.0
+      },
+      "case": "update-1000-mixed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5150608140975237,
+      "load_before": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ],
+      "load_after": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1896,
+      "round": 11,
+      "metrics": {
+        "ns/op": 240846.0,
+        "B/op": 64712.0,
+        "allocs/op": 122.0
+      },
+      "case": "update-10000-repeated",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5654288650257513,
+      "load_before": [
+        1.28759765625,
+        1.203125,
+        0.8193359375
+      ],
+      "load_after": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1381,
+      "round": 11,
+      "metrics": {
+        "ns/op": 272288.0,
+        "B/op": 80699.0,
+        "allocs/op": 129.0
+      },
+      "case": "update-10000-repeated",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.465033334097825,
+      "load_before": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ],
+      "load_after": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/repeated",
+      "iterations": 1671,
+      "round": 11,
+      "metrics": {
+        "ns/op": 215522.0,
+        "B/op": 64456.0,
+        "allocs/op": 120.0
+      },
+      "case": "update-10000-repeated",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.465022959979251,
+      "load_before": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ],
+      "load_after": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 406,
+      "round": 11,
+      "metrics": {
+        "ns/op": 847726.0,
+        "B/op": 229576.0,
+        "allocs/op": 861.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.5155920180259272,
+      "load_before": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ],
+      "load_after": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 465,
+      "round": 11,
+      "metrics": {
+        "ns/op": 964048.0,
+        "B/op": 245792.0,
+        "allocs/op": 870.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.6153331859968603,
+      "load_before": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ],
+      "load_after": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/dispersed",
+      "iterations": 490,
+      "round": 11,
+      "metrics": {
+        "ns/op": 830187.0,
+        "B/op": 216162.0,
+        "allocs/op": 849.0
+      },
+      "case": "update-10000-dispersed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.5650594839826226,
+      "load_before": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ],
+      "load_after": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 225,
+      "round": 11,
+      "metrics": {
+        "ns/op": 1966927.0,
+        "B/op": 432854.0,
+        "allocs/op": 1840.0
+      },
+      "case": "update-10000-mixed",
+      "build": "preallocated",
+      "position": 0,
+      "elapsed": 0.7155188909964636,
+      "load_before": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ],
+      "load_after": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 234,
+      "round": 11,
+      "metrics": {
+        "ns/op": 1750967.0,
+        "B/op": 448851.0,
+        "allocs/op": 1847.0
+      },
+      "case": "update-10000-mixed",
+      "build": "candidate",
+      "position": 1,
+      "elapsed": 0.6657751119928434,
+      "load_before": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ],
+      "load_after": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ]
+    },
+    {
+      "name": "BenchmarkHierarchyUpdate/10000/mixed",
+      "iterations": 232,
+      "round": 11,
+      "metrics": {
+        "ns/op": 1547771.0,
+        "B/op": 419351.0,
+        "allocs/op": 1827.0
+      },
+      "case": "update-10000-mixed",
+      "build": "entry-validation",
+      "position": 2,
+      "elapsed": 0.615595365059562,
+      "load_before": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ],
+      "load_after": [
+        1.26416015625,
+        1.19970703125,
+        0.8203125
+      ]
+    }
+  ],
+  "toolchains": {
+    "candidate": {
+      "CGO_ENABLED": "0",
+      "GOARCH": "amd64",
+      "GOEXPERIMENT": "",
+      "GOFLAGS": "",
+      "GOOS": "linux",
+      "GOTOOLCHAIN": "auto",
+      "GOVERSION": "go1.27.1"
+    },
+    "preallocated": {
+      "CGO_ENABLED": "0",
+      "GOARCH": "amd64",
+      "GOEXPERIMENT": "",
+      "GOFLAGS": "",
+      "GOOS": "linux",
+      "GOTOOLCHAIN": "auto",
+      "GOVERSION": "go1.27.1"
+    },
+    "entry-validation": {
+      "CGO_ENABLED": "0",
+      "GOARCH": "amd64",
+      "GOEXPERIMENT": "",
+      "GOFLAGS": "",
+      "GOOS": "linux",
+      "GOTOOLCHAIN": "auto",
+      "GOVERSION": "go1.27.1"
+    }
+  },
+  "binaries": {
+    "candidate:./internal/manifest": "2e63d2ce0d8076a8e88c0ac2f4a3cd929ba4cd19991b188a5965bda3feb3820e",
+    "preallocated:./internal/manifest": "52123fd523f09a9e05847d86832b6b6564bd129fdb3225904a5e51f649ffd859",
+    "entry-validation:./internal/manifest": "af40191f7aa5aad693f939a99be5691b3fbb56283f8f35c5e322aa9ee53c63b9"
+  },
+  "production_diff": {
+    "candidate": {
+      "internal/manifest/snapshot.go": {
+        "baseline": "9be13008a4fd22ae50090f00b29829ba1b611f32df3899fbd33f1f7c161b4dec",
+        "candidate": "7e1289ceee2f954d1f7497f79d2dccf676e67336b3a7f9a462bdd5bd95496857",
+        "patch": "--- baseline/internal/manifest/snapshot.go\n+++ candidate/internal/manifest/snapshot.go\n@@ -251,6 +251,7 @@\n \tcount := s.count\n \tchanged := false\n \tstructural := false\n+\ttypesChanged := false\n \tfor i, e := range ordered {\n \t\tif err := ctx.Err(); err != nil {\n \t\t\treturn nil, err\n@@ -263,6 +264,7 @@\n \t\t}\n \t\tif old, ok := s.Lookup(e.Entry.Path); ok {\n \t\t\tstructural = structural || e.Delete\n+\t\t\ttypesChanged = typesChanged || old.Type != e.Entry.Type\n \t\t\tif e.Delete {\n \t\t\t\tcount--\n \t\t\t}\n@@ -291,6 +293,7 @@\n \t\t}\n \t\tsize += e.Size\n \t}\n+\tpreservesHierarchy := !structural && !typesChanged\n \t// Both small inventories and height-limited trees use the same validated\n \t// array update. Internal reads borrow immutable views instead of cloning.\n \tflatUpdate := func(noIndex bool) (*Snapshot, error) {\n@@ -304,8 +307,10 @@\n \t\t}\n \t\tnext := &Snapshot{entries: m.Entries, size: size, count: count}\n \t\tnext.noIndex.Store(noIndex)\n-\t\tif err := next.validateReplacements(ctx, replacements.Entries); err != nil {\n-\t\t\treturn nil, err\n+\t\tif !preservesHierarchy {\n+\t\t\tif err := next.validateReplacements(ctx, replacements.Entries); err != nil {\n+\t\t\t\treturn nil, err\n+\t\t\t}\n \t\t}\n \t\treturn next, ctx.Err()\n \t}\n@@ -348,8 +353,13 @@\n \tif root != nil {\n \t\tnext.count = root.count\n \t}\n-\tif err := next.validateReplacements(ctx, replacements.Entries); err != nil {\n-\t\treturn nil, err\n+\t// A validated base remains hierarchically valid when every path and type is\n+\t// preserved. Metadata, paths and totals were still checked above. Membership\n+\t// preservation alone (structural == false) does not rule out type changes.\n+\tif !preservesHierarchy {\n+\t\tif err := next.validateReplacements(ctx, replacements.Entries); err != nil {\n+\t\t\treturn nil, err\n+\t\t}\n \t}\n \treturn next, ctx.Err()\n }\n"
+      }
+    },
+    "preallocated": {
+      "internal/manifest/snapshot.go": {
+        "baseline": "7e1289ceee2f954d1f7497f79d2dccf676e67336b3a7f9a462bdd5bd95496857",
+        "candidate": "1410200d8d74b3bcd90d8bdda15ddf425a12f0186dd3ac7b271ecd2f0658802d",
+        "patch": "--- baseline/internal/manifest/snapshot.go\n+++ candidate/internal/manifest/snapshot.go\n@@ -246,7 +246,7 @@\n \t}\n \tordered := slices.Clone(edits)\n \tsort.Slice(ordered, func(i, j int) bool { return ordered[i].Entry.Path < ordered[j].Entry.Path })\n-\tvar replacements proto.Manifest\n+\treplacements := proto.Manifest{Entries: make([]proto.ManifestEntry, 0, len(ordered))}\n \tsize := s.size\n \tcount := s.count\n \tchanged := false\n"
+      }
+    },
+    "entry-validation": {
+      "internal/archive/archive.go": {
+        "baseline": "3565e5509238d687eb57d9d1ca2fba179c2cb415e7d444798708c3bce3eeb535",
+        "candidate": "8f418cee86c94614f9c110cf1aefb338a2f81e080cfcc33d141db038fb541ecc",
+        "patch": "--- baseline/internal/archive/archive.go\n+++ candidate/internal/archive/archive.go\n@@ -335,3 +335,18 @@\n func typeMismatch(name string) error {\n \treturn fmt.Errorf(\"archive: %q disagrees with manifest about type or target\", name)\n }\n+\n+// ValidateEntry checks one path and its metadata, including symlink containment.\n+// It does not establish ordering, uniqueness, or relationships between entries.\n+func ValidateEntry(e proto.ManifestEntry) error {\n+\tif err := checkRelPath(e.Path); err != nil {\n+\t\treturn err\n+\t}\n+\tif err := validateEntry(e); err != nil {\n+\t\treturn err\n+\t}\n+\tif e.Type == proto.EntrySymlink {\n+\t\treturn checkSymlinkTarget(e.Path, e.Target)\n+\t}\n+\treturn nil\n+}\n"
+      },
+      "internal/manifest/snapshot.go": {
+        "baseline": "7e1289ceee2f954d1f7497f79d2dccf676e67336b3a7f9a462bdd5bd95496857",
+        "candidate": "84e21022ea2e5bab5dd73fb7173123493259ab660e667369f7cbca85f8cb67e4",
+        "patch": "--- baseline/internal/manifest/snapshot.go\n+++ candidate/internal/manifest/snapshot.go\n@@ -246,7 +246,7 @@\n \t}\n \tordered := slices.Clone(edits)\n \tsort.Slice(ordered, func(i, j int) bool { return ordered[i].Entry.Path < ordered[j].Entry.Path })\n-\tvar replacements proto.Manifest\n+\treplacements := proto.Manifest{Entries: make([]proto.ManifestEntry, 0, len(ordered))}\n \tsize := s.size\n \tcount := s.count\n \tchanged := false\n@@ -281,8 +281,13 @@\n \t\t\treplacements.Entries = append(replacements.Entries, e.Entry)\n \t\t}\n \t}\n-\tif err := archive.ValidateSortedContext(ctx, replacements); err != nil {\n-\t\treturn nil, err\n+\tfor _, e := range replacements.Entries {\n+\t\tif err := ctx.Err(); err != nil {\n+\t\t\treturn nil, err\n+\t\t}\n+\t\tif err := archive.ValidateEntry(e); err != nil {\n+\t\t\treturn nil, err\n+\t\t}\n \t}\n \tif !changed {\n \t\treturn s, ctx.Err()\n"
+      }
+    }
+  },
+  "baseline_archive_sha256": "da592f9fca320f016ab211d9879d595d43d5c306036e8937defc7de8f4422bcb",
+  "candidate_archive_sha256": "4e9673f7b69856c28f1400cba1f4e908e10dc1fcdcf5cb7fbcdde5377a71f7d2",
+  "status": "complete",
+  "filesystem": "btrfs",
+  "mount": "btrfs rw,relatime,compress=zstd:3,ssd,space_cache=v2,subvolid=257,subvol=/@home\n",
+  "cases": {
+    "update-1000-repeated": [
+      "./internal/manifest",
+      "^BenchmarkHierarchyUpdate$/^1000$/^repeated$",
+      "300ms"
+    ],
+    "update-1000-dispersed": [
+      "./internal/manifest",
+      "^BenchmarkHierarchyUpdate$/^1000$/^dispersed$",
+      "300ms"
+    ],
+    "update-1000-mixed": [
+      "./internal/manifest",
+      "^BenchmarkHierarchyUpdate$/^1000$/^mixed$",
+      "300ms"
+    ],
+    "update-10000-repeated": [
+      "./internal/manifest",
+      "^BenchmarkHierarchyUpdate$/^10000$/^repeated$",
+      "300ms"
+    ],
+    "update-10000-dispersed": [
+      "./internal/manifest",
+      "^BenchmarkHierarchyUpdate$/^10000$/^dispersed$",
+      "300ms"
+    ],
+    "update-10000-mixed": [
+      "./internal/manifest",
+      "^BenchmarkHierarchyUpdate$/^10000$/^mixed$",
+      "300ms"
+    ]
+  },
+  "builds": [
+    "candidate",
+    "preallocated",
+    "entry-validation"
+  ]
+}

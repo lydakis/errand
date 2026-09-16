@@ -1,0 +1,11 @@
+--- a/internal/manifest/hierarchy_update_test.go
++++ b/internal/manifest/hierarchy_update_test.go
+@@ -19,7 +19,7 @@
+ 	for _, representation := range []string{"flat", "tree", "fallback"} {
+ 		for name, edits := range map[string][]Edit{
+ 			"metadata":              {{Entry: proto.ManifestEntry{Path: "a", Type: proto.EntryDir, Mode: 0700}}, {Entry: file("a/b", 4)}, {Entry: proto.ManifestEntry{Path: "link", Type: proto.EntrySymlink, Target: "z"}}},
+-			"parent-type":           {{Entry: file("a", 2)}, {Entry: file("a/b", 4)}},
++			"parent-type":           {{Entry: file("a", 2)}, {Entry: file("z", 4)}},
+ 			"implicit-parent":       {{Entry: file("a/b/c", 2)}, {Entry: file("z", 4)}},
+ 			"remove-descendant":     {{Entry: file("a", 2)}, {Entry: file("a/b", 0), Delete: true}},
+ 			"add-directory":         {{Entry: proto.ManifestEntry{Path: "z", Type: proto.EntryDir}}, {Entry: file("z/child", 2)}},

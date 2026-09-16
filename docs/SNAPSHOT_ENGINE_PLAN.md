@@ -5,6 +5,53 @@ resolution and staging for push, fetch, workspace creation and job submission.
 Watch schedules repeated pushes. Persistent and temporary workspaces differ in
 lifetime; they should not need independent transfer algorithms.
 
+## Current work queue (2026-09-16)
+
+This is the active tracker. Its order supersedes the historical experiment
+sequence below. Queued investigations have not started; a code-derived scaling
+finding is not a measured attribution of complete-operation latency.
+
+| ID | Status | Work | Next evidence or decision |
+|---|---|---|---|
+| H1 | Complete | [Shared hierarchy validation](HIERARCHY_VALIDATION.md) | Reviewed: retain the predicate and entry-only checks; reject preallocation. Native results and remaining caller caveats are recorded. |
+| P1 | Next | Production apply-journal scaling | Hold changed bytes approximately fixed; vary independent roots 1/8/32/128/512. Measure full apply time, journal validation/serialization counts and bytes, and file/directory synchronization separately. |
+| P2 | Queued after P1 | Realistic Git/editor-save watch | Refresh current-head Errand/rsync/Mutagen measurements using tracked, untracked and mixed trees; cross in-place/atomic saves and structural/policy changes. Record fallback reasons before narrowing invalidation. |
+| P3 | Gated by complete-operation measurements | Wire identity and sequential requests | Count materializations, encodings and root computations. Measure controlled/real RTT before comparing incremental identity or compound stage-and-apply. |
+| I1 | Independent, not started | Detached completion observation | Measure remote result commit → worker observation → local apply, plus full CLI lifecycle timing. Compare notification/long-poll with authoritative status reconciliation. |
+| I2 | Backlog | Log reattachment | Measure resume-near-end as logs grow; compare verified indexing/segments while preserving prefix-integrity guarantees. |
+| I3 | Backlog | Materializer contention | Measure parent-cache misses and lock hold time; compare reserved/pinned two-phase handle acquisition and shared I/O budgets under simultaneous jobs/workspaces. |
+| D1 | Deferred behind production work | Restart-cache experiments | Bounded reads/checksums with exact-generation checks, then independently replay-cost-aware compaction and early encoding termination. Experimental disk journals remain disabled. |
+| D2 | Separate transfer workstream | Large-file differential transfer | Compare whole-file, rolling-delta and chunked transfer for append, prepend, insertion and scattered edits under bandwidth/RTT constraints. |
+
+**P1 candidates:** the normal existing-parent path in
+[apply.go](../internal/changes/apply.go) makes `2k+2` complete journal publications;
+[journal.go](../internal/changes/journal.go) validates and serializes the whole
+plan each time. At 128 roots this is 258 publications. Compare an immutable plan
+with small atomically replaced per-item progress records against an immutable
+plan with checksummed append-only progress. Keep installation ordering fixed
+initially. Both candidates need recovery tests from the first comparison,
+including partial writes, corruption, transaction binding and commit visibility.
+Grouped durability is a separate later candidate. Preserve historical retry
+outcomes, later destination edits and cleanup authorization/recovery.
+
+**P2 evidence:** distinguish content, directory membership and selection-policy
+invalidation. Reconcile an affected parent/subtree only when replacement identity
+and watcher coverage justify it; retain full fallback for uncertainty/overflow.
+The Python competitor fixture currently initializes Git without tracking files;
+the separate Go Git fixture does add them. Refresh competitors with interleaved
+orders, individual latency observations and separate visible-delivery/durable-receipt
+measurements. Include long-lived watch, periodic reconciliation, retries and cleanup.
+
+Keep the adaptive flat/Merkle engine and shared verified materializer. Versioned
+identities require canonical semantics and receiver validation; old-client
+compatibility is not a requirement. Compound apply must durably bind explicit
+intent to the exact attempt and preserve stage-only behavior. Separate unprofiled
+timings from attribution runs, retain identical-code controls, and measure complete
+cost before adoption. A snapshot, a live observation, frozen bytes, an accepted
+baseline and a historical receipt remain distinct evidence.
+
+## Completed experiments and context
+
 The [first comparison](SNAPSHOT_INDEX_BENCHMARKS.md) and
 [optimization follow-up](SNAPSHOT_INDEX_FOLLOWUP.md) record the completed
 representation experiments. The first [production integration](SNAPSHOT_INTEGRATION.md)
@@ -123,12 +170,42 @@ follow-up separates CPU from allocation instrumentation before ranking shared
 hierarchy validation, bounded exact-generation I/O and replay-aware compaction.
 No next runtime optimization is selected solely from the original combined profiles.
 
+The [shared hierarchy-validation slice](HIERARCHY_VALIDATION.md) follows those
+clean profiles with an explicit, independently checked safety predicate. It
+compares repeated and dispersed histories with fully crossed depth/mode orders,
+mixed structural batches and actual production callers. Initial Linux slowdown
+signals receive separate identical-binary and predicate-organization controls;
+the final production predicate has its own caller/dense-history comparison.
+This remains shared snapshot work, without enabling journal persistence. The
+deferred storage candidate is bounded read/checksum work with exact-generation
+identity, followed separately by replay-aware compaction and early encoding
+termination. Whole-command performance, rather than reduced validation work
+alone, remains the persistence adoption gate.
+The original predicate comparison retained slower APFS burst and Btrfs fetch
+medians. The review follow-up records caller reachability and all timed fetch
+iterations, independently measures entry validation and allocation, and compares
+the exact selected source with two executions of the same baseline binary.
+It retains entry-only validation and rejects blanket replacement-slice
+preallocation after delete-only and single-indexed-update losses. Final dispersed
+1K update batches take 47% less time on APFS and 38–47% less on Btrfs, winning
+every pair against both controls. Mixed updates improve on APFS and remain
+around parity on Btrfs. The earlier command slowdowns do not recur consistently
+against both controls; whole-command results remain near parity or noisy, with
+small positive medians and Btrfs staging/apply phase signals retained in the
+report. This is not a general watch/fetch speedup or universal non-regression
+claim. All 1,728 follow-up samples and exact source identities are retained
+separately from earlier campaigns. Production apply/watch investigations now take
+priority; bounded read/checksum work and replay-aware compaction remain D1 above.
+
 Keep the current content-addressed model. Selection policy determines eligible
 paths, a snapshot describes their state, and the content store resolves their
 bodies. Changing the snapshot representation and changing the unit of body
 transfer are separate decisions. Neither requires abandoning transactional apply.
 
-## Sequence
+## Original architecture sequence
+
+These are architectural milestones, not the current execution queue. Step 3's
+remaining storage experiments are deferred behind P1–P3 above.
 
 1. **Choose the snapshot interface and representation.** Compare the flat
    manifest with an immutable partitioned index and a persistent Merkle tree.
@@ -149,8 +226,9 @@ transfer are separate decisions. Neither requires abandoning transactional apply
    have native measurements. Derived storage candidates are rejected on complete
    preparation cost; observation-only journals have workload-dependent results.
    Fixed-depth/lifecycle profiles are complete; current journal adoption is rejected.
-   Clean diagnostic profiles precede selecting one independent candidate from
-   bounded I/O, replay-budget/encoding policy and shared hierarchy validation.
+   Clean profiles and the shared hierarchy-validation comparison are now
+   recorded. When this workstream resumes, compare bounded I/O; keep replay-budget/encoding policy
+   independent so complete-cost changes can be attributed.
    Revisit persistence only if complete costs justify it and adoption gates pass.
 4. **Optimize large changed files.** Compare whole-file transfer, basis-dependent
    rolling deltas, and content-defined chunks under the same content interface.
@@ -226,14 +304,15 @@ not sufficient evidence for migrating all of them.
   the interference loop and derives complete phase/Wire tables from retained data.
   Current journal adoption stays rejected. Writeback and actual inter-variant
   publication interference remain unresolved by the synthetic treatments.
-  **Next comparison:** rotating/dispersed histories alongside repeated-file edits,
-  a fully crossed 36-round depth/variant schedule with joint-coverage assertions,
-  and one candidate selected from clean diagnostics. Consider bounded read/checksum
-  work that preserves exact generation identity; compaction based on replay work,
-  including early delta-encoding termination; and shared type-preserving hierarchy
-  validation. The latter needs an explicit type predicate, valid base snapshots,
-  mixed structural cases and actual production batch-shape evidence. Preserve every
-  transaction's valid intermediate state. Compact encoding, a shared observation
+  **Included in the hierarchy-validation slice:** rotating/dispersed histories
+  alongside repeated-file edits, a fully crossed 36-round depth/variant schedule
+  with joint-coverage assertions, an explicit type predicate over validated base
+  snapshots, structural controls and actual production caller measurements.
+  Every transaction retains intermediate-state validation. Initial Linux losses
+  and their A/A/B and alternative-predicate follow-ups remain visible.
+  **Deferred storage comparison (D1):** bounded read/checksum work that preserves exact generation
+  identity. Follow separately with compaction based on replay work, including
+  early delta-encoding termination. Compact encoding, a shared observation
   scan, allocation layout and parallel validation remain separately measured
   follow-ups. Do not bundle them and attribute all effects to one change.
   The current restore rehashes serially; its lower index phase partly moves work
