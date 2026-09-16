@@ -1,0 +1,53 @@
+File: probe
+Build ID: ff0ee4644e0ede846bc7f320e1fe8c5e7239cec1
+Type: alloc_space
+Time: 2026-09-16 01:46:42 EDT
+Showing nodes accounting for 847.66MB, 97.87% of 866.11MB total
+Dropped 87 nodes (cum <= 4.33MB)
+Showing top 45 nodes out of 111
+      flat  flat%   sum%        cum   cum%
+   74.14MB  8.56%  8.56%    74.14MB  8.56%  internal/bytealg.MakeNoZero
+   64.27MB  7.42% 15.98%    64.27MB  7.42%  slices.Grow[go.shape.[]uint8,go.shape.uint8] (inline)
+   59.99MB  6.93% 22.91%    59.99MB  6.93%  bytes.growSlice
+   48.30MB  5.58% 28.49%    48.30MB  5.58%  syscall.ByteSliceFromString
+   46.70MB  5.39% 33.88%    81.93MB  9.46%  os.lstatNolog
+   46.08MB  5.32% 39.20%    46.08MB  5.32%  io.ReadAll
+   37.90MB  4.38% 43.57%    37.90MB  4.38%  github.com/lydakis/errand/experiments/snapshotcheckpoint.differences
+   37.74MB  4.36% 47.93%    63.97MB  7.39%  github.com/lydakis/errand/internal/manifest.(*Snapshot).Update
+   31.67MB  3.66% 51.59%    31.67MB  3.66%  github.com/lydakis/errand/internal/manifest.buildTree
+   24.88MB  2.87% 54.46%    24.88MB  2.87%  internal/strconv.AppendUint
+   24.59MB  2.84% 57.30%    41.59MB  4.80%  github.com/lydakis/errand/internal/snapshot.walk.func1
+   23.79MB  2.75% 60.05%    23.79MB  2.75%  internal/saferio.ReadData
+   23.37MB  2.70% 62.74%    23.37MB  2.70%  reflect.unsafe_NewArray
+   23.20MB  2.68% 65.42%    83.79MB  9.67%  github.com/lydakis/errand/experiments/snapshotcheckpoint.decodeCheckpoint
+   23.13MB  2.67% 68.09%   186.94MB 21.58%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+   20.53MB  2.37% 70.46%    20.53MB  2.37%  bytes.Clone
+   18.59MB  2.15% 72.61%    18.59MB  2.15%  github.com/lydakis/errand/internal/manifest.replaceNodes
+   17.96MB  2.07% 74.68%    35.86MB  4.14%  os.(*File).readdir
+   17.76MB  2.05% 76.73%    17.76MB  2.05%  os.newUnixDirent
+   17.65MB  2.04% 78.77%    17.65MB  2.04%  os.(*File).Stat
+      17MB  1.96% 80.74%       17MB  1.96%  strings.genSplit
+   15.52MB  1.79% 82.53%    15.52MB  1.79%  encoding/json/jsontext.stateMachine.MayAppendDelim
+   14.70MB  1.70% 84.22%   119.51MB 13.80%  encoding/json/v2.makeStructArshaler.func2
+   13.32MB  1.54% 85.76%    13.32MB  1.54%  encoding/gob.decString
+   13.09MB  1.51% 87.27%    13.09MB  1.51%  io.copyBuffer
+   11.58MB  1.34% 88.61%   153.33MB 17.70%  github.com/lydakis/errand/experiments/snapshotcheckpoint.readCheckpoint
+   11.58MB  1.34% 89.95%    11.58MB  1.34%  github.com/lydakis/errand/internal/manifest.editedView
+   11.58MB  1.34% 91.28%   163.81MB 18.91%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+   11.58MB  1.34% 92.62%    11.58MB  1.34%  slices.Clone[go.shape.[]github.com/lydakis/errand/internal/proto.ManifestEntry,go.shape.struct { Path string "json:\"path\""; Type string "json:\"type\""; Mode uint32 "json:\"mode\""; Size int64 "json:\"size,omitempty\""; SHA256 string "json:\"sha256,omitempty\""; Target string "json:\"target,omitempty\"" }] (inline)
+    9.76MB  1.13% 93.75%     9.76MB  1.13%  os.newFile
+    9.57MB  1.10% 94.85%     9.57MB  1.10%  encoding/hex.EncodeToString (inline)
+    9.26MB  1.07% 95.92%     9.26MB  1.07%  crypto/internal/fips140/sha256.New (inline)
+    7.57MB  0.87% 96.79%     7.57MB  0.87%  slices.Clone[go.shape.[]github.com/lydakis/errand/internal/manifest.Edit,go.shape.struct { Entry github.com/lydakis/errand/internal/proto.ManifestEntry; Delete bool }] (inline)
+    6.60MB  0.76% 97.56%     6.60MB  0.76%  github.com/lydakis/errand/internal/snapshot.expandPaths
+    2.56MB   0.3% 97.85%    78.45MB  9.06%  github.com/lydakis/errand/internal/snapshot.hashFileSizedContext
+    0.08MB 0.0097% 97.86%    60.74MB  7.01%  github.com/lydakis/errand/experiments/snapshotcheckpoint.encodeRecords
+    0.06MB 0.0072% 97.87%    23.43MB  2.71%  reflect.MakeSlice
+         0     0% 97.87%    59.99MB  6.93%  bytes.(*Buffer).Write
+         0     0% 97.87%    59.99MB  6.93%  bytes.(*Buffer).grow
+         0     0% 97.87%     9.26MB  1.07%  crypto/sha256.New (inline)
+         0     0% 97.87%    60.53MB  6.99%  encoding/gob.(*Decoder).Decode
+         0     0% 97.87%    60.53MB  6.99%  encoding/gob.(*Decoder).DecodeValue
+         0     0% 97.87%    36.75MB  4.24%  encoding/gob.(*Decoder).decOpFor.func3
+         0     0% 97.87%    13.32MB  1.54%  encoding/gob.(*Decoder).decOpFor.func4
+         0     0% 97.87%    13.32MB  1.54%  encoding/gob.(*Decoder).decodeArrayHelper

@@ -1,0 +1,158 @@
+File: probe
+Build ID: 819ba6ad47a6ae7915615490ea051edde779b8c7
+Type: cpu
+Time: 2026-09-16 02:22:20 EDT
+Duration: 1.84s, Total samples = 1.99s (108.04%)
+Showing nodes accounting for 1.56s, 78.39% of 1.99s total
+Showing top 150 nodes out of 272
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      1.60s 80.40%  main.main
+         0     0%     0%      1.60s 80.40%  main.run
+         0     0%     0%      1.60s 80.40%  runtime.main
+         0     0%     0%      1.43s 71.86%  github.com/lydakis/errand/experiments/snapshotcheckpoint.Prepare
+         0     0%     0%      1.43s 71.86%  github.com/lydakis/errand/experiments/snapshotcheckpoint.prepare
+         0     0%     0%      0.52s 26.13%  github.com/lydakis/errand/internal/snapshot.SelectFilesWithOptions
+         0     0%     0%      0.52s 26.13%  github.com/lydakis/errand/internal/snapshot.walk
+         0     0%     0%      0.52s 26.13%  path/filepath.WalkDir
+         0     0%     0%      0.52s 26.13%  path/filepath.walkDir
+         0     0%     0%      0.38s 19.10%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+     0.01s   0.5%   0.5%      0.38s 19.10%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+         0     0%   0.5%      0.34s 17.09%  crypto/internal/fips140/sha256.(*Digest).Write
+         0     0%   0.5%      0.34s 17.09%  crypto/internal/fips140/sha256.block
+     0.33s 16.58% 17.09%      0.34s 17.09%  crypto/internal/fips140/sha256.blockAVX2
+     0.32s 16.08% 33.17%      0.32s 16.08%  internal/runtime/syscall/linux.Syscall6
+         0     0% 33.17%      0.32s 16.08%  syscall.RawSyscall6
+         0     0% 33.17%      0.31s 15.58%  github.com/lydakis/errand/internal/snapshot.walk.func1
+         0     0% 33.17%      0.29s 14.57%  os.Lstat
+         0     0% 33.17%      0.29s 14.57%  os.lstatNolog
+         0     0% 33.17%      0.28s 14.07%  github.com/lydakis/errand/internal/snapshot.(*SelectionGuard).Verify
+     0.14s  7.04% 40.20%      0.28s 14.07%  internal/filepathlite.Clean
+         0     0% 40.20%      0.28s 14.07%  path/filepath.Clean (inline)
+         0     0% 40.20%      0.26s 13.07%  os.ignoringEINTR (inline)
+         0     0% 40.20%      0.26s 13.07%  os.lstatNolog.func1 (inline)
+         0     0% 40.20%      0.26s 13.07%  syscall.Lstat (inline)
+         0     0% 40.20%      0.26s 13.07%  syscall.fstatat
+         0     0% 40.20%      0.25s 12.56%  github.com/lydakis/errand/internal/snapshot.SelectFilesGuarded
+     0.09s  4.52% 44.72%      0.25s 12.56%  path/filepath.Rel
+         0     0% 44.72%      0.25s 12.56%  syscall.Syscall6
+         0     0% 44.72%      0.24s 12.06%  crypto/sha256.Sum256
+         0     0% 44.72%      0.24s 12.06%  runtime.systemstack
+         0     0% 44.72%      0.19s  9.55%  github.com/lydakis/errand/experiments/snapshotcheckpoint.observationStore.load
+         0     0% 44.72%      0.19s  9.55%  github.com/lydakis/errand/experiments/snapshotcheckpoint.readCheckpoint
+         0     0% 44.72%      0.18s  9.05%  github.com/lydakis/errand/experiments/snapshotcheckpoint.observationStore.save
+         0     0% 44.72%      0.18s  9.05%  github.com/lydakis/errand/experiments/snapshotcheckpoint.writeCheckpoint
+         0     0% 44.72%      0.18s  9.05%  path/filepath.Join (inline)
+         0     0% 44.72%      0.18s  9.05%  path/filepath.join
+         0     0% 44.72%      0.17s  8.54%  github.com/lydakis/errand/internal/manifest.(*Snapshot).RootHash
+     0.01s   0.5% 45.23%      0.17s  8.54%  github.com/lydakis/errand/internal/manifest.finishSubtree
+         0     0% 45.23%      0.17s  8.54%  github.com/lydakis/errand/internal/manifest.finishTree.func1
+         0     0% 45.23%      0.17s  8.54%  github.com/lydakis/errand/internal/proto.Manifest.RootHash (inline)
+         0     0% 45.23%      0.17s  8.54%  github.com/lydakis/errand/internal/proto.digest
+         0     0% 45.23%      0.17s  8.54%  sync.(*WaitGroup).Go.func1
+         0     0% 45.23%      0.16s  8.04%  runtime.gcBgMarkWorker
+         0     0% 45.23%      0.16s  8.04%  runtime.gcBgMarkWorker.func2
+         0     0% 45.23%      0.16s  8.04%  runtime.gcDrain
+         0     0% 45.23%      0.15s  7.54%  io.Copy (inline)
+         0     0% 45.23%      0.15s  7.54%  io.copyBuffer
+     0.07s  3.52% 48.74%      0.15s  7.54%  runtime.scanObject
+     0.14s  7.04% 55.78%      0.14s  7.04%  internal/filepathlite.(*lazybuf).append (inline)
+         0     0% 55.78%      0.13s  6.53%  runtime.gcDrainMarkWorkerIdle (inline)
+     0.02s  1.01% 56.78%      0.13s  6.53%  runtime.mallocgc
+         0     0% 56.78%      0.12s  6.03%  github.com/lydakis/errand/experiments/snapshotcheckpoint.checkpointChecksum
+         0     0% 56.78%      0.12s  6.03%  github.com/lydakis/errand/internal/manifest.entryDigest
+         0     0% 56.78%      0.11s  5.53%  crypto/internal/fips140/sha256.(*Digest).Sum
+         0     0% 56.78%      0.10s  5.03%  crypto/internal/fips140/sha256.(*Digest).checkSum
+         0     0% 56.78%      0.10s  5.03%  encoding/json.Marshal (inline)
+         0     0% 56.78%      0.10s  5.03%  encoding/json/v2.Marshal
+         0     0% 56.78%      0.10s  5.03%  encoding/json/v2.makeSliceArshaler.func2
+     0.02s  1.01% 57.79%      0.10s  5.03%  encoding/json/v2.makeStructArshaler.func2
+         0     0% 57.79%      0.10s  5.03%  encoding/json/v2.marshalEncode
+         0     0% 57.79%      0.09s  4.52%  encoding/gob.(*Encoder).Encode
+         0     0% 57.79%      0.09s  4.52%  encoding/gob.(*Encoder).EncodeValue
+         0     0% 57.79%      0.09s  4.52%  github.com/lydakis/errand/experiments/snapshotcheckpoint.decodeCheckpoint
+         0     0% 57.79%      0.09s  4.52%  github.com/lydakis/errand/experiments/snapshotcheckpoint.encodeRecords
+         0     0% 57.79%      0.09s  4.52%  os.ReadDir
+     0.09s  4.52% 62.31%      0.09s  4.52%  runtime.memmove
+         0     0% 62.31%      0.08s  4.02%  encoding/gob.(*Decoder).Decode
+         0     0% 62.31%      0.08s  4.02%  encoding/gob.(*Decoder).DecodeValue
+         0     0% 62.31%      0.08s  4.02%  encoding/gob.(*Decoder).decOpFor.func3
+         0     0% 62.31%      0.08s  4.02%  encoding/gob.(*Decoder).decodeSingle
+         0     0% 62.31%      0.08s  4.02%  encoding/gob.(*Decoder).decodeSlice
+         0     0% 62.31%      0.08s  4.02%  encoding/gob.(*Decoder).decodeValue
+         0     0% 62.31%      0.08s  4.02%  github.com/lydakis/errand/internal/snapshot.PrepareBuildPaths (inline)
+         0     0% 62.31%      0.08s  4.02%  github.com/lydakis/errand/internal/snapshot.expandPaths
+         0     0% 62.31%      0.07s  3.52%  encoding/gob.(*Decoder).decOpFor.func4
+         0     0% 62.31%      0.07s  3.52%  encoding/gob.(*Decoder).decodeArrayHelper
+     0.02s  1.01% 63.32%      0.07s  3.52%  encoding/gob.(*Decoder).decodeStruct
+         0     0% 63.32%      0.07s  3.52%  encoding/gob.(*Encoder).encode
+         0     0% 63.32%      0.07s  3.52%  encoding/gob.(*Encoder).encodeArray
+         0     0% 63.32%      0.07s  3.52%  encoding/gob.(*Encoder).encodeSingle
+         0     0% 63.32%      0.07s  3.52%  encoding/gob.encOpFor.func1
+         0     0% 63.32%      0.07s  3.52%  encoding/gob.encOpFor.func4
+     0.05s  2.51% 65.83%      0.07s  3.52%  runtime.tryDeferToSpanScan
+         0     0% 65.83%      0.07s  3.52%  syscall.Syscall
+     0.01s   0.5% 66.33%      0.06s  3.02%  encoding/gob.(*Encoder).encodeStruct
+         0     0% 66.33%      0.06s  3.02%  github.com/lydakis/errand/internal/manifest.(*Snapshot).PrepareUpdates
+         0     0% 66.33%      0.06s  3.02%  github.com/lydakis/errand/internal/manifest.(*Snapshot).tree
+         0     0% 66.33%      0.06s  3.02%  github.com/lydakis/errand/internal/manifest.buildTree
+         0     0% 66.33%      0.06s  3.02%  os.(*File).ReadDir
+         0     0% 66.33%      0.06s  3.02%  os.(*File).readdir
+         0     0% 66.33%      0.05s  2.51%  internal/poll.ignoringEINTRIO (inline)
+         0     0% 66.33%      0.05s  2.51%  slices.Sort[go.shape.[]string,go.shape.string] (inline)
+         0     0% 66.33%      0.05s  2.51%  slices.pdqsortOrdered[go.shape.string]
+         0     0% 66.33%      0.05s  2.51%  sort.Strings
+     0.01s   0.5% 66.83%      0.05s  2.51%  strings.Join
+         0     0% 66.83%      0.04s  2.01%  github.com/lydakis/errand/internal/snapshot.pathContainsGitMetadata
+         0     0% 66.83%      0.04s  2.01%  runtime.bgsweep
+         0     0% 66.83%      0.04s  2.01%  runtime.growslice
+         0     0% 66.83%      0.04s  2.01%  runtime.makeslice
+         0     0% 66.83%      0.04s  2.01%  runtime.slicebytetostring
+         0     0% 66.83%      0.04s  2.01%  runtime.sweepone
+     0.02s  1.01% 67.84%      0.04s  2.01%  slices.partitionOrdered[go.shape.string]
+         0     0% 67.84%      0.04s  2.01%  strings.Split (inline)
+         0     0% 67.84%      0.04s  2.01%  strings.genSplit
+     0.03s  1.51% 69.35%      0.03s  1.51%  cmpbody
+     0.01s   0.5% 69.85%      0.03s  1.51%  encoding/gob.decString
+         0     0% 69.85%      0.03s  1.51%  encoding/json/v2.makeStringArshaler.func1
+         0     0% 69.85%      0.03s  1.51%  github.com/lydakis/errand/experiments/snapshotcheckpoint.contextReader.Read
+         0     0% 69.85%      0.03s  1.51%  github.com/lydakis/errand/internal/archive.ValidateSortedContext
+     0.01s   0.5% 70.35%      0.03s  1.51%  github.com/lydakis/errand/internal/manifest.(*node).rehash
+         0     0% 70.35%      0.03s  1.51%  github.com/lydakis/errand/internal/manifest.New
+         0     0% 70.35%      0.03s  1.51%  github.com/lydakis/errand/internal/manifest.validate
+         0     0% 70.35%      0.03s  1.51%  os.(*File).ReadFrom
+         0     0% 70.35%      0.03s  1.51%  os.genericReadFrom
+     0.01s   0.5% 70.85%      0.03s  1.51%  path.Clean
+         0     0% 70.85%      0.03s  1.51%  runtime.(*sweepLocked).sweep
+         0     0% 70.85%      0.03s  1.51%  runtime.gcDrainMarkWorkerFractional (inline)
+         0     0% 70.85%      0.03s  1.51%  runtime.mallocgcLarge
+     0.03s  1.51% 72.36%      0.03s  1.51%  runtime.memclrNoHeapPointers
+         0     0% 72.36%      0.03s  1.51%  strings.(*Builder).Grow
+     0.01s   0.5% 72.86%      0.03s  1.51%  strings.(*Builder).grow
+         0     0% 72.86%      0.02s  1.01%  bytes.(*Buffer).Write
+         0     0% 72.86%      0.02s  1.01%  bytes.(*Buffer).grow
+         0     0% 72.86%      0.02s  1.01%  bytes.(*Reader).Read
+         0     0% 72.86%      0.02s  1.01%  bytes.growSlice
+         0     0% 72.86%      0.02s  1.01%  cmp.Less[go.shape.string] (inline)
+         0     0% 72.86%      0.02s  1.01%  encoding/gob.(*Encoder).writeMessage
+         0     0% 72.86%      0.02s  1.01%  encoding/gob.(*encoderState).encodeUint (inline)
+     0.01s   0.5% 73.37%      0.02s  1.01%  encoding/gob.encString
+     0.01s   0.5% 73.87%      0.02s  1.01%  encoding/gob.encUint
+     0.01s   0.5% 74.37%      0.02s  1.01%  encoding/json/internal/jsonwire.AppendQuote
+         0     0% 74.37%      0.02s  1.01%  encoding/json/v2.makeUintArshaler.func1
+         0     0% 74.37%      0.02s  1.01%  gcWriteBarrier
+         0     0% 74.37%      0.02s  1.01%  internal/bytealg.MakeNoZero
+         0     0% 74.37%      0.02s  1.01%  internal/poll.(*FD).Close
+         0     0% 74.37%      0.02s  1.01%  internal/poll.(*FD).ReadDirent
+         0     0% 74.37%      0.02s  1.01%  internal/poll.(*FD).Write
+         0     0% 74.37%      0.02s  1.01%  internal/poll.(*FD).decref
+         0     0% 74.37%      0.02s  1.01%  internal/poll.(*FD).destroy
+         0     0% 74.37%      0.02s  1.01%  internal/poll.(*SysFile).destroy (inline)
+     0.02s  1.01% 75.38%      0.02s  1.01%  internal/runtime/maps.ctrlGroup.matchH2 (inline)
+     0.01s   0.5% 75.88%      0.02s  1.01%  internal/strconv.AppendUint
+     0.02s  1.01% 76.88%      0.02s  1.01%  math/bits.LeadingZeros64 (inline)
+     0.02s  1.01% 77.89%      0.02s  1.01%  memeqbody
+         0     0% 77.89%      0.02s  1.01%  os.(*File).Close
+         0     0% 77.89%      0.02s  1.01%  os.(*File).Write
+         0     0% 77.89%      0.02s  1.01%  os.(*File).write (inline)
+         0     0% 77.89%      0.02s  1.01%  os.(*file).close
+     0.01s   0.5% 78.39%      0.02s  1.01%  os.fillFileStatFromSys

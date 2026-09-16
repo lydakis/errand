@@ -230,6 +230,16 @@ wins retain the observed spread, not confidence intervals. Lower ratios are bett
 
 ## Review follow-ups and next slice
 
+The measurement slice described below is now complete in
+[Journal depth and preparation profiles](JOURNAL_DEPTH_PROFILE.md). It retains
+fixed histories, full cycles, the framed replacement control and diagnostic
+profiles. Current journal adoption is rejected on dense-history costs. Review
+follow-ups disclose repeated-file history and coupled ordering, separate CPU/heap
+instrumentation, and reopen candidate ranking rather than selecting shared
+hierarchy validation from the original profiles. This section
+preserves the handoff that led to that investigation; its original measurements
+and evidence remain unchanged.
+
 - Included here: a shared storage strategy instead of additional preparation
   booleans; an observation-only format with explicit derived-image rejection;
   structural/stamp-only restart coverage, stale-writer rejection, busy-cache

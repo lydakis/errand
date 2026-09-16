@@ -113,9 +113,15 @@ the 50K cumulative six-edit sequence (journal depths 0–5) has median paired
 ratios of 0.986 on APFS and 0.935 on Btrfs against the same-binary control,
 while byte compaction is 12.0% and 14.5% slower.
 The APFS edit effect is unresolved. Retain this as experimental evidence;
-production adoption remains open. Next measure independently balanced fixed
-history depths, near-full append and a complete compaction cycle, while profiling
-loading, replay and publication before selecting one further storage candidate.
+production adoption remains open. The [fixed-depth and profile follow-up](JOURNAL_DEPTH_PROFILE.md)
+measures fixed histories and complete cycles. Repeated edits to one file have
+paired cycle medians 1.7% lower on APFS (unresolved) and 5.9% lower on Btrfs;
+near-full append regresses by 29.9% and 47.3%, and byte compaction by 15.4% and
+28.2%. Do not adopt the current journal. Fixed-depth ordering is conditionally
+balanced but coupled, and the sparse histories have no path diversity. The review
+follow-up separates CPU from allocation instrumentation before ranking shared
+hierarchy validation, bounded exact-generation I/O and replay-aware compaction.
+No next runtime optimization is selected solely from the original combined profiles.
 
 Keep the current content-addressed model. Selection policy determines eligible
 paths, a snapshot describes their state, and the content store resolves their
@@ -142,7 +148,10 @@ transfer are separate decisions. Neither requires abandoning transactional apply
    Observation replacement, derived-index checkpoints and observation-only journals
    have native measurements. Derived storage candidates are rejected on complete
    preparation cost; observation-only journals have workload-dependent results.
-   Production adoption remains open, pending profiling and the adoption gates below.
+   Fixed-depth/lifecycle profiles are complete; current journal adoption is rejected.
+   Clean diagnostic profiles precede selecting one independent candidate from
+   bounded I/O, replay-budget/encoding policy and shared hierarchy validation.
+   Revisit persistence only if complete costs justify it and adoption gates pass.
 4. **Optimize large changed files.** Compare whole-file transfer, basis-dependent
    rolling deltas, and content-defined chunks under the same content interface.
    Include cold destinations, shifted insertions, incompressible data, bandwidth
@@ -209,13 +218,24 @@ not sufficient evidence for migrating all of them.
   coupled to execution order, not steady state. Review fixes retain both paired
   baselines, enforce ordinary receipt/history checks, and cover equal-sized stale
   generations with shared framed-store regressions.
-  Next measure fixed depths 0/8/31 with independently balanced order, near-full
-  append and a full compaction cycle. Probe selection variation and interference
-  from preceding writers before attributing it to writeback. If needed, add a
-  framed observation replacement control to isolate codec/framing costs.
-  Profile load/replay/publication costs, then select one independently measured
-  candidate, such as compact encoding or parallel
-  semantic validation, where the profiles support it.
+  The [fixed-depth/profile slice](JOURNAL_DEPTH_PROFILE.md) measures depths 0/8/31,
+  near-full append, complete repeated-file cycles, framed replacement and two
+  preceding-write screens. Its six-round orders are conditionally balanced and
+  coupled, not independent. The original CPU profiles also include elevated heap
+  sampling; the review follow-up collects the two instruments separately, shares
+  the interference loop and derives complete phase/Wire tables from retained data.
+  Current journal adoption stays rejected. Writeback and actual inter-variant
+  publication interference remain unresolved by the synthetic treatments.
+  **Next comparison:** rotating/dispersed histories alongside repeated-file edits,
+  a fully crossed 36-round depth/variant schedule with joint-coverage assertions,
+  and one candidate selected from clean diagnostics. Consider bounded read/checksum
+  work that preserves exact generation identity; compaction based on replay work,
+  including early delta-encoding termination; and shared type-preserving hierarchy
+  validation. The latter needs an explicit type predicate, valid base snapshots,
+  mixed structural cases and actual production batch-shape evidence. Preserve every
+  transaction's valid intermediate state. Compact encoding, a shared observation
+  scan, allocation layout and parallel validation remain separately measured
+  follow-ups. Do not bundle them and attribute all effects to one change.
   The current restore rehashes serially; its lower index phase partly moves work
   into loading. Follow with exact-generation-check and shared-change-scan candidates
   while preserving stale-writer, corruption and intermediate-state validation.

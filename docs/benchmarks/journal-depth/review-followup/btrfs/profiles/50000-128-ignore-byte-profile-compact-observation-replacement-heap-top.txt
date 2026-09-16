@@ -1,0 +1,53 @@
+File: probe
+Build ID: 819ba6ad47a6ae7915615490ea051edde779b8c7
+Type: alloc_space
+Time: 2026-09-16 02:23:10 EDT
+Showing nodes accounting for 914.47MB, 98.82% of 925.43MB total
+Dropped 68 nodes (cum <= 4.63MB)
+Showing top 45 nodes out of 112
+      flat  flat%   sum%        cum   cum%
+   85.29MB  9.22%  9.22%    85.29MB  9.22%  internal/bytealg.MakeNoZero
+   64.39MB  6.96% 16.17%    64.39MB  6.96%  slices.Grow[go.shape.[]uint8,go.shape.uint8] (inline)
+   60.14MB  6.50% 22.67%    60.14MB  6.50%  bytes.growSlice
+   51.27MB  5.54% 28.21%    86.75MB  9.37%  os.lstatNolog
+   49.44MB  5.34% 33.55%    49.44MB  5.34%  syscall.ByteSliceFromString
+   46.16MB  4.99% 38.54%    46.16MB  4.99%  io.ReadAll
+   37.77MB  4.08% 42.62%    37.77MB  4.08%  github.com/lydakis/errand/experiments/snapshotcheckpoint.differences
+   37.53MB  4.06% 46.68%    64.51MB  6.97%  github.com/lydakis/errand/internal/manifest.(*Snapshot).Update
+   34.71MB  3.75% 50.43%   107.15MB 11.58%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.decode
+   32.68MB  3.53% 53.96%    32.68MB  3.53%  github.com/lydakis/errand/internal/manifest.buildTree
+   24.82MB  2.68% 56.64%    24.82MB  2.68%  internal/strconv.AppendUint
+   24.53MB  2.65% 59.29%    43.41MB  4.69%  github.com/lydakis/errand/internal/snapshot.walk.func1
+   23.70MB  2.56% 61.86%    23.70MB  2.56%  reflect.unsafe_NewArray
+   23.45MB  2.53% 64.39%    23.45MB  2.53%  internal/saferio.ReadData
+   23.13MB  2.50% 66.89%   201.96MB 21.82%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+      21MB  2.27% 69.16%    21.08MB  2.28%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.frame
+      21MB  2.27% 71.43%   102.86MB 11.11%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.save
+   20.59MB  2.23% 73.65%    20.59MB  2.23%  bytes.Clone (inline)
+   19.34MB  2.09% 75.74%    19.34MB  2.09%  github.com/lydakis/errand/internal/manifest.replaceNodes
+   18.88MB  2.04% 77.78%    18.88MB  2.04%  strings.genSplit
+   18.51MB  2.00% 79.78%    18.51MB  2.00%  os.newUnixDirent
+   18.28MB  1.98% 81.76%    18.28MB  1.98%  os.(*File).Stat
+   17.28MB  1.87% 83.63%    35.79MB  3.87%  os.(*File).readdir
+   15.59MB  1.68% 85.31%    15.59MB  1.68%  encoding/json/jsontext.stateMachine.MayAppendDelim
+   14.70MB  1.59% 86.90%   119.51MB 12.91%  encoding/json/v2.makeStructArshaler.func2
+   13.57MB  1.47% 88.37%    13.57MB  1.47%  encoding/gob.decString
+   12.74MB  1.38% 89.74%    12.74MB  1.38%  io.copyBuffer
+   11.63MB  1.26% 91.00%    11.63MB  1.26%  encoding/hex.EncodeToString (inline)
+   11.58MB  1.25% 92.25%    11.58MB  1.25%  github.com/lydakis/errand/internal/manifest.editedView
+   11.58MB  1.25% 93.50%   178.83MB 19.32%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+   11.58MB  1.25% 94.75%    11.58MB  1.25%  slices.Clone[go.shape.[]github.com/lydakis/errand/internal/proto.ManifestEntry,go.shape.struct { Path string "json:\"path\""; Type string "json:\"type\""; Mode uint32 "json:\"mode\""; Size int64 "json:\"size,omitempty\""; SHA256 string "json:\"sha256,omitempty\""; Target string "json:\"target,omitempty\"" }] (inline)
+   10.76MB  1.16% 95.92%    10.76MB  1.16%  crypto/internal/fips140/sha256.New (inline)
+    9.44MB  1.02% 96.94%     9.44MB  1.02%  os.newFile
+    7.57MB  0.82% 97.75%     7.57MB  0.82%  slices.Clone[go.shape.[]github.com/lydakis/errand/internal/manifest.Edit,go.shape.struct { Entry github.com/lydakis/errand/internal/proto.ManifestEntry; Delete bool }] (inline)
+    5.91MB  0.64% 98.39%     5.91MB  0.64%  github.com/lydakis/errand/internal/snapshot.expandPaths
+    3.50MB  0.38% 98.77%    83.40MB  9.01%  github.com/lydakis/errand/internal/snapshot.hashFileSizedContext
+    0.19MB  0.02% 98.79%   924.72MB 99.92%  main.run
+    0.17MB 0.018% 98.81%    60.62MB  6.55%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.encode
+    0.06MB 0.0068% 98.82%    13.63MB  1.47%  encoding/gob.(*Decoder).decodeArrayHelper
+         0     0% 98.82%    60.14MB  6.50%  bytes.(*Buffer).Write
+         0     0% 98.82%    60.14MB  6.50%  bytes.(*Buffer).grow
+         0     0% 98.82%    10.76MB  1.16%  crypto/sha256.New (inline)
+         0     0% 98.82%    60.78MB  6.57%  encoding/gob.(*Decoder).Decode
+         0     0% 98.82%    60.78MB  6.57%  encoding/gob.(*Decoder).DecodeValue
+         0     0% 98.82%    37.33MB  4.03%  encoding/gob.(*Decoder).decOpFor.func3

@@ -1,0 +1,53 @@
+File: probe
+Build ID: 819ba6ad47a6ae7915615490ea051edde779b8c7
+Type: alloc_space
+Time: 2026-09-16 02:22:30 EDT
+Showing nodes accounting for 994.16MB, 99.47% of 999.43MB total
+Dropped 78 nodes (cum <= 5MB)
+Showing top 45 nodes out of 84
+      flat  flat%   sum%        cum   cum%
+  196.42MB 19.65% 19.65%   196.42MB 19.65%  io.ReadAll
+   72.94MB  7.30% 26.95%   343.96MB 34.42%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.decode
+   69.77MB  6.98% 33.93%    69.77MB  6.98%  internal/bytealg.MakeNoZero
+   64.30MB  6.43% 40.37%    64.30MB  6.43%  slices.Grow[go.shape.[]uint8,go.shape.uint8] (inline)
+   60.09MB  6.01% 46.38%   135.63MB 13.57%  github.com/lydakis/errand/internal/manifest.(*Snapshot).Update
+   51.54MB  5.16% 51.54%    51.54MB  5.16%  reflect.unsafe_NewArray
+   46.30MB  4.63% 56.17%    46.30MB  4.63%  internal/saferio.ReadData
+   34.11MB  3.41% 59.58%   499.40MB 49.97%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.load
+   32.74MB  3.28% 62.86%    56.96MB  5.70%  os.lstatNolog
+   31.24MB  3.13% 65.98%    31.24MB  3.13%  github.com/lydakis/errand/internal/manifest.replaceNodes
+   31.02MB  3.10% 69.09%    31.02MB  3.10%  github.com/lydakis/errand/internal/manifest.buildTree
+   25.26MB  2.53% 71.61%    25.26MB  2.53%  encoding/gob.decString
+   25.21MB  2.52% 74.14%    42.77MB  4.28%  github.com/lydakis/errand/internal/snapshot.walk.func1
+   24.88MB  2.49% 76.63%    24.88MB  2.49%  internal/strconv.AppendUint
+   24.53MB  2.45% 79.08%    24.53MB  2.45%  syscall.ByteSliceFromString
+   23.13MB  2.31% 81.39%    23.13MB  2.31%  github.com/lydakis/errand/experiments/snapshotcheckpoint.applyObservations
+   23.13MB  2.31% 83.71%   113.57MB 11.36%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+   20.53MB  2.05% 85.76%    20.53MB  2.05%  bytes.Clone (inline)
+   17.57MB  1.76% 87.52%    17.57MB  1.76%  strings.genSplit
+   17.15MB  1.72% 89.24%    33.79MB  3.38%  os.(*File).readdir
+   16.45MB  1.65% 90.88%    16.45MB  1.65%  os.newUnixDirent
+   15.66MB  1.57% 92.45%    15.66MB  1.57%  encoding/json/jsontext.stateMachine.MayAppendDelim
+   14.91MB  1.49% 93.94%   119.75MB 11.98%  encoding/json/v2.makeStructArshaler.func2
+   13.15MB  1.32% 95.26%    13.15MB  1.32%  slices.Clone[go.shape.[]github.com/lydakis/errand/internal/manifest.Edit,go.shape.struct { Entry github.com/lydakis/errand/internal/proto.ManifestEntry; Delete bool }] (inline)
+   11.58MB  1.16% 96.41%    11.58MB  1.16%  github.com/lydakis/errand/internal/manifest.(*Snapshot).materialized
+   11.58MB  1.16% 97.57%    90.44MB  9.05%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+   11.58MB  1.16% 98.73%    11.58MB  1.16%  slices.Clone[go.shape.[]github.com/lydakis/errand/internal/proto.ManifestEntry,go.shape.struct { Path string "json:\"path\""; Type string "json:\"type\""; Mode uint32 "json:\"mode\""; Size int64 "json:\"size,omitempty\""; SHA256 string "json:\"sha256,omitempty\""; Target string "json:\"target,omitempty\"" }] (inline)
+    6.90MB  0.69% 99.42%     6.90MB  0.69%  github.com/lydakis/errand/internal/snapshot.expandPaths
+    0.31MB 0.031% 99.45%    25.57MB  2.56%  encoding/gob.(*Decoder).decodeArrayHelper
+    0.19MB 0.019% 99.47%   998.75MB 99.93%  main.run
+         0     0% 99.47%   123.54MB 12.36%  encoding/gob.(*Decoder).Decode
+         0     0% 99.47%   123.54MB 12.36%  encoding/gob.(*Decoder).DecodeValue
+         0     0% 99.47%    77.11MB  7.72%  encoding/gob.(*Decoder).decOpFor.func3
+         0     0% 99.47%    25.26MB  2.53%  encoding/gob.(*Decoder).decOpFor.func4
+         0     0% 99.47%    77.11MB  7.72%  encoding/gob.(*Decoder).decodeSingle
+         0     0% 99.47%    77.11MB  7.72%  encoding/gob.(*Decoder).decodeSlice
+         0     0% 99.47%    25.26MB  2.53%  encoding/gob.(*Decoder).decodeStruct
+         0     0% 99.47%    46.42MB  4.64%  encoding/gob.(*Decoder).decodeTypeSequence
+         0     0% 99.47%    77.24MB  7.73%  encoding/gob.(*Decoder).decodeValue
+         0     0% 99.47%    46.30MB  4.63%  encoding/gob.(*Decoder).readMessage
+         0     0% 99.47%    46.30MB  4.63%  encoding/gob.(*Decoder).recvMessage
+         0     0% 99.47%   140.28MB 14.04%  encoding/json.Marshal (inline)
+         0     0% 99.47%    64.24MB  6.43%  encoding/json/internal/jsonwire.AppendQuote
+         0     0% 99.47%   140.28MB 14.04%  encoding/json/v2.Marshal
+         0     0% 99.47%   119.69MB 11.98%  encoding/json/v2.makeSliceArshaler.func2

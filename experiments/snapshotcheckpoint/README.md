@@ -18,6 +18,16 @@ index nodes. Storage strategies keep format/publication choices out of the share
 preparation path. It compares frozen and current observation replacement controls,
 including real byte/record compaction and recovery after prior transactions.
 
+The [fixed-depth/profile follow-up](../../docs/JOURNAL_DEPTH_PROFILE.md) adds
+`observation-replacement` as a framed control and optional `-cpu-profile` /
+`-heap-profile` diagnostic output. It compares depths 0/8/31, full 33-operation
+cycles and dense history. The current journal remains experimental because dense
+history regresses complete preparation on both hosts. Original sparse cycles
+repeatedly edit one file; fixed-depth execution orders are coupled. The review
+follow-up adds `--profiles-only` and separate CPU/heap invocations before choosing
+among shared validation, bounded I/O and replay-budget candidates. The snapshot
+representation is unchanged.
+
 ## Contract
 
 - Each call runs `snapshot.SelectFilesGuarded` again and stats every selected path.

@@ -1,0 +1,54 @@
+File: probe
+Build ID: ff0ee4644e0ede846bc7f320e1fe8c5e7239cec1
+Type: cpu
+Time: 2026-09-16 01:45:26 EDT
+Duration: 1.93s, Total samples = 2.12s (110.08%)
+Showing nodes accounting for 1.05s, 49.53% of 2.12s total
+Dropped 99 nodes (cum <= 0.01s)
+Showing top 45 nodes out of 157
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      1.68s 79.25%  main.main
+         0     0%     0%      1.68s 79.25%  main.run
+         0     0%     0%      1.68s 79.25%  runtime.main
+         0     0%     0%      1.50s 70.75%  github.com/lydakis/errand/experiments/snapshotcheckpoint.PrepareObservationReplacement
+         0     0%     0%      1.50s 70.75%  github.com/lydakis/errand/experiments/snapshotcheckpoint.prepare
+         0     0%     0%      0.53s 25.00%  github.com/lydakis/errand/internal/snapshot.SelectFilesWithOptions
+         0     0%     0%      0.53s 25.00%  github.com/lydakis/errand/internal/snapshot.walk
+         0     0%     0%      0.51s 24.06%  path/filepath.WalkDir
+         0     0%     0%      0.51s 24.06%  path/filepath.walkDir
+     0.01s  0.47%  0.47%      0.44s 20.75%  crypto/internal/fips140/sha256.(*Digest).Write
+         0     0%  0.47%      0.43s 20.28%  crypto/internal/fips140/sha256.block
+     0.43s 20.28% 20.75%      0.43s 20.28%  crypto/internal/fips140/sha256.blockAVX2
+         0     0% 20.75%      0.36s 16.98%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+     0.02s  0.94% 21.70%      0.36s 16.98%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+     0.02s  0.94% 22.64%      0.31s 14.62%  github.com/lydakis/errand/internal/snapshot.walk.func1
+     0.30s 14.15% 36.79%      0.30s 14.15%  internal/runtime/syscall/linux.Syscall6
+         0     0% 36.79%      0.30s 14.15%  syscall.RawSyscall6
+         0     0% 36.79%      0.29s 13.68%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.load
+     0.10s  4.72% 41.51%      0.29s 13.68%  internal/filepathlite.Clean
+         0     0% 41.51%      0.29s 13.68%  path/filepath.Clean (inline)
+         0     0% 41.51%      0.27s 12.74%  crypto/sha256.Sum256
+         0     0% 41.51%      0.27s 12.74%  github.com/lydakis/errand/internal/snapshot.SelectFilesGuarded
+         0     0% 41.51%      0.26s 12.26%  github.com/lydakis/errand/internal/snapshot.(*SelectionGuard).Verify
+         0     0% 41.51%      0.26s 12.26%  os.ignoringEINTR (inline)
+     0.08s  3.77% 45.28%      0.26s 12.26%  path/filepath.Rel
+         0     0% 45.28%      0.26s 12.26%  syscall.Syscall6
+         0     0% 45.28%      0.24s 11.32%  os.Lstat
+         0     0% 45.28%      0.24s 11.32%  os.lstatNolog
+         0     0% 45.28%      0.23s 10.85%  os.lstatNolog.func1 (inline)
+         0     0% 45.28%      0.23s 10.85%  syscall.Lstat (inline)
+         0     0% 45.28%      0.23s 10.85%  syscall.fstatat
+     0.02s  0.94% 46.23%      0.21s  9.91%  github.com/lydakis/errand/internal/manifest.finishSubtree
+         0     0% 46.23%      0.21s  9.91%  github.com/lydakis/errand/internal/manifest.finishTree.func1
+         0     0% 46.23%      0.21s  9.91%  io.Copy (inline)
+         0     0% 46.23%      0.21s  9.91%  io.copyBuffer
+         0     0% 46.23%      0.21s  9.91%  runtime.systemstack
+         0     0% 46.23%      0.21s  9.91%  sync.(*WaitGroup).Go.func1
+         0     0% 46.23%      0.20s  9.43%  github.com/lydakis/errand/experiments/snapshotcheckpoint.checkpointChecksum
+         0     0% 46.23%      0.20s  9.43%  path/filepath.Join (inline)
+         0     0% 46.23%      0.20s  9.43%  path/filepath.join
+         0     0% 46.23%      0.18s  8.49%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.save
+         0     0% 46.23%      0.18s  8.49%  github.com/lydakis/errand/internal/manifest.(*Snapshot).RootHash
+         0     0% 46.23%      0.18s  8.49%  github.com/lydakis/errand/internal/proto.Manifest.RootHash (inline)
+         0     0% 46.23%      0.18s  8.49%  github.com/lydakis/errand/internal/proto.digest
+     0.07s  3.30% 49.53%      0.18s  8.49%  runtime.scanObject

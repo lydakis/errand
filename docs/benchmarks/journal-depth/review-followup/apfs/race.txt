@@ -1,0 +1,2 @@
+ok  	github.com/lydakis/errand/experiments/snapshotcheckpoint	25.913s
+?   	github.com/lydakis/errand/experiments/snapshotcheckpoint/cmd	[no test files]

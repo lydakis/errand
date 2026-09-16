@@ -1,0 +1,54 @@
+File: probe
+Build ID: ff0ee4644e0ede846bc7f320e1fe8c5e7239cec1
+Type: cpu
+Time: 2026-09-16 01:45:59 EDT
+Duration: 1.76s, Total samples = 2.02s (114.89%)
+Showing nodes accounting for 1.03s, 50.99% of 2.02s total
+Dropped 87 nodes (cum <= 0.01s)
+Showing top 45 nodes out of 154
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      1.54s 76.24%  main.main
+         0     0%     0%      1.54s 76.24%  main.run
+         0     0%     0%      1.54s 76.24%  runtime.main
+         0     0%     0%      1.34s 66.34%  github.com/lydakis/errand/experiments/snapshotcheckpoint.PrepareObservationJournal
+         0     0%     0%      1.34s 66.34%  github.com/lydakis/errand/experiments/snapshotcheckpoint.prepare
+         0     0%     0%      0.49s 24.26%  github.com/lydakis/errand/internal/snapshot.SelectFilesWithOptions
+         0     0%     0%      0.49s 24.26%  github.com/lydakis/errand/internal/snapshot.walk
+         0     0%     0%      0.49s 24.26%  path/filepath.WalkDir
+         0     0%     0%      0.49s 24.26%  path/filepath.walkDir
+         0     0%     0%      0.48s 23.76%  crypto/internal/fips140/sha256.(*Digest).Write
+     0.01s   0.5%   0.5%      0.47s 23.27%  crypto/internal/fips140/sha256.block
+     0.46s 22.77% 23.27%      0.46s 22.77%  crypto/internal/fips140/sha256.blockAVX2
+         0     0% 23.27%      0.35s 17.33%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+     0.01s   0.5% 23.76%      0.35s 17.33%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+         0     0% 23.76%      0.34s 16.83%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.load
+         0     0% 23.76%      0.33s 16.34%  runtime.systemstack
+     0.01s   0.5% 24.26%      0.32s 15.84%  crypto/sha256.Sum256
+     0.01s   0.5% 24.75%      0.29s 14.36%  github.com/lydakis/errand/internal/snapshot.walk.func1
+     0.27s 13.37% 38.12%      0.27s 13.37%  internal/runtime/syscall/linux.Syscall6
+         0     0% 38.12%      0.27s 13.37%  syscall.RawSyscall6
+         0     0% 38.12%      0.25s 12.38%  github.com/lydakis/errand/internal/snapshot.(*SelectionGuard).Verify
+         0     0% 38.12%      0.24s 11.88%  github.com/lydakis/errand/internal/snapshot.SelectFilesGuarded
+     0.08s  3.96% 42.08%      0.24s 11.88%  internal/filepathlite.Clean
+         0     0% 42.08%      0.24s 11.88%  path/filepath.Clean (inline)
+         0     0% 42.08%      0.24s 11.88%  runtime.gcBgMarkWorker
+         0     0% 42.08%      0.24s 11.88%  runtime.gcBgMarkWorker.func2
+         0     0% 42.08%      0.24s 11.88%  runtime.gcDrain
+     0.08s  3.96% 46.04%      0.23s 11.39%  runtime.scanObject
+     0.10s  4.95% 50.99%      0.22s 10.89%  path/filepath.Rel
+         0     0% 50.99%      0.21s 10.40%  github.com/lydakis/errand/internal/manifest.finishSubtree
+         0     0% 50.99%      0.21s 10.40%  github.com/lydakis/errand/internal/manifest.finishTree.func1
+         0     0% 50.99%      0.21s 10.40%  os.Lstat
+         0     0% 50.99%      0.21s 10.40%  os.ignoringEINTR (inline)
+         0     0% 50.99%      0.21s 10.40%  os.lstatNolog
+         0     0% 50.99%      0.21s 10.40%  os.lstatNolog.func1 (inline)
+         0     0% 50.99%      0.21s 10.40%  sync.(*WaitGroup).Go.func1
+         0     0% 50.99%      0.21s 10.40%  syscall.Lstat (inline)
+         0     0% 50.99%      0.21s 10.40%  syscall.Syscall6
+         0     0% 50.99%      0.21s 10.40%  syscall.fstatat
+         0     0% 50.99%      0.20s  9.90%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.decode
+         0     0% 50.99%      0.20s  9.90%  github.com/lydakis/errand/internal/manifest.(*Snapshot).RootHash
+         0     0% 50.99%      0.20s  9.90%  runtime.gcDrainMarkWorkerIdle (inline)
+         0     0% 50.99%      0.18s  8.91%  github.com/lydakis/errand/experiments/snapshotcheckpoint.checkpointChecksum
+         0     0% 50.99%      0.18s  8.91%  github.com/lydakis/errand/internal/proto.Manifest.RootHash (inline)
+         0     0% 50.99%      0.18s  8.91%  github.com/lydakis/errand/internal/proto.digest

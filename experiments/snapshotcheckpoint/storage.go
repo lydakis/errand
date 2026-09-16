@@ -47,3 +47,13 @@ func PrepareObservationJournal(ctx context.Context, root, cache string, opts sna
 	config.store = observationJournalStore()
 	return prepare(ctx, root, cache, opts, config)
 }
+
+// PrepareObservationReplacement isolates framed encoding from journal history.
+// It uses the observation-journal format but always replaces a changed base.
+func PrepareObservationReplacement(ctx context.Context, root, cache string, opts snapshot.SelectOptions) (Result, error) {
+	config := defaultPreparation(false)
+	store := observationJournalStore()
+	store.journal = false
+	config.store = store
+	return prepare(ctx, root, cache, opts, config)
+}

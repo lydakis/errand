@@ -38,7 +38,9 @@ func framedOracle(t *testing.T, root, cache string, store framedStore) Result {
 }
 
 func TestFramedRestartJournalCompactionAndRecovery(t *testing.T) {
-	for _, store := range []framedStore{derivedStore(false), derivedStore(true), observationJournalStore()} {
+	replacement := observationJournalStore()
+	replacement.journal = false
+	for _, store := range []framedStore{derivedStore(false), derivedStore(true), replacement, observationJournalStore()} {
 		t.Run(fmt.Sprintf("%s/journal=%v", store.name, store.journal), func(t *testing.T) {
 			journal := store.journal
 			root, cache := fixture(t)

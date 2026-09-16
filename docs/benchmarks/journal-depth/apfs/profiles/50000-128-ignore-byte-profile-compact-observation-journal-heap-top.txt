@@ -1,0 +1,52 @@
+File: probe
+Type: alloc_space
+Time: 2026-09-16 01:42:16 EDT
+Showing nodes accounting for 1340.25MB, 98.59% of 1359.46MB total
+Dropped 96 nodes (cum <= 6.80MB)
+Showing top 45 nodes out of 110
+      flat  flat%   sum%        cum   cum%
+  107.78MB  7.93%  7.93%   107.78MB  7.93%  bytes.growSlice
+  101.06MB  7.43% 15.36%   101.06MB  7.43%  io.ReadAll
+   93.17MB  6.85% 22.22%   191.53MB 14.09%  github.com/lydakis/errand/internal/manifest.(*Snapshot).Update
+   77.21MB  5.68% 27.90%    77.21MB  5.68%  internal/bytealg.MakeNoZero
+   69.30MB  5.10% 32.99%   338.69MB 24.91%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.decode
+   69.29MB  5.10% 38.09%    69.29MB  5.10%  github.com/lydakis/errand/experiments/snapshotcheckpoint.observationDifferences
+   64.27MB  4.73% 42.82%    64.27MB  4.73%  slices.Grow[go.shape.[]uint8,go.shape.uint8] (inline)
+   54.60MB  4.02% 46.83%    54.60MB  4.02%  internal/saferio.ReadData
+   48.28MB  3.55% 50.38%    48.28MB  3.55%  reflect.unsafe_NewArray
+   47.95MB  3.53% 53.91%    82.86MB  6.10%  os.lstatNolog
+   47.49MB  3.49% 57.40%    47.49MB  3.49%  syscall.ByteSliceFromString
+   47.14MB  3.47% 60.87%    47.14MB  3.47%  github.com/lydakis/errand/internal/manifest.replaceNodes
+   37.73MB  2.78% 63.65%    37.73MB  2.78%  github.com/lydakis/errand/experiments/snapshotcheckpoint.differences
+   34.35MB  2.53% 66.17%   497.94MB 36.63%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.load
+   31.77MB  2.34% 68.51%    31.77MB  2.34%  github.com/lydakis/errand/internal/manifest.buildTree
+   27.76MB  2.04% 70.55%    27.76MB  2.04%  encoding/gob.decString
+   25.01MB  1.84% 72.39%    42.89MB  3.15%  github.com/lydakis/errand/internal/snapshot.walk.func1
+   24.88MB  1.83% 74.22%    24.88MB  1.83%  internal/strconv.AppendUint
+   23.30MB  1.71% 75.94%    23.38MB  1.72%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.frame
+   23.30MB  1.71% 77.65%   225.37MB 16.58%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.save
+   23.13MB  1.70% 79.35%    23.13MB  1.70%  github.com/lydakis/errand/experiments/snapshotcheckpoint.applyObservations
+   23.13MB  1.70% 81.05%   187.77MB 13.81%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+   21.83MB  1.61% 82.66%    42.78MB  3.15%  os.(*File).readdir
+   20.95MB  1.54% 84.20%    20.95MB  1.54%  os.newUnixDirent
+   20.53MB  1.51% 85.71%    20.53MB  1.51%  bytes.Clone
+   19.45MB  1.43% 87.14%    19.45MB  1.43%  slices.Clone[go.shape.[]github.com/lydakis/errand/internal/manifest.Edit,go.shape.struct { Entry github.com/lydakis/errand/internal/proto.ManifestEntry; Delete bool }] (inline)
+   18.15MB  1.34% 88.48%    18.15MB  1.34%  os.(*File).Stat
+   17.88MB  1.32% 89.79%    17.88MB  1.32%  strings.genSplit
+   15.52MB  1.14% 90.93%    15.52MB  1.14%  encoding/json/jsontext.stateMachine.MayAppendDelim
+   14.77MB  1.09% 92.02%   119.44MB  8.79%  encoding/json/v2.makeStructArshaler.func2
+   12.36MB  0.91% 92.93%    12.36MB  0.91%  io.copyBuffer
+   11.58MB  0.85% 93.78%    11.58MB  0.85%  github.com/lydakis/errand/internal/manifest.(*Snapshot).materialized
+   11.58MB  0.85% 94.63%   164.64MB 12.11%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+   11.58MB  0.85% 95.48%    11.58MB  0.85%  slices.Clone[go.shape.[]github.com/lydakis/errand/internal/proto.ManifestEntry,go.shape.struct { Path string "json:\"path\""; Type string "json:\"type\""; Mode uint32 "json:\"mode\""; Size int64 "json:\"size,omitempty\""; SHA256 string "json:\"sha256,omitempty\""; Target string "json:\"target,omitempty\"" }] (inline)
+   11.20MB  0.82% 96.31%    11.20MB  0.82%  crypto/internal/fips140/sha256.New (inline)
+   10.32MB  0.76% 97.07%    10.32MB  0.76%  encoding/hex.EncodeToString (inline)
+    9.01MB  0.66% 97.73%     9.01MB  0.66%  os.newFile
+    7.97MB  0.59% 98.32%     7.97MB  0.59%  github.com/lydakis/errand/internal/snapshot.expandPaths
+    3.31MB  0.24% 98.56%    79.70MB  5.86%  github.com/lydakis/errand/internal/snapshot.hashFileSizedContext
+    0.25MB 0.019% 98.58%   178.47MB 13.13%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.encode
+    0.13MB 0.0092% 98.59%    27.89MB  2.05%  encoding/gob.(*Decoder).decodeArrayHelper
+         0     0% 98.59%   107.78MB  7.93%  bytes.(*Buffer).Write
+         0     0% 98.59%   107.78MB  7.93%  bytes.(*Buffer).grow
+         0     0% 98.59%    11.20MB  0.82%  crypto/sha256.New (inline)
+         0     0% 98.59%   130.82MB  9.62%  encoding/gob.(*Decoder).Decode

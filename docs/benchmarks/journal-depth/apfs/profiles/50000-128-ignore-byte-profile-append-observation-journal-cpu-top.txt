@@ -1,0 +1,52 @@
+File: probe
+Type: cpu
+Time: 2026-09-16 01:41:57 EDT
+Duration: 1.52s, Total samples = 960ms (62.98%)
+Showing nodes accounting for 460ms, 47.92% of 960ms total
+Showing top 45 nodes out of 218
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      730ms 76.04%  main.main
+         0     0%     0%      730ms 76.04%  main.run
+         0     0%     0%      730ms 76.04%  runtime.main
+         0     0%     0%      700ms 72.92%  github.com/lydakis/errand/experiments/snapshotcheckpoint.PrepareObservationJournal
+         0     0%     0%      700ms 72.92%  github.com/lydakis/errand/experiments/snapshotcheckpoint.prepare
+     370ms 38.54% 38.54%      370ms 38.54%  syscall.rawsyscalln
+         0     0% 38.54%      370ms 38.54%  syscall.syscalln
+         0     0% 38.54%      350ms 36.46%  syscall.syscall
+         0     0% 38.54%      280ms 29.17%  os.ignoringEINTR (inline)
+         0     0% 38.54%      240ms 25.00%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.load
+         0     0% 38.54%      230ms 23.96%  github.com/lydakis/errand/internal/snapshot.SelectFilesWithOptions
+         0     0% 38.54%      230ms 23.96%  github.com/lydakis/errand/internal/snapshot.walk
+         0     0% 38.54%      230ms 23.96%  path/filepath.WalkDir
+         0     0% 38.54%      230ms 23.96%  path/filepath.walkDir
+         0     0% 38.54%      230ms 23.96%  runtime.systemstack
+         0     0% 38.54%      210ms 21.88%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.decode
+         0     0% 38.54%      200ms 20.83%  os.ReadDir
+         0     0% 38.54%      170ms 17.71%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+         0     0% 38.54%      170ms 17.71%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+         0     0% 38.54%      170ms 17.71%  os.Lstat
+         0     0% 38.54%      170ms 17.71%  os.lstatNolog
+         0     0% 38.54%      160ms 16.67%  os.lstatNolog.func1 (inline)
+         0     0% 38.54%      160ms 16.67%  syscall.Lstat
+         0     0% 38.54%      150ms 15.62%  runtime.(*mheap).alloc.func1
+         0     0% 38.54%      150ms 15.62%  runtime.(*mheap).allocSpan
+         0     0% 38.54%      140ms 14.58%  github.com/lydakis/errand/internal/manifest.(*Snapshot).Update
+         0     0% 38.54%      140ms 14.58%  runtime.mallocgc
+         0     0% 38.54%      120ms 12.50%  github.com/lydakis/errand/internal/snapshot.(*SelectionGuard).Verify
+         0     0% 38.54%      120ms 12.50%  os.open (inline)
+         0     0% 38.54%      120ms 12.50%  os.openDir
+         0     0% 38.54%      120ms 12.50%  os.openDirNolog
+         0     0% 38.54%      120ms 12.50%  os.openDirNolog.func1 (inline)
+         0     0% 38.54%      120ms 12.50%  syscall.Open
+         0     0% 38.54%      110ms 11.46%  github.com/lydakis/errand/internal/snapshot.SelectFilesGuarded
+      90ms  9.38% 47.92%       90ms  9.38%  runtime.madvise
+         0     0% 47.92%       90ms  9.38%  runtime.sysUsed (inline)
+         0     0% 47.92%       90ms  9.38%  runtime.sysUsedOS (inline)
+         0     0% 47.92%       70ms  7.29%  github.com/lydakis/errand/internal/manifest.(*Snapshot).validateReplacements
+         0     0% 47.92%       60ms  6.25%  github.com/lydakis/errand/internal/manifest.(*Snapshot).Subtree
+         0     0% 47.92%       60ms  6.25%  runtime.(*mcache).nextFree
+         0     0% 47.92%       60ms  6.25%  runtime.(*mcache).refill
+         0     0% 47.92%       60ms  6.25%  runtime.(*mcentral).cacheSpan
+         0     0% 47.92%       60ms  6.25%  runtime.(*mcentral).grow
+         0     0% 47.92%       60ms  6.25%  runtime.mProf_Malloc
+         0     0% 47.92%       60ms  6.25%  runtime.profilealloc

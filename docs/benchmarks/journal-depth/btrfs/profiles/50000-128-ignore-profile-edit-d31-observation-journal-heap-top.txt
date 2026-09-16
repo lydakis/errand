@@ -1,0 +1,53 @@
+File: probe
+Build ID: ff0ee4644e0ede846bc7f320e1fe8c5e7239cec1
+Type: alloc_space
+Time: 2026-09-16 01:46:00 EDT
+Showing nodes accounting for 651.17MB, 98.13% of 663.57MB total
+Dropped 108 nodes (cum <= 3.32MB)
+Showing top 45 nodes out of 87
+      flat  flat%   sum%        cum   cum%
+   91.88MB 13.85% 13.85%    91.88MB 13.85%  io.ReadAll
+   64.20MB  9.67% 23.52%    64.20MB  9.67%  internal/bytealg.MakeNoZero
+   64.18MB  9.67% 33.19%    64.18MB  9.67%  slices.Grow[go.shape.[]uint8,go.shape.uint8] (inline)
+   34.71MB  5.23% 38.42%   146.45MB 22.07%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.decode
+   33.34MB  5.02% 43.45%    33.34MB  5.02%  github.com/lydakis/errand/internal/manifest.buildTree
+   31.11MB  4.69% 48.14%    50.45MB  7.60%  os.lstatNolog
+   25.47MB  3.84% 51.97%    25.47MB  3.84%  internal/saferio.ReadData
+   24.82MB  3.74% 55.71%    24.82MB  3.74%  internal/strconv.AppendUint
+   24.74MB  3.73% 59.44%    24.74MB  3.73%  reflect.unsafe_NewArray
+   24.58MB  3.70% 63.15%    43.03MB  6.48%  github.com/lydakis/errand/internal/snapshot.walk.func1
+   23.13MB  3.49% 66.63%    23.13MB  3.49%  github.com/lydakis/errand/experiments/snapshotcheckpoint.applyObservations
+   23.13MB  3.49% 70.12%   104.74MB 15.78%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+   20.53MB  3.09% 73.21%    20.53MB  3.09%  bytes.Clone (inline)
+   20.15MB  3.04% 76.25%    20.15MB  3.04%  syscall.ByteSliceFromString
+   18.47MB  2.78% 79.03%    36.30MB  5.47%  os.(*File).readdir
+   18.44MB  2.78% 81.81%    18.44MB  2.78%  strings.genSplit
+   17.63MB  2.66% 84.47%    17.63MB  2.66%  os.newUnixDirent
+   15.59MB  2.35% 86.82%    15.59MB  2.35%  encoding/json/jsontext.stateMachine.MayAppendDelim
+   14.91MB  2.25% 89.07%   119.44MB 18.00%  encoding/json/v2.makeStructArshaler.func2
+   14.26MB  2.15% 91.21%    14.26MB  2.15%  encoding/gob.decString
+   11.58MB  1.74% 92.96%    11.58MB  1.74%  github.com/lydakis/errand/internal/manifest.(*Snapshot).materialized
+   11.58MB  1.74% 94.70%    81.61MB 12.30%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+   11.58MB  1.74% 96.45%    11.58MB  1.74%  slices.Clone[go.shape.[]github.com/lydakis/errand/internal/proto.ManifestEntry,go.shape.struct { Path string "json:\"path\""; Type string "json:\"type\""; Mode uint32 "json:\"mode\""; Size int64 "json:\"size,omitempty\""; SHA256 string "json:\"sha256,omitempty\""; Target string "json:\"target,omitempty\"" }] (inline)
+    7.21MB  1.09% 97.53%     7.21MB  1.09%  github.com/lydakis/errand/internal/snapshot.expandPaths
+    3.89MB  0.59% 98.12%     3.89MB  0.59%  io.copyBuffer
+    0.06MB 0.0094% 98.13%    14.32MB  2.16%  encoding/gob.(*Decoder).decodeArrayHelper
+         0     0% 98.13%    65.96MB  9.94%  encoding/gob.(*Decoder).Decode
+         0     0% 98.13%    65.96MB  9.94%  encoding/gob.(*Decoder).DecodeValue
+         0     0% 98.13%    39.06MB  5.89%  encoding/gob.(*Decoder).decOpFor.func3
+         0     0% 98.13%    14.38MB  2.17%  encoding/gob.(*Decoder).decOpFor.func4
+         0     0% 98.13%    38.93MB  5.87%  encoding/gob.(*Decoder).decodeSingle
+         0     0% 98.13%    39.06MB  5.89%  encoding/gob.(*Decoder).decodeSlice
+         0     0% 98.13%    14.44MB  2.18%  encoding/gob.(*Decoder).decodeStruct
+         0     0% 98.13%    26.22MB  3.95%  encoding/gob.(*Decoder).decodeTypeSequence
+         0     0% 98.13%    40.50MB  6.10%  encoding/gob.(*Decoder).decodeValue
+         0     0% 98.13%    25.47MB  3.84%  encoding/gob.(*Decoder).readMessage
+         0     0% 98.13%    25.47MB  3.84%  encoding/gob.(*Decoder).recvMessage
+         0     0% 98.13%   139.97MB 21.09%  encoding/json.Marshal
+         0     0% 98.13%    64.12MB  9.66%  encoding/json/internal/jsonwire.AppendQuote
+         0     0% 98.13%   139.97MB 21.09%  encoding/json/v2.Marshal
+         0     0% 98.13%   119.44MB 18.00%  encoding/json/v2.makeSliceArshaler.func2
+         0     0% 98.13%    79.56MB 11.99%  encoding/json/v2.makeStringArshaler.func1
+         0     0% 98.13%    24.82MB  3.74%  encoding/json/v2.makeUintArshaler.func1
+         0     0% 98.13%   119.44MB 18.00%  encoding/json/v2.marshalEncode
+         0     0% 98.13%   504.24MB 75.99%  github.com/lydakis/errand/experiments/snapshotcheckpoint.PrepareObservationJournal

@@ -1,0 +1,54 @@
+File: probe
+Build ID: ff0ee4644e0ede846bc7f320e1fe8c5e7239cec1
+Type: cpu
+Time: 2026-09-16 01:46:41 EDT
+Duration: 3.35s, Total samples = 3.62s (107.91%)
+Showing nodes accounting for 1.93s, 53.31% of 3.62s total
+Dropped 79 nodes (cum <= 0.02s)
+Showing top 45 nodes out of 242
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      3.08s 85.08%  main.main
+         0     0%     0%      3.08s 85.08%  main.run
+         0     0%     0%      3.08s 85.08%  runtime.main
+         0     0%     0%      2.87s 79.28%  github.com/lydakis/errand/experiments/snapshotcheckpoint.Prepare
+         0     0%     0%      2.87s 79.28%  github.com/lydakis/errand/experiments/snapshotcheckpoint.prepare
+         0     0%     0%      1.35s 37.29%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+     0.01s  0.28%  0.28%      1.35s 37.29%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+     1.20s 33.15% 33.43%      1.20s 33.15%  internal/runtime/syscall/linux.Syscall6
+     0.01s  0.28% 33.70%      1.17s 32.32%  syscall.RawSyscall6
+         0     0% 33.70%      0.90s 24.86%  github.com/lydakis/errand/internal/snapshot.(*Builder).hash
+     0.01s  0.28% 33.98%      0.90s 24.86%  github.com/lydakis/errand/internal/snapshot.hashFileSizedContext
+     0.01s  0.28% 34.25%      0.68s 18.78%  os.ignoringEINTR (inline)
+         0     0% 34.25%      0.61s 16.85%  syscall.Syscall6
+     0.01s  0.28% 34.53%      0.58s 16.02%  syscall.Syscall
+         0     0% 34.53%      0.53s 14.64%  runtime.systemstack
+         0     0% 34.53%      0.51s 14.09%  os.Lstat
+         0     0% 34.53%      0.51s 14.09%  os.lstatNolog
+         0     0% 34.53%      0.49s 13.54%  github.com/lydakis/errand/internal/snapshot.SelectFilesWithOptions
+         0     0% 34.53%      0.49s 13.54%  github.com/lydakis/errand/internal/snapshot.walk
+         0     0% 34.53%      0.49s 13.54%  path/filepath.WalkDir
+         0     0% 34.53%      0.49s 13.54%  path/filepath.walkDir
+         0     0% 34.53%      0.47s 12.98%  crypto/internal/fips140/sha256.(*Digest).Write
+         0     0% 34.53%      0.47s 12.98%  crypto/internal/fips140/sha256.block
+     0.47s 12.98% 47.51%      0.47s 12.98%  crypto/internal/fips140/sha256.blockAVX2
+         0     0% 47.51%      0.47s 12.98%  os.lstatNolog.func1 (inline)
+         0     0% 47.51%      0.47s 12.98%  syscall.Lstat (inline)
+         0     0% 47.51%      0.47s 12.98%  syscall.fstatat
+         0     0% 47.51%      0.44s 12.15%  os.Open (inline)
+         0     0% 47.51%      0.44s 12.15%  os.OpenFile
+         0     0% 47.51%      0.44s 12.15%  os.openFileNolog
+         0     0% 47.51%      0.36s  9.94%  io.Copy (inline)
+         0     0% 47.51%      0.36s  9.94%  io.copyBuffer
+         0     0% 47.51%      0.35s  9.67%  runtime.gcBgMarkWorker
+         0     0% 47.51%      0.35s  9.67%  runtime.gcBgMarkWorker.func2
+     0.01s  0.28% 47.79%      0.35s  9.67%  runtime.gcDrain
+         0     0% 47.79%      0.33s  9.12%  crypto/sha256.Sum256
+     0.09s  2.49% 50.28%      0.32s  8.84%  internal/filepathlite.Clean
+         0     0% 50.28%      0.32s  8.84%  path/filepath.Clean (inline)
+     0.11s  3.04% 53.31%      0.32s  8.84%  runtime.scanObject
+         0     0% 53.31%      0.27s  7.46%  github.com/lydakis/errand/internal/manifest.(*Snapshot).Update
+         0     0% 53.31%      0.27s  7.46%  github.com/lydakis/errand/internal/snapshot.walk.func1
+         0     0% 53.31%      0.26s  7.18%  internal/poll.ignoringEINTRIO (inline)
+         0     0% 53.31%      0.25s  6.91%  github.com/lydakis/errand/internal/snapshot.(*SelectionGuard).Verify
+         0     0% 53.31%      0.25s  6.91%  os.newFile
+         0     0% 53.31%      0.24s  6.63%  github.com/lydakis/errand/internal/snapshot.SelectFilesGuarded

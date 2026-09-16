@@ -1,0 +1,52 @@
+File: probe
+Type: alloc_space
+Time: 2026-09-16 02:21:52 EDT
+Showing nodes accounting for 664.04MB, 99.26% of 668.98MB total
+Dropped 62 nodes (cum <= 3.34MB)
+Showing top 45 nodes out of 84
+      flat  flat%   sum%        cum   cum%
+   96.42MB 14.41% 14.41%    96.42MB 14.41%  io.ReadAll
+   64.77MB  9.68% 24.09%    64.77MB  9.68%  internal/bytealg.MakeNoZero
+   64.40MB  9.63% 33.72%    64.40MB  9.63%  slices.Grow[go.shape.[]uint8,go.shape.uint8] (inline)
+   34.90MB  5.22% 38.94%   145.41MB 21.74%  github.com/lydakis/errand/experiments/snapshotcheckpoint.framedStore.decode
+   33.67MB  5.03% 43.97%    33.67MB  5.03%  github.com/lydakis/errand/internal/manifest.buildTree
+   31.30MB  4.68% 48.65%    56.08MB  8.38%  os.lstatNolog
+   29.06MB  4.34% 52.99%    29.06MB  4.34%  internal/saferio.ReadData
+   25.28MB  3.78% 56.77%    25.28MB  3.78%  syscall.ByteSliceFromString
+   24.82MB  3.71% 60.48%    24.82MB  3.71%  internal/strconv.AppendUint
+   24.53MB  3.67% 64.15%    42.35MB  6.33%  github.com/lydakis/errand/internal/snapshot.walk.func1
+   23.13MB  3.46% 67.61%    23.13MB  3.46%  github.com/lydakis/errand/experiments/snapshotcheckpoint.applyObservations
+   23.13MB  3.46% 71.07%      111MB 16.59%  github.com/lydakis/errand/internal/snapshot.BuildObservedContext
+   21.65MB  3.24% 74.30%    21.65MB  3.24%  reflect.unsafe_NewArray
+   21.06MB  3.15% 77.45%    39.44MB  5.90%  os.(*File).readdir
+   20.53MB  3.07% 80.52%    20.53MB  3.07%  bytes.Clone (inline)
+   18.38MB  2.75% 83.27%    18.38MB  2.75%  os.newUnixDirent
+   17.88MB  2.67% 85.94%    17.88MB  2.67%  strings.genSplit
+   15.52MB  2.32% 88.26%    15.52MB  2.32%  encoding/json/jsontext.stateMachine.MayAppendDelim
+   14.91MB  2.23% 90.49%   119.91MB 17.92%  encoding/json/v2.makeStructArshaler.func2
+   12.50MB  1.87% 92.36%    12.50MB  1.87%  encoding/gob.decString
+   11.58MB  1.73% 94.09%    11.58MB  1.73%  github.com/lydakis/errand/internal/manifest.(*Snapshot).materialized
+   11.58MB  1.73% 95.82%    87.87MB 13.13%  github.com/lydakis/errand/internal/snapshot.buildSelectedContext
+   11.58MB  1.73% 97.55%    11.58MB  1.73%  slices.Clone[go.shape.[]github.com/lydakis/errand/internal/proto.ManifestEntry,go.shape.struct { Path string "json:\"path\""; Type string "json:\"type\""; Mode uint32 "json:\"mode\""; Size int64 "json:\"size,omitempty\""; SHA256 string "json:\"sha256,omitempty\""; Target string "json:\"target,omitempty\"" }] (inline)
+    6.95MB  1.04% 98.59%     6.95MB  1.04%  github.com/lydakis/errand/internal/snapshot.expandPaths
+    4.13MB  0.62% 99.21%     4.13MB  0.62%  io.copyBuffer
+    0.19MB 0.028% 99.23%   668.47MB 99.92%  main.run
+    0.13MB 0.019% 99.25%    12.57MB  1.88%  encoding/gob.(*Decoder).decodeArrayHelper
+    0.06MB 0.0093% 99.26%    21.71MB  3.25%  reflect.MakeSlice
+         0     0% 99.26%    64.53MB  9.65%  encoding/gob.(*Decoder).Decode
+         0     0% 99.26%    64.53MB  9.65%  encoding/gob.(*Decoder).DecodeValue
+         0     0% 99.26%    34.28MB  5.12%  encoding/gob.(*Decoder).decOpFor.func3
+         0     0% 99.26%    12.69MB  1.90%  encoding/gob.(*Decoder).decOpFor.func4
+         0     0% 99.26%    34.09MB  5.10%  encoding/gob.(*Decoder).decodeSingle
+         0     0% 99.26%    34.28MB  5.12%  encoding/gob.(*Decoder).decodeSlice
+         0     0% 99.26%    12.69MB  1.90%  encoding/gob.(*Decoder).decodeStruct
+         0     0% 99.26%    29.69MB  4.44%  encoding/gob.(*Decoder).decodeTypeSequence
+         0     0% 99.26%    35.40MB  5.29%  encoding/gob.(*Decoder).decodeValue
+         0     0% 99.26%    29.06MB  4.34%  encoding/gob.(*Decoder).readMessage
+         0     0% 99.26%    29.06MB  4.34%  encoding/gob.(*Decoder).recvMessage
+         0     0% 99.26%   140.25MB 20.96%  encoding/json.Marshal (inline)
+         0     0% 99.26%    64.40MB  9.63%  encoding/json/internal/jsonwire.AppendQuote
+         0     0% 99.26%   140.25MB 20.96%  encoding/json/v2.Marshal
+         0     0% 99.26%   119.65MB 17.89%  encoding/json/v2.makeSliceArshaler.func2
+         0     0% 99.26%    79.85MB 11.94%  encoding/json/v2.makeStringArshaler.func1
+         0     0% 99.26%    24.82MB  3.71%  encoding/json/v2.makeUintArshaler.func1
