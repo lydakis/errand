@@ -14,7 +14,7 @@ finding is not a measured attribution of complete-operation latency.
 | ID | Status | Work | Next evidence or decision |
 |---|---|---|---|
 | H1 | Complete | [Shared hierarchy validation](HIERARCHY_VALIDATION.md) | Reviewed: retain the predicate and entry-only checks; reject preallocation. Native results and remaining caller caveats are recorded. |
-| P1 | Next | Production apply-journal scaling | Hold changed bytes approximately fixed; vary independent roots 1/8/32/128/512. Measure full apply time, journal validation/serialization counts and bytes, and file/directory synchronization separately. |
+| P1 | Next | Production apply-journal scaling | Hold changed bytes approximately fixed; vary independent roots 1/8/32/128/512. Measure full apply time, journal validation/serialization counts and bytes, and synchronization barriers per root (count and time per barrier) separately. Choose the candidate from the measured split, not before it. |
 | P2 | Queued after P1 | Realistic Git/editor-save watch | Refresh current-head Errand/rsync/Mutagen measurements using tracked, untracked and mixed trees; cross in-place/atomic saves and structural/policy changes. Record fallback reasons before narrowing invalidation. |
 | P3 | Gated by complete-operation measurements | Wire identity and sequential requests | Count materializations, encodings and root computations. Measure controlled/real RTT before comparing incremental identity or compound stage-and-apply. |
 | I1 | Independent, not started | Detached completion observation | Measure remote result commit → worker observation → local apply, plus full CLI lifecycle timing. Compare notification/long-poll with authoritative status reconciliation. |
@@ -26,13 +26,25 @@ finding is not a measured attribution of complete-operation latency.
 **P1 candidates:** the normal existing-parent path in
 [apply.go](../internal/changes/apply.go) makes `2k+2` complete journal publications;
 [journal.go](../internal/changes/journal.go) validates and serializes the whole
-plan each time. At 128 roots this is 258 publications. Compare an immutable plan
-with small atomically replaced per-item progress records against an immutable
-plan with checksummed append-only progress. Keep installation ordering fixed
-initially. Both candidates need recovery tests from the first comparison,
-including partial writes, corruption, transaction binding and commit visibility.
-Grouped durability is a separate later candidate. Preserve historical retry
-outcomes, later destination edits and cleanup authorization/recovery.
+plan each time. At 128 roots this is 258 publications. Each publication also
+synchronizes the journal file and the transaction directory; the staging loop
+synchronizes the transaction directory once per item; backup and install
+synchronize the parent and backup directories. That is roughly eight barriers
+per root. Serialized bytes therefore grow as Θ(k²) while barriers grow as Θ(k)
+with a large constant, and `File.Sync` issues `F_FULLFSYNC` on Darwin. The
+measurement decides which term dominates; do not select a candidate before it.
+
+If barriers dominate, the first candidate is one journal publication per phase
+with grouped item barriers. It needs an explicit recovery argument and
+crash-injection tests from the first comparison: partial writes, corruption,
+transaction binding, commit visibility and interrupted cleanup. If serialization
+dominates, compare an immutable plan with small atomically replaced per-item
+progress records against an immutable plan with checksummed append-only
+progress, with installation ordering fixed. The two changes can be combined once
+each is attributed separately. Either way, preserve historical retry outcomes,
+later destination edits and cleanup authorization/recovery. A
+representation-only candidate measured at parity is not evidence against the
+barrier candidate.
 
 **P2 evidence:** distinguish content, directory membership and selection-policy
 invalidation. Reconcile an affected parent/subtree only when replacement identity
