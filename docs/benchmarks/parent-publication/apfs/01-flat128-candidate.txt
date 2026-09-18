@@ -1,0 +1,6 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/lydakis/errand/internal/changes
+cpu: Apple M4
+BenchmarkApplyWorkloads/flat128-2         	       1	 853601208 ns/op	      4096 file-bytes/op	         1.000 grouped/op	       128.0 roots/op
+PASS

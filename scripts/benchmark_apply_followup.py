@@ -110,7 +110,8 @@ def main():
                     if sample['iterations'] != 1:
                         raise ValueError('Expected one complete operation')
                     if kind == 'changes':
-                        expected_group = case == 'flat128' or case in ('parents8', 'parents128') and variant in ('parents', 'exchange')
+                        multi_parent = report['inputs'][variant].get('multiple_parent_groups', variant in ('parents', 'exchange'))
+                        expected_group = case == 'flat128' or case in ('parents8', 'parents128') and multi_parent
                         expected_roots = 1 if case in ('tiny', 'large') else 128
                         if sample['metrics'].get('grouped/op') != int(expected_group) or sample['metrics'].get('roots/op') != expected_roots:
                             raise ValueError('Unexpected eligibility or fixture shape')

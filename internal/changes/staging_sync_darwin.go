@@ -7,10 +7,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Sync each staging member to the device without draining its hardware cache
-// separately for every file. Callers must complete syncStagingBarrier on the
-// containing tree or blob directory before publishing durable names or receipts.
-// This is only for private staging on the same filesystem as that barrier.
+// Sync a file or directory to the device without draining its hardware cache.
+// A completed member sync alone does not establish durability. Callers must
+// complete syncStagingBarrier on the same device before depending on that
+// durability or publishing a durable receipt. This serves private staging and
+// grouped installation; their protocols still determine rename/backup ordering.
 // Apple's fcntl(2) guarantees this persists preceding fsyncs on the same device:
 // https://github.com/apple-oss-distributions/xnu/blob/main/bsd/man/man2/fcntl.2
 func syncStagedData(file *os.File) error {

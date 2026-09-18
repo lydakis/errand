@@ -1,0 +1,32 @@
+{
+  "baseline_commit": "fd3ce973ed6610911461c72a446fbdb83f9af54e",
+  "command": "python3 scripts/benchmark_apply_followup.py --inputs docs/benchmarks/parent-publication/inputs --variants baseline candidate --cases tiny flat128 parents8 parents128 --no-watch --small-rounds 24 --batch-rounds 12 --output .parent-publication/results",
+  "prechecks": [
+    "go test ./internal/changes",
+    "go test -race ./internal/changes -run 'Test(Grouped|ApplySynchronization)' -count=1"
+  ],
+  "driver_sha256": "4b63f5f22a8172fabc0008ea791add30468600d2babefaed8ba4a7c94063217f",
+  "runs": {
+    "apfs": {
+      "handle": "mac-mini/01M2SA82XFPTFYQSH5P98XDESV",
+      "environment_prefix": "export PATH=/Library/Developer/CommandLineTools/usr/bin:$PATH"
+    },
+    "btrfs": {
+      "handle": "cabal/01M2SA87RQWPFWBF2KQHNAXEKZ"
+    }
+  },
+  "inputs": {
+    "baseline": {
+      "revision": "fd3ce973ed6610911461c72a446fbdb83f9af54e",
+      "input_sha256": "c278f5af19cd756591a4252cf7fa990be1928b37b6b9cf7d1cfd295763f1caba",
+      "multiple_parent_groups": true,
+      "note": "Same BenchmarkApplyWorkloads fixture; shared current Python harness. Candidate changes final parent publication and device guard only; baseline production is the exact committed revision."
+    },
+    "candidate": {
+      "revision": "fd3ce973ed6610911461c72a446fbdb83f9af54e+parent-publication",
+      "input_sha256": "d7352e6acfa4ce1409140fc079a220cda6e08df1df47e44adb089a50d4adc146",
+      "multiple_parent_groups": true,
+      "note": "Same BenchmarkApplyWorkloads fixture; shared current Python harness. Candidate changes final parent publication and device guard only; baseline production is the exact committed revision."
+    }
+  }
+}

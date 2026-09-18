@@ -1,0 +1,6 @@
+{
+  "revision": "fd3ce973ed6610911461c72a446fbdb83f9af54e+parent-publication",
+  "input_sha256": "d7352e6acfa4ce1409140fc079a220cda6e08df1df47e44adb089a50d4adc146",
+  "multiple_parent_groups": true,
+  "note": "Same BenchmarkApplyWorkloads fixture; shared current Python harness. Candidate changes final parent publication and device guard only; baseline production is the exact committed revision."
+}

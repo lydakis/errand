@@ -1,0 +1,14 @@
+{
+  "frozen_input_sha256": "d7352e6acfa4ce1409140fc079a220cda6e08df1df47e44adb089a50d4adc146",
+  "changes": {
+    "internal/changes/apply_group.go": {
+      "before": "bc83e86063aa20abfcf37e2bdf76413e94f6b087609a108d37781852271b9568",
+      "after": "9338797debc6188f2bfce78e5d559424b16d1dc344c0f1a9c2e5737df88ad1a6"
+    },
+    "internal/changes/staging_sync_darwin.go": {
+      "before": "c69fe97091791854f6166cce08338a215517fb747054c0d51b462438b5ed13e3",
+      "after": "4c961a17f3060505884add7d8b22c5bd53d272fbb0fe0cdceb191331f61756c3"
+    }
+  },
+  "note": "Post-measurement production changes are comments only; byte comparison after removing line comments confirms the measured implementation is unchanged. Expanded publication tests and stronger evidence verification are not new performance measurements."
+}

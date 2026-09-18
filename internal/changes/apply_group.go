@@ -40,6 +40,11 @@ func planApplyFileGroup(destination *applyDestination, journal applyJournal, inp
 		if input.ancestor.path != parentPath || input.ancestor.identity.IsZero() {
 			return nil, "missing-parent"
 		}
+		// The final publication barrier may drain earlier parent member syncs
+		// only on the transaction's device. Keep other devices on the reference path.
+		if input.ancestor.identity.Device != journal.TransactionIdentity.Device {
+			return nil, "cross-device"
+		}
 		if previous, exists := parents[parentPath]; exists && previous != input.ancestor.identity {
 			return nil, "changed-parent"
 		}
@@ -153,8 +158,10 @@ func (g *applyFileGroup) install(destination *applyDestination, journal *applyJo
 	if err := g.check("install-barrier", -1); err != nil {
 		return err
 	}
-	// Each changed parent must be synchronized, including on Linux where syncing
-	// another directory cannot publish this directory's rename entries.
+	// Fsync every parent: syncing another directory cannot publish its entries.
+	// Darwin needs one final same-device cache drain after those member fsyncs.
+	// Any parent can carry it; choose the last to avoid an extra synchronization.
+	// Linux still fsyncs each directory. Backup barriers are unchanged.
 	names := make([]string, 0, len(g.parents))
 	for name := range g.parents {
 		names = append(names, name)
@@ -165,7 +172,11 @@ func (g *applyFileGroup) install(destination *applyDestination, journal *applyJo
 		if err != nil {
 			return err
 		}
-		err = synchronization.barrier("install-parent", dir)
+		if i == len(names)-1 {
+			err = synchronization.barrier("install-parent", dir)
+		} else {
+			err = synchronization.member("install-parent", dir)
+		}
 		if err = errors.Join(err, dir.Close()); err != nil {
 			return err
 		}
