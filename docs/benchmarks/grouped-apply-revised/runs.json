@@ -1,0 +1,16 @@
+{
+  "baseline_revision": "16d747d55b917e47cf533fb0a39c8b9211b1badd",
+  "baseline_input_sha256": "ea33e79dedfc7428bf53a011e225b2c568694b80af0b77a4536a6b8f2164367e",
+  "apfs_comparison_and_validation": "mac-mini/01M2S2D0EJSWMGT82AYJ6XSJA0",
+  "btrfs_comparison_and_validation": "cabal/01M2S2D0EJXVFPKMG4Q25F8AKM",
+  "apfs_path_prefix": "/Library/Developer/CommandLineTools/usr/bin",
+  "validation_commands": [
+    "go test ./internal/changes ./internal/client ./internal/daemon ./cmd/errand",
+    "go test -race ./internal/changes -run ^Test(Grouped|Transfer|ApplySynchronization|BackupDataSync|CopyToRoot) -count=1"
+  ],
+  "benchmark_command": "python3 scripts/benchmark_grouped_apply.py --output .group-results --rounds 4",
+  "note": "Final code after review fixes. Includes shared regular-file backup-data synchronization, explicit synchronization roles, mixed-intent rejection, permission eligibility tests and evidence-driver guards. Pre-review artifacts remain in ../grouped-apply. The frozen production baseline predates the inherited backup-data fix; comparisons measure the whole proposed slice.",
+  "candidate_input_sha256": "a39b194f9d28fdeb0b046f99dd041fd83573e6ccb4d12b1c098447f257834de6",
+  "verified_samples": 250,
+  "ordinary_samples": 210
+}

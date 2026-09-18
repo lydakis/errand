@@ -1,0 +1,6 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/lydakis/errand/internal/changes
+cpu: Apple M4
+BenchmarkApplyJournalScaling/1-2 	       1	 128127750 ns/op	   1048576 changed-bytes/op
+PASS

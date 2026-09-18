@@ -1,0 +1,7 @@
+EVALUATION {"mode":"ephemeral-job","sample":0,"seconds":0.589082833}
+goos: darwin
+goarch: arm64
+pkg: github.com/lydakis/errand/cmd/errand
+cpu: Apple M4
+BenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         	       1	 589083209 ns/op
+PASS

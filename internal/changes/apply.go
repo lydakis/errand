@@ -322,6 +322,8 @@ func ApplyToWorkspace(
 			journal.Items[i].ExpectedMode = uint32(mergedAccess.original[changePath])
 		}
 	}
+	synchronization := applySynchronization{observe: options.syncCheckpoint}
+	group := planApplyFileGroup(destination, journal, inputs, mergedAccess, options.groupCheckpoint)
 	if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
 		return ApplyResult{}, fmt.Errorf("writing apply journal: %w", err)
 	}
@@ -333,15 +335,21 @@ func ApplyToWorkspace(
 		if err := destination.root.Mkdir(itemRoot, 0o700); err != nil {
 			return ApplyResult{}, fmt.Errorf("creating apply item for %q: %w", changePath, err)
 		}
-		if err := syncApplyRootDirectory(destination.root, transaction); err != nil {
-			return ApplyResult{}, fmt.Errorf("syncing apply item for %q: %w", changePath, err)
+		if group == nil {
+			if err := syncApplyRootDirectory(destination.root, transaction); err != nil {
+				return ApplyResult{}, fmt.Errorf("syncing apply item for %q: %w", changePath, err)
+			}
 		}
 		if item.Expected.Missing || item.MetadataOnly {
 			continue
 		}
 		value := path.Join(itemRoot, "value")
-		if err := copyPathToRoot(
-			mergedRoot, changePath, destination.root, value,
+		synchronize := syncStagingBarrier
+		if group != nil {
+			synchronize = func(file *os.File) error { return synchronization.member("stage-member", file) }
+		}
+		if err := copyPathToRootWithSync(
+			mergedRoot, changePath, destination.root, value, synchronize,
 		); err != nil {
 			return ApplyResult{}, fmt.Errorf("staging merged change %q: %w", changePath, err)
 		}
@@ -355,83 +363,97 @@ func ApplyToWorkspace(
 			return ApplyResult{}, fmt.Errorf("merged change %q changed before installation", changePath)
 		}
 	}
+	if group != nil {
+		if err := syncApplyRootDirectoryWith(destination.root, transaction, func(file *os.File) error { return synchronization.barrier("stage-publication", file) }); err != nil {
+			return ApplyResult{}, fmt.Errorf("publishing grouped staged values: %w", err)
+		}
+		if err := group.check("staged", -1); err != nil {
+			return ApplyResult{}, err
+		}
+	}
 	published = true
 
-	for i := range journal.Items {
-		item := &journal.Items[i]
-		if err := destination.verifyPath(); err != nil {
+	if group != nil {
+		if err := group.install(destination, &journal, synchronization); err != nil {
 			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
 		}
-		got, identity, _, err := captureApplyItemBaseline(context.Background(), destination.root, *item)
-		if err != nil || !sameBaseline(item.Original, got) {
-			if err == nil {
-				err = fmt.Errorf("change %q conflicts with local changes", item.Path)
-			} else {
-				err = fmt.Errorf("checking local change %q: %w", item.Path, err)
-			}
-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
-		}
-		if item.MetadataOnly && identity != item.Target {
-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
-				fmt.Errorf("metadata change %q conflicts with a replaced directory", item.Path))
-		}
-		if input := inputs[item.Path]; !input.ancestor.identity.IsZero() {
-			if err := verifyApplyAncestor(destination.root, input.ancestor); err != nil {
+	} else {
+		for i := range journal.Items {
+			item := &journal.Items[i]
+			if err := destination.verifyPath(); err != nil {
 				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
 			}
-		}
-		if err := ensureChangeParents(destination.root, &journal, item.Path, parentPolicies); err != nil {
-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
-				fmt.Errorf("preparing parents for %q: %w", item.Path, err))
-		}
-		parentID, err := captureChangeParentIdentity(destination.root, item.Path)
-		if err != nil {
-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
-				fmt.Errorf("identifying parent for %q: %w", item.Path, err))
-		}
-		destinationDir, err := openChangeParent(destination.root, item.Path, parentID)
-		if err != nil {
-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
-		}
-		item.Parent = parentID
-		item.Phase = applyItemInstalling
-		if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
-			destinationDir.Close()
-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
-		}
-		if item.MetadataOnly {
-			if err := installMetadataChange(destination.root, *item); err != nil {
+			got, identity, _, err := captureApplyItemBaseline(context.Background(), destination.root, *item)
+			if err != nil || !sameBaseline(item.Original, got) {
+				if err == nil {
+					err = fmt.Errorf("change %q conflicts with local changes", item.Path)
+				} else {
+					err = fmt.Errorf("checking local change %q: %w", item.Path, err)
+				}
+				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+			}
+			if item.MetadataOnly && identity != item.Target {
+				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+					fmt.Errorf("metadata change %q conflicts with a replaced directory", item.Path))
+			}
+			if input := inputs[item.Path]; !input.ancestor.identity.IsZero() {
+				if err := verifyApplyAncestor(destination.root, input.ancestor); err != nil {
+					return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+				}
+			}
+			if err := ensureChangeParents(destination.root, &journal, item.Path, parentPolicies); err != nil {
+				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+					fmt.Errorf("preparing parents for %q: %w", item.Path, err))
+			}
+			parentID, err := captureChangeParentIdentity(destination.root, item.Path)
+			if err != nil {
+				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+					fmt.Errorf("identifying parent for %q: %w", item.Path, err))
+			}
+			destinationDir, err := openChangeParent(destination.root, item.Path, parentID)
+			if err != nil {
+				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+			}
+			item.Parent = parentID
+			item.Phase = applyItemInstalling
+			if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
+				destinationDir.Close()
+				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+			}
+			if item.MetadataOnly {
+				if err := installMetadataChange(destination.root, *item); err != nil {
+					destinationDir.Close()
+					return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+						fmt.Errorf("installing metadata for %q: %w", item.Path, err))
+				}
+			} else if err := moveOriginalToBackup(destination.root, journal, *item, destinationDir, synchronization); err != nil {
 				destinationDir.Close()
 				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
-					fmt.Errorf("installing metadata for %q: %w", item.Path, err))
+					fmt.Errorf("backing up %q: %w", item.Path, err))
+			} else if !item.Expected.Missing {
+				if err := installPreparedValue(destination.root, journal, *item, destinationDir, synchronization); err != nil {
+					destinationDir.Close()
+					return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+						fmt.Errorf("installing %q: %w", item.Path, err))
+				}
+				if err := restoreLogicalModesAtRoot(destination.root, item.Path, mergedAccess.original); err != nil {
+					destinationDir.Close()
+					return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+						fmt.Errorf("restoring logical modes for %q: %w", item.Path, err))
+				}
 			}
-		} else if err := moveOriginalToBackup(destination.root, journal, *item, destinationDir); err != nil {
-			destinationDir.Close()
-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
-				fmt.Errorf("backing up %q: %w", item.Path, err))
-		} else if !item.Expected.Missing {
-			if err := installPreparedValue(destination.root, journal, *item, destinationDir); err != nil {
-				destinationDir.Close()
-				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
-					fmt.Errorf("installing %q: %w", item.Path, err))
+			parentErr := verifyChangeParent(destination.root, item.Path, parentID)
+			closeErr := destinationDir.Close()
+			if err := errors.Join(parentErr, closeErr); err != nil {
+				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
 			}
-			if err := restoreLogicalModesAtRoot(destination.root, item.Path, mergedAccess.original); err != nil {
-				destinationDir.Close()
-				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
-					fmt.Errorf("restoring logical modes for %q: %w", item.Path, err))
+			if err := destination.verifyPath(); err != nil {
+				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
 			}
-		}
-		parentErr := verifyChangeParent(destination.root, item.Path, parentID)
-		closeErr := destinationDir.Close()
-		if err := errors.Join(parentErr, closeErr); err != nil {
-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
-		}
-		if err := destination.verifyPath(); err != nil {
-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
-		}
-		item.Phase = applyItemInstalled
-		if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+			item.Phase = applyItemInstalled
+			if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
+				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+			}
 		}
 	}
 	if err := validateApplyBackups(destination.root, journal); err != nil {
@@ -448,6 +470,11 @@ func ApplyToWorkspace(
 	journal.Phase = applyPhaseCommitted
 	if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
 		return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+	}
+	if group != nil {
+		if err := group.check("committed", -1); err != nil {
+			return ApplyResult{}, err
+		}
 	}
 	if err := validateInstalledChanges(destination.root, journal); err != nil {
 		return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
@@ -893,58 +920,70 @@ func baselineState(baseline Baseline) string {
 	return baseline.Digest
 }
 
-func installPreparedValue(root *os.Root, journal applyJournal, item applyJournalItem, destinationDir *os.File) error {
+// renamePreparedValue returns the item-directory handle after the no-replace
+// rename. The caller owns publication order and must close the handle.
+func renamePreparedValue(root *os.Root, journal applyJournal, item applyJournalItem, destinationDir *os.File) (*os.File, error) {
 	sourceDir, err := root.Open(path.Join(journal.Transaction, item.ItemDir))
+	if err != nil {
+		return nil, err
+	}
+	value := path.Join(journal.Transaction, item.ItemDir, "value")
+	if err := renameNoReplacePreservingDirectoryMode(root, value, item.Path, sourceDir, "value", destinationDir, path.Base(item.Path)); err != nil {
+		sourceDir.Close()
+		if errors.Is(err, fs.ErrExist) {
+			return nil, fmt.Errorf("change %q conflicts with local changes", item.Path)
+		}
+		return nil, fmt.Errorf("renaming prepared value: %w", err)
+	}
+	return sourceDir, nil
+}
+
+func installPreparedValue(root *os.Root, journal applyJournal, item applyJournalItem, destinationDir *os.File, synchronization applySynchronization) error {
+	sourceDir, err := renamePreparedValue(root, journal, item, destinationDir)
 	if err != nil {
 		return err
 	}
 	defer sourceDir.Close()
-	value := path.Join(journal.Transaction, item.ItemDir, "value")
-	if err := renameNoReplacePreservingDirectoryMode(
-		root, value, item.Path, sourceDir, "value", destinationDir, path.Base(item.Path),
-	); err != nil {
-		if errors.Is(err, fs.ErrExist) {
-			return fmt.Errorf("change %q conflicts with local changes", item.Path)
-		}
-		return fmt.Errorf("renaming prepared value: %w", err)
+	if err := synchronization.barrier("install-directory", sourceDir); err != nil {
+		return err
 	}
-	if err := sourceDir.Sync(); err != nil {
-		return fmt.Errorf("syncing prepared value directory: %w", err)
-	}
-	if err := destinationDir.Sync(); err != nil {
-		return fmt.Errorf("syncing change destination directory: %w", err)
-	}
-	return nil
+	return synchronization.barrier("install-parent", destinationDir)
 }
 
-func moveOriginalToBackup(
-	root *os.Root,
-	journal applyJournal,
-	item applyJournalItem,
-	destinationDir *os.File,
-) error {
+// A nil handle means an originally missing destination was still absent.
+func renameOriginalToBackup(root *os.Root, journal applyJournal, item applyJournalItem, destinationDir *os.File) (*os.File, error) {
 	backup := path.Join(journal.Transaction, item.ItemDir, "previous")
 	backupDir, err := root.Open(path.Dir(backup))
 	if err != nil {
+		return nil, err
+	}
+	err = renameNoReplacePreservingDirectoryMode(root, item.Path, backup, destinationDir, path.Base(item.Path), backupDir, "previous")
+	if err != nil {
+		closeErr := backupDir.Close()
+		if os.IsNotExist(err) {
+			if item.Original.Missing {
+				return nil, closeErr
+			}
+			return nil, errors.Join(fmt.Errorf("change %q conflicts with local changes", item.Path), closeErr)
+		}
+		return nil, errors.Join(err, closeErr)
+	}
+	return backupDir, nil
+}
+
+func moveOriginalToBackup(root *os.Root, journal applyJournal, item applyJournalItem, destinationDir *os.File, synchronization applySynchronization) error {
+	backupDir, err := renameOriginalToBackup(root, journal, item, destinationDir)
+	if err != nil || backupDir == nil {
 		return err
 	}
 	defer backupDir.Close()
-	err = renameNoReplacePreservingDirectoryMode(
-		root, item.Path, backup, destinationDir, path.Base(item.Path), backupDir, path.Base(backup),
-	)
-	if os.IsNotExist(err) {
-		if item.Original.Missing {
-			return nil
-		}
-		return fmt.Errorf("change %q conflicts with local changes", item.Path)
-	}
-	if err != nil {
+	if err := synchronizeApplyBackup(root, journal, item, synchronization); err != nil {
 		return err
 	}
-	if err := errors.Join(destinationDir.Sync(), backupDir.Sync()); err != nil {
+	if err := synchronization.barrier("backup-directory", backupDir); err != nil {
 		return err
 	}
-	return validateApplyBackup(root, journal, item)
+	return synchronization.barrier("backup-parent", destinationDir)
 }
 
 func captureChangeParentIdentity(root *os.Root, changePath string) (fsidentity.Identity, error) {
@@ -1208,12 +1247,7 @@ func copyPath(src, dest string) error {
 	}
 }
 
-func copyPathToRoot(
-	sourceRoot string,
-	sourceRel string,
-	root *os.Root,
-	dest string,
-) error {
+func copyPathToRootWithSync(sourceRoot, sourceRel string, root *os.Root, dest string, synchronize func(*os.File) error) error {
 	src := filepath.Join(sourceRoot, filepath.FromSlash(sourceRel))
 	info, err := os.Lstat(src)
 	if err != nil {
@@ -1232,15 +1266,13 @@ func copyPathToRoot(
 			return err
 		}
 		_, copyErr := io.Copy(out, in)
-		syncErr := out.Sync()
+		modeErr := out.Chmod(mode)
+		syncErr := synchronize(out)
 		closeErr := out.Close()
-		if err := errors.Join(copyErr, syncErr, closeErr); err != nil {
+		if err := errors.Join(copyErr, modeErr, syncErr, closeErr); err != nil {
 			return err
 		}
-		if err := root.Chmod(dest, mode); err != nil {
-			return err
-		}
-		return syncApplyPathAtRoot(root, dest)
+		return syncApplyRootDirectoryWith(root, path.Dir(dest), synchronize)
 	case info.IsDir():
 		if err := root.Mkdir(dest, mode|0o700); err != nil {
 			return err
@@ -1250,9 +1282,9 @@ func copyPathToRoot(
 			return err
 		}
 		for _, entry := range entries {
-			if err := copyPathToRoot(
+			if err := copyPathToRootWithSync(
 				sourceRoot, path.Join(sourceRel, entry.Name()),
-				root, path.Join(dest, entry.Name()),
+				root, path.Join(dest, entry.Name()), synchronize,
 			); err != nil {
 				return err
 			}
@@ -1265,7 +1297,7 @@ func copyPathToRoot(
 			dir.Close()
 			return err
 		}
-		return errors.Join(dir.Sync(), dir.Close())
+		return errors.Join(synchronize(dir), dir.Close())
 	case info.Mode()&fs.ModeSymlink != 0:
 		target, err := os.Readlink(src)
 		if err != nil {
@@ -1274,7 +1306,7 @@ func copyPathToRoot(
 		if err := root.Symlink(target, dest); err != nil {
 			return err
 		}
-		return syncApplyPathAtRoot(root, dest)
+		return syncApplyRootDirectoryWith(root, path.Dir(dest), synchronize)
 	default:
 		return fmt.Errorf("unsupported change type %v at %s", info.Mode(), src)
 	}

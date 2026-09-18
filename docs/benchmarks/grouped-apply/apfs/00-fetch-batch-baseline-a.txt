@@ -1,0 +1,25 @@
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"start","iterations":1,"phase":"fixture","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"end","iterations":1,"phase":"fixture","seconds":0.040492083}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"start","iterations":1,"phase":"daemon-start","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"end","iterations":1,"phase":"daemon-start","seconds":0.051373917}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"start","iterations":1,"phase":"workspace-create","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"end","iterations":1,"phase":"workspace-create","seconds":0.608013583}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"start","iterations":1,"phase":"edit","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"end","iterations":1,"phase":"edit","seconds":0.007275375}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"start","iterations":1,"phase":"job-and-capture","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"end","iterations":1,"phase":"job-and-capture","seconds":0.365921375}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"start","iterations":1,"phase":"fetch","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"end","iterations":1,"phase":"fetch","seconds":6.078098625}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"start","iterations":1,"phase":"verify","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"end","iterations":1,"phase":"verify","seconds":0.001536375}
+EVALUATION {"mode":"fetch","persistent":true,"sample":0,"seconds":6.078056542,"transferred_bytes":760647}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"start","iterations":1,"phase":"daemon-close","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"end","iterations":1,"phase":"daemon-close","seconds":0.000005625}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"start","iterations":1,"phase":"temp-cleanup","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkFetchBodies/batch","event":"end","iterations":1,"phase":"temp-cleanup","seconds":0.156468958}
+goos: darwin
+goarch: arm64
+pkg: github.com/lydakis/errand/cmd/errand
+cpu: Apple M4
+BenchmarkFetchBodies/batch-2         	       1	6078056916 ns/op	      6078 fetch-ms/op
+PASS

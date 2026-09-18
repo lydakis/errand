@@ -1856,7 +1856,7 @@ func TestMoveOriginalToBackupRejectsPathCreatedAfterPreflight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = moveOriginalToBackup(root, journal, item, parentDir)
+	err = moveOriginalToBackup(root, journal, item, parentDir, applySynchronization{})
 	if closeErr := parentDir.Close(); err == nil {
 		err = closeErr
 	}
@@ -1931,7 +1931,7 @@ func TestPinnedChangeParentCannotRedirectInstallation(t *testing.T) {
 		t.Fatal(err)
 	}
 	item := applyJournalItem{Path: "nested/artifact", ItemDir: "000000"}
-	if err := installPreparedValue(root, applyJournal{Transaction: "transaction"}, item, destinationDir); err != nil {
+	if err := installPreparedValue(root, applyJournal{Transaction: "transaction"}, item, destinationDir, applySynchronization{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(filepath.Join(parent, "artifact")); !os.IsNotExist(err) {

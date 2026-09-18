@@ -27,6 +27,7 @@ const (
 	applyPhaseCommitted         = "committed"
 	applyItemPrepared           = "prepared"
 	applyItemInstalling         = "installing"
+	applyItemGrouped            = "group-installing"
 	applyItemInstalled          = "installed"
 	rollbackInstalledName       = "installed"
 	applyParentStagingDirectory = "parents"
@@ -515,6 +516,7 @@ func validateApplyJournal(journal applyJournal) error {
 		}
 	}
 	seen := map[string]bool{}
+	grouped := 0
 	for i, item := range journal.Items {
 		if err := validatePath(item.Path); err != nil {
 			return err
@@ -524,8 +526,14 @@ func validateApplyJournal(journal applyJournal) error {
 			!validBaseline(item.Original) || !validBaseline(item.Expected) {
 			return fmt.Errorf("invalid change apply journal item %q", item.Path)
 		}
-		if item.Phase != applyItemPrepared && item.Phase != applyItemInstalling && item.Phase != applyItemInstalled {
+		if item.Phase != applyItemPrepared && item.Phase != applyItemInstalling && item.Phase != applyItemGrouped && item.Phase != applyItemInstalled {
 			return fmt.Errorf("invalid change apply item phase %q", item.Phase)
+		}
+		if item.Phase == applyItemGrouped && (item.MetadataOnly || item.Original.Missing || item.Expected.Missing || journal.Phase == applyPhaseCommitted) {
+			return fmt.Errorf("invalid grouped apply item %q", item.Path)
+		}
+		if item.Phase == applyItemGrouped {
+			grouped++
 		}
 		if item.Phase != applyItemPrepared && item.Parent.IsZero() {
 			return fmt.Errorf("change apply item %q is missing its parent identity", item.Path)
@@ -540,6 +548,17 @@ func validateApplyJournal(journal applyJournal) error {
 			return fmt.Errorf("invalid content change apply journal item %q", item.Path)
 		}
 		seen[item.Path] = true
+	}
+	if grouped != 0 {
+		if grouped != len(journal.Items) || grouped < 2 || len(journal.CreatedParents) != 0 {
+			return fmt.Errorf("grouped apply intent must cover the entire existing-parent plan")
+		}
+		first := journal.Items[0]
+		for _, item := range journal.Items[1:] {
+			if item.Parent != first.Parent || path.Dir(item.Path) != path.Dir(first.Path) {
+				return fmt.Errorf("grouped apply intent has different parents")
+			}
+		}
 	}
 	seenParents := map[string]bool{}
 	for _, parent := range journal.CreatedParents {
@@ -666,6 +685,28 @@ func rollbackApplyItemAtRootContext(
 	hasBackup := backupErr == nil
 	if backupErr != nil && !os.IsNotExist(backupErr) {
 		return fmt.Errorf("inspecting backup for %s: %w", item.Path, backupErr)
+	}
+	if !hasBackup && item.Phase == applyItemGrouped {
+		// Group intent precedes all backups. A still-staged value proves this
+		// item was not installed; preserve a live destination changed before
+		// its backup turn. Missing original AND backup remains insufficient
+		// evidence, even if the value survived an interrupted backup phase.
+		value := path.Join(journal.Transaction, item.ItemDir, "value")
+		// planApplyFileGroup requires physical modes to equal logical modes,
+		// so this physical digest is comparable with the planned Expected state.
+		staged, err := captureBaselineAtRootContext(ctx, rootFS, value, item.Path)
+		if err != nil {
+			return err
+		}
+		if !staged.Missing {
+			if !sameBaselineContent(staged, item.Expected) {
+				return fmt.Errorf("grouped staged value %s changed; recovery data retained", item.Path)
+			}
+			if _, err := rootFS.Lstat(item.Path); err != nil {
+				return fmt.Errorf("original %s and its backup are unavailable: %w", item.Path, err)
+			}
+			return nil
+		}
 	}
 	if hasBackup {
 		hasQuarantine, err := quarantineInstalledChange(rootFS, item.Path, quarantine, destinationDir)
@@ -939,10 +980,14 @@ func syncApplyPathAtRoot(root *os.Root, changePath string) error {
 }
 
 func syncApplyRootDirectory(root *os.Root, directory string) error {
+	return syncApplyRootDirectoryWith(root, directory, syncStagingBarrier)
+}
+
+func syncApplyRootDirectoryWith(root *os.Root, directory string, synchronize func(*os.File) error) error {
 	dir, err := root.Open(directory)
 	if err != nil {
 		return err
 	}
 	defer dir.Close()
-	return syncStagingBarrier(dir)
+	return synchronize(dir)
 }

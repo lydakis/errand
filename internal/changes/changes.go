@@ -40,6 +40,10 @@ type ApplyResult struct {
 
 type ApplyOptions struct {
 	MaterializeConflicts bool
+	// Internal fault injection at grouped transaction boundaries. Production
+	// callers leave this nil; it does not form part of persisted apply intent.
+	groupCheckpoint func(string, int) error
+	syncCheckpoint  func(string, applySyncKind, *os.File) error
 }
 
 const (

@@ -1,0 +1,6 @@
+goos: linux
+goarch: amd64
+pkg: github.com/lydakis/errand/internal/changes
+cpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz
+BenchmarkApplyJournalScaling/512-2         	       1	23852394952 ns/op	   1048576 changed-bytes/op
+PASS

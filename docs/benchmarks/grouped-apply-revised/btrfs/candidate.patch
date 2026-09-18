@@ -1,0 +1,1332 @@
+--- a/internal/changes/apply.go
++++ b/internal/changes/apply.go
+@@ -322,6 +322,8 @@
+ 			journal.Items[i].ExpectedMode = uint32(mergedAccess.original[changePath])
+ 		}
+ 	}
++	synchronization := applySynchronization{observe: options.syncCheckpoint}
++	group := planApplyFileGroup(destination, journal, inputs, mergedAccess, options.groupCheckpoint)
+ 	if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
+ 		return ApplyResult{}, fmt.Errorf("writing apply journal: %w", err)
+ 	}
+@@ -333,15 +335,21 @@
+ 		if err := destination.root.Mkdir(itemRoot, 0o700); err != nil {
+ 			return ApplyResult{}, fmt.Errorf("creating apply item for %q: %w", changePath, err)
+ 		}
+-		if err := syncApplyRootDirectory(destination.root, transaction); err != nil {
+-			return ApplyResult{}, fmt.Errorf("syncing apply item for %q: %w", changePath, err)
++		if group == nil {
++			if err := syncApplyRootDirectory(destination.root, transaction); err != nil {
++				return ApplyResult{}, fmt.Errorf("syncing apply item for %q: %w", changePath, err)
++			}
+ 		}
+ 		if item.Expected.Missing || item.MetadataOnly {
+ 			continue
+ 		}
+ 		value := path.Join(itemRoot, "value")
+-		if err := copyPathToRoot(
+-			mergedRoot, changePath, destination.root, value,
++		synchronize := syncStagingBarrier
++		if group != nil {
++			synchronize = func(file *os.File) error { return synchronization.member("stage-member", file) }
++		}
++		if err := copyPathToRootWithSync(
++			mergedRoot, changePath, destination.root, value, synchronize,
+ 		); err != nil {
+ 			return ApplyResult{}, fmt.Errorf("staging merged change %q: %w", changePath, err)
+ 		}
+@@ -355,83 +363,97 @@
+ 			return ApplyResult{}, fmt.Errorf("merged change %q changed before installation", changePath)
+ 		}
+ 	}
++	if group != nil {
++		if err := syncApplyRootDirectoryWith(destination.root, transaction, func(file *os.File) error { return synchronization.barrier("stage-publication", file) }); err != nil {
++			return ApplyResult{}, fmt.Errorf("publishing grouped staged values: %w", err)
++		}
++		if err := group.check("staged", -1); err != nil {
++			return ApplyResult{}, err
++		}
++	}
+ 	published = true
+ 
+-	for i := range journal.Items {
+-		item := &journal.Items[i]
+-		if err := destination.verifyPath(); err != nil {
++	if group != nil {
++		if err := group.install(destination, &journal, synchronization); err != nil {
+ 			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+ 		}
+-		got, identity, _, err := captureApplyItemBaseline(context.Background(), destination.root, *item)
+-		if err != nil || !sameBaseline(item.Original, got) {
+-			if err == nil {
+-				err = fmt.Errorf("change %q conflicts with local changes", item.Path)
+-			} else {
+-				err = fmt.Errorf("checking local change %q: %w", item.Path, err)
+-			}
+-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+-		}
+-		if item.MetadataOnly && identity != item.Target {
+-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+-				fmt.Errorf("metadata change %q conflicts with a replaced directory", item.Path))
+-		}
+-		if input := inputs[item.Path]; !input.ancestor.identity.IsZero() {
+-			if err := verifyApplyAncestor(destination.root, input.ancestor); err != nil {
++	} else {
++		for i := range journal.Items {
++			item := &journal.Items[i]
++			if err := destination.verifyPath(); err != nil {
+ 				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+ 			}
+-		}
+-		if err := ensureChangeParents(destination.root, &journal, item.Path, parentPolicies); err != nil {
+-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+-				fmt.Errorf("preparing parents for %q: %w", item.Path, err))
+-		}
+-		parentID, err := captureChangeParentIdentity(destination.root, item.Path)
+-		if err != nil {
+-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+-				fmt.Errorf("identifying parent for %q: %w", item.Path, err))
+-		}
+-		destinationDir, err := openChangeParent(destination.root, item.Path, parentID)
+-		if err != nil {
+-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+-		}
+-		item.Parent = parentID
+-		item.Phase = applyItemInstalling
+-		if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
+-			destinationDir.Close()
+-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+-		}
+-		if item.MetadataOnly {
+-			if err := installMetadataChange(destination.root, *item); err != nil {
++			got, identity, _, err := captureApplyItemBaseline(context.Background(), destination.root, *item)
++			if err != nil || !sameBaseline(item.Original, got) {
++				if err == nil {
++					err = fmt.Errorf("change %q conflicts with local changes", item.Path)
++				} else {
++					err = fmt.Errorf("checking local change %q: %w", item.Path, err)
++				}
++				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
++			}
++			if item.MetadataOnly && identity != item.Target {
++				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
++					fmt.Errorf("metadata change %q conflicts with a replaced directory", item.Path))
++			}
++			if input := inputs[item.Path]; !input.ancestor.identity.IsZero() {
++				if err := verifyApplyAncestor(destination.root, input.ancestor); err != nil {
++					return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
++				}
++			}
++			if err := ensureChangeParents(destination.root, &journal, item.Path, parentPolicies); err != nil {
++				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
++					fmt.Errorf("preparing parents for %q: %w", item.Path, err))
++			}
++			parentID, err := captureChangeParentIdentity(destination.root, item.Path)
++			if err != nil {
++				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
++					fmt.Errorf("identifying parent for %q: %w", item.Path, err))
++			}
++			destinationDir, err := openChangeParent(destination.root, item.Path, parentID)
++			if err != nil {
++				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
++			}
++			item.Parent = parentID
++			item.Phase = applyItemInstalling
++			if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
++				destinationDir.Close()
++				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
++			}
++			if item.MetadataOnly {
++				if err := installMetadataChange(destination.root, *item); err != nil {
++					destinationDir.Close()
++					return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
++						fmt.Errorf("installing metadata for %q: %w", item.Path, err))
++				}
++			} else if err := moveOriginalToBackup(destination.root, journal, *item, destinationDir, synchronization); err != nil {
+ 				destinationDir.Close()
+ 				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+-					fmt.Errorf("installing metadata for %q: %w", item.Path, err))
+-			}
+-		} else if err := moveOriginalToBackup(destination.root, journal, *item, destinationDir); err != nil {
+-			destinationDir.Close()
+-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+-				fmt.Errorf("backing up %q: %w", item.Path, err))
+-		} else if !item.Expected.Missing {
+-			if err := installPreparedValue(destination.root, journal, *item, destinationDir); err != nil {
+-				destinationDir.Close()
+-				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+-					fmt.Errorf("installing %q: %w", item.Path, err))
+-			}
+-			if err := restoreLogicalModesAtRoot(destination.root, item.Path, mergedAccess.original); err != nil {
+-				destinationDir.Close()
+-				return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
+-					fmt.Errorf("restoring logical modes for %q: %w", item.Path, err))
+-			}
+-		}
+-		parentErr := verifyChangeParent(destination.root, item.Path, parentID)
+-		closeErr := destinationDir.Close()
+-		if err := errors.Join(parentErr, closeErr); err != nil {
+-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+-		}
+-		if err := destination.verifyPath(); err != nil {
+-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+-		}
+-		item.Phase = applyItemInstalled
+-		if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
+-			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
++					fmt.Errorf("backing up %q: %w", item.Path, err))
++			} else if !item.Expected.Missing {
++				if err := installPreparedValue(destination.root, journal, *item, destinationDir, synchronization); err != nil {
++					destinationDir.Close()
++					return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
++						fmt.Errorf("installing %q: %w", item.Path, err))
++				}
++				if err := restoreLogicalModesAtRoot(destination.root, item.Path, mergedAccess.original); err != nil {
++					destinationDir.Close()
++					return ApplyResult{}, abortApplyAtRoot(destination.root, journal,
++						fmt.Errorf("restoring logical modes for %q: %w", item.Path, err))
++				}
++			}
++			parentErr := verifyChangeParent(destination.root, item.Path, parentID)
++			closeErr := destinationDir.Close()
++			if err := errors.Join(parentErr, closeErr); err != nil {
++				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
++			}
++			if err := destination.verifyPath(); err != nil {
++				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
++			}
++			item.Phase = applyItemInstalled
++			if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
++				return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
++			}
+ 		}
+ 	}
+ 	if err := validateApplyBackups(destination.root, journal); err != nil {
+@@ -448,6 +470,11 @@
+ 	journal.Phase = applyPhaseCommitted
+ 	if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
+ 		return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
++	}
++	if group != nil {
++		if err := group.check("committed", -1); err != nil {
++			return ApplyResult{}, err
++		}
+ 	}
+ 	if err := validateInstalledChanges(destination.root, journal); err != nil {
+ 		return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+@@ -893,58 +920,70 @@
+ 	return baseline.Digest
+ }
+ 
+-func installPreparedValue(root *os.Root, journal applyJournal, item applyJournalItem, destinationDir *os.File) error {
++// renamePreparedValue returns the item-directory handle after the no-replace
++// rename. The caller owns publication order and must close the handle.
++func renamePreparedValue(root *os.Root, journal applyJournal, item applyJournalItem, destinationDir *os.File) (*os.File, error) {
+ 	sourceDir, err := root.Open(path.Join(journal.Transaction, item.ItemDir))
+ 	if err != nil {
++		return nil, err
++	}
++	value := path.Join(journal.Transaction, item.ItemDir, "value")
++	if err := renameNoReplacePreservingDirectoryMode(root, value, item.Path, sourceDir, "value", destinationDir, path.Base(item.Path)); err != nil {
++		sourceDir.Close()
++		if errors.Is(err, fs.ErrExist) {
++			return nil, fmt.Errorf("change %q conflicts with local changes", item.Path)
++		}
++		return nil, fmt.Errorf("renaming prepared value: %w", err)
++	}
++	return sourceDir, nil
++}
++
++func installPreparedValue(root *os.Root, journal applyJournal, item applyJournalItem, destinationDir *os.File, synchronization applySynchronization) error {
++	sourceDir, err := renamePreparedValue(root, journal, item, destinationDir)
++	if err != nil {
+ 		return err
+ 	}
+ 	defer sourceDir.Close()
+-	value := path.Join(journal.Transaction, item.ItemDir, "value")
+-	if err := renameNoReplacePreservingDirectoryMode(
+-		root, value, item.Path, sourceDir, "value", destinationDir, path.Base(item.Path),
+-	); err != nil {
+-		if errors.Is(err, fs.ErrExist) {
+-			return fmt.Errorf("change %q conflicts with local changes", item.Path)
+-		}
+-		return fmt.Errorf("renaming prepared value: %w", err)
+-	}
+-	if err := sourceDir.Sync(); err != nil {
+-		return fmt.Errorf("syncing prepared value directory: %w", err)
+-	}
+-	if err := destinationDir.Sync(); err != nil {
+-		return fmt.Errorf("syncing change destination directory: %w", err)
+-	}
+-	return nil
+-}
+-
+-func moveOriginalToBackup(
+-	root *os.Root,
+-	journal applyJournal,
+-	item applyJournalItem,
+-	destinationDir *os.File,
+-) error {
++	if err := synchronization.barrier("install-directory", sourceDir); err != nil {
++		return err
++	}
++	return synchronization.barrier("install-parent", destinationDir)
++}
++
++// A nil handle means an originally missing destination was still absent.
++func renameOriginalToBackup(root *os.Root, journal applyJournal, item applyJournalItem, destinationDir *os.File) (*os.File, error) {
+ 	backup := path.Join(journal.Transaction, item.ItemDir, "previous")
+ 	backupDir, err := root.Open(path.Dir(backup))
+ 	if err != nil {
++		return nil, err
++	}
++	err = renameNoReplacePreservingDirectoryMode(root, item.Path, backup, destinationDir, path.Base(item.Path), backupDir, "previous")
++	if err != nil {
++		closeErr := backupDir.Close()
++		if os.IsNotExist(err) {
++			if item.Original.Missing {
++				return nil, closeErr
++			}
++			return nil, errors.Join(fmt.Errorf("change %q conflicts with local changes", item.Path), closeErr)
++		}
++		return nil, errors.Join(err, closeErr)
++	}
++	return backupDir, nil
++}
++
++func moveOriginalToBackup(root *os.Root, journal applyJournal, item applyJournalItem, destinationDir *os.File, synchronization applySynchronization) error {
++	backupDir, err := renameOriginalToBackup(root, journal, item, destinationDir)
++	if err != nil || backupDir == nil {
+ 		return err
+ 	}
+ 	defer backupDir.Close()
+-	err = renameNoReplacePreservingDirectoryMode(
+-		root, item.Path, backup, destinationDir, path.Base(item.Path), backupDir, path.Base(backup),
+-	)
+-	if os.IsNotExist(err) {
+-		if item.Original.Missing {
+-			return nil
+-		}
+-		return fmt.Errorf("change %q conflicts with local changes", item.Path)
+-	}
+-	if err != nil {
++	if err := synchronizeApplyBackup(root, journal, item, synchronization); err != nil {
+ 		return err
+ 	}
+-	if err := errors.Join(destinationDir.Sync(), backupDir.Sync()); err != nil {
++	if err := synchronization.barrier("backup-directory", backupDir); err != nil {
+ 		return err
+ 	}
+-	return validateApplyBackup(root, journal, item)
++	return synchronization.barrier("backup-parent", destinationDir)
+ }
+ 
+ func captureChangeParentIdentity(root *os.Root, changePath string) (fsidentity.Identity, error) {
+@@ -1208,12 +1247,7 @@
+ 	}
+ }
+ 
+-func copyPathToRoot(
+-	sourceRoot string,
+-	sourceRel string,
+-	root *os.Root,
+-	dest string,
+-) error {
++func copyPathToRootWithSync(sourceRoot, sourceRel string, root *os.Root, dest string, synchronize func(*os.File) error) error {
+ 	src := filepath.Join(sourceRoot, filepath.FromSlash(sourceRel))
+ 	info, err := os.Lstat(src)
+ 	if err != nil {
+@@ -1232,15 +1266,13 @@
+ 			return err
+ 		}
+ 		_, copyErr := io.Copy(out, in)
+-		syncErr := out.Sync()
++		modeErr := out.Chmod(mode)
++		syncErr := synchronize(out)
+ 		closeErr := out.Close()
+-		if err := errors.Join(copyErr, syncErr, closeErr); err != nil {
+-			return err
+-		}
+-		if err := root.Chmod(dest, mode); err != nil {
+-			return err
+-		}
+-		return syncApplyPathAtRoot(root, dest)
++		if err := errors.Join(copyErr, modeErr, syncErr, closeErr); err != nil {
++			return err
++		}
++		return syncApplyRootDirectoryWith(root, path.Dir(dest), synchronize)
+ 	case info.IsDir():
+ 		if err := root.Mkdir(dest, mode|0o700); err != nil {
+ 			return err
+@@ -1250,9 +1282,9 @@
+ 			return err
+ 		}
+ 		for _, entry := range entries {
+-			if err := copyPathToRoot(
++			if err := copyPathToRootWithSync(
+ 				sourceRoot, path.Join(sourceRel, entry.Name()),
+-				root, path.Join(dest, entry.Name()),
++				root, path.Join(dest, entry.Name()), synchronize,
+ 			); err != nil {
+ 				return err
+ 			}
+@@ -1265,7 +1297,7 @@
+ 			dir.Close()
+ 			return err
+ 		}
+-		return errors.Join(dir.Sync(), dir.Close())
++		return errors.Join(synchronize(dir), dir.Close())
+ 	case info.Mode()&fs.ModeSymlink != 0:
+ 		target, err := os.Readlink(src)
+ 		if err != nil {
+@@ -1274,7 +1306,7 @@
+ 		if err := root.Symlink(target, dest); err != nil {
+ 			return err
+ 		}
+-		return syncApplyPathAtRoot(root, dest)
++		return syncApplyRootDirectoryWith(root, path.Dir(dest), synchronize)
+ 	default:
+ 		return fmt.Errorf("unsupported change type %v at %s", info.Mode(), src)
+ 	}
+--- a/internal/changes/apply_group.go
++++ b/internal/changes/apply_group.go
+@@ -0,0 +1,155 @@
++package changes
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"os"
++	"path"
++
++	"github.com/lydakis/errand/internal/fsidentity"
++)
++
++// A group changes existing regular files under one pinned parent. Independent
++// item directories retain each backup/value; directory and structural changes
++// keep the per-item protocol. See docs/GROUPED_APPLY.md for recovery ordering.
++type applyFileGroup struct {
++	parent     fsidentity.Identity
++	checkpoint func(string, int) error
++}
++
++func planApplyFileGroup(destination *applyDestination, journal applyJournal, inputs map[string]applyPathInput, merged *treeAccess, checkpoint func(string, int) error) *applyFileGroup {
++	if len(journal.Items) < 2 {
++		return nil
++	}
++	parentPath := path.Dir(journal.Items[0].Path)
++	parent := inputs[journal.Items[0].Path].ancestor.identity
++	if parent.IsZero() {
++		return nil
++	}
++	for _, item := range journal.Items {
++		input := inputs[item.Path]
++		if item.MetadataOnly || item.Original.Missing || item.Expected.Missing || path.Dir(item.Path) != parentPath || input.ancestor.path != parentPath || input.ancestor.identity != parent {
++			return nil
++		}
++		original, err := destination.root.Lstat(item.Path)
++		if err != nil || !original.Mode().IsRegular() {
++			return nil
++		}
++		value, err := merged.root.Lstat(item.Path)
++		// Physical mode must equal logical mode: grouped install skips mode
++		// restoration, and grouped recovery hashes the still-staged physical value.
++		if err != nil || !value.Mode().IsRegular() || value.Mode().Perm() != merged.original[item.Path] {
++			return nil
++		}
++	}
++	return &applyFileGroup{parent: parent, checkpoint: checkpoint}
++}
++
++func (g *applyFileGroup) check(event string, index int) error {
++	if g.checkpoint != nil {
++		return g.checkpoint(event, index)
++	}
++	return nil
++}
++
++func (g *applyFileGroup) install(destination *applyDestination, journal *applyJournal, synchronization applySynchronization) error {
++	parent, err := openChangeParent(destination.root, journal.Items[0].Path, g.parent)
++	if err != nil {
++		return err
++	}
++	defer parent.Close()
++	for i := range journal.Items {
++		journal.Items[i].Parent = g.parent
++		journal.Items[i].Phase = applyItemGrouped
++	}
++	if err := writeApplyJournalAtRoot(destination.root, *journal); err != nil {
++		return err
++	}
++	if err := g.check("intent", -1); err != nil {
++		return err
++	}
++	verify := func(item applyJournalItem) error {
++		return errors.Join(destination.verifyPath(), verifyChangeParent(destination.root, item.Path, g.parent))
++	}
++	for i, item := range journal.Items {
++		if err := g.check("before-backup", i); err != nil {
++			return err
++		}
++		if err := verify(item); err != nil {
++			return err
++		}
++		got, _, _, err := captureApplyItemBaseline(context.Background(), destination.root, item)
++		if err != nil {
++			return err
++		}
++		if !sameBaseline(item.Original, got) {
++			return fmt.Errorf("change %q conflicts with local changes", item.Path)
++		}
++		if err := g.backup(destination, *journal, item, parent, i, synchronization); err != nil {
++			return err
++		}
++
++		if err := g.check("backups-durable", i); err != nil {
++			return err
++		}
++		if err := verify(item); err != nil {
++			return err
++		}
++		sourceDir, err := renamePreparedValue(destination.root, *journal, item, parent)
++		if err != nil {
++			return err
++		}
++		err = g.check("install-rename", i)
++		if err == nil {
++			err = synchronization.member("install-directory", sourceDir)
++		}
++		if err := errors.Join(err, sourceDir.Close()); err != nil {
++			return err
++		}
++
++	}
++	// Every item shares this parent; verify it once before publication.
++	if err := verify(journal.Items[0]); err != nil {
++		return err
++	}
++	if err := g.check("install-barrier", -1); err != nil {
++		return err
++	}
++	if err := synchronization.barrier("install-parent", parent); err != nil {
++		return err
++	}
++	if err := g.check("installed", -1); err != nil {
++		return err
++	}
++	for i := range journal.Items {
++		journal.Items[i].Phase = applyItemInstalled
++	}
++	return nil
++}
++
++// Keep each backup/replacement pair together. The backup data and renamed entry
++// must both be durable before installing that file; other files stay visible.
++func (g *applyFileGroup) backup(destination *applyDestination, journal applyJournal, item applyJournalItem, parent *os.File, index int, synchronization applySynchronization) error {
++	dir, err := renameOriginalToBackup(destination.root, journal, item, parent)
++	if err != nil {
++		return err
++	}
++	if dir == nil {
++		return fmt.Errorf("grouped original %q disappeared", item.Path)
++	}
++	defer dir.Close()
++	if err := g.check("backup-rename", index); err != nil {
++		return err
++	}
++	if err := synchronizeApplyBackup(destination.root, journal, item, synchronization); err != nil {
++		return err
++	}
++	if err := synchronization.member("backup-directory", dir); err != nil {
++		return err
++	}
++	if err := g.check("backup-barrier", index); err != nil {
++		return err
++	}
++	return synchronization.barrier("backup-parent", parent)
++}
+--- a/internal/changes/apply_group_test.go
++++ b/internal/changes/apply_group_test.go
+@@ -0,0 +1,441 @@
++package changes
++
++import (
++	"encoding/json"
++	"errors"
++	"fmt"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"reflect"
++	"testing"
++
++	"github.com/lydakis/errand/internal/proto"
++	"github.com/lydakis/errand/internal/snapshot"
++)
++
++func groupFixture(t *testing.T) (TransferTarget, proto.ChangeBundle, string) {
++	return groupFixturePaths(t, []string{"a", "b", "c"})
++}
++
++func groupFixturePaths(t *testing.T, paths []string) (TransferTarget, proto.ChangeBundle, string) {
++	t.Helper()
++	root, staged := t.TempDir(), t.TempDir()
++	base, remote := filepath.Join(staged, "base"), filepath.Join(staged, "remote")
++	for _, dir := range []string{base, remote} {
++		if err := os.Mkdir(dir, 0700); err != nil {
++			t.Fatal(err)
++		}
++	}
++	selection := append([]string(nil), paths...)
++	parents := map[string]bool{}
++	for _, name := range paths {
++		for parent := filepath.Dir(name); parent != "."; parent = filepath.Dir(parent) {
++			if !parents[parent] {
++				selection = append(selection, parent)
++				parents[parent] = true
++			}
++		}
++		for _, dir := range []string{root, base, remote} {
++			if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0700); err != nil {
++				t.Fatal(err)
++			}
++			value := "before-" + name
++			if dir == remote {
++				value = "after-" + name
++			}
++			if err := os.WriteFile(filepath.Join(dir, name), []byte(value), 0600); err != nil {
++				t.Fatal(err)
++			}
++		}
++	}
++	b, err := snapshot.Build(base, selection)
++	if err != nil {
++		t.Fatal(err)
++	}
++	r, err := snapshot.Build(remote, selection)
++	if err != nil {
++		t.Fatal(err)
++	}
++	bundle, err := PrepareSourceDelta(t.Context(), b, r, 1<<20)
++	if err != nil {
++		t.Fatal(err)
++	}
++	return transferTarget(t, root), bundle, staged
++}
++
++func TestGroupedApplyPhaseOrdering(t *testing.T) {
++	target, bundle, staged := groupFixture(t)
++	var events []string
++	result, err := target.Apply(staged, bundle, nil, ApplyOptions{groupCheckpoint: func(event string, i int) error {
++		events = append(events, fmt.Sprintf("%s:%d", event, i))
++		if event == "backups-durable" {
++			for j, name := range bundle.Paths {
++				if j == i {
++					if _, err := os.Lstat(filepath.Join(target.Root, name)); !os.IsNotExist(err) {
++						t.Fatalf("installed before backup barrier: %s", name)
++					}
++				} else {
++					want := "before-" + name
++					if j < i {
++						want = "after-" + name
++					}
++					assertTransferFile(t, target.Root, name, want)
++				}
++			}
++		}
++		return nil
++	}})
++	if err != nil || !reflect.DeepEqual(result.Applied, bundle.Paths) {
++		t.Fatalf("apply: %+v %v", result, err)
++	}
++	want := []string{"staged:-1", "intent:-1"}
++	for i := range 3 {
++		for _, event := range []string{"before-backup", "backup-rename", "backup-barrier", "backups-durable", "install-rename"} {
++			want = append(want, fmt.Sprintf("%s:%d", event, i))
++		}
++	}
++	want = append(want, "install-barrier:-1", "installed:-1", "committed:-1")
++	if !reflect.DeepEqual(events, want) {
++		t.Fatalf("phase order = %v; want %v", events, want)
++	}
++}
++
++func TestGroupedApplyFailurePreservesUntouchedEdit(t *testing.T) {
++	target, bundle, staged := groupFixture(t)
++	injected := errors.New("stop before second backup")
++	_, err := target.Apply(staged, bundle, nil, ApplyOptions{groupCheckpoint: func(event string, i int) error {
++		if event == "before-backup" && i == 1 {
++			if err := os.WriteFile(filepath.Join(target.Root, "b"), []byte("later"), 0600); err != nil {
++				t.Fatal(err)
++			}
++			return injected
++		}
++		return nil
++	}})
++	if !errors.Is(err, injected) {
++		t.Fatalf("missing injected failure: %v", err)
++	}
++	for _, name := range bundle.Paths {
++		want := "before-" + name
++		if name == "b" {
++			want = "later"
++		}
++		assertTransferFile(t, target.Root, name, want)
++	}
++	if pending, err := WorkspaceHasApplyTransactions(target.Root); err != nil || pending {
++		t.Fatalf("unnecessary retained recovery: %v %v", pending, err)
++	}
++}
++
++func TestGroupedApplyBoundariesPreserveModesAndSelection(t *testing.T) {
++	for _, tc := range []struct {
++		name    string
++		paths   []string
++		grouped bool
++	}{
++		{"single", []string{"a"}, false},
++		{"nested", []string{"dir/a", "dir/b"}, true},
++		{"different-parents", []string{"x/a", "y/b"}, false},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			target, bundle, staged := groupFixturePaths(t, tc.paths)
++			seen := false
++			_, err := target.Apply(staged, bundle, nil, ApplyOptions{groupCheckpoint: func(string, int) error { seen = true; return nil }})
++			if err != nil || seen != tc.grouped {
++				t.Fatalf("apply grouped=%v want %v: %v", seen, tc.grouped, err)
++			}
++			for _, name := range tc.paths {
++				assertTransferFile(t, target.Root, name, "after-"+name)
++			}
++		})
++	}
++	for _, mode := range []os.FileMode{0400, 0000} {
++		t.Run(fmt.Sprintf("mode-%o", mode), func(t *testing.T) {
++			target, bundle, staged := groupFixture(t)
++			r, err := snapshot.Build(filepath.Join(staged, "remote"), bundle.Paths)
++			if err != nil {
++				t.Fatal(err)
++			}
++			for i := range r.Entries {
++				if r.Entries[i].Path == "a" {
++					r.Entries[i].Mode = uint32(mode)
++				}
++			}
++			if err := os.Chmod(filepath.Join(staged, "remote", "a"), mode); err != nil {
++				t.Fatal(err)
++			}
++
++			bundle, err = PrepareSourceDelta(t.Context(), bundle.BaseManifest, r, 1<<20)
++			if err != nil {
++				t.Fatal(err)
++			}
++			seen := false
++			_, err = target.Apply(staged, bundle, nil, ApplyOptions{groupCheckpoint: func(string, int) error { seen = true; return nil }})
++			if seen != (mode == 0400) {
++				t.Fatalf("grouped=%v for mode %o", seen, mode)
++			}
++			if err != nil {
++				t.Fatal(err)
++			}
++			info, err := os.Stat(filepath.Join(target.Root, "a"))
++			if err != nil || info.Mode().Perm() != mode {
++				t.Fatalf("mode: %v %v", info, err)
++			}
++		})
++	}
++}
++
++func TestGroupedApplyRefusesLaterInstalledEdit(t *testing.T) {
++	target, bundle, staged := groupFixture(t)
++	injected := errors.New("interrupt after first install")
++	_, err := target.Apply(staged, bundle, nil, ApplyOptions{groupCheckpoint: func(event string, i int) error {
++		if event == "before-backup" && i == 1 {
++			writeTransferFile(t, target.Root, "a", "later")
++			return injected
++		}
++		return nil
++	}})
++	if !errors.Is(err, injected) {
++		t.Fatal(err)
++	}
++	assertTransferFile(t, target.Root, "a", "later")
++	if pending, err := WorkspaceHasApplyTransactions(target.Root); err != nil || !pending {
++		t.Fatalf("lost recovery data: %v %v", pending, err)
++	}
++	if _, err := target.Apply(staged, bundle, nil, ApplyOptions{}); err == nil {
++		t.Fatal("retry overwrote later edit")
++	}
++	assertTransferFile(t, target.Root, "a", "later")
++}
++
++func TestGroupedApplyErrorsRollbackAtEachBoundary(t *testing.T) {
++	for _, event := range []string{"staged", "intent", "backup-rename", "backup-barrier", "backups-durable", "install-rename", "install-barrier", "installed"} {
++		t.Run(event, func(t *testing.T) {
++			target, bundle, staged := groupFixture(t)
++			injected := errors.New("injected publication failure")
++			_, err := target.Apply(staged, bundle, nil, ApplyOptions{groupCheckpoint: func(at string, i int) error {
++				if at == event && (i == -1 || i == 1) {
++					return injected
++				}
++				return nil
++			}})
++			if !errors.Is(err, injected) {
++				t.Fatalf("failure: %v", err)
++			}
++			for _, name := range bundle.Paths {
++				assertTransferFile(t, target.Root, name, "before-"+name)
++			}
++			if pending, err := WorkspaceHasApplyTransactions(target.Root); err != nil || pending {
++				t.Fatalf("incomplete rollback: %v %v", pending, err)
++			}
++		})
++	}
++}
++
++func TestGroupedApplyRefusesReplacedParent(t *testing.T) {
++	target, bundle, staged := groupFixturePaths(t, []string{"dir/a", "dir/b"})
++	_, err := target.Apply(staged, bundle, nil, ApplyOptions{groupCheckpoint: func(event string, i int) error {
++		if event == "before-backup" && i == 1 {
++			if err := os.Rename(filepath.Join(target.Root, "dir"), filepath.Join(target.Root, "old-dir")); err != nil {
++				t.Fatal(err)
++			}
++			if err := os.Mkdir(filepath.Join(target.Root, "dir"), 0700); err != nil {
++				t.Fatal(err)
++			}
++			writeTransferFile(t, target.Root, "dir/b", "replacement")
++		}
++		return nil
++	}})
++	if err == nil {
++		t.Fatal("accepted replaced parent")
++	}
++	assertTransferFile(t, target.Root, "dir/b", "replacement")
++	assertTransferFile(t, target.Root, "old-dir/b", "before-dir/b")
++	if pending, err := WorkspaceHasApplyTransactions(target.Root); err != nil || !pending {
++		t.Fatalf("lost recovery data: %v %v", pending, err)
++	}
++}
++
++func TestCopyToRootSynchronizesFinalMode(t *testing.T) {
++	source, dest := t.TempDir(), t.TempDir()
++	if err := os.WriteFile(filepath.Join(source, "value"), []byte("value"), 0400); err != nil {
++		t.Fatal(err)
++	}
++	root, err := os.OpenRoot(dest)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer root.Close()
++	injected := errors.New("file sync failed")
++	err = copyPathToRootWithSync(source, "value", root, "value", func(f *os.File) error {
++		info, err := f.Stat()
++		if err != nil {
++			return err
++		}
++		if info.Mode().Perm() != 0400 {
++			t.Fatalf("synchronized temporary mode %o", info.Mode().Perm())
++		}
++		return injected
++	})
++	if !errors.Is(err, injected) {
++		t.Fatal(err)
++	}
++}
++
++func TestGroupedRecoveryRejectsInsufficientEvidence(t *testing.T) {
++	for _, damage := range []string{"truncated-journal", "foreign-owner", "committed-group", "corrupt-value", "missing-original", "missing-both"} {
++		t.Run(damage, func(t *testing.T) {
++			target, bundle, staged := groupFixture(t)
++			crashGroupedApply(t, target, bundle, staged, "intent", -1)
++			var state transferApplyState
++			raw, err := os.ReadFile(target.StatePath)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if err := json.Unmarshal(raw, &state); err != nil {
++				t.Fatal(err)
++			}
++			journalFile := filepath.Join(target.Root, state.Pending, applyJournalFile)
++			raw, err = os.ReadFile(journalFile)
++			if err != nil {
++				t.Fatal(err)
++			}
++			var j applyJournal
++			if err := json.Unmarshal(raw, &j); err != nil {
++				t.Fatal(err)
++			}
++			switch damage {
++			case "truncated-journal":
++				raw = raw[:len(raw)/2]
++			case "foreign-owner":
++				j.Owner = "another owner"
++				raw, err = json.Marshal(j)
++			case "committed-group":
++				j.Phase = applyPhaseCommitted
++				raw, err = json.Marshal(j)
++			case "corrupt-value":
++				err = os.WriteFile(filepath.Join(target.Root, state.Pending, "000000", "value"), []byte("corrupt"), 0600)
++			case "missing-both":
++				if err := os.Remove(filepath.Join(target.Root, state.Pending, "000000", "value")); err != nil {
++					t.Fatal(err)
++				}
++				fallthrough
++			case "missing-original":
++				err = os.Remove(filepath.Join(target.Root, "a"))
++			}
++			if err != nil {
++				t.Fatal(err)
++			}
++			if err := os.WriteFile(journalFile, raw, 0600); err != nil {
++				t.Fatal(err)
++			}
++			if _, err := target.Apply(staged, bundle, nil, ApplyOptions{}); err == nil {
++				t.Fatal("accepted damaged recovery evidence")
++			}
++			assertTransferFile(t, target.Root, "b", "before-b")
++			if _, err := os.Stat(filepath.Join(target.Root, state.Pending)); err != nil {
++				t.Fatalf("discarded recovery: %v", err)
++			}
++		})
++	}
++}
++
++func TestGroupedApplyCrashHelper(t *testing.T) {
++	file := os.Getenv("ERRAND_GROUP_CRASH_INPUT")
++	if file == "" {
++		t.Skip("subprocess helper")
++	}
++	var input struct {
++		Target        TransferTarget
++		Bundle        proto.ChangeBundle
++		Staged, Event string
++		Index         int
++	}
++	raw, err := os.ReadFile(file)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := json.Unmarshal(raw, &input); err != nil {
++		t.Fatal(err)
++	}
++	_, err = input.Target.Apply(input.Staged, input.Bundle, nil, ApplyOptions{groupCheckpoint: func(event string, i int) error {
++		if event == input.Event && i == input.Index {
++			os.Exit(77)
++		}
++		return nil
++	}})
++	t.Fatalf("crash boundary not reached: %v", err)
++}
++
++func TestGroupedApplyCrashRecovery(t *testing.T) {
++	cases := []struct {
++		event string
++		index int
++	}{{"staged", -1}, {"intent", -1}, {"backup-rename", 0}, {"backup-rename", 1}, {"backup-barrier", 1}, {"backups-durable", 1}, {"install-rename", 0}, {"install-rename", 1}, {"install-barrier", -1}, {"installed", -1}, {"committed", -1}}
++	for _, tc := range cases {
++		t.Run(fmt.Sprintf("%s-%d", tc.event, tc.index), func(t *testing.T) {
++			target, bundle, staged := groupFixture(t)
++			crashGroupedApply(t, target, bundle, staged, tc.event, tc.index)
++			if tc.event != "committed" {
++				var state transferApplyState
++				raw, err := os.ReadFile(target.StatePath)
++				if err != nil {
++					t.Fatal(err)
++				}
++				if err := json.Unmarshal(raw, &state); err != nil {
++					t.Fatal(err)
++				}
++				d, err := openApplyDestination(target.Root)
++				if err != nil {
++					t.Fatal(err)
++				}
++				defer d.Close()
++				if err := target.recoverTransfer(d, &state, func() error { persistTransferState(t, target, state); return nil }); err != nil {
++					t.Fatal(err)
++				}
++				for _, name := range bundle.Paths {
++					assertTransferFile(t, target.Root, name, "before-"+name)
++				}
++			}
++			first, err := target.Apply(staged, bundle, nil, ApplyOptions{})
++			if err != nil {
++				t.Fatal(err)
++			}
++			for _, name := range bundle.Paths {
++				assertTransferFile(t, target.Root, name, "after-"+name)
++			}
++			writeTransferFile(t, target.Root, "a", "later")
++			retry, err := target.Apply(staged, bundle, nil, ApplyOptions{})
++			if err != nil || !reflect.DeepEqual(first, retry) {
++				t.Fatalf("retry: %+v %v", retry, err)
++			}
++			assertTransferFile(t, target.Root, "a", "later")
++		})
++	}
++}
++
++func crashGroupedApply(t *testing.T, target TransferTarget, bundle proto.ChangeBundle, staged, event string, index int) {
++	t.Helper()
++	input := struct {
++		Target        TransferTarget
++		Bundle        proto.ChangeBundle
++		Staged, Event string
++		Index         int
++	}{target, bundle, staged, event, index}
++	raw, err := json.Marshal(input)
++	if err != nil {
++		t.Fatal(err)
++	}
++	file := filepath.Join(t.TempDir(), "input.json")
++	if err := os.WriteFile(file, raw, 0600); err != nil {
++		t.Fatal(err)
++	}
++	cmd := exec.Command(os.Args[0], "-test.run=^TestGroupedApplyCrashHelper$")
++	cmd.Env = append(os.Environ(), "ERRAND_GROUP_CRASH_INPUT="+file)
++	output, err := cmd.CombinedOutput()
++	var exit *exec.ExitError
++	if !errors.As(err, &exit) || exit.ExitCode() != 77 {
++		t.Fatalf("child: %v %s", err, output)
++	}
++}
+--- a/internal/changes/apply_journal_benchmark_test.go
++++ b/internal/changes/apply_journal_benchmark_test.go
+@@ -168,8 +168,12 @@
+ 				b.Fatalf("retry overwrote later edit: %v", err)
+ 			}
+ 			if len(metrics) != 0 {
+-				if m := metrics["journal/encode"]; m.Count != int64(2*roots+2) {
+-					b.Fatalf("expected 2k+2 publications, got %d", m.Count)
++				publications := int64(3)
++				if roots == 1 {
++					publications = 4
++				}
++				if m := metrics["journal/encode"]; m.Count != publications {
++					b.Fatalf("expected %d publications, got %d", publications, m.Count)
+ 				}
+ 				for name, m := range metrics {
+ 					b.ReportMetric(float64(m.Count), name+"-count/op")
+--- a/internal/changes/apply_sync.go
++++ b/internal/changes/apply_sync.go
+@@ -0,0 +1,64 @@
++package changes
++
++import (
++	"errors"
++	"fmt"
++	"os"
++	"path"
++)
++
++type applySyncKind string
++
++const (
++	applyMemberSync  applySyncKind = "member"
++	applyBarrierSync applySyncKind = "barrier"
++)
++
++// Observation is per application, never global. Tests see the actual operation
++// selected below, so changing a publication barrier to a member sync is visible.
++type applySynchronization struct {
++	observe func(string, applySyncKind, *os.File) error
++}
++
++func (s applySynchronization) member(role string, file *os.File) error {
++	if s.observe != nil {
++		if err := s.observe(role, applyMemberSync, file); err != nil {
++			return err
++		}
++	}
++	return syncStagedData(file)
++}
++
++func (s applySynchronization) barrier(role string, file *os.File) error {
++	if s.observe != nil {
++		if err := s.observe(role, applyBarrierSync, file); err != nil {
++			return err
++		}
++	}
++	return syncStagingBarrier(file)
++}
++
++// A renamed directory entry does not establish persistence of dirty file data.
++// Both installation strategies sync regular-file backups before publishing the
++// rename. Directory-tree backup durability remains on the reference protocol.
++func synchronizeApplyBackup(root *os.Root, journal applyJournal, item applyJournalItem, synchronization applySynchronization) error {
++	backup := path.Join(journal.Transaction, item.ItemDir, "previous")
++	before, err := root.Lstat(backup)
++	if err != nil {
++		return err
++	}
++	if before.Mode().IsRegular() {
++		file, err := openSearchSourceFile(root, backup)
++		if err != nil {
++			return err
++		}
++		opened, err := file.Stat()
++		if err != nil || !opened.Mode().IsRegular() || !os.SameFile(before, opened) {
++			return errors.Join(fmt.Errorf("backup %q changed while opening", item.Path), err, file.Close())
++		}
++		if err := errors.Join(synchronization.member("backup-data", file), file.Close()); err != nil {
++			return err
++		}
++	}
++	return validateApplyBackup(root, journal, item)
++}
+--- a/internal/changes/apply_sync_test.go
++++ b/internal/changes/apply_sync_test.go
+@@ -0,0 +1,122 @@
++package changes
++
++import (
++	"errors"
++	"fmt"
++	"os"
++	"reflect"
++	"testing"
++)
++
++func TestApplySynchronizationOrder(t *testing.T) {
++	for _, grouped := range []bool{false, true} {
++		t.Run(fmt.Sprint(grouped), func(t *testing.T) {
++			paths := []string{"a"}
++			if grouped {
++				paths = []string{"a", "b", "c"}
++			}
++			target, bundle, staged := groupFixturePaths(t, paths)
++			var events []string
++			_, err := target.Apply(staged, bundle, nil, ApplyOptions{syncCheckpoint: func(role string, kind applySyncKind, file *os.File) error {
++				events = append(events, role+":"+string(kind))
++				if role == "backup-data" {
++					info, err := file.Stat()
++					if err != nil || !info.Mode().IsRegular() {
++						t.Fatalf("backup data descriptor: %v %v", info, err)
++					}
++					body := make([]byte, len("before-a"))
++					if _, err := file.ReadAt(body, 0); err != nil || string(body[:7]) != "before-" {
++						t.Fatalf("wrong synchronized body: %q %v", body, err)
++					}
++				}
++				return nil
++			}})
++			if err != nil {
++				t.Fatal(err)
++			}
++			var want []string
++			if grouped {
++				for range paths {
++					want = append(want, "stage-member:member", "stage-member:member")
++				}
++				want = append(want, "stage-publication:barrier")
++			}
++			for range paths {
++				member := "barrier"
++				if grouped {
++					member = "member"
++				}
++				want = append(want, "backup-data:member", "backup-directory:"+member, "backup-parent:barrier", "install-directory:"+member)
++				if !grouped {
++					want = append(want, "install-parent:barrier")
++				}
++			}
++			if grouped {
++				want = append(want, "install-parent:barrier")
++			}
++			if !reflect.DeepEqual(events, want) {
++				t.Fatalf("sync order = %v; want %v", events, want)
++			}
++		})
++	}
++}
++
++func TestBackupDataSyncFailurePreventsInstallation(t *testing.T) {
++	for _, paths := range [][]string{{"a"}, {"a", "b", "c"}} {
++		t.Run(fmt.Sprint(len(paths)), func(t *testing.T) {
++			target, bundle, staged := groupFixturePaths(t, paths)
++			injected := errors.New("backup data sync failed")
++			_, err := target.Apply(staged, bundle, nil, ApplyOptions{syncCheckpoint: func(role string, _ applySyncKind, _ *os.File) error {
++				if role == "backup-data" {
++					return injected
++				}
++				if role == "install-directory" {
++					t.Fatal("installed after failed backup sync")
++				}
++				return nil
++			}})
++			if !errors.Is(err, injected) {
++				t.Fatal(err)
++			}
++			for _, name := range paths {
++				assertTransferFile(t, target.Root, name, "before-"+name)
++			}
++		})
++	}
++}
++
++func TestGroupedJournalRejectsMixedProtocols(t *testing.T) {
++	for _, phase := range []string{applyItemPrepared, applyItemInstalling, applyItemInstalled} {
++		t.Run(phase, func(t *testing.T) {
++			target, bundle, staged := groupFixture(t)
++			_, err := target.Apply(staged, bundle, nil, ApplyOptions{groupCheckpoint: func(event string, _ int) error {
++				if event != "intent" {
++					return nil
++				}
++				entries, err := os.ReadDir(target.Root)
++				if err != nil {
++					t.Fatal(err)
++				}
++				for _, e := range entries {
++					if !validApplyTransaction(e.Name()) {
++						continue
++					}
++					journal, err := loadApplyJournal(target.Root, e.Name())
++					if err != nil {
++						t.Fatal(err)
++					}
++					journal.Items[0].Phase = phase
++					if err := validateApplyJournal(journal); err == nil {
++						t.Fatal("accepted mixed grouped protocol")
++					}
++					return nil
++				}
++				t.Fatal("missing grouped intent")
++				return nil
++			}})
++			if err != nil {
++				t.Fatal(err)
++			}
++		})
++	}
++}
+--- a/internal/changes/changes.go
++++ b/internal/changes/changes.go
+@@ -40,6 +40,10 @@
+ 
+ type ApplyOptions struct {
+ 	MaterializeConflicts bool
++	// Internal fault injection at grouped transaction boundaries. Production
++	// callers leave this nil; it does not form part of persisted apply intent.
++	groupCheckpoint func(string, int) error
++	syncCheckpoint  func(string, applySyncKind, *os.File) error
+ }
+ 
+ const (
+--- a/internal/changes/changes_test.go
++++ b/internal/changes/changes_test.go
+@@ -1856,7 +1856,7 @@
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+-	err = moveOriginalToBackup(root, journal, item, parentDir)
++	err = moveOriginalToBackup(root, journal, item, parentDir, applySynchronization{})
+ 	if closeErr := parentDir.Close(); err == nil {
+ 		err = closeErr
+ 	}
+@@ -1931,7 +1931,7 @@
+ 		t.Fatal(err)
+ 	}
+ 	item := applyJournalItem{Path: "nested/artifact", ItemDir: "000000"}
+-	if err := installPreparedValue(root, applyJournal{Transaction: "transaction"}, item, destinationDir); err != nil {
++	if err := installPreparedValue(root, applyJournal{Transaction: "transaction"}, item, destinationDir, applySynchronization{}); err != nil {
+ 		t.Fatal(err)
+ 	}
+ 	if _, err := os.Lstat(filepath.Join(parent, "artifact")); !os.IsNotExist(err) {
+--- a/internal/changes/journal.go
++++ b/internal/changes/journal.go
+@@ -27,6 +27,7 @@
+ 	applyPhaseCommitted         = "committed"
+ 	applyItemPrepared           = "prepared"
+ 	applyItemInstalling         = "installing"
++	applyItemGrouped            = "group-installing"
+ 	applyItemInstalled          = "installed"
+ 	rollbackInstalledName       = "installed"
+ 	applyParentStagingDirectory = "parents"
+@@ -515,6 +516,7 @@
+ 		}
+ 	}
+ 	seen := map[string]bool{}
++	grouped := 0
+ 	for i, item := range journal.Items {
+ 		if err := validatePath(item.Path); err != nil {
+ 			return err
+@@ -524,8 +526,14 @@
+ 			!validBaseline(item.Original) || !validBaseline(item.Expected) {
+ 			return fmt.Errorf("invalid change apply journal item %q", item.Path)
+ 		}
+-		if item.Phase != applyItemPrepared && item.Phase != applyItemInstalling && item.Phase != applyItemInstalled {
++		if item.Phase != applyItemPrepared && item.Phase != applyItemInstalling && item.Phase != applyItemGrouped && item.Phase != applyItemInstalled {
+ 			return fmt.Errorf("invalid change apply item phase %q", item.Phase)
++		}
++		if item.Phase == applyItemGrouped && (item.MetadataOnly || item.Original.Missing || item.Expected.Missing || journal.Phase == applyPhaseCommitted) {
++			return fmt.Errorf("invalid grouped apply item %q", item.Path)
++		}
++		if item.Phase == applyItemGrouped {
++			grouped++
+ 		}
+ 		if item.Phase != applyItemPrepared && item.Parent.IsZero() {
+ 			return fmt.Errorf("change apply item %q is missing its parent identity", item.Path)
+@@ -540,6 +548,17 @@
+ 			return fmt.Errorf("invalid content change apply journal item %q", item.Path)
+ 		}
+ 		seen[item.Path] = true
++	}
++	if grouped != 0 {
++		if grouped != len(journal.Items) || grouped < 2 || len(journal.CreatedParents) != 0 {
++			return fmt.Errorf("grouped apply intent must cover the entire existing-parent plan")
++		}
++		first := journal.Items[0]
++		for _, item := range journal.Items[1:] {
++			if item.Parent != first.Parent || path.Dir(item.Path) != path.Dir(first.Path) {
++				return fmt.Errorf("grouped apply intent has different parents")
++			}
++		}
+ 	}
+ 	seenParents := map[string]bool{}
+ 	for _, parent := range journal.CreatedParents {
+@@ -666,6 +685,28 @@
+ 	hasBackup := backupErr == nil
+ 	if backupErr != nil && !os.IsNotExist(backupErr) {
+ 		return fmt.Errorf("inspecting backup for %s: %w", item.Path, backupErr)
++	}
++	if !hasBackup && item.Phase == applyItemGrouped {
++		// Group intent precedes all backups. A still-staged value proves this
++		// item was not installed; preserve a live destination changed before
++		// its backup turn. Missing original AND backup remains insufficient
++		// evidence, even if the value survived an interrupted backup phase.
++		value := path.Join(journal.Transaction, item.ItemDir, "value")
++		// planApplyFileGroup requires physical modes to equal logical modes,
++		// so this physical digest is comparable with the planned Expected state.
++		staged, err := captureBaselineAtRootContext(ctx, rootFS, value, item.Path)
++		if err != nil {
++			return err
++		}
++		if !staged.Missing {
++			if !sameBaselineContent(staged, item.Expected) {
++				return fmt.Errorf("grouped staged value %s changed; recovery data retained", item.Path)
++			}
++			if _, err := rootFS.Lstat(item.Path); err != nil {
++				return fmt.Errorf("original %s and its backup are unavailable: %w", item.Path, err)
++			}
++			return nil
++		}
+ 	}
+ 	if hasBackup {
+ 		hasQuarantine, err := quarantineInstalledChange(rootFS, item.Path, quarantine, destinationDir)
+@@ -939,10 +980,14 @@
+ }
+ 
+ func syncApplyRootDirectory(root *os.Root, directory string) error {
++	return syncApplyRootDirectoryWith(root, directory, syncStagingBarrier)
++}
++
++func syncApplyRootDirectoryWith(root *os.Root, directory string, synchronize func(*os.File) error) error {
+ 	dir, err := root.Open(directory)
+ 	if err != nil {
+ 		return err
+ 	}
+ 	defer dir.Close()
+-	return syncStagingBarrier(dir)
+-}
++	return synchronize(dir)
++}

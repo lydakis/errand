@@ -1,0 +1,7 @@
+EVALUATION {"mode":"workspace-create","sample":0,"seconds":0.535698875}
+goos: darwin
+goarch: arm64
+pkg: github.com/lydakis/errand/cmd/errand
+cpu: Apple M4
+BenchmarkWorkspaceCreationAndSubmission/workspace-create-2         	       1	 535699333 ns/op
+PASS

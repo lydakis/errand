@@ -1,0 +1,7 @@
+EVALUATION {"mode":"workspace-create","sample":0,"seconds":1.5695824900000002}
+goos: linux
+goarch: amd64
+pkg: github.com/lydakis/errand/cmd/errand
+cpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz
+BenchmarkWorkspaceCreationAndSubmission/workspace-create-2         	       1	1569583269 ns/op
+PASS

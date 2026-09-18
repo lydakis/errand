@@ -1,0 +1,5 @@
+git version 2.54.0 (Apple Git-157)
+ok  	github.com/lydakis/errand/internal/changes	30.336s
+ok  	github.com/lydakis/errand/internal/client	19.513s
+ok  	github.com/lydakis/errand/internal/daemon	61.422s
+ok  	github.com/lydakis/errand/cmd/errand	52.990s

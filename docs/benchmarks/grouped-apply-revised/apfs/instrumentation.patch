@@ -1,0 +1,175 @@
+--- a/internal/changes/apply.go
++++ b/internal/changes/apply.go
+@@ -1,6 +1,7 @@
+ package changes
+ 
+ import (
++	"time"
+ 	"context"
+ 	"errors"
+ 	"fmt"
+@@ -146,6 +147,7 @@
+ 	expectedRoot fsidentity.Identity,
+ 	options ApplyOptions,
+ ) (ApplyResult, error) {
++	defer applyJournalRecord("apply/core", time.Now(), 0)
+ 	if err := validateBundle(bundle); err != nil {
+ 		return ApplyResult{}, err
+ 	}
+@@ -657,7 +659,7 @@
+ 	if err != nil {
+ 		return err
+ 	}
+-	return errors.Join(dir.Sync(), dir.Close())
++	return errors.Join(applyJournalSync(dir, "apply:660:dir"), dir.Close())
+ }
+ 
+ func materializeApplySnapshot(sourceRoot, destinationRoot, tempRoot string, manifest proto.Manifest) (*treeAccess, error) {
+@@ -1213,7 +1215,7 @@
+ 			return err
+ 		}
+ 		_, copyErr := io.Copy(out, in)
+-		syncErr := out.Sync()
++		syncErr := applyJournalSync(out, "apply:1216:out")
+ 		closeErr := out.Close()
+ 		if err := errors.Join(copyErr, syncErr, closeErr); err != nil {
+ 			return err
+--- a/internal/changes/export.go
++++ b/internal/changes/export.go
+@@ -79,7 +79,7 @@
+ 	if err := renameNoReplace(from, "tree", to, name); err != nil {
+ 		return fmt.Errorf("publishing export (destination must not exist): %w", err)
+ 	}
+-	return errors.Join(to.Sync(), guard.verifyPath())
++	return errors.Join(applyJournalSync(to, "export:82:to"), guard.verifyPath())
+ }
+ 
+ func exportManifest(bundle proto.ChangeBundle, requested string) (proto.Manifest, error) {
+--- a/internal/changes/journal.go
++++ b/internal/changes/journal.go
+@@ -1,6 +1,7 @@
+ package changes
+ 
+ import (
++	"time"
+ 	"context"
+ 	"encoding/hex"
+ 	"encoding/json"
+@@ -351,10 +352,11 @@
+ }
+ 
+ func writeApplyJournalAtRoot(root *os.Root, journal applyJournal) error {
+-	if err := validateApplyJournal(journal); err != nil {
+-		return err
+-	}
+-	raw, err := json.MarshalIndent(journal, "", "  ")
++	defer applyJournalRecord("journal/publication", time.Now(), 0)
++	if err := applyJournalValidate(journal); err != nil {
++		return err
++	}
++	raw, err := applyJournalEncode(journal)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -375,7 +377,7 @@
+ 		tmp.Close()
+ 		return err
+ 	}
+-	if err := tmp.Sync(); err != nil {
++	if err := applyJournalSync(tmp, "journal:378:tmp"); err != nil {
+ 		tmp.Close()
+ 		return err
+ 	}
+@@ -796,7 +798,7 @@
+ 	if err != nil {
+ 		return err
+ 	}
+-	return errors.Join(dir.Sync(), dir.Close())
++	return errors.Join(applyJournalSync(dir, "journal:799:dir"), dir.Close())
+ }
+ 
+ func quarantineInstalledChange(root *os.Root, changePath, quarantine string, changeParent *os.File) (bool, error) {
+@@ -821,7 +823,7 @@
+ 		}
+ 		return false, err
+ 	}
+-	return true, errors.Join(changeParent.Sync(), quarantineDir.Sync())
++	return true, errors.Join(applyJournalSync(changeParent, "journal:824:changeParent"), applyJournalSync(quarantineDir, "journal:824:quarantineDir"))
+ }
+ 
+ func renameApplyPathToDirectoryNoReplace(root *os.Root, from, to string, toDir *os.File) error {
+@@ -835,7 +837,7 @@
+ 	); err != nil {
+ 		return err
+ 	}
+-	return errors.Join(fromDir.Sync(), toDir.Sync())
++	return errors.Join(applyJournalSync(fromDir, "journal:838:fromDir"), applyJournalSync(toDir, "journal:838:toDir"))
+ }
+ 
+ func renameApplyPathNoReplace(root *os.Root, from, to string) error {
+@@ -854,7 +856,7 @@
+ 	); err != nil {
+ 		return err
+ 	}
+-	return errors.Join(fromDir.Sync(), toDir.Sync())
++	return errors.Join(applyJournalSync(fromDir, "journal:857:fromDir"), applyJournalSync(toDir, "journal:857:toDir"))
+ }
+ 
+ func renameNoReplacePreservingDirectoryMode(
+--- a/internal/changes/staging_sync.go
++++ b/internal/changes/staging_sync.go
+@@ -7,4 +7,4 @@
+ // draining the device cache for preceding member fsyncs. Other systems use
+ // their normal fsync semantics. Finish this before exposing prepared data under
+ // durable names, then sync the containing directory again after those renames.
+-func syncStagingBarrier(file *os.File) error { return file.Sync() }
++func syncStagingBarrier(file *os.File) error { return applyJournalSync(file, "staging_sync:10:file") }
+--- a/internal/changes/staging_sync_darwin.go
++++ b/internal/changes/staging_sync_darwin.go
+@@ -1,6 +1,7 @@
+ package changes
+ 
+ import (
++	"time"
+ 	"errors"
+ 	"os"
+ 
+@@ -14,6 +15,7 @@
+ // Apple's fcntl(2) guarantees this persists preceding fsyncs on the same device:
+ // https://github.com/apple-oss-distributions/xnu/blob/main/bsd/man/man2/fcntl.2
+ func syncStagedData(file *os.File) error {
++	defer applyJournalRecord("member/fsync", time.Now(), 0)
+ 	conn, err := file.SyscallConn()
+ 	if err != nil {
+ 		return err
+--- a/internal/changes/staging_sync_other.go
++++ b/internal/changes/staging_sync_other.go
+@@ -5,5 +5,5 @@
+ import "os"
+ 
+ func syncStagedData(file *os.File) error {
+-	return file.Sync()
++	return applyJournalSync(file, "staging_sync_other:8:file")
+ }
+--- a/internal/changes/transfer.go
++++ b/internal/changes/transfer.go
+@@ -438,7 +438,7 @@
+ 	}
+ 	defer root.Remove(tmpName)
+ 	_, writeErr := f.Write(raw)
+-	if err := errors.Join(writeErr, f.Sync(), f.Close()); err != nil {
++	if err := errors.Join(writeErr, applyJournalSync(f, "transfer:441:f"), f.Close()); err != nil {
+ 		return err
+ 	}
+ 	if err := root.Rename(tmpName, name); err != nil {
+--- a/internal/changes/transfer_session.go
++++ b/internal/changes/transfer_session.go
+@@ -358,7 +358,7 @@
+ 	defer os.Remove(name)
+ 	_, err = f.Write(raw)
+ 	if err == nil {
+-		err = f.Sync()
++		err = applyJournalSync(f, "transfer_session:361:f")
+ 	}
+ 	err = errors.Join(err, f.Close())
+ 	if err != nil {

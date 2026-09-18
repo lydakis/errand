@@ -1,0 +1,6 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/lydakis/errand/internal/changes
+cpu: Apple M4
+BenchmarkApplyJournalScaling/8-2 	       1	 186623250 ns/op	         1.000 apply/core-count/op	 145022500 apply/core-ns/op	         8.000 barrier/apply:1211:out-count/op	  26098708 barrier/apply:1211:out-ns/op	         3.000 barrier/journal:378:tmp-count/op	  11332166 barrier/journal:378:tmp-ns/op	        19.00 barrier/staging_sync:10:file-count/op	  64509917 barrier/staging_sync:10:file-ns/op	         4.000 barrier/transfer:441:f-count/op	  13357125 barrier/transfer:441:f-ns/op	   1048576 changed-bytes/op	     14053 journal/encode-bytes/op	         3.000 journal/encode-count/op	    272541 journal/encode-ns/op	         3.000 journal/publication-count/op	  24764376 journal/publication-ns/op	         3.000 journal/validate-count/op	     40834 journal/validate-ns/op	        32.00 member/fsync-count/op	    942130 member/fsync-ns/op
+PASS

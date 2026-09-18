@@ -5,7 +5,7 @@ resolution and staging for push, fetch, workspace creation and job submission.
 Watch schedules repeated pushes. Persistent and temporary workspaces differ in
 lifetime; they should not need independent transfer algorithms.
 
-## Current work queue (2026-09-16)
+## Current work queue (2026-09-17)
 
 This is the active tracker. Its order supersedes the historical experiment
 sequence below. Queued investigations have not started; a code-derived scaling
@@ -14,7 +14,7 @@ finding is not a measured attribution of complete-operation latency.
 | ID | Status | Work | Next evidence or decision |
 |---|---|---|---|
 | H1 | Complete | [Shared hierarchy validation](HIERARCHY_VALIDATION.md) | Reviewed: retain the predicate and entry-only checks; reject preallocation. Native results and remaining caller caveats are recorded. |
-| P1 | Next | Production apply-journal scaling | Hold changed bytes approximately fixed; vary independent roots 1/8/32/128/512. Measure full apply time, journal validation/serialization counts and bytes, and synchronization barriers per root (count and time per barrier) separately. Choose the candidate from the measured split, not before it. |
+| P1 | Implemented and measured; ready for review | [Apply-journal baseline](APPLY_JOURNAL_SCALING.md) and [grouped apply](GROUPED_APPLY.md) | Retain grouped existing-file replacement: revised eligible single-parent 128-file fetch shows 74% time reduction on APFS and 41–45% on Btrfs. Shared backup-data synchronization and review guards are included; small-operation non-regression remains unresolved. Measure mixed-parent/fallback overhead before widening eligibility; compact progress and private merged-output synchronization remain separate candidates. |
 | P2 | Queued after P1 | Realistic Git/editor-save watch | Refresh current-head Errand/rsync/Mutagen measurements using tracked, untracked and mixed trees; cross in-place/atomic saves and structural/policy changes. Record fallback reasons before narrowing invalidation. |
 | P3 | Gated by complete-operation measurements | Wire identity and sequential requests | Count materializations, encodings and root computations. Measure controlled/real RTT before comparing incremental identity or compound stage-and-apply. |
 | I1 | Independent, not started | Detached completion observation | Measure remote result commit → worker observation → local apply, plus full CLI lifecycle timing. Compare notification/long-poll with authoritative status reconciliation. |
@@ -23,28 +23,47 @@ finding is not a measured attribution of complete-operation latency.
 | D1 | Deferred behind production work | Restart-cache experiments | Bounded reads/checksums with exact-generation checks, then independently replay-cost-aware compaction and early encoding termination. Experimental disk journals remain disabled. |
 | D2 | Separate transfer workstream | Large-file differential transfer | Compare whole-file, rolling-delta and chunked transfer for append, prepend, insertion and scattered edits under bandwidth/RTT constraints. |
 
-**P1 candidates:** the normal existing-parent path in
+**P1 baseline and candidate:** the frozen normal existing-parent path in
 [apply.go](../internal/changes/apply.go) makes `2k+2` complete journal publications;
 [journal.go](../internal/changes/journal.go) validates and serializes the whole
 plan each time. At 128 roots this is 258 publications. Each publication also
 synchronizes the journal file and the transaction directory; the staging loop
 synchronizes the transaction directory once per item; backup and install
-synchronize the parent and backup directories. That is roughly eight barriers
-per root. Serialized bytes therefore grow as Θ(k²) while barriers grow as Θ(k)
-with a large constant, and `File.Sync` issues `F_FULLFSYNC` on Darwin. The
-measurement decides which term dominates; do not select a candidate before it.
+synchronize the parent and backup directories. The measured complete
+`TransferTarget.Apply` lifecycle has `12k+14` synchronization calls for flat
+existing-file replacements, including merged scratch, transaction staging,
+receipt publication and cleanup. Serialized bytes grow as Θ(k²) while barriers
+grow as Θ(k) with a large constant. See the native measurements and limitations
+in [the P1 report](APPLY_JOURNAL_SCALING.md).
 
-If barriers dominate, the first candidate is one journal publication per phase
-with grouped item barriers. It needs an explicit recovery argument and
-crash-injection tests from the first comparison: partial writes, corruption,
-transaction binding, commit visibility and interrupted cleanup. If serialization
-dominates, compare an immutable plan with small atomically replaced per-item
-progress records against an immutable plan with checksummed append-only
-progress, with installation ordering fixed. The two changes can be combined once
+Synchronization dominates the measured APFS and Btrfs workloads (74–85% of
+instrumented apply time at 512 roots, versus 8–13% in validation/encoding).
+The implemented candidate groups two or more existing regular-file replacements
+under one verified parent. It publishes prepared, grouped-intent and committed
+journals, while synchronizing each regular-file backup's data before publishing its renamed
+entry and replacing it. Shared
+staging and final installation barriers reduce repeated synchronization. Recovery
+coverage includes process termination, injected errors, corrupted evidence,
+transaction binding, parent replacement, later edits and historical retry. The
+review fixes also make member/barrier roles explicit, reject mixed protocol
+intent, check restricted-mode eligibility, and guard evidence-driver mode
+separation. Broader-parent/fallback measurements precede any eligibility
+expansion; compact progress and scratch synchronization stay gated on residual
+cost. The existing outcome/cleanup tests remain applicable; process termination is not a
+power-loss test. See [the recovery argument and comparison](GROUPED_APPLY.md).
+
+Compact progress records remain gated on material cost after grouping: compare an immutable plan
+with small atomically replaced per-item records against checksummed append-only progress,
+with installation ordering fixed. The two changes can be combined once
 each is attributed separately. Either way, preserve historical retry outcomes,
 later destination edits and cleanup authorization/recovery. A
 representation-only candidate measured at parity is not evidence against the
 barrier candidate.
+
+Private **merged-output** copying also performs per-file synchronization before
+verified durable transaction staging. Measure an explicit scratch publication
+policy separately; this is distinct from the previously optimized private merge
+inputs. Keep generic copying and recoverable staged values durable.
 
 **P2 evidence:** distinguish content, directory membership and selection-policy
 invalidation. Reconcile an affected parent/subtree only when replacement identity

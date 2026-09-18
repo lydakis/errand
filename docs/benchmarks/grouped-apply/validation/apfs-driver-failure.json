@@ -1,0 +1,67 @@
+{
+  "platform": "macOS-27.0-arm64-arm-64bit",
+  "rounds": 4,
+  "cases": {
+    "apply-1": [
+      "changes",
+      "^BenchmarkApplyJournalScaling$/^1$"
+    ],
+    "apply-8": [
+      "changes",
+      "^BenchmarkApplyJournalScaling$/^8$"
+    ],
+    "apply-32": [
+      "changes",
+      "^BenchmarkApplyJournalScaling$/^32$"
+    ],
+    "apply-128": [
+      "changes",
+      "^BenchmarkApplyJournalScaling$/^128$"
+    ],
+    "apply-512": [
+      "changes",
+      "^BenchmarkApplyJournalScaling$/^512$"
+    ],
+    "push": [
+      "cli",
+      "^BenchmarkPushPhases$"
+    ],
+    "watch": [
+      "cli",
+      "^BenchmarkWatchPhases$"
+    ],
+    "fetch-batch": [
+      "cli",
+      "^BenchmarkFetchBodies$/^batch$"
+    ],
+    "workspace-create": [
+      "cli",
+      "^BenchmarkWorkspaceCreationAndSubmission$/^workspace-create$"
+    ],
+    "ephemeral-job": [
+      "cli",
+      "^BenchmarkWorkspaceCreationAndSubmission$/^ephemeral-job$"
+    ]
+  },
+  "baseline_input_sha256": "ea33e79dedfc7428bf53a011e225b2c568694b80af0b77a4536a6b8f2164367e",
+  "samples": [],
+  "commands": [],
+  "gomaxprocs": 2,
+  "case_rounds": {
+    "apply-1": 4,
+    "apply-8": 4,
+    "apply-32": 4,
+    "apply-128": 4,
+    "apply-512": 4,
+    "push": 3,
+    "watch": 3,
+    "fetch-batch": 3,
+    "workspace-create": 3,
+    "ephemeral-job": 3
+  },
+  "status": "failed",
+  "failure": {
+    "type": "TypeError",
+    "error": "extractall() got an unexpected keyword argument 'filter'"
+  }
+}

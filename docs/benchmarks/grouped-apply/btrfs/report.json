@@ -1,0 +1,2186 @@
+{
+  "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+  "rounds": 4,
+  "cases": {
+    "apply-1": [
+      "changes",
+      "^BenchmarkApplyJournalScaling$/^1$"
+    ],
+    "apply-8": [
+      "changes",
+      "^BenchmarkApplyJournalScaling$/^8$"
+    ],
+    "apply-32": [
+      "changes",
+      "^BenchmarkApplyJournalScaling$/^32$"
+    ],
+    "apply-128": [
+      "changes",
+      "^BenchmarkApplyJournalScaling$/^128$"
+    ],
+    "apply-512": [
+      "changes",
+      "^BenchmarkApplyJournalScaling$/^512$"
+    ],
+    "push": [
+      "cli",
+      "^BenchmarkPushPhases$"
+    ],
+    "watch": [
+      "cli",
+      "^BenchmarkWatchPhases$"
+    ],
+    "fetch-batch": [
+      "cli",
+      "^BenchmarkFetchBodies$/^batch$"
+    ],
+    "workspace-create": [
+      "cli",
+      "^BenchmarkWorkspaceCreationAndSubmission$/^workspace-create$"
+    ],
+    "ephemeral-job": [
+      "cli",
+      "^BenchmarkWorkspaceCreationAndSubmission$/^ephemeral-job$"
+    ]
+  },
+  "baseline_input_sha256": "ea33e79dedfc7428bf53a011e225b2c568694b80af0b77a4536a6b8f2164367e",
+  "samples": [
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 125402947.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "baseline-a",
+      "position": 0,
+      "log": "00-apply-1-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 120657435.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "baseline-b",
+      "position": 1,
+      "log": "00-apply-1-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 118136698.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "candidate",
+      "position": 2,
+      "log": "00-apply-1-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 120169370.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 91506373.0,
+        "barrier/apply:1211:out-count/op": 1.0,
+        "barrier/apply:1211:out-ns/op": 2671043.0,
+        "barrier/journal:378:tmp-count/op": 4.0,
+        "barrier/journal:378:tmp-ns/op": 10816473.0,
+        "barrier/staging_sync:10:file-count/op": 17.0,
+        "barrier/staging_sync:10:file-ns/op": 45535316.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 11215023.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 3432.0,
+        "journal/encode-count/op": 4.0,
+        "journal/encode-ns/op": 139319.0,
+        "journal/publication-count/op": 4.0,
+        "journal/publication-ns/op": 22411483.0,
+        "journal/validate-count/op": 4.0,
+        "journal/validate-ns/op": 22006.0
+      },
+      "case": "apply-1",
+      "mode": "attribution",
+      "position": 3,
+      "log": "00-apply-1-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 375696869.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "baseline-a",
+      "position": 0,
+      "log": "00-apply-8-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 374897268.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "baseline-b",
+      "position": 1,
+      "log": "00-apply-8-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 241409713.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "candidate",
+      "position": 2,
+      "log": "00-apply-8-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 250416183.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 216736608.0,
+        "barrier/apply:1211:out-count/op": 8.0,
+        "barrier/apply:1211:out-ns/op": 20153895.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 8822943.0,
+        "barrier/staging_sync:10:file-count/op": 19.0,
+        "barrier/staging_sync:10:file-ns/op": 55294345.0,
+        "barrier/staging_sync_other:8:file-count/op": 32.0,
+        "barrier/staging_sync_other:8:file-ns/op": 85677139.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 12147915.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 13939.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 233054.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 17958964.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 30057.0
+      },
+      "case": "apply-8",
+      "mode": "attribution",
+      "position": 3,
+      "log": "00-apply-8-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1699486115.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "baseline-a",
+      "position": 0,
+      "log": "00-apply-32-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1263428203.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "baseline-b",
+      "position": 1,
+      "log": "00-apply-32-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 912786785.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "candidate",
+      "position": 2,
+      "log": "00-apply-32-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 718958637.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 681099703.0,
+        "barrier/apply:1211:out-count/op": 32.0,
+        "barrier/apply:1211:out-ns/op": 88228320.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 9659348.0,
+        "barrier/staging_sync:10:file-count/op": 43.0,
+        "barrier/staging_sync:10:file-ns/op": 123112722.0,
+        "barrier/staging_sync_other:8:file-count/op": 128.0,
+        "barrier/staging_sync_other:8:file-ns/op": 364565893.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 10909736.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 52891.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 474121.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 20022036.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 92084.0
+      },
+      "case": "apply-32",
+      "mode": "attribution",
+      "position": 3,
+      "log": "00-apply-32-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5113498265.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "baseline-a",
+      "position": 0,
+      "log": "00-apply-128-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 7280310074.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "baseline-b",
+      "position": 1,
+      "log": "00-apply-128-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 2603344659.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "candidate",
+      "position": 2,
+      "log": "00-apply-128-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 3163010811.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 3095762539.0,
+        "barrier/apply:1211:out-count/op": 128.0,
+        "barrier/apply:1211:out-ns/op": 357591507.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 13170409.0,
+        "barrier/staging_sync:10:file-count/op": 139.0,
+        "barrier/staging_sync:10:file-ns/op": 523088106.0,
+        "barrier/staging_sync_other:8:file-count/op": 512.0,
+        "barrier/staging_sync_other:8:file-ns/op": 1851980869.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 13827985.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 208699.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 2221341.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 26912528.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 303398.0
+      },
+      "case": "apply-128",
+      "mode": "attribution",
+      "position": 3,
+      "log": "00-apply-128-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 24684585263.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "baseline-a",
+      "position": 0,
+      "log": "00-apply-512-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 25417429291.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "baseline-b",
+      "position": 1,
+      "log": "00-apply-512-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 10989346165.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "candidate",
+      "position": 2,
+      "log": "00-apply-512-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 11248217415.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 11081452891.0,
+        "barrier/apply:1211:out-count/op": 512.0,
+        "barrier/apply:1211:out-ns/op": 1987631435.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 13148556.0,
+        "barrier/staging_sync:10:file-count/op": 523.0,
+        "barrier/staging_sync:10:file-ns/op": 1781060443.0,
+        "barrier/staging_sync_other:8:file-count/op": 2048.0,
+        "barrier/staging_sync_other:8:file-ns/op": 6266925899.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 15077886.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 831931.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 6468975.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 30458271.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 964098.0
+      },
+      "case": "apply-512",
+      "mode": "attribution",
+      "position": 3,
+      "log": "00-apply-512-attribution.txt"
+    },
+    {
+      "name": "BenchmarkPushPhases",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 859764662.0,
+        "apply-ms/op": 346.5,
+        "client-ms/op": 394.2,
+        "cpu-ms/op": 619.0,
+        "negotiate-ms/op": 0.0,
+        "stage-ms/op": 119.0
+      },
+      "case": "push",
+      "mode": "baseline-a",
+      "position": 0,
+      "log": "00-push-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkPushPhases",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1017336403.0,
+        "apply-ms/op": 357.0,
+        "client-ms/op": 520.8,
+        "cpu-ms/op": 726.1,
+        "negotiate-ms/op": 0.0,
+        "stage-ms/op": 139.5
+      },
+      "case": "push",
+      "mode": "baseline-b",
+      "position": 1,
+      "log": "00-push-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkPushPhases",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 763958278.0,
+        "apply-ms/op": 150.3,
+        "client-ms/op": 477.4,
+        "cpu-ms/op": 730.5,
+        "negotiate-ms/op": 0.0,
+        "stage-ms/op": 136.2
+      },
+      "case": "push",
+      "mode": "candidate",
+      "position": 2,
+      "log": "00-push-candidate.txt"
+    },
+    {
+      "name": "BenchmarkWatchPhases",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 344360486.0,
+        "apply-ms/op": 139.3,
+        "client-ms/op": 76.41,
+        "cpu-ms/op": 223.2,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 128.5
+      },
+      "case": "watch",
+      "mode": "baseline-a",
+      "position": 0,
+      "log": "00-watch-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkWatchPhases",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 436497000.0,
+        "apply-ms/op": 213.7,
+        "client-ms/op": 81.94,
+        "cpu-ms/op": 300.8,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 140.2
+      },
+      "case": "watch",
+      "mode": "baseline-b",
+      "position": 1,
+      "log": "00-watch-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkWatchPhases",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 395287825.0,
+        "apply-ms/op": 146.8,
+        "client-ms/op": 94.63,
+        "cpu-ms/op": 271.1,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 152.2
+      },
+      "case": "watch",
+      "mode": "candidate",
+      "position": 2,
+      "log": "00-watch-candidate.txt"
+    },
+    {
+      "name": "BenchmarkFetchBodies/batch",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 6717184381.0,
+        "fetch-ms/op": 6717.0
+      },
+      "case": "fetch-batch",
+      "mode": "baseline-a",
+      "position": 0,
+      "log": "00-fetch-batch-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkFetchBodies/batch",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 6030174985.0,
+        "fetch-ms/op": 6030.0
+      },
+      "case": "fetch-batch",
+      "mode": "baseline-b",
+      "position": 1,
+      "log": "00-fetch-batch-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkFetchBodies/batch",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 2935637498.0,
+        "fetch-ms/op": 2936.0
+      },
+      "case": "fetch-batch",
+      "mode": "candidate",
+      "position": 2,
+      "log": "00-fetch-batch-candidate.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 2077665547.0
+      },
+      "case": "workspace-create",
+      "mode": "baseline-a",
+      "position": 0,
+      "log": "00-workspace-create-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1772722185.0
+      },
+      "case": "workspace-create",
+      "mode": "baseline-b",
+      "position": 1,
+      "log": "00-workspace-create-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1714302347.0
+      },
+      "case": "workspace-create",
+      "mode": "candidate",
+      "position": 2,
+      "log": "00-workspace-create-candidate.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 854358667.0
+      },
+      "case": "ephemeral-job",
+      "mode": "baseline-a",
+      "position": 0,
+      "log": "00-ephemeral-job-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 799437011.0
+      },
+      "case": "ephemeral-job",
+      "mode": "baseline-b",
+      "position": 1,
+      "log": "00-ephemeral-job-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 825004016.0
+      },
+      "case": "ephemeral-job",
+      "mode": "candidate",
+      "position": 2,
+      "log": "00-ephemeral-job-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 387833532.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "baseline-b",
+      "position": 0,
+      "log": "01-apply-8-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 252327938.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "candidate",
+      "position": 1,
+      "log": "01-apply-8-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 266288127.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 235019887.0,
+        "barrier/apply:1211:out-count/op": 8.0,
+        "barrier/apply:1211:out-ns/op": 22650645.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 10311412.0,
+        "barrier/staging_sync:10:file-count/op": 19.0,
+        "barrier/staging_sync:10:file-ns/op": 53078385.0,
+        "barrier/staging_sync_other:8:file-count/op": 32.0,
+        "barrier/staging_sync_other:8:file-ns/op": 92488843.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 11130008.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 13939.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 211116.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 20641307.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 33329.0
+      },
+      "case": "apply-8",
+      "mode": "attribution",
+      "position": 2,
+      "log": "01-apply-8-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 420990985.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "baseline-a",
+      "position": 3,
+      "log": "01-apply-8-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1313274605.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "baseline-b",
+      "position": 0,
+      "log": "01-apply-32-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 722293226.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "candidate",
+      "position": 1,
+      "log": "01-apply-32-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 726452908.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 688911650.0,
+        "barrier/apply:1211:out-count/op": 32.0,
+        "barrier/apply:1211:out-ns/op": 94136560.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 9661246.0,
+        "barrier/staging_sync:10:file-count/op": 43.0,
+        "barrier/staging_sync:10:file-ns/op": 118230563.0,
+        "barrier/staging_sync_other:8:file-count/op": 128.0,
+        "barrier/staging_sync_other:8:file-ns/op": 369106485.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 11105070.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 52891.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 1425265.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 20764964.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 195343.0
+      },
+      "case": "apply-32",
+      "mode": "attribution",
+      "position": 2,
+      "log": "01-apply-32-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1595572970.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "baseline-a",
+      "position": 3,
+      "log": "01-apply-32-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5047734770.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "baseline-b",
+      "position": 0,
+      "log": "01-apply-128-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 2499150549.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "candidate",
+      "position": 1,
+      "log": "01-apply-128-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 3621733737.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 3556148494.0,
+        "barrier/apply:1211:out-count/op": 128.0,
+        "barrier/apply:1211:out-ns/op": 568182194.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 13370037.0,
+        "barrier/staging_sync:10:file-count/op": 139.0,
+        "barrier/staging_sync:10:file-ns/op": 503484033.0,
+        "barrier/staging_sync_other:8:file-count/op": 512.0,
+        "barrier/staging_sync_other:8:file-ns/op": 2043138838.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 13094893.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 208699.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 3676006.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 33264918.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 516650.0
+      },
+      "case": "apply-128",
+      "mode": "attribution",
+      "position": 2,
+      "log": "01-apply-128-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5029377106.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "baseline-a",
+      "position": 3,
+      "log": "01-apply-128-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 24793812638.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "baseline-b",
+      "position": 0,
+      "log": "01-apply-512-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 11162356581.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "candidate",
+      "position": 1,
+      "log": "01-apply-512-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 10663867424.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 10496248867.0,
+        "barrier/apply:1211:out-count/op": 512.0,
+        "barrier/apply:1211:out-ns/op": 1337780802.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 12759294.0,
+        "barrier/staging_sync:10:file-count/op": 523.0,
+        "barrier/staging_sync:10:file-ns/op": 1751597111.0,
+        "barrier/staging_sync_other:8:file-count/op": 2048.0,
+        "barrier/staging_sync_other:8:file-ns/op": 6478758206.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 14706759.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 831931.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 9136496.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 34310549.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 1632780.0
+      },
+      "case": "apply-512",
+      "mode": "attribution",
+      "position": 2,
+      "log": "01-apply-512-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 23869365372.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "baseline-a",
+      "position": 3,
+      "log": "01-apply-512-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkPushPhases",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 681520376.0,
+        "apply-ms/op": 143.5,
+        "client-ms/op": 395.0,
+        "cpu-ms/op": 629.5,
+        "negotiate-ms/op": 0.0,
+        "stage-ms/op": 143.1
+      },
+      "case": "push",
+      "mode": "baseline-b",
+      "position": 0,
+      "log": "01-push-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkPushPhases",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 791025211.0,
+        "apply-ms/op": 162.1,
+        "client-ms/op": 483.8,
+        "cpu-ms/op": 737.9,
+        "negotiate-ms/op": 0.0,
+        "stage-ms/op": 145.0
+      },
+      "case": "push",
+      "mode": "candidate",
+      "position": 1,
+      "log": "01-push-candidate.txt"
+    },
+    {
+      "name": "BenchmarkPushPhases",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 786597441.0,
+        "apply-ms/op": 180.3,
+        "client-ms/op": 465.3,
+        "cpu-ms/op": 738.0,
+        "negotiate-ms/op": 0.0,
+        "stage-ms/op": 140.9
+      },
+      "case": "push",
+      "mode": "baseline-a",
+      "position": 2,
+      "log": "01-push-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkWatchPhases",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 368567904.0,
+        "apply-ms/op": 148.2,
+        "client-ms/op": 83.55,
+        "cpu-ms/op": 229.9,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 134.7
+      },
+      "case": "watch",
+      "mode": "baseline-b",
+      "position": 0,
+      "log": "01-watch-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkWatchPhases",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 375521536.0,
+        "apply-ms/op": 153.0,
+        "client-ms/op": 94.24,
+        "cpu-ms/op": 250.2,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 128.0
+      },
+      "case": "watch",
+      "mode": "candidate",
+      "position": 1,
+      "log": "01-watch-candidate.txt"
+    },
+    {
+      "name": "BenchmarkWatchPhases",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 360627406.0,
+        "apply-ms/op": 142.6,
+        "client-ms/op": 76.69,
+        "cpu-ms/op": 242.9,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 141.3
+      },
+      "case": "watch",
+      "mode": "baseline-a",
+      "position": 2,
+      "log": "01-watch-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkFetchBodies/batch",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5807960260.0,
+        "fetch-ms/op": 5808.0
+      },
+      "case": "fetch-batch",
+      "mode": "baseline-b",
+      "position": 0,
+      "log": "01-fetch-batch-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkFetchBodies/batch",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 3389310529.0,
+        "fetch-ms/op": 3389.0
+      },
+      "case": "fetch-batch",
+      "mode": "candidate",
+      "position": 1,
+      "log": "01-fetch-batch-candidate.txt"
+    },
+    {
+      "name": "BenchmarkFetchBodies/batch",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5638186471.0,
+        "fetch-ms/op": 5638.0
+      },
+      "case": "fetch-batch",
+      "mode": "baseline-a",
+      "position": 2,
+      "log": "01-fetch-batch-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1965050722.0
+      },
+      "case": "workspace-create",
+      "mode": "baseline-b",
+      "position": 0,
+      "log": "01-workspace-create-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1987528971.0
+      },
+      "case": "workspace-create",
+      "mode": "candidate",
+      "position": 1,
+      "log": "01-workspace-create-candidate.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1637648338.0
+      },
+      "case": "workspace-create",
+      "mode": "baseline-a",
+      "position": 2,
+      "log": "01-workspace-create-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 814734139.0
+      },
+      "case": "ephemeral-job",
+      "mode": "baseline-b",
+      "position": 0,
+      "log": "01-ephemeral-job-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 799870935.0
+      },
+      "case": "ephemeral-job",
+      "mode": "candidate",
+      "position": 1,
+      "log": "01-ephemeral-job-candidate.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 813740398.0
+      },
+      "case": "ephemeral-job",
+      "mode": "baseline-a",
+      "position": 2,
+      "log": "01-ephemeral-job-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 129421997.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "baseline-b",
+      "position": 0,
+      "log": "01-apply-1-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 126344459.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "candidate",
+      "position": 1,
+      "log": "01-apply-1-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 127487808.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 94978124.0,
+        "barrier/apply:1211:out-count/op": 1.0,
+        "barrier/apply:1211:out-ns/op": 2847553.0,
+        "barrier/journal:378:tmp-count/op": 4.0,
+        "barrier/journal:378:tmp-ns/op": 12064438.0,
+        "barrier/staging_sync:10:file-count/op": 17.0,
+        "barrier/staging_sync:10:file-ns/op": 50429940.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 12526299.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 3432.0,
+        "journal/encode-count/op": 4.0,
+        "journal/encode-ns/op": 124714.0,
+        "journal/publication-count/op": 4.0,
+        "journal/publication-ns/op": 25419617.0,
+        "journal/validate-count/op": 4.0,
+        "journal/validate-ns/op": 20814.0
+      },
+      "case": "apply-1",
+      "mode": "attribution",
+      "position": 2,
+      "log": "01-apply-1-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 126685760.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "baseline-a",
+      "position": 3,
+      "log": "01-apply-1-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 772297645.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "candidate",
+      "position": 0,
+      "log": "02-apply-32-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 756675049.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 716298921.0,
+        "barrier/apply:1211:out-count/op": 32.0,
+        "barrier/apply:1211:out-ns/op": 95298423.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 10832877.0,
+        "barrier/staging_sync:10:file-count/op": 43.0,
+        "barrier/staging_sync:10:file-ns/op": 125761591.0,
+        "barrier/staging_sync_other:8:file-count/op": 128.0,
+        "barrier/staging_sync_other:8:file-ns/op": 382311208.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 12019207.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 52891.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 710762.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 21867789.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 101192.0
+      },
+      "case": "apply-32",
+      "mode": "attribution",
+      "position": 1,
+      "log": "02-apply-32-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1440769183.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "baseline-a",
+      "position": 2,
+      "log": "02-apply-32-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 2443521103.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "baseline-b",
+      "position": 3,
+      "log": "02-apply-32-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 2561604544.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "candidate",
+      "position": 0,
+      "log": "02-apply-128-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 2556335804.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 2493098762.0,
+        "barrier/apply:1211:out-count/op": 128.0,
+        "barrier/apply:1211:out-ns/op": 356273594.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 10398417.0,
+        "barrier/staging_sync:10:file-count/op": 139.0,
+        "barrier/staging_sync:10:file-ns/op": 380986948.0,
+        "barrier/staging_sync_other:8:file-count/op": 512.0,
+        "barrier/staging_sync_other:8:file-ns/op": 1452336600.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 12785021.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 208699.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 1310571.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 21218951.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 419960.0
+      },
+      "case": "apply-128",
+      "mode": "attribution",
+      "position": 1,
+      "log": "02-apply-128-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6367940056.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "baseline-a",
+      "position": 2,
+      "log": "02-apply-128-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 4995746430.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "baseline-b",
+      "position": 3,
+      "log": "02-apply-128-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 17920412383.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "candidate",
+      "position": 0,
+      "log": "02-apply-512-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 10281804956.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 10110974013.0,
+        "barrier/apply:1211:out-count/op": 512.0,
+        "barrier/apply:1211:out-ns/op": 1675345114.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 12796905.0,
+        "barrier/staging_sync:10:file-count/op": 523.0,
+        "barrier/staging_sync:10:file-ns/op": 1601986604.0,
+        "barrier/staging_sync_other:8:file-count/op": 2048.0,
+        "barrier/staging_sync_other:8:file-ns/op": 5794289308.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 16424161.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 831931.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 6246889.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 29162225.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 984122.0
+      },
+      "case": "apply-512",
+      "mode": "attribution",
+      "position": 1,
+      "log": "02-apply-512-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 24684826405.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "baseline-a",
+      "position": 2,
+      "log": "02-apply-512-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 24972986917.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "baseline-b",
+      "position": 3,
+      "log": "02-apply-512-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkPushPhases",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 801871107.0,
+        "apply-ms/op": 155.4,
+        "client-ms/op": 511.9,
+        "cpu-ms/op": 761.4,
+        "negotiate-ms/op": 0.0,
+        "stage-ms/op": 134.6
+      },
+      "case": "push",
+      "mode": "candidate",
+      "position": 0,
+      "log": "02-push-candidate.txt"
+    },
+    {
+      "name": "BenchmarkPushPhases",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 764911714.0,
+        "apply-ms/op": 218.5,
+        "client-ms/op": 401.3,
+        "cpu-ms/op": 615.9,
+        "negotiate-ms/op": 0.0,
+        "stage-ms/op": 145.1
+      },
+      "case": "push",
+      "mode": "baseline-a",
+      "position": 1,
+      "log": "02-push-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkPushPhases",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 737117069.0,
+        "apply-ms/op": 163.1,
+        "client-ms/op": 431.2,
+        "cpu-ms/op": 672.4,
+        "negotiate-ms/op": 0.0,
+        "stage-ms/op": 142.8
+      },
+      "case": "push",
+      "mode": "baseline-b",
+      "position": 2,
+      "log": "02-push-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkWatchPhases",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 360807839.0,
+        "apply-ms/op": 140.8,
+        "client-ms/op": 86.05,
+        "cpu-ms/op": 253.0,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 130.5
+      },
+      "case": "watch",
+      "mode": "candidate",
+      "position": 0,
+      "log": "02-watch-candidate.txt"
+    },
+    {
+      "name": "BenchmarkWatchPhases",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 366806644.0,
+        "apply-ms/op": 138.4,
+        "client-ms/op": 79.9,
+        "cpu-ms/op": 265.7,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 148.4
+      },
+      "case": "watch",
+      "mode": "baseline-a",
+      "position": 1,
+      "log": "02-watch-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkWatchPhases",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 366070610.0,
+        "apply-ms/op": 149.3,
+        "client-ms/op": 87.59,
+        "cpu-ms/op": 259.3,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 129.0
+      },
+      "case": "watch",
+      "mode": "baseline-b",
+      "position": 2,
+      "log": "02-watch-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkFetchBodies/batch",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 2905269522.0,
+        "fetch-ms/op": 2905.0
+      },
+      "case": "fetch-batch",
+      "mode": "candidate",
+      "position": 0,
+      "log": "02-fetch-batch-candidate.txt"
+    },
+    {
+      "name": "BenchmarkFetchBodies/batch",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6726634409.0,
+        "fetch-ms/op": 6727.0
+      },
+      "case": "fetch-batch",
+      "mode": "baseline-a",
+      "position": 1,
+      "log": "02-fetch-batch-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkFetchBodies/batch",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 7270539562.0,
+        "fetch-ms/op": 7271.0
+      },
+      "case": "fetch-batch",
+      "mode": "baseline-b",
+      "position": 2,
+      "log": "02-fetch-batch-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1569583269.0
+      },
+      "case": "workspace-create",
+      "mode": "candidate",
+      "position": 0,
+      "log": "02-workspace-create-candidate.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1537794306.0
+      },
+      "case": "workspace-create",
+      "mode": "baseline-a",
+      "position": 1,
+      "log": "02-workspace-create-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/workspace-create",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1557119433.0
+      },
+      "case": "workspace-create",
+      "mode": "baseline-b",
+      "position": 2,
+      "log": "02-workspace-create-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 820533786.0
+      },
+      "case": "ephemeral-job",
+      "mode": "candidate",
+      "position": 0,
+      "log": "02-ephemeral-job-candidate.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 799021737.0
+      },
+      "case": "ephemeral-job",
+      "mode": "baseline-a",
+      "position": 1,
+      "log": "02-ephemeral-job-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkWorkspaceCreationAndSubmission/ephemeral-job",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 792294278.0
+      },
+      "case": "ephemeral-job",
+      "mode": "baseline-b",
+      "position": 2,
+      "log": "02-ephemeral-job-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 116844048.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "candidate",
+      "position": 0,
+      "log": "02-apply-1-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 133571579.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 100807408.0,
+        "barrier/apply:1211:out-count/op": 1.0,
+        "barrier/apply:1211:out-ns/op": 2611573.0,
+        "barrier/journal:378:tmp-count/op": 4.0,
+        "barrier/journal:378:tmp-ns/op": 12736853.0,
+        "barrier/staging_sync:10:file-count/op": 17.0,
+        "barrier/staging_sync:10:file-ns/op": 50453358.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 12448386.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 3432.0,
+        "journal/encode-count/op": 4.0,
+        "journal/encode-ns/op": 145311.0,
+        "journal/publication-count/op": 4.0,
+        "journal/publication-ns/op": 25267039.0,
+        "journal/validate-count/op": 4.0,
+        "journal/validate-ns/op": 46108.0
+      },
+      "case": "apply-1",
+      "mode": "attribution",
+      "position": 1,
+      "log": "02-apply-1-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 117656786.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "baseline-a",
+      "position": 2,
+      "log": "02-apply-1-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 127637067.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "baseline-b",
+      "position": 3,
+      "log": "02-apply-1-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 238652370.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "candidate",
+      "position": 0,
+      "log": "02-apply-8-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 260058938.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 209914973.0,
+        "barrier/apply:1211:out-count/op": 8.0,
+        "barrier/apply:1211:out-ns/op": 22637615.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 8456001.0,
+        "barrier/staging_sync:10:file-count/op": 19.0,
+        "barrier/staging_sync:10:file-ns/op": 68544426.0,
+        "barrier/staging_sync_other:8:file-count/op": 32.0,
+        "barrier/staging_sync_other:8:file-ns/op": 83432393.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 12354028.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 13939.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 187758.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 17814967.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 31686.0
+      },
+      "case": "apply-8",
+      "mode": "attribution",
+      "position": 1,
+      "log": "02-apply-8-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 453142052.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "baseline-a",
+      "position": 2,
+      "log": "02-apply-8-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 374340459.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "baseline-b",
+      "position": 3,
+      "log": "02-apply-8-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 2497201788.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 2435030024.0,
+        "barrier/apply:1211:out-count/op": 128.0,
+        "barrier/apply:1211:out-ns/op": 354037071.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 10123687.0,
+        "barrier/staging_sync:10:file-count/op": 139.0,
+        "barrier/staging_sync:10:file-ns/op": 364745805.0,
+        "barrier/staging_sync_other:8:file-count/op": 512.0,
+        "barrier/staging_sync_other:8:file-ns/op": 1413357776.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 14175695.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 208699.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 1555036.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 21107191.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 268436.0
+      },
+      "case": "apply-128",
+      "mode": "attribution",
+      "position": 0,
+      "log": "03-apply-128-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5087844920.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "baseline-a",
+      "position": 1,
+      "log": "03-apply-128-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5796512228.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "baseline-b",
+      "position": 2,
+      "log": "03-apply-128-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 3833046334.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-128",
+      "mode": "candidate",
+      "position": 3,
+      "log": "03-apply-128-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 10223409809.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 10056977616.0,
+        "barrier/apply:1211:out-count/op": 512.0,
+        "barrier/apply:1211:out-ns/op": 1343836217.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 13383840.0,
+        "barrier/staging_sync:10:file-count/op": 523.0,
+        "barrier/staging_sync:10:file-ns/op": 1612912287.0,
+        "barrier/staging_sync_other:8:file-count/op": 2048.0,
+        "barrier/staging_sync_other:8:file-ns/op": 6128319901.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 15182299.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 831931.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 6063952.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 29938757.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 1027876.0
+      },
+      "case": "apply-512",
+      "mode": "attribution",
+      "position": 0,
+      "log": "03-apply-512-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 24917233283.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "baseline-a",
+      "position": 1,
+      "log": "03-apply-512-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 24204479795.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "baseline-b",
+      "position": 2,
+      "log": "03-apply-512-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/512",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 10938802997.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-512",
+      "mode": "candidate",
+      "position": 3,
+      "log": "03-apply-512-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 125025549.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 92628373.0,
+        "barrier/apply:1211:out-count/op": 1.0,
+        "barrier/apply:1211:out-ns/op": 2785239.0,
+        "barrier/journal:378:tmp-count/op": 4.0,
+        "barrier/journal:378:tmp-ns/op": 11452265.0,
+        "barrier/staging_sync:10:file-count/op": 17.0,
+        "barrier/staging_sync:10:file-ns/op": 48184457.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 11867053.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 3432.0,
+        "journal/encode-count/op": 4.0,
+        "journal/encode-ns/op": 122054.0,
+        "journal/publication-count/op": 4.0,
+        "journal/publication-ns/op": 23854039.0,
+        "journal/validate-count/op": 4.0,
+        "journal/validate-ns/op": 22107.0
+      },
+      "case": "apply-1",
+      "mode": "attribution",
+      "position": 0,
+      "log": "03-apply-1-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 120129196.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "baseline-a",
+      "position": 1,
+      "log": "03-apply-1-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 123694821.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "baseline-b",
+      "position": 2,
+      "log": "03-apply-1-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/1",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 120703383.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-1",
+      "mode": "candidate",
+      "position": 3,
+      "log": "03-apply-1-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 263119232.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 228298781.0,
+        "barrier/apply:1211:out-count/op": 8.0,
+        "barrier/apply:1211:out-ns/op": 22708127.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 9899793.0,
+        "barrier/staging_sync:10:file-count/op": 19.0,
+        "barrier/staging_sync:10:file-ns/op": 56755064.0,
+        "barrier/staging_sync_other:8:file-count/op": 32.0,
+        "barrier/staging_sync_other:8:file-ns/op": 89257694.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 12466877.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 13939.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 349559.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 19529310.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 37808.0
+      },
+      "case": "apply-8",
+      "mode": "attribution",
+      "position": 0,
+      "log": "03-apply-8-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 375411557.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "baseline-a",
+      "position": 1,
+      "log": "03-apply-8-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 378106520.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "baseline-b",
+      "position": 2,
+      "log": "03-apply-8-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 258339594.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-8",
+      "mode": "candidate",
+      "position": 3,
+      "log": "03-apply-8-candidate.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 706932953.0,
+        "apply/core-count/op": 1.0,
+        "apply/core-ns/op": 668006498.0,
+        "barrier/apply:1211:out-count/op": 32.0,
+        "barrier/apply:1211:out-ns/op": 88308752.0,
+        "barrier/journal:378:tmp-count/op": 3.0,
+        "barrier/journal:378:tmp-ns/op": 9455621.0,
+        "barrier/staging_sync:10:file-count/op": 43.0,
+        "barrier/staging_sync:10:file-ns/op": 119790806.0,
+        "barrier/staging_sync_other:8:file-count/op": 128.0,
+        "barrier/staging_sync_other:8:file-ns/op": 355133184.0,
+        "barrier/transfer:441:f-count/op": 4.0,
+        "barrier/transfer:441:f-ns/op": 11143066.0,
+        "changed-bytes/op": 1048576.0,
+        "journal/encode-bytes/op": 52891.0,
+        "journal/encode-count/op": 3.0,
+        "journal/encode-ns/op": 554894.0,
+        "journal/publication-count/op": 3.0,
+        "journal/publication-ns/op": 18717693.0,
+        "journal/validate-count/op": 3.0,
+        "journal/validate-ns/op": 177031.0
+      },
+      "case": "apply-32",
+      "mode": "attribution",
+      "position": 0,
+      "log": "03-apply-32-attribution.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 1264828053.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "baseline-a",
+      "position": 1,
+      "log": "03-apply-32-baseline-a.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 1745451367.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "baseline-b",
+      "position": 2,
+      "log": "03-apply-32-baseline-b.txt"
+    },
+    {
+      "name": "BenchmarkApplyJournalScaling/32",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 717400952.0,
+        "changed-bytes/op": 1048576.0
+      },
+      "case": "apply-32",
+      "mode": "candidate",
+      "position": 3,
+      "log": "03-apply-32-candidate.txt"
+    }
+  ],
+  "commands": [
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/home/lydakis/.errand/jobs/01M2PWHEX5HY8HSBT0A4AWVZHR/workspace/.group-results/.scratch-gjel74py/baseline-changes.test",
+      "./internal/changes"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/home/lydakis/.errand/jobs/01M2PWHEX5HY8HSBT0A4AWVZHR/workspace/.group-results/.scratch-gjel74py/baseline-cli.test",
+      "./cmd/errand"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/home/lydakis/.errand/jobs/01M2PWHEX5HY8HSBT0A4AWVZHR/workspace/.group-results/.scratch-gjel74py/candidate-changes.test",
+      "./internal/changes"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/home/lydakis/.errand/jobs/01M2PWHEX5HY8HSBT0A4AWVZHR/workspace/.group-results/.scratch-gjel74py/candidate-cli.test",
+      "./cmd/errand"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/home/lydakis/.errand/jobs/01M2PWHEX5HY8HSBT0A4AWVZHR/workspace/.group-results/.scratch-gjel74py/attribution-changes.test",
+      "./internal/changes"
+    ]
+  ],
+  "gomaxprocs": 2,
+  "case_rounds": {
+    "apply-1": 4,
+    "apply-8": 4,
+    "apply-32": 4,
+    "apply-128": 4,
+    "apply-512": 4,
+    "push": 3,
+    "watch": 3,
+    "fetch-batch": 3,
+    "workspace-create": 3,
+    "ephemeral-job": 3
+  },
+  "status": "complete",
+  "input_sha256": "26557ea6e47837c837f83cb42863e9f8c2b27fc23afb46edfe335f94381e2c98",
+  "archive_sha256": "0757df85ba50000cd5d35b1808f266888dee1f17d7b761531f8b5ef0e04d31cb",
+  "sync_sites": [
+    "apply:659:dir",
+    "apply:1211:out",
+    "export:82:to",
+    "journal:378:tmp",
+    "journal:782:dir",
+    "journal:807:changeParent",
+    "journal:807:quarantineDir",
+    "journal:821:fromDir",
+    "journal:821:toDir",
+    "journal:840:fromDir",
+    "journal:840:toDir",
+    "staging_sync:10:file",
+    "staging_sync_other:8:file",
+    "transfer:441:f",
+    "transfer_session:361:f"
+  ],
+  "go": "go version go1.27.1 linux/amd64",
+  "filesystem": "btrfs"
+}

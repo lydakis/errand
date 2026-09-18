@@ -1,0 +1,9 @@
+{
+  "baseline_revision": "16d747d55b917e47cf533fb0a39c8b9211b1badd",
+  "apfs_comparison": "mac-mini/01M2PX0HRA23EC4GA2FMG7P3SX",
+  "apfs_validation": "mac-mini/01M2PWWNXPX2ZJP3AQFP99BD4E",
+  "apfs_system_git_failure": "mac-mini/01M2PWHEX59ET0FT4Q9ZR74230",
+  "btrfs_comparison_and_validation": "cabal/01M2PWHEX5HY8HSBT0A4AWVZHR",
+  "apfs_path_prefix": "/Library/Developer/CommandLineTools/usr/bin",
+  "note": "APFS validation passed after selecting installed Command Line Tools Git. Benchmark extraction then failed on older Python before any measurements; regular-file extraction was fixed. Measured Go inputs unchanged."
+}

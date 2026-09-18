@@ -1,0 +1,4 @@
+ok  	github.com/lydakis/errand/internal/changes	1.537s
+ok  	github.com/lydakis/errand/internal/client	10.552s
+ok  	github.com/lydakis/errand/internal/daemon	12.999s
+ok  	github.com/lydakis/errand/cmd/errand	15.214s

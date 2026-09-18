@@ -1,0 +1,6 @@
+goos: linux
+goarch: amd64
+pkg: github.com/lydakis/errand/internal/changes
+cpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz
+BenchmarkApplyJournalScaling/512-2         	       1	24824438568 ns/op	         1.000 apply/core-count/op	24676908725 apply/core-ns/op	       512.0 barrier/apply:1177:out-count/op	1783351223 barrier/apply:1177:out-ns/op	       512.0 barrier/apply:1235:out-count/op	1526948682 barrier/apply:1235:out-ns/op	       512.0 barrier/apply:911:sourceDir-count/op	2035005986 barrier/apply:911:sourceDir-ns/op	       512.0 barrier/apply:914:destinationDir-count/op	1079060693 barrier/apply:914:destinationDir-ns/op	       512.0 barrier/apply:944:backupDir-count/op	1019349768 barrier/apply:944:backupDir-ns/op	       512.0 barrier/apply:944:destinationDir-count/op	2450677068 barrier/apply:944:destinationDir-ns/op	      1026 barrier/journal:377:tmp-count/op	4708438087 barrier/journal:377:tmp-ns/op	      2056 barrier/staging_sync:10:file-count/op	6497972991 barrier/staging_sync:10:file-ns/op	         4.000 barrier/transfer:441:f-count/op	  13663893 barrier/transfer:441:f-ns/op	   1048576 changed-bytes/op	 282424445 journal/encode-bytes/op	      1026 journal/encode-count/op	1676413656 journal/encode-ns/op	      1026 journal/publication-count/op	10620598555 journal/publication-ns/op	      1026 journal/validate-count/op	 414931287 journal/validate-ns/op
+PASS

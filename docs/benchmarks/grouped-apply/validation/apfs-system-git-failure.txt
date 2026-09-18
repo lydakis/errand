@@ -1,0 +1,379 @@
+--- FAIL: TestApplyThreeWayMergesRestrictedInputs (0.10s)
+    apply_materialize_test.go:99: merging workspace changes: workspace changes conflict at: artifact
+--- FAIL: TestCollectWorkspaceChangesUsesGitQuestionMarkPolicy (0.04s)
+    changes_test.go:262: git init: exit status 69: You have not agreed to the Xcode license agreements. Please run 'sudo xcodebuild -license' from within a Terminal window to review and agree to the Xcode and Apple SDKs license.
+--- FAIL: TestCollectWorkspaceChangesKeepsPathsOutsideNestedGitignoreScope (0.04s)
+    changes_test.go:302: git init: exit status 69: You have not agreed to the Xcode license agreements. Please run 'sudo xcodebuild -license' from within a Terminal window to review and agree to the Xcode and Apple SDKs license.
+--- FAIL: TestApplyThreeWayMergesIndependentTextEdits (0.07s)
+    changes_test.go:2527: merging workspace changes: workspace changes conflict at: artifact
+--- FAIL: TestApplyWithConflictsMaterializesTextAndPreservesBinary (0.15s)
+    changes_test.go:2739: text conflict = ""
+--- FAIL: TestCheckpointRecordsSourceAndPreservesDestinationEdits (0.14s)
+    checkpoint_test.go:34: workspace changes conflict at: artifact
+--- FAIL: TestApplyCumulativeResultWithPreviouslyAppliedContent (0.16s)
+    cumulative_apply_test.go:20: already-applied change caused a conflict: merging workspace changes: workspace changes conflict at: artifact
+--- FAIL: TestTransferConflictReceiptDoesNotRemergeMarkers (0.16s)
+    transfer_test.go:55: markers = "", <nil>
+--- FAIL: TestTransferRecoveryPreservesPartialConflictOutcome (0.95s)
+    --- FAIL: TestTransferRecoveryPreservesPartialConflictOutcome/before-install (0.31s)
+        transfer_test.go:128: missing conflict contents: ""
+    --- FAIL: TestTransferRecoveryPreservesPartialConflictOutcome/before-receipt (0.14s)
+        transfer_test.go:128: missing conflict contents: ""
+FAIL
+FAIL	github.com/lydakis/errand/internal/changes	25.017s
+ok  	github.com/lydakis/errand/internal/client	26.467s
+--- FAIL: TestFetchApplyConflictsMaterializesTextConflict (0.61s)
+    milestone4_test.go:395: materialized conflict = "", <nil>
+2026/09/17 01:14:30 workspace transfer inventory incomplete: workspace 01M2PWKA89NPX4AGX97BKQ29FY: unexpected EOF
+2026/09/17 01:14:32 workspace transfer inventory incomplete: workspace 01M2PWKCAK8JFWNBCWFTR770TS: openat 01M2PWKCAK8JFWNBCWFTR770TS/workspace.json: no such file or directory
+2026/09/17 01:14:41 workspace snapshot cache insertion: unchanged: rename /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestPushSnapshotFallbackcorrupt-unremovable2519008459/001/cache/blobs/.insert-1452711840 /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestPushSnapshotFallbackcorrupt-unremovable2519008459/001/cache/blobs/8f/8f990ba0b577b51cf009ea049368c16bbda1b21e1b93be07a824758bb253c39b: permission denied
+2026/09/17 01:14:43 workspace transfer inventory incomplete: workspace 01M2PWKQD482AMHDKKBCKJ0AS9: unexpected EOF
+--- FAIL: TestWorkspaceTransferRoundTrip (1.18s)
+    workspace_transfer_test.go:164: workspace changes conflict at: value
+FAIL
+FAIL	github.com/lydakis/errand/internal/daemon	85.257s
+errand: artifact path "" must be an exact workspace-relative file or directory
+errand: --artifact and --no-artifacts are mutually exclusive
+errand: artifact path "../out" must be an exact workspace-relative file or directory
+errand: retaining 1 artifact (use --verbose for bindings)
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestArtifactsRunFetchAndApplyfalse2464539264/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestArtifactsRunFetchAndApplyfalse2464539264/004
+errand: snapshot contains 2 files, 49 bytes
+errand: shipping 2 of 2 files (49 bytes; the rest is cached on the runner)
+errand: job test/01M2PWHP1BYPT2SSYNNKZA1Q4Y (2 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (6 bytes); fetch with errand fetch test/01M2PWHP1BYPT2SSYNNKZA1Q4Y
+errand: fetch: exported 1 changed path from test/01M2PWHP1BYPT2SSYNNKZA1Q4Y; 4.9 KiB transferred in 0.04s
+/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestArtifactsRunFetchAndApplyfalse2464539264/005/output
+errand: applying changes: merging workspace changes: workspace changes conflict at: ignored
+errand: workspace changes remain staged at /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestArtifactsRunFetchAndApplyfalse2464539264/001/errand/downloads/9e72615584e77b155f08da9acd491580-01M2PWHP1BYPT2SSYNNKZA1Q4Y
+errand: fetch: applied 1 changed path from test/01M2PWHP1BYPT2SSYNNKZA1Q4Y; 0 B transferred in 0.19s
+errand: file changes applied; application readiness not checked
+errand: retaining 1 artifact (use --verbose for bindings)
+errand: no snapshot; using an empty remote workspace
+errand: job test/01M2PWHPVQMGBW8TFAHFVZ21RM (0 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (6 bytes); fetch with errand fetch test/01M2PWHPVQMGBW8TFAHFVZ21RM
+errand: fetch: exported 1 changed path from test/01M2PWHPVQMGBW8TFAHFVZ21RM; 4.9 KiB transferred in 0.06s
+/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestArtifactsRunFetchAndApplytrue990952332/005/output
+errand: applying changes: merging workspace changes: workspace changes conflict at: ignored
+errand: workspace changes remain staged at /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestArtifactsRunFetchAndApplytrue990952332/001/errand/downloads/375efcce33399a68554c7cc6a9db133c-01M2PWHPVQMGBW8TFAHFVZ21RM
+errand: fetch: applied 1 changed path from test/01M2PWHPVQMGBW8TFAHFVZ21RM; 0 B transferred in 0.17s
+errand: file changes applied; application readiness not checked
+errand: using 3 caches (use --verbose for bindings)
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestCacheGroupsReuseAcrossJobsAndFreezeAtCreation2912814041/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestCacheGroupsReuseAcrossJobsAndFreezeAtCreation2912814041/004
+errand: snapshot contains 3 files, 170 bytes
+errand: shipping 3 of 3 files (170 bytes; the rest is cached on the runner)
+errand: job test/01M2PWHQKJY4SB8GNXE809B4YB (5 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: using 3 caches (use --verbose for bindings)
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestCacheGroupsReuseAcrossJobsAndFreezeAtCreation2912814041/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestCacheGroupsReuseAcrossJobsAndFreezeAtCreation2912814041/004
+errand: snapshot contains 3 files, 170 bytes
+errand: shipping 0 of 3 files (0 bytes; the rest is cached on the runner)
+errand: job test/01M2PWHRC0WQT076MF9FHQAWXQ (5 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: using 5 caches (use --verbose for bindings)
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestCacheGroupsReuseAcrossJobsAndFreezeAtCreation2912814041/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestCacheGroupsReuseAcrossJobsAndFreezeAtCreation2912814041/004
+errand: snapshot contains 4 files, 173 bytes
+errand: shipping 1 of 4 files (3 bytes; the rest is cached on the runner)
+errand: job test/01M2PWHS2XY3SXBD8CY64N06M8 (7 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: using persistent workspace dev; local files are not uploaded
+errand: job test/01M2PWHTTR0883A0RAZGY3M4JF in workspace dev
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (5 bytes); fetch with errand fetch test/01M2PWHTTR0883A0RAZGY3M4JF
+errand: --cache requires NAME=PATH
+errand: --cache and --no-caches are mutually exclusive
+errand: cache paths: artifact path "../out" must be an exact workspace-relative file or directory
+errand: using 1 cache; retaining 1 artifact (use --verbose for bindings)
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestNamedCachesReuseWithoutSnapshotOrFetchContentsfalse1913693808/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestNamedCachesReuseWithoutSnapshotOrFetchContentsfalse1913693808/004
+errand: snapshot contains 2 files, 60 bytes
+errand: shipping 2 of 2 files (60 bytes; the rest is cached on the runner)
+errand: job test/01M2PWHVQF3W8CNY0TFBWPHYBR (2 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (6 bytes); fetch with errand fetch test/01M2PWHVQF3W8CNY0TFBWPHYBR
+errand: using 1 cache; retaining 1 artifact (use --verbose for bindings)
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestNamedCachesReuseWithoutSnapshotOrFetchContentsfalse1913693808/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestNamedCachesReuseWithoutSnapshotOrFetchContentsfalse1913693808/004
+errand: snapshot contains 2 files, 60 bytes
+errand: shipping 0 of 2 files (0 bytes; the rest is cached on the runner)
+errand: job test/01M2PWHWAV8KGR67G5WCDDZTV0 (2 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (6 bytes); fetch with errand fetch test/01M2PWHWAV8KGR67G5WCDDZTV0
+errand: fetch: exported 1 changed path from test/01M2PWHWAV8KGR67G5WCDDZTV0; 3.8 KiB transferred in 0.06s
+/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestNamedCachesReuseWithoutSnapshotOrFetchContentsfalse1913693808/005/results
+errand: fetch: exported 1 changed path from test/01M2PWHVQF3W8CNY0TFBWPHYBR; 3.8 KiB transferred in 0.03s
+/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestNamedCachesReuseWithoutSnapshotOrFetchContentsfalse1913693808/006/results
+errand: using 1 cache; retaining 1 artifact (use --verbose for bindings)
+errand: no snapshot; using an empty remote workspace
+errand: job test/01M2PWHX44JRR6RC7N0HWYXHQ1 (0 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (6 bytes); fetch with errand fetch test/01M2PWHX44JRR6RC7N0HWYXHQ1
+errand: using 1 cache; retaining 1 artifact (use --verbose for bindings)
+errand: no snapshot; using an empty remote workspace
+errand: job test/01M2PWHXKN9W7C7W5QQAAS078K (0 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (6 bytes); fetch with errand fetch test/01M2PWHXKN9W7C7W5QQAAS078K
+errand: fetch: exported 1 changed path from test/01M2PWHXKN9W7C7W5QQAAS078K; 3.8 KiB transferred in 0.06s
+/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestNamedCachesReuseWithoutSnapshotOrFetchContentstrue2813702503/005/results
+errand: fetch: exported 1 changed path from test/01M2PWHX44JRR6RC7N0HWYXHQ1; 3.8 KiB transferred in 0.03s
+/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestNamedCachesReuseWithoutSnapshotOrFetchContentstrue2813702503/006/results
+errand: environment file "/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestEnvironmentFileCLIOverridesAndFailures853353971/002/missing.env": stat /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestEnvironmentFileCLIOverridesAndFailures853353971/002/missing.env: no such file or directory
+errand: environment file "/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestEnvironmentFileCLIOverridesAndFailures853353971/002/malformed.env" line 1: invalid quoted value
+errand: environment file "/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestEnvironmentFileCLIOverridesAndFailures853353971/002" must be a regular file
+errand: using persistent workspace env-test; local files are not uploaded
+errand: job test/01M2PWJ1XMV1KB3BZEAVXQ8C61 in workspace env-test
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: using persistent workspace env-test; local files are not uploaded
+errand: job test/01M2PWJ26E79PPS7V405Q8MA3W in workspace env-test
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: no snapshot; using an empty remote workspace
+errand: job test/01M2PWJ2DAYF1118AMK71V0618 (0 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: using persistent workspace env-test; local files are not uploaded
+errand: job test/01M2PWJ2R1H3RCC88KCE2RZDA5 in workspace env-test
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: --detach and --forward are mutually exclusive
+errand: --detach and --forward are mutually exclusive
+flag provided but not defined: -invalid-test-flag
+usage: errand fetch [options] HANDLE [PATH]
+
+options:
+  -apply
+    	apply retained workspace changes with a clean-or-refuse three-way merge
+  -conflicts
+    	materialize text conflicts and apply clean changes
+  -json
+    	emit machine-readable JSON
+  -o string
+    	export retained remote files into a new directory
+  -on string
+    	peer name
+  -output string
+    	export retained remote files into a new directory
+  -url string
+    	peer base URL
+usage: errand fetch [options] HANDLE [PATH]
+
+options:
+  -apply
+    	apply retained workspace changes with a clean-or-refuse three-way merge
+  -conflicts
+    	materialize text conflicts and apply clean changes
+  -json
+    	emit machine-readable JSON
+  -o string
+    	export retained remote files into a new directory
+  -on string
+    	peer name
+  -output string
+    	export retained remote files into a new directory
+  -url string
+    	peer base URL
+flag provided but not defined: -invalid-test-flag
+usage: errand kill [options] HANDLE
+
+options:
+  -f	SIGKILL instead of SIGTERM
+  -force
+    	SIGKILL instead of SIGTERM
+  -on string
+    	peer name
+  -url string
+    	peer base URL
+usage: errand kill [options] HANDLE
+
+options:
+  -f	SIGKILL instead of SIGTERM
+  -force
+    	SIGKILL instead of SIGTERM
+  -on string
+    	peer name
+  -url string
+    	peer base URL
+flag provided but not defined: -invalid-test-flag
+usage: errand ps [options]
+
+options:
+  -a	include terminal jobs
+  -all
+    	include terminal jobs
+  -json
+    	emit machine-readable JSON
+  -last int
+    	show only the latest N jobs across all states
+  -n int
+    	show only the latest N jobs across all states
+  -on string
+    	restrict to one peer name
+  -url string
+    	restrict to one peer base URL
+  -workspace string
+    	restrict to jobs in a persistent workspace name or ID
+usage: errand ps [options]
+
+options:
+  -a	include terminal jobs
+  -all
+    	include terminal jobs
+  -json
+    	emit machine-readable JSON
+  -last int
+    	show only the latest N jobs across all states
+  -n int
+    	show only the latest N jobs across all states
+  -on string
+    	restrict to one peer name
+  -url string
+    	restrict to one peer base URL
+  -workspace string
+    	restrict to jobs in a persistent workspace name or ID
+flag provided but not defined: -invalid-test-flag
+usage: errand df [options]
+
+options:
+  -json
+    	emit machine-readable JSON
+  -on string
+    	restrict to one peer name
+  -url string
+    	restrict to one peer base URL
+  -v	show individual workspace, named-cache, and job storage
+  -verbose
+    	show individual workspace, named-cache, and job storage
+usage: errand df [options]
+
+options:
+  -json
+    	emit machine-readable JSON
+  -on string
+    	restrict to one peer name
+  -url string
+    	restrict to one peer base URL
+  -v	show individual workspace, named-cache, and job storage
+  -verbose
+    	show individual workspace, named-cache, and job storage
+errand: --workspace-root and --no-snapshot are mutually exclusive
+errand: --workdir must be the workspace root when using --no-snapshot
+errand: --env requires NAME=VALUE
+errand fetch: --conflicts requires --apply
+errand fetch: --output requires a non-empty directory and cannot be combined with --apply or --conflicts
+errand fetch: --output requires a non-empty directory and cannot be combined with --apply or --conflicts
+errand fetch: --output requires a non-empty directory and cannot be combined with --apply or --conflicts
+errand fetch: --output requires a non-empty directory and cannot be combined with --apply or --conflicts
+errand: force kill (SIGKILL) requested for http://127.0.0.1:52067/01M2PWJ6RV68X9ATTRBCTG671T
+errand: --include-all and --no-snapshot are mutually exclusive
+errand: --workdir must be the workspace root when using --no-snapshot
+SETTING           VALUE                                                                    SOURCE
+peer              test                                                                     personal: /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigRemainsOfflineInReleaseBuild1440006373/001/errand/config.toml (default_peer)
+url               http://runner.invalid:7443                                               personal: /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigRemainsOfflineInReleaseBuild1440006373/001/errand/config.toml (peers.test)
+workspace_root    /Users/ody/.errand/jobs/01M2PWHEX59ET0FT4Q9ZR74230/workspace/cmd/errand  current directory
+workdir           /Users/ody/.errand/jobs/01M2PWHEX59ET0FT4Q9ZR74230/workspace/cmd/errand  current directory relative to workspace root
+project           errand                                                                   derived from workspace root and current directory
+apply_on_success  false                                                                    default: false
+no_snapshot       false                                                                    default: false
+forward           []                                                                       default: no forwards
+artifacts         []                                                                       default: no artifacts
+caches            0 bindings                                                               default: no named caches
+SETTING           VALUE                                                                    SOURCE
+peer              test                                                                     personal: /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigRemainsOfflineInReleaseBuild1440006373/001/errand/config.toml (default_peer)
+url               http://runner.invalid:7443                                               personal: /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigRemainsOfflineInReleaseBuild1440006373/001/errand/config.toml (peers.test)
+workspace_root    /Users/ody/.errand/jobs/01M2PWHEX59ET0FT4Q9ZR74230/workspace/cmd/errand  current directory
+workdir           /Users/ody/.errand/jobs/01M2PWHEX59ET0FT4Q9ZR74230/workspace/cmd/errand  current directory relative to workspace root
+project           errand                                                                   derived from workspace root and current directory
+apply_on_success  false                                                                    default: false
+no_snapshot       false                                                                    default: false
+forward           []                                                                       default: no forwards
+artifacts         []                                                                       default: no artifacts
+caches            0 bindings                                                               default: no named caches
+errand: retaining 1 artifact (use --verbose for bindings)
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestCombinedProfileEndToEnd2047638681/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestCombinedProfileEndToEnd2047638681/004
+errand: snapshot contains 3 files, 352 bytes
+errand: shipping 3 of 3 files (352 bytes; the rest is cached on the runner)
+errand: job build/01M2PWJ8231WS9WAXN52RKC7XQ (3 files, commit none)
+errand: forwarding localhost:52177 to job port 52178
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+PASS
+errand: workspace changes applied from /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestCombinedProfileEndToEnd2047638681/001/errand/downloads/c31f9b970542c9a83a2a52e136f0c620-01M2PWJ8231WS9WAXN52RKC7XQ
+--- FAIL: TestPushWatchConflictsStopAfterNormalPushSemantics (2.14s)
+    --- FAIL: TestPushWatchConflictsStopAfterNormalPushSemantics/markers=true (1.13s)
+        push_watch_test.go:137: missing markers: 
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigInspectionAndRunUseWorkspacePreferences1190298928/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigInspectionAndRunUseWorkspacePreferences1190298928/004
+errand: snapshot contains 2 files, 63 bytes
+errand: shipping 2 of 2 files (63 bytes; the rest is cached on the runner)
+errand: job test/01M2PWKB7A15QV96A82YXPB1GG (2 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (15 bytes); fetch with errand fetch test/01M2PWKB7A15QV96A82YXPB1GG
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigInspectionAndRunUseWorkspacePreferences1190298928/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigInspectionAndRunUseWorkspacePreferences1190298928/004
+errand: snapshot contains 2 files, 63 bytes
+errand: shipping 0 of 2 files (0 bytes; the rest is cached on the runner)
+errand: job test/01M2PWKBK7V3TSK7TEHDYK052A (2 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: workspace changes applied from /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigInspectionAndRunUseWorkspacePreferences1190298928/001/errand/downloads/21ae58e05841221366f79a659b2de974-01M2PWKBK7V3TSK7TEHDYK052A
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigInspectionAndRunUseWorkspacePreferences1190298928/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigInspectionAndRunUseWorkspacePreferences1190298928/004/nested
+errand: snapshot contains 3 files, 182 bytes
+errand: shipping 2 of 3 files (174 bytes; the rest is cached on the runner)
+errand: job profile-target/01M2PWKC2W4DCPXVTYTG34VC72 (4 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: workspace changes applied from /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestConfigInspectionAndRunUseWorkspacePreferences1190298928/001/errand/downloads/21ae58e05841221366f79a659b2de974-01M2PWKC2W4DCPXVTYTG34VC72
+errand: workspace: /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestWorkspacePassStopsDoctorAndRunBeforeContact1145124687/002/.errand.toml: nonempty workspace env.pass requires an explicit choice; move the names to personal config or an explicitly selected profile, or remove this default and use --passenv
+errand: no snapshot; using an empty remote workspace
+errand: job test/01M2PWKCJNEMDDXKQNWW460BYQ (0 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: --detach cannot use configured forwards; add --no-forward
+errand: --forward and --no-forward are mutually exclusive
+errand: local port 3000 is forwarded more than once
+errand: binding forward 127.0.0.1:52523: listen tcp4 127.0.0.1:52523: bind: address already in use
+errand: binding forward 127.0.0.1:52523: listen tcp4 127.0.0.1:52523: bind: address already in use
+errand: no snapshot; using an empty remote workspace
+errand: job test/01M2PWKCV3CSWRX6JXVEVCMVHW (0 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+--- FAIL: TestTransferReportingRoundTrip (1.53s)
+    transfer_reporting_test.go:136: fetch apply: 120 errand: workspace changes conflict at: value
+        errand: workspace changes remain staged at /var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestTransferReportingRoundTrip3785046057/001/errand/workspace-transfers/a253138958b4f2ae81eaeb5216d9351f-01M2PWKGW05PPN8THC0MT7SH82/fetch/attempts/01M2PWKJ2G791QKMWWGFVW1W4B
+errand: using persistent workspace experiment; local files are not uploaded
+errand: job test/01M2PWKPB03RTCZ5SR6F382HRS in workspace experiment
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: selecting workspace: named-cache bindings are fixed when the workspace is created
+errand: using persistent workspace experiment; local files are not uploaded
+errand: job test/01M2PWKQ3BR28T4H3XZPVYKDFR in workspace experiment
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (7 bytes); fetch with errand fetch test/01M2PWKQ3BR28T4H3XZPVYKDFR
+errand: using persistent workspace experiment; local files are not uploaded
+errand: job test/01M2PWKQA8BQ4K9M5TBKQAMBBK in workspace experiment
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: selecting workspace: workspace: 404 Not Found: workspace does not exist
+errand: using persistent workspace experiment; local files are not uploaded
+errand: job test/01M2PWKQWKH6PRM01TCVQ1TARD in workspace experiment
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (15 bytes); fetch with errand fetch test/01M2PWKQWKH6PRM01TCVQ1TARD
+errand: using persistent workspace experiment; local files are not uploaded
+errand: job test/01M2PWKR423RXE0FTMMH2G6JZT in workspace experiment
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (15 bytes); fetch with errand fetch test/01M2PWKR423RXE0FTMMH2G6JZT
+errand: using 1 cache (use --verbose for bindings)
+errand: workspace root /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestWorkspaceCommandsCreateReuseAndRemove2950451191/004 (from current directory)
+errand: command workdir /private/var/folders/nr/v3drrsvj1l9fntp4lnpvrnb00000gn/T/TestWorkspaceCommandsCreateReuseAndRemove2950451191/004
+errand: snapshot contains 3 files, 34 bytes
+errand: shipping 1 of 3 files (5 bytes; the rest is cached on the runner)
+errand: job test/01M2PWKRCQGH8YW4JBEYA11E86 (3 files, commit none)
+errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)
+errand: 1 workspace changes retained (15 bytes); fetch with errand fetch test/01M2PWKRCQGH8YW4JBEYA11E86
+errand: --workspace: workspace name must start with a letter and contain at most 64 letters, digits, hyphens, or underscores
+errand: persistent workspace runs cannot use --no-snapshot or --include-all
+errand: persistent workspace runs cannot use --no-snapshot or --include-all
+errand: persistent workspace runs cannot use --no-snapshot or --include-all
+errand: persistent workspace runs cannot use --no-snapshot or --include-all
+errand: persistent workspace requires a pinned peer; use --on instead of where
+errand: --workspace: workspace name must start with a letter and contain at most 64 letters, digits, hyphens, or underscores
+FAIL
+FAIL	github.com/lydakis/errand/cmd/errand	69.473s
+FAIL

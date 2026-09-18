@@ -1,0 +1,7 @@
+EVALUATION {"mode":"ephemeral-job","sample":0,"seconds":0.82500322}
+goos: linux
+goarch: amd64
+pkg: github.com/lydakis/errand/cmd/errand
+cpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz
+BenchmarkWorkspaceCreationAndSubmission/ephemeral-job-2         	       1	 825004016 ns/op
+PASS
