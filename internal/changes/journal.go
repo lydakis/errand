@@ -553,11 +553,13 @@ func validateApplyJournal(journal applyJournal) error {
 		if grouped != len(journal.Items) || grouped < 2 || len(journal.CreatedParents) != 0 {
 			return fmt.Errorf("grouped apply intent must cover the entire existing-parent plan")
 		}
-		first := journal.Items[0]
-		for _, item := range journal.Items[1:] {
-			if item.Parent != first.Parent || path.Dir(item.Path) != path.Dir(first.Path) {
-				return fmt.Errorf("grouped apply intent has different parents")
+		parents := make(map[string]fsidentity.Identity)
+		for _, item := range journal.Items {
+			parentPath := path.Dir(item.Path)
+			if previous, exists := parents[parentPath]; exists && previous != item.Parent {
+				return fmt.Errorf("grouped apply intent has inconsistent parent identity")
 			}
+			parents[parentPath] = item.Parent
 		}
 	}
 	seenParents := map[string]bool{}

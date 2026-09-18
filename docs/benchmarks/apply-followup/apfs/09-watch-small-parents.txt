@@ -1,0 +1,18 @@
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"fixture","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"fixture","seconds":0.052074791}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"daemon-start","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"daemon-start","seconds":0.022444083}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"workspace-create","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"workspace-create","seconds":0.346409541}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"warm-push","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"warm-push","seconds":0.181393291}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"daemon-close","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"daemon-close","seconds":0.000039875}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"temp-cleanup","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"temp-cleanup","seconds":0.110001333}
+goos: darwin
+goarch: arm64
+pkg: github.com/lydakis/errand/cmd/errand
+cpu: Apple M4
+BenchmarkWatchWorkloads/small-2         	       1	 252714250 ns/op	       144.7 apply-ms/op	        64.54 client-ms/op	        53.50 cpu-ms/op	         0 negotiate-ms/op	         0 resamples/op	        34.77 stage-ms/op
+PASS

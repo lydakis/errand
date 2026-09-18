@@ -1,0 +1,18 @@
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"fixture","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"fixture","seconds":0.03211491}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"daemon-start","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"daemon-start","seconds":0.011670355}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"workspace-create","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"workspace-create","seconds":1.064201545}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"warm-push","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"warm-push","seconds":0.17839768}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"daemon-close","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"daemon-close","seconds":0.000012884}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"start","iterations":1,"phase":"temp-cleanup","seconds":0}
+BENCH_PHASE {"benchmark":"BenchmarkWatchWorkloads/small","event":"end","iterations":1,"phase":"temp-cleanup","seconds":0.123283879}
+goos: linux
+goarch: amd64
+pkg: github.com/lydakis/errand/cmd/errand
+cpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz
+BenchmarkWatchWorkloads/small-2         	       1	 218493904 ns/op	       126.0 apply-ms/op	        44.08 client-ms/op	        59.06 cpu-ms/op	         0 negotiate-ms/op	         0 resamples/op	        45.53 stage-ms/op
+PASS

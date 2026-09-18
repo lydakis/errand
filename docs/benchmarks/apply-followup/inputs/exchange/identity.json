@@ -1,0 +1,5 @@
+{
+  "revision": "092e88a+experimental-exchange",
+  "input_sha256": "7dcd201d29197356de6a143fb75332ccde759cd17ca8619559f0e73f6524199c",
+  "note": "Isolated exchange prototype on frozen parents; not production; patch retained in experiments/applyexchange."
+}

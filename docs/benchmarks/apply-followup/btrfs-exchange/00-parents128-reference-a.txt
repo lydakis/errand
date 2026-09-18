@@ -1,0 +1,6 @@
+goos: linux
+goarch: amd64
+pkg: github.com/lydakis/errand/internal/changes
+cpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz
+BenchmarkApplyWorkloads/parents128-2         	       1	2807351306 ns/op	      4096 file-bytes/op	         1.000 grouped/op	       128.0 roots/op
+PASS

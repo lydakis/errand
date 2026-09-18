@@ -6,44 +6,58 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 
 	"github.com/lydakis/errand/internal/fsidentity"
 )
 
-// A group changes existing regular files under one pinned parent. Independent
+// A group changes existing regular files under verified existing parents. Independent
 // item directories retain each backup/value; directory and structural changes
 // keep the per-item protocol. See docs/GROUPED_APPLY.md for recovery ordering.
 type applyFileGroup struct {
-	parent     fsidentity.Identity
+	parents    map[string]fsidentity.Identity
 	checkpoint func(string, int) error
 }
 
-func planApplyFileGroup(destination *applyDestination, journal applyJournal, inputs map[string]applyPathInput, merged *treeAccess, checkpoint func(string, int) error) *applyFileGroup {
+// Reasons are stable diagnostic categories; never include source paths or bodies.
+func planApplyFileGroup(destination *applyDestination, journal applyJournal, inputs map[string]applyPathInput, merged *treeAccess, checkpoint func(string, int) error) (*applyFileGroup, string) {
 	if len(journal.Items) < 2 {
-		return nil
+		return nil, "single-root"
 	}
-	parentPath := path.Dir(journal.Items[0].Path)
-	parent := inputs[journal.Items[0].Path].ancestor.identity
-	if parent.IsZero() {
-		return nil
-	}
+	parents := make(map[string]fsidentity.Identity)
 	for _, item := range journal.Items {
 		input := inputs[item.Path]
-		if item.MetadataOnly || item.Original.Missing || item.Expected.Missing || path.Dir(item.Path) != parentPath || input.ancestor.path != parentPath || input.ancestor.identity != parent {
-			return nil
+		if item.MetadataOnly {
+			return nil, "metadata"
 		}
+		if item.Original.Missing {
+			return nil, "creation"
+		}
+		if item.Expected.Missing {
+			return nil, "deletion"
+		}
+		parentPath := path.Dir(item.Path)
+		if input.ancestor.path != parentPath || input.ancestor.identity.IsZero() {
+			return nil, "missing-parent"
+		}
+		if previous, exists := parents[parentPath]; exists && previous != input.ancestor.identity {
+			return nil, "changed-parent"
+		}
+		parents[parentPath] = input.ancestor.identity
 		original, err := destination.root.Lstat(item.Path)
 		if err != nil || !original.Mode().IsRegular() {
-			return nil
+			return nil, "non-regular-original"
 		}
 		value, err := merged.root.Lstat(item.Path)
-		// Physical mode must equal logical mode: grouped install skips mode
-		// restoration, and grouped recovery hashes the still-staged physical value.
-		if err != nil || !value.Mode().IsRegular() || value.Mode().Perm() != merged.original[item.Path] {
-			return nil
+		if err != nil || !value.Mode().IsRegular() {
+			return nil, "non-regular-value"
+		}
+		// Group installation/recovery uses final physical modes directly.
+		if value.Mode().Perm() != merged.original[item.Path] {
+			return nil, "widened-mode"
 		}
 	}
-	return &applyFileGroup{parent: parent, checkpoint: checkpoint}
+	return &applyFileGroup{parents: parents, checkpoint: checkpoint}, "eligible"
 }
 
 func (g *applyFileGroup) check(event string, index int) error {
@@ -54,13 +68,16 @@ func (g *applyFileGroup) check(event string, index int) error {
 }
 
 func (g *applyFileGroup) install(destination *applyDestination, journal *applyJournal, synchronization applySynchronization) error {
-	parent, err := openChangeParent(destination.root, journal.Items[0].Path, g.parent)
-	if err != nil {
-		return err
-	}
-	defer parent.Close()
+	// Only one installation parent is held at a time, even for deep/mixed trees.
+	var parent *os.File
+	var parentPath string
+	defer func() {
+		if parent != nil {
+			_ = parent.Close()
+		}
+	}()
 	for i := range journal.Items {
-		journal.Items[i].Parent = g.parent
+		journal.Items[i].Parent = g.parents[path.Dir(journal.Items[i].Path)]
 		journal.Items[i].Phase = applyItemGrouped
 	}
 	if err := writeApplyJournalAtRoot(destination.root, *journal); err != nil {
@@ -70,9 +87,25 @@ func (g *applyFileGroup) install(destination *applyDestination, journal *applyJo
 		return err
 	}
 	verify := func(item applyJournalItem) error {
-		return errors.Join(destination.verifyPath(), verifyChangeParent(destination.root, item.Path, g.parent))
+		return errors.Join(destination.verifyPath(), verifyChangeParent(destination.root, item.Path, item.Parent))
 	}
 	for i, item := range journal.Items {
+		nextParent := path.Dir(item.Path)
+		if parent == nil || nextParent != parentPath {
+			if parent != nil {
+				err := parent.Close()
+				parent = nil
+				if err != nil {
+					return err
+				}
+			}
+			var err error
+			parent, err = openChangeParent(destination.root, item.Path, item.Parent)
+			if err != nil {
+				return err
+			}
+			parentPath = nextParent
+		}
 		if err := g.check("before-backup", i); err != nil {
 			return err
 		}
@@ -109,15 +142,36 @@ func (g *applyFileGroup) install(destination *applyDestination, journal *applyJo
 		}
 
 	}
-	// Every item shares this parent; verify it once before publication.
-	if err := verify(journal.Items[0]); err != nil {
+	if err := parent.Close(); err != nil {
+		parent = nil
+		return err
+	}
+	parent = nil
+	if err := destination.verifyPath(); err != nil {
 		return err
 	}
 	if err := g.check("install-barrier", -1); err != nil {
 		return err
 	}
-	if err := synchronization.barrier("install-parent", parent); err != nil {
-		return err
+	// Each changed parent must be synchronized, including on Linux where syncing
+	// another directory cannot publish this directory's rename entries.
+	names := make([]string, 0, len(g.parents))
+	for name := range g.parents {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for i, name := range names {
+		dir, err := openApplyDirectory(destination.root, name, g.parents[name])
+		if err != nil {
+			return err
+		}
+		err = synchronization.barrier("install-parent", dir)
+		if err = errors.Join(err, dir.Close()); err != nil {
+			return err
+		}
+		if err := g.check("parent-published", i); err != nil {
+			return err
+		}
 	}
 	if err := g.check("installed", -1); err != nil {
 		return err

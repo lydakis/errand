@@ -1,0 +1,37 @@
+{
+  "scope": "Post-review diagnostic helper, explicit merge scratch copier, partial parent-publication crash coverage and evidence verification. No new performance measurements.",
+  "production_transition_sha256": "86cb1fef62011bb2c1639680f0f01e4928e6bab61c8339720b777b22ee282087",
+  "jobs": {
+    "apfs": {
+      "handle": "mac-mini/01M2S98J328WGYY1NBR13BY72P",
+      "git_path_prefix": "/Library/Developer/CommandLineTools/usr/bin",
+      "exit_code": 0,
+      "output": [
+        "ok github.com/lydakis/errand/internal/changes 21.578s",
+        "ok github.com/lydakis/errand/internal/changes 9.851s"
+      ]
+    },
+    "btrfs": {
+      "handle": "cabal/01M2S98J32CHE0P192BZK9GWBE",
+      "exit_code": 0,
+      "output": [
+        "ok github.com/lydakis/errand/internal/changes 0.865s",
+        "ok github.com/lydakis/errand/internal/changes 2.042s"
+      ]
+    }
+  },
+  "native_commands": [
+    "go test ./internal/changes",
+    "go test -race ./internal/changes -run Test(Grouped|ApplySynchronization|MergeRegular) -count=1"
+  ],
+  "local_checks": {
+    "python_command": "python3 -m unittest discover -s scripts -p 'test_*apply*.py'",
+    "python_tests_passed": 13,
+    "verified_individual_samples": 1004
+  },
+  "review_test_sources": {
+    "internal/changes/apply_group_test.go": "b2d64bcc481334f2ac86faa81bb01fc56625b376544cfc7e57766a8e4e2079e7",
+    "internal/changes/apply_group_parents_test.go": "7b794f2cd90b13f177a5ba6a99febf496a28172fad834d696f977a3f32ef4833",
+    "scripts/test_apply_followup_evidence.py": "a8a3a5ad9fe49bef42d3282533425333321b3dfa13792c69676d3b3c3e2a0c3b"
+  }
+}

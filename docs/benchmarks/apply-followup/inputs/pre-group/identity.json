@@ -1,0 +1,5 @@
+{
+  "revision": "16d747d+matched-workload",
+  "input_sha256": "40c61770d28cf3bf4ca4082605084000c73b278f71a8fd23da1a1e3f608b0b5f",
+  "note": "Historical pre-P1 source plus same apply workload without group instrumentation. No backup-data fix. Compare one-root only; fsnotify dependency differs."
+}

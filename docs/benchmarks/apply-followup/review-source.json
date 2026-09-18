@@ -1,0 +1,18 @@
+{
+  "frozen_input_sha256": "ff78b9d5ab8df8c05149f1f511b29a484526cf3ef5c41e86b1698d7d2df0730a",
+  "note": "Post-benchmark review edits only. Recorded timings apply to frozen parents, not these edits. Tests are excluded from production source identity.",
+  "changes": {
+    "internal/changes/apply.go": {
+      "before": "2ec91a1ef6631eafed91be916c64cce6c41d2dcc069f136cf91280ec7623726a",
+      "after": "23aa09b7d7631cddc0d2675e2e55c5579eb4551e9119276c8a9201c4c4c8d601"
+    },
+    "internal/changes/apply_group.go": {
+      "before": "2b228a0930097105c6bfd3c699f4eaa2425f261aab7f1259b58d00a96de49d8a",
+      "after": "a5d3967ae6917f1482fab02d59cbc4cb1d646e8b5e6c8dcffb0dbe7820c0d045"
+    },
+    "internal/changes/merge.go": {
+      "before": "c611fa6a26f6eb9cf1d8b775811e56360195da34a74b21b587948414e4732443",
+      "after": "745927e5893421cf11f8570afa65650094516d9d51634180fcd32f0c838517fd"
+    }
+  }
+}

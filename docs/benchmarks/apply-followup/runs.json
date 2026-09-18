@@ -1,0 +1,51 @@
+{
+  "base_revision": "092e88a2df1709c0ba9f6f6a057501893b5f9ef9",
+  "jobs": {
+    "apfs": "mac-mini/01M2S5WW0YKMMWJ119NRN2QEWT",
+    "btrfs": "cabal/01M2S5WWRQ9Q18TR26BKE1H1EF",
+    "apfs_exchange": "mac-mini/01M2S6NBNFRYRA4YAD6FQ1TP1N",
+    "btrfs_exchange_history_repeat": "cabal/01M2S6WG2BWJ51MCX93REHWPVW"
+  },
+  "main_command": "python3 scripts/benchmark_apply_followup.py --output .followup-results",
+  "exchange_command": "python3 scripts/benchmark_apply_followup.py --variants parents exchange --cases flat128 parents8 parents128 --no-watch --batch-rounds 6 --output .exchange-results",
+  "historical_btrfs_command": "python3 scripts/benchmark_apply_followup.py --variants pre-group baseline --cases tiny large --no-watch --small-rounds 24 --output .historical-small",
+  "repeat_btrfs_command": "python3 scripts/benchmark_apply_followup.py --cases flat128 --no-watch --batch-rounds 12 --output .flat-repeat",
+  "production_validation": [
+    "go test ./internal/changes ./internal/snapshot ./internal/client ./internal/daemon ./cmd/errand",
+    "go test -race ./internal/changes -run Test(Grouped|ApplySynchronization|MergeRegular)",
+    "go test -race ./internal/changes -run ^TestGroupedApplyPublishesEveryParentBeforeCommit$ -count=1"
+  ],
+  "experimental_validation": "python3 scripts/validate_apply_exchange.py --output .exchange-tests",
+  "apfs_path_prefix": "/Library/Developer/CommandLineTools/usr/bin",
+  "inputs": {
+    "parents": {
+      "revision": "092e88a+followup",
+      "input_sha256": "ff78b9d5ab8df8c05149f1f511b29a484526cf3ef5c41e86b1698d7d2df0730a",
+      "note": "Scratch policy, Git failure reporting, and multiple existing parents; creations and deletions remain reference."
+    },
+    "exchange": {
+      "revision": "092e88a+experimental-exchange",
+      "input_sha256": "7dcd201d29197356de6a143fb75332ccde759cd17ca8619559f0e73f6524199c",
+      "note": "Isolated exchange prototype on frozen parents; not production; patch retained in experiments/applyexchange."
+    },
+    "baseline": {
+      "revision": "092e88a",
+      "input_sha256": "088b2775a865a71f5421a891a99c4bec0b4afc22b3b2070cee62e5a1101d3812",
+      "note": "Committed P1 plus the new workload benchmark; production unchanged."
+    },
+    "scratch": {
+      "input_sha256": "4b089ea99a24c61e35624586a44688dff090a7c47bc090fb6fc4442726f04a1a",
+      "note": "P1 plus scratch-only publication policy and Git operational-error correction; original single-parent grouping."
+    },
+    "pre-group": {
+      "revision": "16d747d+matched-workload",
+      "input_sha256": "40c61770d28cf3bf4ca4082605084000c73b278f71a8fd23da1a1e3f608b0b5f",
+      "note": "Historical pre-P1 source plus same apply workload without group instrumentation. No backup-data fix. Compare one-root only; fsnotify dependency differs."
+    }
+  },
+  "driver_sha256": "8622953b0d1a70904c2c64c30a5e23da14e6f931972287eaafd2c196c49acf2b",
+  "note": "Main campaigns used the driver frozen in parents inputs; subsequent campaigns used driver.py (adds --cases only). Production code matches parents inputs; the later additional parent-barrier test is validated separately. Main report reference A/B is committed P1; exchange reference is parents; historical-small reference is pre-group. Campaigns do not overlap on a host. Historical pre-group fsnotify dependency differs, but that comparison runs only apply benchmarks, not watchers.",
+  "verified_samples": 1004,
+  "status": "complete",
+  "validation_driver_sha256": "8d0cbf2259e29fdf9fd226739878bcc3fc822985b1cd3af6bd1dd217b0b5e00a"
+}

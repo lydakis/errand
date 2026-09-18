@@ -1,5 +1,9 @@
 # Grouped apply: implementation and native comparison
 
+This report records the committed P1 single-parent candidate. The subsequent
+[scratch and multi-parent follow-up](APPLY_FOLLOWUP.md) has separate frozen inputs
+and measurements; the figures below remain historical P1 evidence.
+
 The [baseline](APPLY_JOURNAL_SCALING.md) selects synchronization and publication
 grouping as the first production candidate. This experiment initially applies
 only to two or more existing regular-file replacements sharing one existing

@@ -332,7 +332,7 @@ func copyMergeSubtree(source mergeTree, name, mergedRoot string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 		return err
 	}
-	if err := copyPath(filepath.Join(source.root, filepath.FromSlash(name)), dest); err != nil {
+	if err := copyMergeScratch(filepath.Join(source.root, filepath.FromSlash(name)), dest); err != nil {
 		return err
 	}
 	return restoreMergeSubtreeModes(source, name, mergedRoot)
@@ -408,11 +408,15 @@ func mergeRegularFile(
 	stderr := truncatingBuffer{remaining: 32 << 10}
 	cmd.Stderr = &stderr
 	runErr := cmd.Run()
-	closeErr := out.Close()
+	outputInfo, statErr := out.Stat()
+	closeErr := errors.Join(statErr, out.Close())
 	if runErr != nil {
 		var exitErr *exec.ExitError
 		if errors.As(runErr, &exitErr) {
-			if code := exitErr.ExitCode(); code > 0 && code < 128 {
+			// Git reports a conflict count in this range, but wrappers such as
+			// Apple's license gate also use these codes. A textual conflict always
+			// emits merge output; startup failures must retain their stderr/error.
+			if code := exitErr.ExitCode(); code > 0 && code < 128 && statErr == nil && outputInfo.Size() > 0 {
 				if closeErr != nil {
 					_ = os.Remove(dest)
 					return regularMergeClean, closeErr

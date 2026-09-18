@@ -95,7 +95,7 @@ func TestGroupedApplyPhaseOrdering(t *testing.T) {
 			want = append(want, fmt.Sprintf("%s:%d", event, i))
 		}
 	}
-	want = append(want, "install-barrier:-1", "installed:-1", "committed:-1")
+	want = append(want, "install-barrier:-1", "parent-published:0", "installed:-1", "committed:-1")
 	if !reflect.DeepEqual(events, want) {
 		t.Fatalf("phase order = %v; want %v", events, want)
 	}
@@ -136,7 +136,7 @@ func TestGroupedApplyBoundariesPreserveModesAndSelection(t *testing.T) {
 	}{
 		{"single", []string{"a"}, false},
 		{"nested", []string{"dir/a", "dir/b"}, true},
-		{"different-parents", []string{"x/a", "y/b"}, false},
+		{"different-parents", []string{"x/a", "y/b"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			target, bundle, staged := groupFixturePaths(t, tc.paths)
@@ -369,13 +369,25 @@ func TestGroupedApplyCrashHelper(t *testing.T) {
 }
 
 func TestGroupedApplyCrashRecovery(t *testing.T) {
+	for _, paths := range [][]string{{"a", "b", "c"}, {"x/a", "y/b", "y/c"}} {
+		t.Run(paths[0], func(t *testing.T) { testGroupedApplyCrashRecovery(t, paths) })
+	}
+}
+
+func testGroupedApplyCrashRecovery(t *testing.T, paths []string) {
 	cases := []struct {
 		event string
 		index int
 	}{{"staged", -1}, {"intent", -1}, {"backup-rename", 0}, {"backup-rename", 1}, {"backup-barrier", 1}, {"backups-durable", 1}, {"install-rename", 0}, {"install-rename", 1}, {"install-barrier", -1}, {"installed", -1}, {"committed", -1}}
+	if filepath.Dir(paths[0]) != filepath.Dir(paths[len(paths)-1]) {
+		cases = append(cases, struct {
+			event string
+			index int
+		}{"parent-published", 0})
+	}
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("%s-%d", tc.event, tc.index), func(t *testing.T) {
-			target, bundle, staged := groupFixture(t)
+			target, bundle, staged := groupFixturePaths(t, paths)
 			crashGroupedApply(t, target, bundle, staged, tc.event, tc.index)
 			if tc.event != "committed" {
 				var state transferApplyState
@@ -405,12 +417,12 @@ func TestGroupedApplyCrashRecovery(t *testing.T) {
 			for _, name := range bundle.Paths {
 				assertTransferFile(t, target.Root, name, "after-"+name)
 			}
-			writeTransferFile(t, target.Root, "a", "later")
+			writeTransferFile(t, target.Root, paths[0], "later")
 			retry, err := target.Apply(staged, bundle, nil, ApplyOptions{})
 			if err != nil || !reflect.DeepEqual(first, retry) {
 				t.Fatalf("retry: %+v %v", retry, err)
 			}
-			assertTransferFile(t, target.Root, "a", "later")
+			assertTransferFile(t, target.Root, paths[0], "later")
 		})
 	}
 }

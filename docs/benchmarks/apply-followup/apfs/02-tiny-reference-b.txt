@@ -1,0 +1,6 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/lydakis/errand/internal/changes
+cpu: Apple M4
+BenchmarkApplyWorkloads/tiny-2         	       1	  77117625 ns/op	      4096 file-bytes/op	         0 grouped/op	         1.000 roots/op
+PASS

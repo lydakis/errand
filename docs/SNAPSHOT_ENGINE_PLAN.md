@@ -14,8 +14,12 @@ finding is not a measured attribution of complete-operation latency.
 | ID | Status | Work | Next evidence or decision |
 |---|---|---|---|
 | H1 | Complete | [Shared hierarchy validation](HIERARCHY_VALIDATION.md) | Reviewed: retain the predicate and entry-only checks; reject preallocation. Native results and remaining caller caveats are recorded. |
-| P1 | Implemented and measured; ready for review | [Apply-journal baseline](APPLY_JOURNAL_SCALING.md) and [grouped apply](GROUPED_APPLY.md) | Retain grouped existing-file replacement: revised eligible single-parent 128-file fetch shows 74% time reduction on APFS and 41–45% on Btrfs. Shared backup-data synchronization and review guards are included; small-operation non-regression remains unresolved. Measure mixed-parent/fallback overhead before widening eligibility; compact progress and private merged-output synchronization remain separate candidates. |
-| P2 | Queued after P1 | Realistic Git/editor-save watch | Refresh current-head Errand/rsync/Mutagen measurements using tracked, untracked and mixed trees; cross in-place/atomic saves and structural/policy changes. Record fallback reasons before narrowing invalidation. |
+| P1 | Committed (`092e88a`) | [Apply-journal baseline](APPLY_JOURNAL_SCALING.md) and [grouped apply](GROUPED_APPLY.md) | Eligible single-parent 128-file fetch improved 74% on APFS and 41–45% on Btrfs. Includes backup-data durability and recovery guards. P1b measures residual costs and broader eligibility separately. |
+| P1b | Implemented and measured; ready for review | [Apply follow-up](APPLY_FOLLOWUP.md) | Retain scratch-only synchronization policy, multi-parent grouping, opt-in eligibility diagnostics and Git operational-error reporting. Native mixed-case and repeated one-file/watch results are in the follow-up; exchange remains an isolated candidate. |
+| R1 | Queued recovery hardening; inherited behavior | Rollback deletion and final parent identity | Reproduce later deletion during rollback and content-identical parent replacement during publication against committed code; specify preservation and durability guarantees before changing recovery. Keep this separate from P1b's diagnostic, crash-boundary and evidence-verifier fixes. |
+| P2 | Queued after P1b | Realistic Git/editor-save watch | Refresh current-head Errand/rsync/Mutagen measurements using tracked, untracked and mixed trees; cross in-place/atomic saves and structural/policy changes. Record fallback reasons before narrowing invalidation. |
+| P1x | Separate adoption review | [Exchange replacement experiment](../experiments/applyexchange/README.md) | Large APFS gain in the isolated prototype; retain the patch and native comparison. Enumerate pre-barrier power-loss states and interrupted rollback/cleanup; assert every sibling's restoration or retained evidence after concurrent edits; validate actual unsupported filesystems and the rollout gate. Do not infer persistence from atomic visibility. |
+| P1c | Deferred protocol extension | Creations and deletions | Mixed fixtures measure the remaining fallback cliff. Existing-parent creations, deletions, newly created parents, and mixed eligible/reference subsets require separate recovery/atomicity arguments and crash coverage. |
 | P3 | Gated by complete-operation measurements | Wire identity and sequential requests | Count materializations, encodings and root computations. Measure controlled/real RTT before comparing incremental identity or compound stage-and-apply. |
 | I1 | Independent, not started | Detached completion observation | Measure remote result commit → worker observation → local apply, plus full CLI lifecycle timing. Compare notification/long-poll with authoritative status reconciliation. |
 | I2 | Backlog | Log reattachment | Measure resume-near-end as logs grow; compare verified indexing/segments while preserving prefix-integrity guarantees. |
@@ -38,8 +42,8 @@ in [the P1 report](APPLY_JOURNAL_SCALING.md).
 
 Synchronization dominates the measured APFS and Btrfs workloads (74–85% of
 instrumented apply time at 512 roots, versus 8–13% in validation/encoding).
-The implemented candidate groups two or more existing regular-file replacements
-under one verified parent. It publishes prepared, grouped-intent and committed
+The committed P1 candidate groups two or more existing regular-file replacements
+under one verified parent; P1b measures expansion to multiple verified parents. It publishes prepared, grouped-intent and committed
 journals, while synchronizing each regular-file backup's data before publishing its renamed
 entry and replacing it. Shared
 staging and final installation barriers reduce repeated synchronization. Recovery
@@ -47,9 +51,8 @@ coverage includes process termination, injected errors, corrupted evidence,
 transaction binding, parent replacement, later edits and historical retry. The
 review fixes also make member/barrier roles explicit, reject mixed protocol
 intent, check restricted-mode eligibility, and guard evidence-driver mode
-separation. Broader-parent/fallback measurements precede any eligibility
-expansion; compact progress and scratch synchronization stay gated on residual
-cost. The existing outcome/cleanup tests remain applicable; process termination is not a
+separation. P1b now supplies broader-parent/fallback measurements and isolates scratch
+synchronization. Compact progress stays gated on material residual cost. The existing outcome/cleanup tests remain applicable; process termination is not a
 power-loss test. See [the recovery argument and comparison](GROUPED_APPLY.md).
 
 Compact progress records remain gated on material cost after grouping: compare an immutable plan
@@ -60,10 +63,12 @@ later destination edits and cleanup authorization/recovery. A
 representation-only candidate measured at parity is not evidence against the
 barrier candidate.
 
-Private **merged-output** copying also performs per-file synchronization before
-verified durable transaction staging. Measure an explicit scratch publication
-policy separately; this is distinct from the previously optimized private merge
-inputs. Keep generic copying and recoverable staged values durable.
+P1b removes per-file synchronization from private **merged-output** copying,
+while keeping verified durable transaction staging. The frozen scratch-only
+variant measures this separately from multi-parent grouping and the earlier
+private merge-input optimization. The review removes the unused generic durable
+wrapper; the explicitly named scratch copier cannot be mistaken for transaction
+publication. Recoverable staged values retain their publication policy.
 
 **P2 evidence:** distinguish content, directory membership and selection-policy
 invalidation. Reconcile an affected parent/subtree only when replacement identity

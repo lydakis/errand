@@ -1,0 +1,927 @@
+{
+  "platform": "macOS-27.0-arm64-arm-64bit",
+  "cases": {
+    "flat128": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^flat128$"
+    ],
+    "parents8": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^parents8$"
+    ],
+    "parents128": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^parents128$"
+    ]
+  },
+  "modes": [
+    "reference-a",
+    "reference-b",
+    "exchange"
+  ],
+  "inputs": {
+    "parents": {
+      "revision": "092e88a+followup",
+      "input_sha256": "ff78b9d5ab8df8c05149f1f511b29a484526cf3ef5c41e86b1698d7d2df0730a",
+      "note": "Scratch policy, Git failure reporting, and multiple existing parents; creations and deletions remain reference."
+    },
+    "exchange": {
+      "revision": "092e88a+experimental-exchange",
+      "input_sha256": "7dcd201d29197356de6a143fb75332ccde759cd17ca8619559f0e73f6524199c",
+      "note": "Isolated exchange prototype on frozen parents; not production; patch retained in experiments/applyexchange."
+    }
+  },
+  "samples": [
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 889691042.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-flat128-reference-a.txt",
+      "log_sha256": "4847c56c1a2e5e980a0d4862e08a24a386bb153f05367a4aa5e4aaa0c6b9ba35"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 889171917.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-flat128-reference-b.txt",
+      "log_sha256": "158aa24e7f9efda4a42916bc0743323d6294ce58b2e36485466d4a12eb627503"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 244245834.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "exchange",
+      "position": 2,
+      "log": "00-flat128-exchange.txt",
+      "log_sha256": "0fddd253c5c0f6eaeaece245b32e582d48ab1879cdba5755bec5d1a884483e4c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 961799667.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-parents8-reference-a.txt",
+      "log_sha256": "172c067aeb15a34a2935309fd4d8ef6546efdd179e3e8d0d8ab028ffc6a3080c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 969766167.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-parents8-reference-b.txt",
+      "log_sha256": "fba2d1b7f2dc1d4d2df26fcc120810a8babceaaff7ad1ef91791d82da702e9e1"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 313423750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "exchange",
+      "position": 2,
+      "log": "00-parents8-exchange.txt",
+      "log_sha256": "88cdb9ca24b5ee6011a8404ed8b382c2343af960159411f152704194d58d4d5c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1490233917.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-parents128-reference-a.txt",
+      "log_sha256": "f3c7ddb22b71d3947e6fc5e51a3d81a86c5f6c03a51d2fcef29f894733e519bc"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1486257667.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-parents128-reference-b.txt",
+      "log_sha256": "967ab5b443a937f7b4accb3c630875ae54603b3050dd812b05be2d66278193a1"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 860001708.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "exchange",
+      "position": 2,
+      "log": "00-parents128-exchange.txt",
+      "log_sha256": "3934f67404cd583c979779af2677f67bb7b404475ad049adf4e14d21edc010bc"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 952069417.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-parents8-reference-b.txt",
+      "log_sha256": "f54996334de39b9452543aa8680ddf060cb2eea275ec8941f47a2e1847befb71"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 311475167.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "exchange",
+      "position": 1,
+      "log": "01-parents8-exchange.txt",
+      "log_sha256": "c55e7696038d10193f763e19bb03833105e88557544a92e0c78fd35dc28e735e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 972961916.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "01-parents8-reference-a.txt",
+      "log_sha256": "a119040d67079a56e7a3e7aafbfcf8b5fc06044da0d590334b43b1d10d263c02"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1483289958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-parents128-reference-b.txt",
+      "log_sha256": "2c68960d945f8705bcfdbf02c52670aaee210d3584cf914a74b8e301d051cfdf"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 850057708.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "exchange",
+      "position": 1,
+      "log": "01-parents128-exchange.txt",
+      "log_sha256": "23cfdaf1ff39b8a69fa1877ef52dd9bf4bef774d285114c3a6ea869751ad5858"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1490885000.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "01-parents128-reference-a.txt",
+      "log_sha256": "b5fc06b9c1b91b97710f7cad645a51bd000540e4b3ca1ddf26cc938a34369c1b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 888656416.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-flat128-reference-b.txt",
+      "log_sha256": "3a2ed71c3b4c2988f830a448297ef8baa2550760f2f7a482301c71ed29d77cf9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 246348583.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "exchange",
+      "position": 1,
+      "log": "01-flat128-exchange.txt",
+      "log_sha256": "8f2bded73cf6a024e2f696baf27b3412b8a1e40cbdcb571a116c50f1ebe1bc23"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 880188542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "01-flat128-reference-a.txt",
+      "log_sha256": "cd8b89c5d22b4cb01b2e6a4233dd88ab92c4104ea3ce85597cc0730945cb37fe"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 851325500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "exchange",
+      "position": 0,
+      "log": "02-parents128-exchange.txt",
+      "log_sha256": "c42af785044eef37ef53679ab621d51be758624465c42699a1eec5a8a92c1338"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1492937250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "02-parents128-reference-a.txt",
+      "log_sha256": "ad0ad2e1da043402f31af6f441806e4467a53f3ff04e626f8024cd49da4bf14c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1494159792.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "02-parents128-reference-b.txt",
+      "log_sha256": "df1e15694d0f7d1d5198079875f8d6ef9393ba6cf4ebf3ad1cd4c239d98dd86f"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 250347958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "exchange",
+      "position": 0,
+      "log": "02-flat128-exchange.txt",
+      "log_sha256": "99668074b90a9e80c8641599a7a27d62ed7d04d5be4337e87c25af0443fa4a02"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 897330459.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "02-flat128-reference-a.txt",
+      "log_sha256": "d23677e4ac26aa7607012e5370f1111e05f7b0e87f51d3019898ccbf629adf4a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 898279291.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "02-flat128-reference-b.txt",
+      "log_sha256": "e7097af8bbecafbff66c13116061ed701182919c543fc37740be5337a8a284b8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 317194042.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "exchange",
+      "position": 0,
+      "log": "02-parents8-exchange.txt",
+      "log_sha256": "16ad207d8e436cd7add636b43c5cc2e5894990d07ae5840ee4a41e7db779d6fb"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 945273916.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "02-parents8-reference-a.txt",
+      "log_sha256": "3180590ce68910f891d3947a1de25277d61ffc39f5cf4c6f4e2fccba5b6433c3"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 954895875.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "02-parents8-reference-b.txt",
+      "log_sha256": "84f554e5ec171dd4faa049a30f242d657742150923b9de6181d95a490174df9e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 894012708.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "03-flat128-reference-a.txt",
+      "log_sha256": "23971cbd8a2d05d0116ac17d9502873037e0e0e2d829f51c160aabce12814b20"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 883389459.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "03-flat128-reference-b.txt",
+      "log_sha256": "0e193bcfef040647f0ba4f9ce232cf3320a75a56c968a5b246edad2eab89fd13"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 240705208.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "exchange",
+      "position": 2,
+      "log": "03-flat128-exchange.txt",
+      "log_sha256": "3b8aa1b2f3244555feed05de64ae8fc36c0a9459c6f4e2c47a499a3fd23334be"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 937987083.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "03-parents8-reference-a.txt",
+      "log_sha256": "f6be5dec6a962f5e9530d0b2eff4c0e24896523e1fea528ce063e8dfcbe1b9ab"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 980196125.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "03-parents8-reference-b.txt",
+      "log_sha256": "454203e3f68f17819e6f0dc6592c1161aeaecdcf0743fe406aaf369d0e72a907"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 307722542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "exchange",
+      "position": 2,
+      "log": "03-parents8-exchange.txt",
+      "log_sha256": "36fedd44616deeabffd1d0c90413a80450dc3caccdb13080123db21e50c75922"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 1489269208.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "03-parents128-reference-a.txt",
+      "log_sha256": "a505cff7c335682563e72da53a7f1b474b322b2fc7bbca8f0ffac3de65280a9e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 1481749833.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "03-parents128-reference-b.txt",
+      "log_sha256": "1cbe15497fe459ec2a5b30ea596d23942f8d2cd2631a68c76c9deba4107ddd86"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 404517625.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "exchange",
+      "position": 2,
+      "log": "03-parents128-exchange.txt",
+      "log_sha256": "a05a4c5f291679050d903c610afc07325b7cfdfb22354917869f771f3520c9d4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 978481417.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "04-parents8-reference-b.txt",
+      "log_sha256": "a89670d2097e9bd1e5d7b46fca1636d78eb412f6959d706618b3d4b198f12cbe"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 308567375.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "exchange",
+      "position": 1,
+      "log": "04-parents8-exchange.txt",
+      "log_sha256": "d5a4fcaa15a89cbee4d35533e627a6f2cca6532e0fa0e9cb5dfdf4f98cb28293"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 954289542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "04-parents8-reference-a.txt",
+      "log_sha256": "dc958931991243d50631c9c4a6a13745282a9d5db508ae2aa3f38511bee88344"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 1501508708.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "04-parents128-reference-b.txt",
+      "log_sha256": "18dffecd44ce58a4ebd59f506411496cea396aad6d2f8114fdddd06229622572"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 853949959.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "exchange",
+      "position": 1,
+      "log": "04-parents128-exchange.txt",
+      "log_sha256": "6d41208e47da6c23d5ec00bfec35613fec583ec3af52f353347dedcff0682fdf"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 1469493292.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "04-parents128-reference-a.txt",
+      "log_sha256": "796a18696fb165e7197555e03bcfd1b78f2c70787903a38c9334eaa9241bb19b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 905318959.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "04-flat128-reference-b.txt",
+      "log_sha256": "9c047f50d458a8cbf2fd9d01c7fd8a261df59d35e27e023907d484e03b850d79"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 247523583.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "exchange",
+      "position": 1,
+      "log": "04-flat128-exchange.txt",
+      "log_sha256": "405b79fcbdae59b8be8f40f5e05e5248cd38b2845fcba0d6d5bcba346819b2c9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 914358250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "04-flat128-reference-a.txt",
+      "log_sha256": "e47f850db4ddf2c54d6c9ad75ad3307f5591238d89cf63f65e41fa543de53ec7"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 855565334.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "exchange",
+      "position": 0,
+      "log": "05-parents128-exchange.txt",
+      "log_sha256": "bab2f40680ca7d3633af44194127af6f6f47d28dae47f61ad3ea987a97b9135b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 1477083958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "05-parents128-reference-a.txt",
+      "log_sha256": "18fc4496d922aba50bf77b55e00dc509dd900751adbcb65ae0d8da6084dde08e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 1494180917.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "05-parents128-reference-b.txt",
+      "log_sha256": "462fbf0ff9ecf2ae7a8026755114c6071c2e21e42be519a6fb5a9314610ec672"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 237546375.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "exchange",
+      "position": 0,
+      "log": "05-flat128-exchange.txt",
+      "log_sha256": "a617e2a40054c1b85ad13d29b2a7a77ab6023c88191937095420cba234e828d1"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 898001458.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "05-flat128-reference-a.txt",
+      "log_sha256": "7694c9ccf227d0b5562427426f52cd9ae89082040038ffbc57ea37443c10be69"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 901634334.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "05-flat128-reference-b.txt",
+      "log_sha256": "7bcc6ea16a2f21f6658c64e96d53ded5710175dc1ae89b9cfd2c5e7d3368c958"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 315525542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "exchange",
+      "position": 0,
+      "log": "05-parents8-exchange.txt",
+      "log_sha256": "6bcf9ffab3f51d6f44d412c9d962e15e3e72bc568973fa77b5c81e230a1c2454"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 953488209.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "05-parents8-reference-a.txt",
+      "log_sha256": "41d7914ba0a159e0620a57519e5f8b27e1b7bee533b7b0972c74bcfc49aac09a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 970528542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "05-parents8-reference-b.txt",
+      "log_sha256": "5e2e48e91cebd4fcc647ecbe542c6e41c070c57673d210653b9648bca207b0f1"
+    }
+  ],
+  "commands": [
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/Users/ody/.errand/jobs/01M2S6NBNFRYRA4YAD6FQ1TP1N/workspace/.exchange-results/.scratch-pwok57y6/parents-changes.test",
+      "./internal/changes"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/Users/ody/.errand/jobs/01M2S6NBNFRYRA4YAD6FQ1TP1N/workspace/.exchange-results/.scratch-pwok57y6/exchange-changes.test",
+      "./internal/changes"
+    ]
+  ],
+  "gomaxprocs": 2,
+  "case_rounds": {
+    "flat128": 6,
+    "parents8": 6,
+    "parents128": 6
+  },
+  "status": "complete",
+  "go": "go version go1.27.1 darwin/arm64",
+  "filesystem": "apfs"
+}

@@ -1,0 +1,549 @@
+--- a/internal/changes/apply.go
++++ b/internal/changes/apply.go
+@@ -383,6 +383,7 @@
+ 	published = true
+ 
+ 	if group != nil {
++		group.swap = options.exchangeRename
+ 		if err := group.install(destination, &journal, synchronization); err != nil {
+ 			return ApplyResult{}, abortApplyAtRoot(destination.root, journal, err)
+ 		}
+--- a/internal/changes/apply_exchange.go
++++ b/internal/changes/apply_exchange.go
+@@ -0,0 +1,216 @@
++package changes
++
++// EXPERIMENT ONLY. This file is introduced by experiments/applyexchange/candidate.patch.
++import (
++	"context"
++	"errors"
++	"fmt"
++	"os"
++	"path"
++	"sort"
++
++	"github.com/lydakis/errand/internal/fsidentity"
++	"golang.org/x/sys/unix"
++)
++
++const applyItemExchanging = "group-exchanging"
++
++type exchangeRenameFunc func(*os.File, string, *os.File, string) error
++
++func (g *applyFileGroup) exchangeSupported(root *os.Root, journal applyJournal) (bool, error) {
++	dir, err := root.Open(journal.Transaction)
++	if err != nil {
++		return false, err
++	}
++	defer dir.Close()
++	for _, name := range []string{"probe-a", "probe-b"} {
++		p := path.Join(journal.Transaction, name)
++		file, err := root.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
++		if err != nil {
++			return false, err
++		}
++		defer root.Remove(p)
++		if err := file.Close(); err != nil {
++			return false, err
++		}
++	}
++	err = g.swap(dir, "probe-a", dir, "probe-b")
++	if errors.Is(err, unix.ENOTSUP) || errors.Is(err, unix.ENOSYS) || errors.Is(err, unix.EINVAL) {
++		return false, nil
++	}
++	return err == nil, err
++}
++
++func exchangeIdentity(root *os.Root, p string) (fsidentity.Identity, error) {
++	info, err := root.Lstat(p)
++	if err != nil {
++		return fsidentity.Identity{}, err
++	}
++	if !info.Mode().IsRegular() {
++		return fsidentity.Identity{}, fmt.Errorf("exchange requires regular file %q", p)
++	}
++	return fsidentity.FromInfo(info)
++}
++
++func (g *applyFileGroup) installExchange(destination *applyDestination, journal *applyJournal, synchronization applySynchronization) error {
++	root := destination.root
++	// The staged inode and original inode distinguish the two sides of a swap.
++	// Both names exist in BOTH states; path existence alone cannot do this.
++	for i := range journal.Items {
++		item := &journal.Items[i]
++		var err error
++		item.ExchangeValue, err = exchangeIdentity(root, path.Join(journal.Transaction, item.ItemDir, "value"))
++		if err != nil {
++			return err
++		}
++		item.ExchangeOriginal, err = exchangeIdentity(root, item.Path)
++		if err != nil {
++			return err
++		}
++		item.Parent, item.Phase = g.parents[path.Dir(item.Path)], applyItemExchanging
++	}
++	if err := writeApplyJournalAtRoot(root, *journal); err != nil {
++		return err
++	}
++	if err := g.check("exchange-intent", -1); err != nil {
++		return err
++	}
++	for i, item := range journal.Items {
++		if err := g.exchangeItem(destination, *journal, item, i, synchronization); err != nil {
++			return err
++		}
++	}
++	if err := g.check("exchange-barrier", -1); err != nil {
++		return err
++	}
++	names := make([]string, 0, len(g.parents))
++	for name := range g.parents {
++		names = append(names, name)
++	}
++	sort.Strings(names)
++	for _, name := range names {
++		parent, err := openChangeParent(root, path.Join(name, "unused"), g.parents[name])
++		if err != nil {
++			return err
++		}
++		err = synchronization.barrier("exchange-parent", parent)
++		if err := errors.Join(err, parent.Close()); err != nil {
++			return err
++		}
++	}
++	if err := destination.verifyPath(); err != nil {
++		return err
++	}
++	if err := g.check("exchange-installed", -1); err != nil {
++		return err
++	}
++	for i := range journal.Items {
++		journal.Items[i].Phase = applyItemInstalled
++	}
++	return nil
++}
++
++func (g *applyFileGroup) exchangeItem(destination *applyDestination, journal applyJournal, item applyJournalItem, i int, synchronization applySynchronization) error {
++	root := destination.root
++	parent, err := openChangeParent(root, item.Path, item.Parent)
++	if err != nil {
++		return err
++	}
++	defer parent.Close()
++	dir, err := root.Open(path.Join(journal.Transaction, item.ItemDir))
++	if err != nil {
++		return err
++	}
++	defer dir.Close()
++	if err := g.check("exchange-before", i); err != nil {
++		return err
++	}
++	if err := errors.Join(destination.verifyPath(), verifyChangeParent(root, item.Path, item.Parent)); err != nil {
++		return err
++	}
++	got, _, _, err := captureApplyItemBaseline(context.Background(), root, item)
++	if err != nil {
++		return err
++	}
++	if !sameBaseline(got, item.Original) {
++		return fmt.Errorf("exchange %q conflicts with local changes", item.Path)
++	}
++	// Preserve dirty original data as well as namespace entries. Atomic visibility
++	// alone establishes neither data persistence nor conflict freedom.
++	original, err := openSearchSourceFile(root, item.Path)
++	if err != nil {
++		return err
++	}
++	if err := errors.Join(synchronization.member("exchange-original", original), original.Close()); err != nil {
++		return err
++	}
++	if err := g.check("exchange-ready", i); err != nil {
++		return err
++	}
++	if err := g.swap(parent, path.Base(item.Path), dir, "value"); err != nil {
++		return err
++	}
++	if err := g.check("exchange-rename", i); err != nil {
++		return err
++	}
++	// Normalize displaced content to the existing backup name. A crash before
++	// this rename is recovered using the inode evidence above.
++	if err := renameNoReplace(dir, "value", dir, "previous"); err != nil {
++		return err
++	}
++	if err := g.check("exchange-backup", i); err != nil {
++		return err
++	}
++	if err := synchronizeApplyBackup(root, journal, item, synchronization); err != nil {
++		return err
++	}
++	if err := synchronization.member("exchange-directory", dir); err != nil {
++		return err
++	}
++	return g.check("exchange-member", i)
++}
++
++// Normalize an interrupted exchange into the existing quarantine/no-replace
++// rollback protocol. Never exchange backwards: that would overwrite a concurrent
++// edit appearing after the destination check.
++func prepareExchangeRollback(ctx context.Context, root *os.Root, journal applyJournal, item applyJournalItem) (bool, error) {
++	value := path.Join(journal.Transaction, item.ItemDir, "value")
++	staged, err := exchangeIdentity(root, value)
++	if os.IsNotExist(err) {
++		return false, nil
++	} // normalized backup or completed rollback
++	if err != nil {
++		return false, err
++	}
++	if staged == item.ExchangeValue {
++		got, err := captureBaselineAtRootContext(ctx, root, value, item.Path)
++		if err != nil {
++			return false, err
++		}
++		if !sameBaselineContent(got, item.Expected) {
++			return false, fmt.Errorf("exchange staged value changed; retained")
++		}
++		return true, nil // swap did not occur; preserve any later edit/deletion
++	}
++	live, liveErr := exchangeIdentity(root, item.Path)
++	if staged != item.ExchangeOriginal && (liveErr != nil || live != item.ExchangeValue) {
++		return false, fmt.Errorf("ambiguous exchange evidence for %q; retained", item.Path)
++	}
++	dir, err := root.Open(path.Dir(value))
++	if err != nil {
++		return false, err
++	}
++	defer dir.Close()
++	if err := renameNoReplace(dir, "value", dir, "previous"); err != nil {
++		return false, err
++	}
++	// Recovery is deliberately conservative and uses the durable reference barrier.
++	backup, err := openSearchSourceFile(root, path.Join(path.Dir(value), "previous"))
++	if err != nil {
++		return false, err
++	}
++	if err := errors.Join(backup.Sync(), backup.Close()); err != nil {
++		return false, err
++	}
++	return false, dir.Sync()
++}
+--- a/internal/changes/apply_exchange_darwin.go
++++ b/internal/changes/apply_exchange_darwin.go
+@@ -0,0 +1,10 @@
++package changes
++
++import (
++	"golang.org/x/sys/unix"
++	"os"
++)
++
++func exchangeRename(a *os.File, an string, b *os.File, bn string) error {
++	return unix.RenameatxNp(int(a.Fd()), an, int(b.Fd()), bn, unix.RENAME_SWAP)
++}
+--- a/internal/changes/apply_exchange_evidence_test.go
++++ b/internal/changes/apply_exchange_evidence_test.go
+@@ -0,0 +1,44 @@
++package changes
++
++import (
++	"encoding/json"
++	"os"
++	"path/filepath"
++	"testing"
++)
++
++func TestExchangeRejectsAmbiguousEvidence(t *testing.T) {
++	target, bundle, staged := groupFixture(t)
++	crashGroupedApply(t, target, bundle, staged, "exchange-intent", -1)
++	var state transferApplyState
++	raw, err := os.ReadFile(target.StatePath)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err = json.Unmarshal(raw, &state); err != nil {
++		t.Fatal(err)
++	}
++	value := filepath.Join(target.Root, state.Pending, "000000", "value")
++	// Replace the staged inode, while retaining its bytes. Content equality alone
++	// cannot authorize treating it as either an untouched value or a backup.
++	body, err := os.ReadFile(value)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err = os.Rename(value, value+".saved"); err != nil {
++		t.Fatal(err)
++	}
++	if err = os.WriteFile(value, body, 0600); err != nil {
++		t.Fatal(err)
++	}
++	_, err = target.Apply(staged, bundle, nil, ApplyOptions{})
++	if err == nil {
++		t.Fatal("accepted ambiguous inode evidence")
++	}
++	for _, p := range bundle.Paths {
++		assertTransferFile(t, target.Root, p, "before-"+p)
++	}
++	if pending, e := WorkspaceHasApplyTransactions(target.Root); e != nil || !pending {
++		t.Fatal("lost evidence", e)
++	}
++}
+--- a/internal/changes/apply_exchange_linux.go
++++ b/internal/changes/apply_exchange_linux.go
+@@ -0,0 +1,10 @@
++package changes
++
++import (
++	"golang.org/x/sys/unix"
++	"os"
++)
++
++func exchangeRename(a *os.File, an string, b *os.File, bn string) error {
++	return unix.Renameat2(int(a.Fd()), an, int(b.Fd()), bn, unix.RENAME_EXCHANGE)
++}
+--- a/internal/changes/apply_exchange_test.go
++++ b/internal/changes/apply_exchange_test.go
+@@ -0,0 +1,125 @@
++package changes
++
++import (
++	"encoding/json"
++	"errors"
++	"fmt"
++	"golang.org/x/sys/unix"
++	"os"
++	"path/filepath"
++	"reflect"
++	"testing"
++)
++
++func TestExchangeCrashRecovery(t *testing.T) {
++	for _, paths := range [][]string{{"a", "b", "c"}, {"x/a", "y/b", "y/c"}} {
++		for _, tc := range []struct {
++			event string
++			index int
++		}{
++			{"staged", -1}, {"exchange-intent", -1}, {"exchange-ready", 0}, {"exchange-rename", 0}, {"exchange-rename", 1},
++			{"exchange-backup", 1}, {"exchange-member", 1}, {"exchange-barrier", -1}, {"exchange-installed", -1}, {"committed", -1},
++		} {
++			t.Run(fmt.Sprintf("%s/%s-%d", paths[0], tc.event, tc.index), func(t *testing.T) {
++				target, bundle, staged := groupFixturePaths(t, paths)
++				crashGroupedApply(t, target, bundle, staged, tc.event, tc.index)
++				if tc.event != "committed" {
++					var state transferApplyState
++					raw, err := os.ReadFile(target.StatePath)
++					if err != nil {
++						t.Fatal(err)
++					}
++					if err := json.Unmarshal(raw, &state); err != nil {
++						t.Fatal(err)
++					}
++					d, err := openApplyDestination(target.Root)
++					if err != nil {
++						t.Fatal(err)
++					}
++					defer d.Close()
++					if err := target.recoverTransfer(d, &state, func() error { persistTransferState(t, target, state); return nil }); err != nil {
++						t.Fatal(err)
++					}
++					for _, name := range paths {
++						assertTransferFile(t, target.Root, name, "before-"+name)
++					}
++				}
++				result, err := target.Apply(staged, bundle, nil, ApplyOptions{})
++				if err != nil {
++					t.Fatal(err)
++				}
++				for _, name := range paths {
++					assertTransferFile(t, target.Root, name, "after-"+name)
++				}
++				writeTransferFile(t, target.Root, paths[0], "later")
++				retry, err := target.Apply(staged, bundle, nil, ApplyOptions{})
++				if err != nil || !reflect.DeepEqual(result, retry) {
++					t.Fatalf("retry: %v", err)
++				}
++				assertTransferFile(t, target.Root, paths[0], "later")
++			})
++		}
++	}
++}
++
++func TestExchangeUnsupportedUsesReference(t *testing.T) {
++	target, bundle, staged := groupFixture(t)
++	reference := false
++	_, err := target.Apply(staged, bundle, nil, ApplyOptions{
++		exchangeRename: func(*os.File, string, *os.File, string) error { return unix.ENOTSUP },
++		groupCheckpoint: func(event string, i int) error {
++			if event == "intent" {
++				reference = true
++			}
++			return nil
++		},
++	})
++	if err != nil || !reference {
++		t.Fatalf("fallback: %v %v", reference, err)
++	}
++	for _, p := range bundle.Paths {
++		assertTransferFile(t, target.Root, p, "after-"+p)
++	}
++}
++
++func TestExchangePreservesConcurrentEdits(t *testing.T) {
++	for _, when := range []string{"before", "installed", "swap-window"} {
++		t.Run(when, func(t *testing.T) {
++			target, bundle, staged := groupFixture(t)
++			injected := errors.New("stop")
++			_, err := target.Apply(staged, bundle, nil, ApplyOptions{groupCheckpoint: func(event string, i int) error {
++				if when == "before" && event == "exchange-before" && i == 1 {
++					writeTransferFile(t, target.Root, "b", "later")
++					return injected
++				}
++				if when == "installed" && event == "exchange-rename" && i == 0 {
++					writeTransferFile(t, target.Root, "a", "later")
++					return injected
++				}
++				if when == "swap-window" && event == "exchange-ready" && i == 0 {
++					replacement := filepath.Join(target.Root, "replacement")
++					if err := os.WriteFile(replacement, []byte("later"), 0600); err != nil {
++						t.Fatal(err)
++					}
++					if err := os.Rename(replacement, filepath.Join(target.Root, "a")); err != nil {
++						t.Fatal(err)
++					}
++				}
++				return nil
++			}})
++			if err == nil {
++				t.Fatal("expected conflict")
++			}
++			name := "a"
++			if when == "before" {
++				name = "b"
++			}
++			assertTransferFile(t, target.Root, name, "later")
++			if when == "installed" {
++				if pending, e := WorkspaceHasApplyTransactions(target.Root); e != nil || !pending {
++					t.Fatal("lost backup", e)
++				}
++			}
++		})
++	}
++}
+--- a/internal/changes/apply_group.go
++++ b/internal/changes/apply_group.go
+@@ -17,6 +17,7 @@
+ type applyFileGroup struct {
+ 	parents    map[string]fsidentity.Identity
+ 	checkpoint func(string, int) error
++	swap       exchangeRenameFunc
+ }
+ 
+ // Reasons are stable diagnostic categories; never include source paths or bodies.
+@@ -68,6 +69,19 @@
+ }
+ 
+ func (g *applyFileGroup) install(destination *applyDestination, journal *applyJournal, synchronization applySynchronization) error {
++	if g.swap == nil {
++		g.swap = exchangeRename
++	}
++	supported, err := g.exchangeSupported(destination.root, *journal)
++	if err != nil {
++		return err
++	}
++	if supported {
++		return g.installExchange(destination, journal, synchronization)
++	}
++	return g.installReference(destination, journal, synchronization)
++}
++func (g *applyFileGroup) installReference(destination *applyDestination, journal *applyJournal, synchronization applySynchronization) error {
+ 	// Only one installation parent is held at a time, even for deep/mixed trees.
+ 	var parent *os.File
+ 	var parentPath string
+--- a/internal/changes/changes.go
++++ b/internal/changes/changes.go
+@@ -39,6 +39,7 @@
+ }
+ 
+ type ApplyOptions struct {
++	exchangeRename       exchangeRenameFunc
+ 	MaterializeConflicts bool
+ 	// Internal fault injection at grouped transaction boundaries. Production
+ 	// callers leave this nil; it does not form part of persisted apply intent.
+--- a/internal/changes/journal.go
++++ b/internal/changes/journal.go
+@@ -47,16 +47,18 @@
+ }
+ 
+ type applyJournalItem struct {
+-	Path         string              `json:"path"`
+-	ItemDir      string              `json:"item_dir"`
+-	Original     Baseline            `json:"original"`
+-	Expected     Baseline            `json:"expected"`
+-	Parent       fsidentity.Identity `json:"parent_identity,omitempty"`
+-	Phase        string              `json:"phase"`
+-	MetadataOnly bool                `json:"metadata_only,omitempty"`
+-	Target       fsidentity.Identity `json:"target_identity,omitempty"`
+-	OriginalMode uint32              `json:"original_mode,omitempty"`
+-	ExpectedMode uint32              `json:"expected_mode,omitempty"`
++	ExchangeValue    fsidentity.Identity `json:"exchange_value,omitempty"`
++	ExchangeOriginal fsidentity.Identity `json:"exchange_original,omitempty"`
++	Path             string              `json:"path"`
++	ItemDir          string              `json:"item_dir"`
++	Original         Baseline            `json:"original"`
++	Expected         Baseline            `json:"expected"`
++	Parent           fsidentity.Identity `json:"parent_identity,omitempty"`
++	Phase            string              `json:"phase"`
++	MetadataOnly     bool                `json:"metadata_only,omitempty"`
++	Target           fsidentity.Identity `json:"target_identity,omitempty"`
++	OriginalMode     uint32              `json:"original_mode,omitempty"`
++	ExpectedMode     uint32              `json:"expected_mode,omitempty"`
+ }
+ 
+ type applyJournalParent struct {
+@@ -526,13 +528,19 @@
+ 			!validBaseline(item.Original) || !validBaseline(item.Expected) {
+ 			return fmt.Errorf("invalid change apply journal item %q", item.Path)
+ 		}
+-		if item.Phase != applyItemPrepared && item.Phase != applyItemInstalling && item.Phase != applyItemGrouped && item.Phase != applyItemInstalled {
++		if item.Phase != applyItemPrepared && item.Phase != applyItemInstalling && item.Phase != applyItemGrouped && item.Phase != applyItemExchanging && item.Phase != applyItemInstalled {
+ 			return fmt.Errorf("invalid change apply item phase %q", item.Phase)
+ 		}
+-		if item.Phase == applyItemGrouped && (item.MetadataOnly || item.Original.Missing || item.Expected.Missing || journal.Phase == applyPhaseCommitted) {
++		if (item.Phase == applyItemGrouped || item.Phase == applyItemExchanging) && (item.MetadataOnly || item.Original.Missing || item.Expected.Missing || journal.Phase == applyPhaseCommitted) {
+ 			return fmt.Errorf("invalid grouped apply item %q", item.Path)
+ 		}
+-		if item.Phase == applyItemGrouped {
++		if item.Phase == applyItemExchanging && (item.ExchangeValue.IsZero() || item.ExchangeOriginal.IsZero()) {
++			return fmt.Errorf("exchange missing inode evidence")
++		}
++		if !item.ExchangeValue.IsZero() && (item.ExchangeOriginal.IsZero() || item.MetadataOnly || item.Original.Missing || item.Expected.Missing || (item.Phase != applyItemExchanging && item.Phase != applyItemInstalled)) {
++			return fmt.Errorf("invalid exchange evidence")
++		}
++		if item.Phase == applyItemGrouped || item.Phase == applyItemExchanging {
+ 			grouped++
+ 		}
+ 		if item.Phase != applyItemPrepared && item.Parent.IsZero() {
+@@ -552,6 +560,11 @@
+ 	if grouped != 0 {
+ 		if grouped != len(journal.Items) || grouped < 2 || len(journal.CreatedParents) != 0 {
+ 			return fmt.Errorf("grouped apply intent must cover the entire existing-parent plan")
++		}
++		for _, item := range journal.Items {
++			if item.Phase != journal.Items[0].Phase {
++				return fmt.Errorf("mixed exchange intent")
++			}
+ 		}
+ 		parents := make(map[string]fsidentity.Identity)
+ 		for _, item := range journal.Items {
+@@ -680,6 +693,12 @@
+ ) error {
+ 	if item.MetadataOnly {
+ 		return rollbackMetadataApplyItemAtRoot(ctx, rootFS, item)
++	}
++	if !item.ExchangeValue.IsZero() {
++		handled, err := prepareExchangeRollback(ctx, rootFS, journal, item)
++		if err != nil || handled {
++			return err
++		}
+ 	}
+ 	backup := path.Join(journal.Transaction, item.ItemDir, "previous")
+ 	quarantine := path.Join(journal.Transaction, item.ItemDir, rollbackInstalledName)

@@ -1,0 +1,5 @@
+{
+  "revision": "092e88a",
+  "input_sha256": "088b2775a865a71f5421a891a99c4bec0b4afc22b3b2070cee62e5a1101d3812",
+  "note": "Committed P1 plus the new workload benchmark; production unchanged."
+}

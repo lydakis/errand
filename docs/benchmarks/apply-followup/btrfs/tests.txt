@@ -1,0 +1,7 @@
+go: downloading github.com/fsnotify/fsnotify v1.10.1
+ok  	github.com/lydakis/errand/internal/changes	2.092s
+ok  	github.com/lydakis/errand/internal/snapshot	2.594s
+ok  	github.com/lydakis/errand/internal/client	10.649s
+ok  	github.com/lydakis/errand/internal/daemon	12.797s
+ok  	github.com/lydakis/errand/cmd/errand	13.910s
+ok  	github.com/lydakis/errand/internal/changes	2.034s

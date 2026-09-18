@@ -1,0 +1,6 @@
+goos: linux
+goarch: amd64
+pkg: github.com/lydakis/errand/internal/changes
+cpu: Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz
+BenchmarkApplyWorkloads/tiny-2         	       1	  83622514 ns/op	      4096 file-bytes/op	         0 grouped/op	         1.000 roots/op
+PASS

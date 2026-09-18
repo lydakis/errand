@@ -1,0 +1,6007 @@
+{
+  "platform": "macOS-27.0-arm64-arm-64bit",
+  "cases": {
+    "tiny": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^tiny$"
+    ],
+    "large": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^large$"
+    ],
+    "flat128": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^flat128$"
+    ],
+    "parents8": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^parents8$"
+    ],
+    "parents128": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^parents128$"
+    ],
+    "creation": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^creation$"
+    ],
+    "deletion": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^deletion$"
+    ],
+    "new-parent": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^new-parent$"
+    ],
+    "restricted": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^restricted$"
+    ],
+    "watch-small": [
+      "cli",
+      "^BenchmarkWatchWorkloads$/^small$"
+    ]
+  },
+  "modes": [
+    "reference-a",
+    "reference-b",
+    "scratch",
+    "parents"
+  ],
+  "inputs": {
+    "baseline": {
+      "revision": "092e88a",
+      "input_sha256": "088b2775a865a71f5421a891a99c4bec0b4afc22b3b2070cee62e5a1101d3812",
+      "note": "Committed P1 plus the new workload benchmark; production unchanged."
+    },
+    "scratch": {
+      "input_sha256": "4b089ea99a24c61e35624586a44688dff090a7c47bc090fb6fc4442726f04a1a",
+      "note": "P1 plus scratch-only publication policy and Git operational-error correction; original single-parent grouping."
+    },
+    "parents": {
+      "revision": "092e88a+followup",
+      "input_sha256": "ff78b9d5ab8df8c05149f1f511b29a484526cf3ef5c41e86b1698d7d2df0730a",
+      "note": "Scratch policy, Git failure reporting, and multiple existing parents; creations and deletions remain reference."
+    }
+  },
+  "samples": [
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 103498791.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-tiny-reference-a.txt",
+      "log_sha256": "a368abb7441a2c323755325ef6159f62321b17adddd67fec77aaea87eef7d5e2"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 106304166.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-tiny-reference-b.txt",
+      "log_sha256": "31a5aa6821c221d0565ff98f8888ecf9484fa591ed40404d035dd4420f2c7aa8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 101861834.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 2,
+      "log": "00-tiny-scratch.txt",
+      "log_sha256": "fa661e97f7b3ee94708929778786d6a325db293ab078f3fbddafec9f8f659635"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 102841791.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 3,
+      "log": "00-tiny-parents.txt",
+      "log_sha256": "a2d6265f1d28829fa942612e2d7d54677c30a6aed7e69dcab590dd6ba173fca6"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 121611875.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-large-reference-a.txt",
+      "log_sha256": "d82660c68d50233916f8119a7a192b1d088c1853c11b5f2e7c15685e47f25403"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 128572666.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-large-reference-b.txt",
+      "log_sha256": "4469368601d2c5211379c2b180e77beeb1a509e98e825ec12d190f536db058ae"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 118359125.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 2,
+      "log": "00-large-scratch.txt",
+      "log_sha256": "2150c64f7db96c4a92cb9b7afb22f304b3d37e94108a5710e1b1fbe0ad6e9e34"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 124107958.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 3,
+      "log": "00-large-parents.txt",
+      "log_sha256": "a9c8e7caa9cfe5a61eb0b416f8bffae54655f5547640a2197ea931538d212a88"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1445848334.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-flat128-reference-a.txt",
+      "log_sha256": "8aba32e705b21d21635dc827f396b94810406d4bd78220fbb13495d72f9d655b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1433379834.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-flat128-reference-b.txt",
+      "log_sha256": "5067c25d7b77a2ecc242a2e0fd1bff8f273f25e04e555f1b8dd5d7a9240d5dc8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 862516041.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "scratch",
+      "position": 2,
+      "log": "00-flat128-scratch.txt",
+      "log_sha256": "1fd7020426801acc89fb2c428dffca634067a59a7e06d0426d580e4690bb71a0"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 864420500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "parents",
+      "position": 3,
+      "log": "00-flat128-parents.txt",
+      "log_sha256": "373df8f5c43856ffc8e0087377497bc9328cfead7673e0f55222325c987a7d64"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 6114236000.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-parents8-reference-a.txt",
+      "log_sha256": "f1e8c39d4564d033f7c81d15effce6188cda36994608772131acf8f4247566ab"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 6101801292.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-parents8-reference-b.txt",
+      "log_sha256": "439f3b695f7ad127c357f3557d0cd72e44d194f1fd6dbce2e5bc4e9308deda2a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5520364542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "scratch",
+      "position": 2,
+      "log": "00-parents8-scratch.txt",
+      "log_sha256": "55d2b03dacd7a2d3db32ce3726a95d36f9e70d90e26710ac25fff4ad0afc8bf4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 982603125.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "parents",
+      "position": 3,
+      "log": "00-parents8-parents.txt",
+      "log_sha256": "da4e536166de440caf246640360ab013989124578cafd01103869d729c408d84"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 6112402041.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-parents128-reference-a.txt",
+      "log_sha256": "ee45d4c5181f8e37d38fbde365332403b90b2fdbc924488aba77493b4cc393c8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 6030321833.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-parents128-reference-b.txt",
+      "log_sha256": "2e10335a285a3cd76aeeab7d85d50356715601186c70b9ce6daef2e0486bd955"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5522442000.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "scratch",
+      "position": 2,
+      "log": "00-parents128-scratch.txt",
+      "log_sha256": "a459040f57cc0bdf534bb8bdf61be2090d07be7d102400dfa8dc726b57b2d849"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 1496981125.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "parents",
+      "position": 3,
+      "log": "00-parents128-parents.txt",
+      "log_sha256": "2c8830d02f0a5401a289ab2e7f36d3a20e4691d7b59c4fdbd0ed888718c1fe6d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5875148250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-creation-reference-a.txt",
+      "log_sha256": "619ea96ca7172ae79cb3139a654f29a6bb60e0e97b63b49c3887d926bf12d74c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5955962625.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-creation-reference-b.txt",
+      "log_sha256": "e631eea7b5c945819bf39f8e80a3f406363e33339b08a0f528c76fb764be7b1d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5446699500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "scratch",
+      "position": 2,
+      "log": "00-creation-scratch.txt",
+      "log_sha256": "8d9e1605015b1cdbb08e01630b195b07e765d82bae4a287091bae15792df3a95"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5492399667.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "parents",
+      "position": 3,
+      "log": "00-creation-parents.txt",
+      "log_sha256": "f543fc07216700735f32ddafa59063c9fffb5b750e9badaa48590aee854bf5fd"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5958105084.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-deletion-reference-a.txt",
+      "log_sha256": "92a49bede7f444749903d3c9ba5bcea0dddabbdd6fec93ac4be74aa023e21cf8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 6062445208.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-deletion-reference-b.txt",
+      "log_sha256": "e7dacb22d0acae62c1533dee82d0bf0e983dfeb2fa637c438a430373f1956f0d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5443160041.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "scratch",
+      "position": 2,
+      "log": "00-deletion-scratch.txt",
+      "log_sha256": "4c82ae59891f2091ae9849b638c10d5e8b7eada63de9f2ab80a8717795dbfd28"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5327362000.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "parents",
+      "position": 3,
+      "log": "00-deletion-parents.txt",
+      "log_sha256": "89c871e966401d02d29e64ff85ecfffa2d8660b945a23e94cd7bc2acaa881f9a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 6084529875.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-new-parent-reference-a.txt",
+      "log_sha256": "5d6fcd7bb450304c41682348960f92d37b586dc75a79281de604a7d143661d35"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5914913375.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-new-parent-reference-b.txt",
+      "log_sha256": "a377eb7b15c980766b9ee65b2b4e758a5cd6b2bae33db4c3a7243aff9b64a1b2"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5549157750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "scratch",
+      "position": 2,
+      "log": "00-new-parent-scratch.txt",
+      "log_sha256": "cdf29741afdb623bdcf2f3b398a7a183d4c524e70589b4391a48411db89b202b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5537677625.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "parents",
+      "position": 3,
+      "log": "00-new-parent-parents.txt",
+      "log_sha256": "288a23811b739c54847bec8bb42eb173dd68195b1905a8f2a241873bcc9af235"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 6021434375.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-restricted-reference-a.txt",
+      "log_sha256": "931493d596c518cc56adb45a8081aa6ffb918cf33c279a6910916182263b69d8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 6062823625.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-restricted-reference-b.txt",
+      "log_sha256": "5a1052af7510f2e33af4744f17a80994bfbc986e97372a9c5d0bac1c0dd8e790"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 5244321500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "scratch",
+      "position": 2,
+      "log": "00-restricted-scratch.txt",
+      "log_sha256": "6d82ab89fd940410bad4b5956356a828d44f2de1160fc6a7b617cfa0f1a54c1b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 4963244500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "parents",
+      "position": 3,
+      "log": "00-restricted-parents.txt",
+      "log_sha256": "ed0466c5810612f5fd54c4b62aba99fb96ebe969e3e0a39d37386d4abadefd61"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 253842916.0,
+        "apply-ms/op": 151.7,
+        "client-ms/op": 59.36,
+        "cpu-ms/op": 51.18,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.93
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-watch-small-reference-a.txt",
+      "log_sha256": "e6ba3f7cb21952e4b9547f8e85d5c3d1f998f114fbcdb4e6c22b31e14f3acf1d"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 245871708.0,
+        "apply-ms/op": 142.7,
+        "client-ms/op": 59.31,
+        "cpu-ms/op": 47.73,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 34.96
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-watch-small-reference-b.txt",
+      "log_sha256": "f9ea6ce58eeda9656a4572d1f3345f847d0ab62bd01c06169e72bfa50198eba3"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 192225042.0,
+        "apply-ms/op": 109.4,
+        "client-ms/op": 48.87,
+        "cpu-ms/op": 36.5,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 28.08
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 2,
+      "log": "00-watch-small-scratch.txt",
+      "log_sha256": "a89a63af73946881cf3b679276355da0eb8ee05d0601d72102884a524dd64732"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 252321583.0,
+        "apply-ms/op": 145.6,
+        "client-ms/op": 64.38,
+        "cpu-ms/op": 53.1,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 34.0
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 3,
+      "log": "00-watch-small-parents.txt",
+      "log_sha256": "aa43a14b08077cb011481131d68ad50a2eeb193f9d2fb3cebbb092173d4127bd"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 122247625.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-large-reference-b.txt",
+      "log_sha256": "a7fe62e0af80889c0c1bb95ccccd0f26dc02e097d035bf1bf8adcda7d90f0654"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 123550083.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 1,
+      "log": "01-large-scratch.txt",
+      "log_sha256": "67c5fe0ffc47f73ae8791329b28d0347c9d1a6291817487f1430bb1b6613e594"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 126115333.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 2,
+      "log": "01-large-parents.txt",
+      "log_sha256": "07040bcc3de6060dc56dbfae5575e2fd7f139743fdb114b04dfc1b26c8d69c8c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 134475417.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "01-large-reference-a.txt",
+      "log_sha256": "4b09a23422644b11bc9f4d3d5183b834a70e043c6e39598f3174b970cce749df"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1483902084.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-flat128-reference-b.txt",
+      "log_sha256": "4965c5f1f2ce4c1789152f93d28fb95ca884ccfb15bb6b631cf2cbd92d731bcf"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 875241500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "scratch",
+      "position": 1,
+      "log": "01-flat128-scratch.txt",
+      "log_sha256": "a9e9f7450050f0281b8051d9c8f3bf3cc8bebe64439cd650af654a181b4a4240"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 897114792.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "parents",
+      "position": 2,
+      "log": "01-flat128-parents.txt",
+      "log_sha256": "d972532a0e2b2bb085ca2e206d82b31e24358c2a2db7b71fb45ae7af97e53f27"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1420483125.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "01-flat128-reference-a.txt",
+      "log_sha256": "b5e22f4ee3f1dcd0d50730750c505d8c1d252a52f49f4efacac743b8eca25a27"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 6195011750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-parents8-reference-b.txt",
+      "log_sha256": "f3e679f9dff44caf4eb2871240265ab256068d6e080da4b9f60ffa1ac21c9e45"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5604821500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "scratch",
+      "position": 1,
+      "log": "01-parents8-scratch.txt",
+      "log_sha256": "ada8c47679bb8b828c66b8dd63169a4b50cd9eaa3da7afbcafddaa1ee177aa7e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1006555459.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "parents",
+      "position": 2,
+      "log": "01-parents8-parents.txt",
+      "log_sha256": "aeac80c0961f47419929a67411f3b20f033ea3f8364a2141b85c54f7ec58f07d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 6291433583.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "01-parents8-reference-a.txt",
+      "log_sha256": "4d3c45b01a77ab50acf8a0356a7294fae9431281d0522c89ba609f7f061550f9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 6234097334.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-parents128-reference-b.txt",
+      "log_sha256": "df1ef75ee8e4cacd626f15fc901952d701a944dfb891570042cdb1d18746edba"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5455588209.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "scratch",
+      "position": 1,
+      "log": "01-parents128-scratch.txt",
+      "log_sha256": "86feda152f682cfa0a0e2e222f841df2db50030a71a95663a16a750885fdfbf2"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 1485598750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "parents",
+      "position": 2,
+      "log": "01-parents128-parents.txt",
+      "log_sha256": "1558c14ad7856637736c4f9c8899b4f5130682fa6d3ec81b3f9ec8522270e925"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 6041643542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "01-parents128-reference-a.txt",
+      "log_sha256": "afad1abbca4c3b440ce490944102a2caf0747653342fff015b5d23c7a1d23e41"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5265162292.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-creation-reference-b.txt",
+      "log_sha256": "34e16d32fad37e6b297d5d9f8467f018f2d67d99104db4035c68aa29ab20e718"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5490640458.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "scratch",
+      "position": 1,
+      "log": "01-creation-scratch.txt",
+      "log_sha256": "653b3179bfd5c6f739f564e40e034257a2897a61a583f5015b2b52179105c55d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 4748099125.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "parents",
+      "position": 2,
+      "log": "01-creation-parents.txt",
+      "log_sha256": "7bf518bb21591352a4c29ace85d742afae690d67835ec1f79b5cfebf689dba3e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5209747458.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "01-creation-reference-a.txt",
+      "log_sha256": "eff8a2e110ecf1ad9289e51f1f150869927884e6f7345442758953279db741b5"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 6069927334.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-deletion-reference-b.txt",
+      "log_sha256": "e55b8efd019cf10aaca84a9e2374a4b631155f3f08312f4ab9f0fa328f528617"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5554603250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "scratch",
+      "position": 1,
+      "log": "01-deletion-scratch.txt",
+      "log_sha256": "56f235c486ec8a2935cd728a52053d60b16f3c6a00fd4f514773175b571bdffb"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5337538917.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "parents",
+      "position": 2,
+      "log": "01-deletion-parents.txt",
+      "log_sha256": "ef7697ec2b0a31990e48c3375303cdf38d15af9a4693210388b0bf7a6cf55fea"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5151533375.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "01-deletion-reference-a.txt",
+      "log_sha256": "041c2688538695ebb2c978dc8f9c1c2a763f223b8bcde032eccc88b59ed892fb"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5228266042.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-new-parent-reference-b.txt",
+      "log_sha256": "2e2a483377c6288d2ab5afdaf365219f691f662b9fe8fa06bcadece9ce28ebee"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 4711200458.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "scratch",
+      "position": 1,
+      "log": "01-new-parent-scratch.txt",
+      "log_sha256": "ac6ca09629ae7dede2ba44479a6cd39ec07b790a2bcabbd88fdd97d5018e2bf9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 4820758792.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "parents",
+      "position": 2,
+      "log": "01-new-parent-parents.txt",
+      "log_sha256": "92677ef324c66081a5ac9b229f94948f1e7477a065b9422f0f41ae8c79e65495"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5331269041.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "01-new-parent-reference-a.txt",
+      "log_sha256": "3b58c24a4e964a34e4391ab2655a98ff20861fd4717e59857e82990cffc57a7b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5418415041.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-restricted-reference-b.txt",
+      "log_sha256": "21004a22c2606d16141e9088af284d3feb1fb20c94b08b9e8a68c09994c370fe"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 4985985542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "scratch",
+      "position": 1,
+      "log": "01-restricted-scratch.txt",
+      "log_sha256": "c39628a83c42ebab15669451f9bca12b92e2588be0dd8ce880e1d25770aeba14"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 5065817000.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "parents",
+      "position": 2,
+      "log": "01-restricted-parents.txt",
+      "log_sha256": "13244bfcad285c5919dd33903a65e745d3ac32cf9c0a310f955225c3beb8de2e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 6679397833.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "01-restricted-reference-a.txt",
+      "log_sha256": "60af0c6f03b1ab35c7531b5c7987af447e2a331eb10a7606c45e480a10cd5a5b"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 254569625.0,
+        "apply-ms/op": 150.6,
+        "client-ms/op": 61.28,
+        "cpu-ms/op": 51.89,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.98
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-watch-small-reference-b.txt",
+      "log_sha256": "1c161f20b64e3b60d9d9445131cf79945587af6996491a69f3d507eefdcae7c5"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 263159917.0,
+        "apply-ms/op": 155.7,
+        "client-ms/op": 64.24,
+        "cpu-ms/op": 57.42,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 34.0
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 1,
+      "log": "01-watch-small-scratch.txt",
+      "log_sha256": "b741f2d28c61cc6f64fbde8c9b6a72839f2cb409a231251a063319e395495d8b"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 261608167.0,
+        "apply-ms/op": 156.7,
+        "client-ms/op": 64.39,
+        "cpu-ms/op": 52.14,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.0
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 2,
+      "log": "01-watch-small-parents.txt",
+      "log_sha256": "d7caab059933d4a332d3a0e09c67762f919d17014fde3bd9a8db6899b1b1b4e5"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 255092584.0,
+        "apply-ms/op": 149.7,
+        "client-ms/op": 62.24,
+        "cpu-ms/op": 51.24,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 34.03
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "01-watch-small-reference-a.txt",
+      "log_sha256": "ee6c5c200b072304a939cedbe0c9be2f8978a2b07e8602b1b3e02510eb1b4ea6"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 107372542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-tiny-reference-b.txt",
+      "log_sha256": "f6e3d227a5e52946b94f58a70a5694ed049a55099596a071e2461b9be4955c74"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 102350542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 1,
+      "log": "01-tiny-scratch.txt",
+      "log_sha256": "f21f9b8d6d18c7db1dd38ea7c855a7fa9756a4da58b827047d1ecb1725d31d2a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 103303042.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 2,
+      "log": "01-tiny-parents.txt",
+      "log_sha256": "02392cff58a7f6924165321ddc51bfd1f6aaefbed73326a90257119abaa9ac2c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 105369625.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "01-tiny-reference-a.txt",
+      "log_sha256": "a84298b056968985379d6167351a60fa19b4a6aded5b1ab01cfc823350ca89cd"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 885563208.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "scratch",
+      "position": 0,
+      "log": "02-flat128-scratch.txt",
+      "log_sha256": "ff7a19ffd732adb6f9b1586b741b4936c948b78f9ed01216ca8d761885221432"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 875054167.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "parents",
+      "position": 1,
+      "log": "02-flat128-parents.txt",
+      "log_sha256": "342c457a9203d7c0e38b6a6b6f7e0baf802a8602a1da155aa9284ef5308fc9ce"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1427458042.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "02-flat128-reference-a.txt",
+      "log_sha256": "12246b3af4567625d7208b2645dcf6fa3b7a1cb660048842bca48f6c9dec72fc"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1423546291.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "02-flat128-reference-b.txt",
+      "log_sha256": "1ad5869223ff85bb5fb74fa953d9785d9e3e8e1405fec56a2defe9aacb9f4060"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5914636250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "scratch",
+      "position": 0,
+      "log": "02-parents8-scratch.txt",
+      "log_sha256": "1afdea7e91ffef23e49b537b3e8842daf255f62c5ed9351f2f551335d10747c8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 976636667.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "parents",
+      "position": 1,
+      "log": "02-parents8-parents.txt",
+      "log_sha256": "0a565eae06f7cf373b35717d0079a6c79e439067969378d4cfc264df62eb1cd8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6284501708.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "02-parents8-reference-a.txt",
+      "log_sha256": "19b37509722789cabeec09e4f4eb8813d860fa19c99f0c80c18a96290859c0c8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6274287833.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "02-parents8-reference-b.txt",
+      "log_sha256": "44c324c56176a09947666773a8df362fbc43b485a7df672ade4a3d3a64871929"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5656607750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "scratch",
+      "position": 0,
+      "log": "02-parents128-scratch.txt",
+      "log_sha256": "7f7474c7cccd7892c57712cc1769131e8dec0529c2efcc2d00c34f9e4469e6c6"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 1505949959.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "parents",
+      "position": 1,
+      "log": "02-parents128-parents.txt",
+      "log_sha256": "96afa70bea5c6c49b0793b2ec451a3a697cf3bec9ed642a17a2c18e8d7550c70"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6313629459.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "02-parents128-reference-a.txt",
+      "log_sha256": "b92d5e2d2a3c29c66a628a4458482b26c32806df8c9da17baf69066a8652426c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6355897750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "02-parents128-reference-b.txt",
+      "log_sha256": "adc06a4b143bdd7b787668d1817aff4906080cd956dd239a1ead9df4f458063c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5678634292.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "scratch",
+      "position": 0,
+      "log": "02-creation-scratch.txt",
+      "log_sha256": "7ca310d7282ddbf2d8a3b56ae8cc6e791575c1452e9bec572d46e8dc39ed0e85"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5720807583.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "parents",
+      "position": 1,
+      "log": "02-creation-parents.txt",
+      "log_sha256": "6ac863a33d814f5b53d841d0f4d7f931d6ccc74927bbd7f43ac67a2c48399539"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6192028500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "02-creation-reference-a.txt",
+      "log_sha256": "9ad375c5a9307a6f7cd7672de02648ff386f0e357bea070de532d057204f09eb"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6234259459.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "02-creation-reference-b.txt",
+      "log_sha256": "65b7473bb930779d25ced4f792134ed771bd7b61d90ad0c6d372a8e1e29510eb"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5657182542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "scratch",
+      "position": 0,
+      "log": "02-deletion-scratch.txt",
+      "log_sha256": "006bcecfa4637d62a361dc2c2105666cf41065eb1df3459233fd6bf2202017fa"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5674976291.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "parents",
+      "position": 1,
+      "log": "02-deletion-parents.txt",
+      "log_sha256": "bee9f91462682e4142cbdd6a9a45dc07026463cbb6f6d091ee049f87cb93fc7e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6163786667.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "02-deletion-reference-a.txt",
+      "log_sha256": "c17ce694223c7f8011833d82673f3a079e096038d9e86d1915cc6b5e6169a785"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6043227083.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "02-deletion-reference-b.txt",
+      "log_sha256": "6a6083a95e70843a4ea6ffca3a4caa0ccce278778567fd891e18e75dd92aeb7f"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5716983833.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "scratch",
+      "position": 0,
+      "log": "02-new-parent-scratch.txt",
+      "log_sha256": "54388d2fdc9dcf2243cfb98b530868c5b2fa0170ae081c35f10236f33e5c4208"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5047445875.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "parents",
+      "position": 1,
+      "log": "02-new-parent-parents.txt",
+      "log_sha256": "55546e11fc0d9968e7b4611a3d92e1b7eed64c6eecf2c4623186e378ac51dbe7"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 6212148917.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "02-new-parent-reference-a.txt",
+      "log_sha256": "2a5e32c340a7e9b13d5827165b75fa60e1162a3dd24bff6da487911a5a0a842b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5241925500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "02-new-parent-reference-b.txt",
+      "log_sha256": "2a893dc30369e87fdcd0e704b5a626a0886533ac398febcd85b231d187a8698c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 4868259042.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "scratch",
+      "position": 0,
+      "log": "02-restricted-scratch.txt",
+      "log_sha256": "41d0a557424d592b2372be5796fe0825dc49a3b5ad34b84e7fddeb12f91d7c8d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5630339291.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "parents",
+      "position": 1,
+      "log": "02-restricted-parents.txt",
+      "log_sha256": "26ea5c4b4d411b7e54b595cff15aa1244a5bb0bf17318684c02ba69fb93dc4b8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5992612250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "02-restricted-reference-a.txt",
+      "log_sha256": "fcdc9af289edd1f276acbb71623b274355784b094c6de95bf9bca6888b59fdce"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 5449588958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "02-restricted-reference-b.txt",
+      "log_sha256": "4bb39d3e8d0553c19bc26f98f758eefc325aafbf936b8e46f4258985f1847f05"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 247126625.0,
+        "apply-ms/op": 144.7,
+        "client-ms/op": 61.0,
+        "cpu-ms/op": 48.75,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.18
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 0,
+      "log": "02-watch-small-scratch.txt",
+      "log_sha256": "66ce8756fe4f929a50881cec8dc4fdbff8ae089cd374a321a49cfbfb32007f38"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 250942125.0,
+        "apply-ms/op": 147.7,
+        "client-ms/op": 60.37,
+        "cpu-ms/op": 55.36,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.98
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 1,
+      "log": "02-watch-small-parents.txt",
+      "log_sha256": "e9390df8acc36e120303a1a260ba8e759c0949bb9371ae2a7bd55bdd5ba47827"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 204307458.0,
+        "apply-ms/op": 119.8,
+        "client-ms/op": 49.91,
+        "cpu-ms/op": 37.32,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 28.51
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "02-watch-small-reference-a.txt",
+      "log_sha256": "2c52853bd3a67449bf8806d777c73a27041f9b662df39d777cc5342e5a9f809e"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 198322709.0,
+        "apply-ms/op": 109.7,
+        "client-ms/op": 55.05,
+        "cpu-ms/op": 40.58,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 27.31
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "02-watch-small-reference-b.txt",
+      "log_sha256": "2d7fc746d2fd59c45b4675a9e1fe78b5753030d03a24c83ce93871587c6f011a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 96919500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 0,
+      "log": "02-tiny-scratch.txt",
+      "log_sha256": "68826a8b3b8c9f7247151ad5886c222119dbe79011db42708d9e9e700786ae9e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 85407250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 1,
+      "log": "02-tiny-parents.txt",
+      "log_sha256": "07ec2e44d96aa5ea2e4564baeb544d66e7096e4b91e13a4956ad539cb500e9e9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 90363833.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "02-tiny-reference-a.txt",
+      "log_sha256": "a3cdd0e7feb0efefa55b0e56156ccce95627d39af2a8152f0eaeb0c581483265"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 77117625.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "02-tiny-reference-b.txt",
+      "log_sha256": "584f364cf533c616a59488765ecc1f03701048cb94f74e91bee540b10ab15612"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 83788125.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 0,
+      "log": "02-large-scratch.txt",
+      "log_sha256": "233bcba4fd5c107609f08ae317d2c3d8ed1a1152a3bebd213cc4b48d3bf918b2"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 123570750.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 1,
+      "log": "02-large-parents.txt",
+      "log_sha256": "97d3acf3d8941b9b6b884f0b5d77dd3d6fd2b20be871fb87d15be852973417a8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 131355292.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "02-large-reference-a.txt",
+      "log_sha256": "44a4686a8ec06358766b2fa01e99d53799fdbdf8e3b2d7b10c1cfe6de86885c5"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 129417334.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "02-large-reference-b.txt",
+      "log_sha256": "bf7d5eba4c758355721a8ceb1d62801e11315f66a1b6e7e502152bee317c93d3"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 980811542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "parents",
+      "position": 0,
+      "log": "03-parents8-parents.txt",
+      "log_sha256": "d83ba70103fb3f7ce5f78b13c4a2250796e4cadb0712bcb459723ac0c6ada7b3"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6229845125.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "03-parents8-reference-a.txt",
+      "log_sha256": "40ccf32f6bdbb27cfc0aa9fb9c1e19a0f61023536bc3e7cf11ca7695ab314138"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6350822334.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "03-parents8-reference-b.txt",
+      "log_sha256": "d7113328b13a0d918d4185354a579df3b0755d34f604e30882caadfc84b26f9a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents8",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5646138167.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents8",
+      "mode": "scratch",
+      "position": 3,
+      "log": "03-parents8-scratch.txt",
+      "log_sha256": "a7833635a260db534740f54b2bbb4eb7ecc664641e5661f232529a31b79b0d2a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 1499748583.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "parents",
+      "position": 0,
+      "log": "03-parents128-parents.txt",
+      "log_sha256": "a9d5cfecab34525312061adc0f25eb382168935808979841c82062e303c8dae0"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6405265667.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "03-parents128-reference-a.txt",
+      "log_sha256": "56f66d94c0b52998fe192f9ed1292a1764cd7f4c6a1cf2663903291365241aa1"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6429303333.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "03-parents128-reference-b.txt",
+      "log_sha256": "8b23e35627938ec2d4af0746efa85d12c0dca9b77207cb6fff89ede6d3b3e572"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/parents128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5737210958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "parents128",
+      "mode": "scratch",
+      "position": 3,
+      "log": "03-parents128-scratch.txt",
+      "log_sha256": "408805a04fc14548b1a07326dce9a92a989b8a404a72348801de8c7ff7e31a77"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5587020250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "parents",
+      "position": 0,
+      "log": "03-creation-parents.txt",
+      "log_sha256": "9315d5ca37fb458366ed203049c4a815ae97b440a5c07253cdc54cafd424c5c4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6214564208.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "03-creation-reference-a.txt",
+      "log_sha256": "42da4a34dc508d3b4aef2bf181c9f564cf264f2d03ff1e92cc54f0ce3a85da94"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6159706083.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "03-creation-reference-b.txt",
+      "log_sha256": "fa425ffce7448773d08cedcc9b6637c67d140af3b4a52b1dfad0f483806cfcfa"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/creation",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5671499250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "creation",
+      "mode": "scratch",
+      "position": 3,
+      "log": "03-creation-scratch.txt",
+      "log_sha256": "b15bd5e7dfa4734fc5762a16739b6ecd153553e0d63424514def3f921bd09890"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5640018333.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "parents",
+      "position": 0,
+      "log": "03-deletion-parents.txt",
+      "log_sha256": "147a629ad868e33a46aaef7c39c32cd0677a087d31f742aa7be8e50effa2f0f4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6110155000.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "03-deletion-reference-a.txt",
+      "log_sha256": "3e3d700752d8bfabd8fba772f679105666f45eab136d2dca4420b332d43e132d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6056999708.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "03-deletion-reference-b.txt",
+      "log_sha256": "d86de86b05168a98a12db4be1a08720d8728ffc036b35bc267b96bdd939eb5be"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/deletion",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5745877166.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "deletion",
+      "mode": "scratch",
+      "position": 3,
+      "log": "03-deletion-scratch.txt",
+      "log_sha256": "6c7bc3ccd0b92f6a6461ba3f95adc0e7072419cb8e3e0eeb5e74aca2d5465dce"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5706101958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "parents",
+      "position": 0,
+      "log": "03-new-parent-parents.txt",
+      "log_sha256": "b3304bd85d2e78bb4fddc4ab90795786dcb8b4516b8deb9b04450e5d91cdb6b2"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6281234125.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "03-new-parent-reference-a.txt",
+      "log_sha256": "c1da72bf5f89be5570be80f3ba45e278a711837bfb5cea83b124026259fa25db"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6133542333.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "03-new-parent-reference-b.txt",
+      "log_sha256": "3caad48931c238be3aa2464790f4be157c1af70f675bad41c72ccef771877330"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/new-parent",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5553921666.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "new-parent",
+      "mode": "scratch",
+      "position": 3,
+      "log": "03-new-parent-scratch.txt",
+      "log_sha256": "a3ab6cd4ec7a4ca466458aa3607d165dc9727931544374ecc3fd3ac8e08e85b7"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5617616750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "parents",
+      "position": 0,
+      "log": "03-restricted-parents.txt",
+      "log_sha256": "5fb77ac701508f943bf52b0b539d558a2e003aef5481060d897b918e72054015"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6166039459.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "03-restricted-reference-a.txt",
+      "log_sha256": "258d0af8d879cc5de4e98d8c2841f645087268ca714c81d0f031be8d106a0411"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 6137460208.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "03-restricted-reference-b.txt",
+      "log_sha256": "08b0c5c0bde445a91ce289265ae4974bf683f272778ffbbd38c13d0cdbdda607"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/restricted",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 5587191166.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 128.0
+      },
+      "case": "restricted",
+      "mode": "scratch",
+      "position": 3,
+      "log": "03-restricted-scratch.txt",
+      "log_sha256": "0c95898879961c58b0b26123dd045f86385faa5d7587258dd193c91398f1ea7f"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 197859375.0,
+        "apply-ms/op": 110.3,
+        "client-ms/op": 52.78,
+        "cpu-ms/op": 40.75,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 28.1
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 0,
+      "log": "03-watch-small-parents.txt",
+      "log_sha256": "89014b438f417501b3d4be48aafc41b2a360fd9403be064ed8ab998a74a493ed"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 200037792.0,
+        "apply-ms/op": 116.7,
+        "client-ms/op": 49.27,
+        "cpu-ms/op": 40.72,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 28.98
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "03-watch-small-reference-a.txt",
+      "log_sha256": "46441fe19f51bff2d07041e5c04753dd0686c3d3ecfb168d8d4c6ce9ca0668dd"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 200756292.0,
+        "apply-ms/op": 115.1,
+        "client-ms/op": 52.32,
+        "cpu-ms/op": 41.49,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 26.97
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "03-watch-small-reference-b.txt",
+      "log_sha256": "f649c1602caa92b8b5c14dbcbdf5f8244653175ec9a0bfd752ce0dd1a4ead092"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 198329208.0,
+        "apply-ms/op": 108.8,
+        "client-ms/op": 50.12,
+        "cpu-ms/op": 38.46,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.99
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 3,
+      "log": "03-watch-small-scratch.txt",
+      "log_sha256": "62f0604642911f563e6ecb63a45a6ad14fc9f6dbae07366257d5469a40a37193"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 104304542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 0,
+      "log": "03-tiny-parents.txt",
+      "log_sha256": "0a2a4e3aca0d171f9f0b9c0867dc1e443fe15018070c0d37bc839962fcc0675a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 107303584.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "03-tiny-reference-a.txt",
+      "log_sha256": "3223300bcf0ca772a23fe46009962004f95ac6b15d1204d1a4a631e9ad42dcfe"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 108366417.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "03-tiny-reference-b.txt",
+      "log_sha256": "fb45b2b37ed7720a5dc54f620968c99670449d8a7c779236093ec95f57a4b7eb"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 63208958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 3,
+      "log": "03-tiny-scratch.txt",
+      "log_sha256": "921a182991f6640111662be7907a8863adafb80208bdc469265603e1d568a819"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 94408875.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 0,
+      "log": "03-large-parents.txt",
+      "log_sha256": "ab015b7692ed1b57888450a3fa33c7791d1a5adc0789175016ef850bd3ba048d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 86745000.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "03-large-reference-a.txt",
+      "log_sha256": "ad8ca24c519bf80acdf7a639caa2c050358d4c6da63b7f0414a34d46d6f16ebd"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 125790041.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "03-large-reference-b.txt",
+      "log_sha256": "6aacccafc36cb038743bf90dc02904daf31fbcf773f07c24c2a749f5be2314ee"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 80882125.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 3,
+      "log": "03-large-scratch.txt",
+      "log_sha256": "bd7e9d9a18eea49b8da496cd49d160ccbec6b4aec271476faf9002e9f6ad9775"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 864755167.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "parents",
+      "position": 0,
+      "log": "03-flat128-parents.txt",
+      "log_sha256": "03cd76c8d3c149679fbdd0c82f1effe46b0535c4d749ec19d457d0a58e406ff6"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 1421550250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "03-flat128-reference-a.txt",
+      "log_sha256": "702f19b2085dfad58d9adcfd01a05c9c9cd409aa3530f263684821ee3337eaed"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 1080017750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "03-flat128-reference-b.txt",
+      "log_sha256": "b297c5d63def8a0644f30c329d97665f393ac0e9b0e30088c9f312f4e98c3bdf"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/flat128",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 855167791.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 1.0,
+        "roots/op": 128.0
+      },
+      "case": "flat128",
+      "mode": "scratch",
+      "position": 3,
+      "log": "03-flat128-scratch.txt",
+      "log_sha256": "f181a7cb062916ec3c478b454a5b69279e08802fd626adc3c5f74f644e91a26a"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 244023750.0,
+        "apply-ms/op": 146.7,
+        "client-ms/op": 58.15,
+        "cpu-ms/op": 44.59,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.03
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "04-watch-small-reference-a.txt",
+      "log_sha256": "1fea2238bfda857ffb5f99a5bbd8d44a8d50e37bbfcdbd531739bdf374c2d5fc"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 259051791.0,
+        "apply-ms/op": 153.7,
+        "client-ms/op": 61.35,
+        "cpu-ms/op": 52.41,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 34.96
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "04-watch-small-reference-b.txt",
+      "log_sha256": "e2dd9d812a15e584db1bc4ed91d321b459728c6e152a171d7b5db1bc2977a7ed"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 252381667.0,
+        "apply-ms/op": 146.7,
+        "client-ms/op": 61.21,
+        "cpu-ms/op": 53.02,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 35.94
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 2,
+      "log": "04-watch-small-scratch.txt",
+      "log_sha256": "9a8797166c65b9d6901c2655b8eded918b9d0488aac05c4590fc6b214eb67652"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 243343667.0,
+        "apply-ms/op": 144.7,
+        "client-ms/op": 59.18,
+        "cpu-ms/op": 44.89,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 30.07
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 3,
+      "log": "04-watch-small-parents.txt",
+      "log_sha256": "3818a7b8495626c6f48ff95521d794ddab0e981f982793ecd8d80dd862c15232"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 108418750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "04-tiny-reference-a.txt",
+      "log_sha256": "ba513424e6e5c3c0d77d596121ada4d0dc8726f1d25cc971055bf62e2b10b834"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 101337708.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "04-tiny-reference-b.txt",
+      "log_sha256": "5837acd86f736f94b923ae141496c3261defe49e91b8b740a72d0e9a87eb2502"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 102344625.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 2,
+      "log": "04-tiny-scratch.txt",
+      "log_sha256": "1d3d6eac75665d964d67ae9361a0fc4546aaf6c415dfcf54704142a72c455bdb"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 103478333.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 3,
+      "log": "04-tiny-parents.txt",
+      "log_sha256": "629c85be621d250b335d2d9ef406712ac02ef8aad352503de0ec34a997227715"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 130902833.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "04-large-reference-a.txt",
+      "log_sha256": "c46219c32ed8e0bbe0b9c56d406d855a214ef882224ab2ed0e9158fa1ac8a7ea"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 129291833.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "04-large-reference-b.txt",
+      "log_sha256": "a6f78f6e54121cd8d028afc6d6535cdb7b1d6b8a0293373a6acf121504b6db1d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 129638750.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 2,
+      "log": "04-large-scratch.txt",
+      "log_sha256": "c820dca6b872ab55418380b87514386e6badab010c62868ce85e181785ade753"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 121747417.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 3,
+      "log": "04-large-parents.txt",
+      "log_sha256": "d4bae14b93bcab825bf2523721620528602b7f6d11ace61e71830e654b1fb44a"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 255848167.0,
+        "apply-ms/op": 149.6,
+        "client-ms/op": 62.51,
+        "cpu-ms/op": 55.62,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 35.04
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "05-watch-small-reference-b.txt",
+      "log_sha256": "3a1ac3ff8830929c04fa0733b3800a3e9ea555606ee157053986d7321db6b08c"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 249517916.0,
+        "apply-ms/op": 145.6,
+        "client-ms/op": 63.19,
+        "cpu-ms/op": 49.89,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.99
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 1,
+      "log": "05-watch-small-scratch.txt",
+      "log_sha256": "77549189271f310eaf1cc360967545d5a58e465b1d6c9a86dc3853036928074e"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 239221750.0,
+        "apply-ms/op": 134.6,
+        "client-ms/op": 62.13,
+        "cpu-ms/op": 44.88,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 35.0
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 2,
+      "log": "05-watch-small-parents.txt",
+      "log_sha256": "bba4b1f231bb5454d8720b80adc4f3e042d6d14cafd3e9ffbb3b7d73cd5881ae"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 249211667.0,
+        "apply-ms/op": 144.7,
+        "client-ms/op": 62.3,
+        "cpu-ms/op": 43.52,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.97
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "05-watch-small-reference-a.txt",
+      "log_sha256": "e832dde2681ea1c7bb7f2ead4719158e758a9c08ead3548dc7c7612b6a87ab51"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 115469583.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "05-tiny-reference-b.txt",
+      "log_sha256": "f23ed8d83bdc658aecc195b5a14372369d9fbbc3d871eaf1865158d8d6a34bf5"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 101288875.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 1,
+      "log": "05-tiny-scratch.txt",
+      "log_sha256": "95e272f6e7b026f5e7461460083d29a4e8667a48c0bbf6dca7ca91a1a765179d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 100261542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 2,
+      "log": "05-tiny-parents.txt",
+      "log_sha256": "4026af3eacb92f524d405f42c9ccc7cab87fb8a9a699024ba88b75eb197d41d9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 101396916.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "05-tiny-reference-a.txt",
+      "log_sha256": "19af4a343f0ceb9bf084477a77b10f2350122998abd80930ca4730e2b0eeb0f5"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 129672666.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "05-large-reference-b.txt",
+      "log_sha256": "783aeb9408be63915387f1fa99cc9b9539262dd5ba1c12492356639b58ca6766"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 122657583.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 1,
+      "log": "05-large-scratch.txt",
+      "log_sha256": "d81116c10e535b48b664b887b4be74fe848242cdaf4b35788cb4152a04e6811f"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 132548042.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 2,
+      "log": "05-large-parents.txt",
+      "log_sha256": "15881c7b438486b15e04d3a819e4d8918cffa72cff3483d1b215c8662bb4f92a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 128723834.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "05-large-reference-a.txt",
+      "log_sha256": "bd97372a92dfc71d52433fbba3db56d8566e7890d122382638b0ff120dc0eada"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 231091666.0,
+        "apply-ms/op": 131.6,
+        "client-ms/op": 59.07,
+        "cpu-ms/op": 41.1,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.96
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 0,
+      "log": "06-watch-small-scratch.txt",
+      "log_sha256": "e0339598047fe2c23597842eb296a4e8e16b81b1ac59544b6689f64bdea26738"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 241956375.0,
+        "apply-ms/op": 137.8,
+        "client-ms/op": 62.03,
+        "cpu-ms/op": 49.02,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.05
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 1,
+      "log": "06-watch-small-parents.txt",
+      "log_sha256": "7106bd18930b6df8c128ef9558cb796d55fbcbd559d62c3dd16c0c307dc9c305"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 251074083.0,
+        "apply-ms/op": 150.6,
+        "client-ms/op": 58.22,
+        "cpu-ms/op": 52.94,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.98
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "06-watch-small-reference-a.txt",
+      "log_sha256": "d61642b02004a3e54248e34ba441b3a442d7851286477e2c89e4532533c24869"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 244550666.0,
+        "apply-ms/op": 147.6,
+        "client-ms/op": 60.19,
+        "cpu-ms/op": 47.81,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 27.15
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "06-watch-small-reference-b.txt",
+      "log_sha256": "5a782aca63b039c4851f584c40811bb6c075a877793932cb81151c74493bcfa3"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 95621291.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 0,
+      "log": "06-tiny-scratch.txt",
+      "log_sha256": "a27f16a59405fec35d3779c7e79b8f5eebc3fa1a36f919020350b022617b58b1"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 111427542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 1,
+      "log": "06-tiny-parents.txt",
+      "log_sha256": "df87304f8843449cbb13066522d24ec1240dd2b9a9db972aeec18927f9530aac"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 104394458.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "06-tiny-reference-a.txt",
+      "log_sha256": "613f4c7d338423aaca170554ec5a2f8877522cf9d0ca180f8ff975191c6356dd"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 106314666.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "06-tiny-reference-b.txt",
+      "log_sha256": "2dba122642be038f7341d15903c81f2f04ae9e0a6e2059ef186958cb6a982271"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 121787125.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 0,
+      "log": "06-large-scratch.txt",
+      "log_sha256": "91975a32ee5c778f76905c21bfba85787d14fb0e47f51885921b7cec1f066fcb"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 125865584.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 1,
+      "log": "06-large-parents.txt",
+      "log_sha256": "5e9c726b5383e66fd536bd7af26e377cabe418c2182053d9431a27353d1a629e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 127824042.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "06-large-reference-a.txt",
+      "log_sha256": "70af2441fb88ff9fecbecb856fc465942d6c0cefd427939a8baa1277b812c090"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 127636791.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "06-large-reference-b.txt",
+      "log_sha256": "02473040d6613abd22f77722cb4e49db86da3aecb4d3e9b4aedc96359dbf232f"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 246069167.0,
+        "apply-ms/op": 145.6,
+        "client-ms/op": 60.31,
+        "cpu-ms/op": 49.82,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 30.95
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 0,
+      "log": "07-watch-small-parents.txt",
+      "log_sha256": "5a56811d56c08bb452c538e5fd4024209dee983de5e896baac85cd209bf6cb68"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 252676958.0,
+        "apply-ms/op": 146.6,
+        "client-ms/op": 63.15,
+        "cpu-ms/op": 56.99,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 35.1
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "07-watch-small-reference-a.txt",
+      "log_sha256": "0b4a8c5e103d05b24657dec08979460ceee6deaf69c31408da6f0f20818c9ddc"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 250592708.0,
+        "apply-ms/op": 146.9,
+        "client-ms/op": 60.91,
+        "cpu-ms/op": 50.22,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 34.01
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "07-watch-small-reference-b.txt",
+      "log_sha256": "9dcd7d5054175aa226b13ba72bc8bff12d9570724052e76da4b80e085e333cfe"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 319762750.0,
+        "apply-ms/op": 191.4,
+        "client-ms/op": 87.25,
+        "cpu-ms/op": 54.03,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 35.89
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 3,
+      "log": "07-watch-small-scratch.txt",
+      "log_sha256": "979d768ffde79e0547924b466c49aedee47bbdf79eec6cd12fa487ecfda22cc1"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 94376375.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 0,
+      "log": "07-tiny-parents.txt",
+      "log_sha256": "9a5f7b9117ebb34e19926a5035dd60199d81063487c79bc91e1ccd5bda53bfba"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 99450000.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "07-tiny-reference-a.txt",
+      "log_sha256": "f7807b156205e8866b6fe8336483d9e595a239bc14a0207bff1b99b19c4e7255"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 96375375.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "07-tiny-reference-b.txt",
+      "log_sha256": "44e20e93e873d0d49860d2738a5d29edc13049eeefa743cdb45412b55a7aba3c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 100462334.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 3,
+      "log": "07-tiny-scratch.txt",
+      "log_sha256": "1e53ec5af43067d69ed9f03ad72205b4a96ac615c216762b6cf0eb453dad9b5c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 109789500.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 0,
+      "log": "07-large-parents.txt",
+      "log_sha256": "64b9ad7a872c160d922ef25cb36e4cacc68246b41e97dc7a00d3d0b92fa0c221"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 114923083.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "07-large-reference-a.txt",
+      "log_sha256": "476219d223cdc33e6514dc214a1283bd526b25cb7bfd2a7d65668404becd60d1"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 120846750.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "07-large-reference-b.txt",
+      "log_sha256": "67c502487df6bdc9814e5c6aa5b1e79982b31c4c1a05cb227171e63556be3df7"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 116902000.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 3,
+      "log": "07-large-scratch.txt",
+      "log_sha256": "d2e001555a92a0f3710ea0639955bdb6b7308747fdfa221f96638d6763b0f41d"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 239854667.0,
+        "apply-ms/op": 143.6,
+        "client-ms/op": 57.16,
+        "cpu-ms/op": 51.73,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.02
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "08-watch-small-reference-a.txt",
+      "log_sha256": "9b2ef2248d7bd81b78a76bfc53480b4701ff68985dab3a344471be2acaf0dc0d"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 247178708.0,
+        "apply-ms/op": 142.6,
+        "client-ms/op": 61.05,
+        "cpu-ms/op": 48.48,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 34.14
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "08-watch-small-reference-b.txt",
+      "log_sha256": "764790956a2bbf62977fb3dc7f975c27e89e943c500300c974351a6a20d4c962"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 256434167.0,
+        "apply-ms/op": 152.7,
+        "client-ms/op": 62.18,
+        "cpu-ms/op": 47.42,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.92
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 2,
+      "log": "08-watch-small-scratch.txt",
+      "log_sha256": "59ccdceb5ea17e012171929c1c954e097e513718f7bf2ebb0e4a4856d31a2825"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 248374959.0,
+        "apply-ms/op": 146.6,
+        "client-ms/op": 61.32,
+        "cpu-ms/op": 50.76,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.9
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 3,
+      "log": "08-watch-small-parents.txt",
+      "log_sha256": "b6d5c7f827310e31a43eea23e4c632b173537f94c11b3a047ba361088507227e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 103428417.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "08-tiny-reference-a.txt",
+      "log_sha256": "173153a46e8e309c09b87f603a6d8027dbb7056be4d02f1cc9e5be10fe8a2f96"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 108370834.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "08-tiny-reference-b.txt",
+      "log_sha256": "a6374253520d33d274aefc0182319744935a36ddc8caeb008de0c58eec9ca177"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 97412250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 2,
+      "log": "08-tiny-scratch.txt",
+      "log_sha256": "76f0fdb0752b209a93bd9e854e336b99b47ebae6b5e45fac47c6cffe1bab9ebb"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 102388208.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 3,
+      "log": "08-tiny-parents.txt",
+      "log_sha256": "0f180fa13ad57264e1580fa62aa598d19e18e8dd8759ab873eed2f4ae77f56d9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 123879000.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "08-large-reference-a.txt",
+      "log_sha256": "79217f012e2b8109842efc0987e06eacf9c98e56ad468cedd2bba4ca6dc749e4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 123720334.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "08-large-reference-b.txt",
+      "log_sha256": "de5bf96099d40f3ae739051a80bac3e3ef84d0205b5953b6198e2f47b906f220"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 121857917.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 2,
+      "log": "08-large-scratch.txt",
+      "log_sha256": "49c5ee6977f8666eabbda46befd1d359830baef84eb48d863157aafbed36939e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 115879083.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 3,
+      "log": "08-large-parents.txt",
+      "log_sha256": "12a0781a9513aac615d09eb6f7db595b8b415de2cd35caa163e0f51e483634b0"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 231350625.0,
+        "apply-ms/op": 135.7,
+        "client-ms/op": 58.99,
+        "cpu-ms/op": 42.08,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 28.13
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "09-watch-small-reference-b.txt",
+      "log_sha256": "c9634fd646fcf597e83a0b50fb211fce7f1982551b08f17eef5872ee7bc14b6f"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 243680291.0,
+        "apply-ms/op": 148.6,
+        "client-ms/op": 57.04,
+        "cpu-ms/op": 46.87,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 29.14
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 1,
+      "log": "09-watch-small-scratch.txt",
+      "log_sha256": "5efaacba208d2b836f24260df5cbc553b0e2fe74af9e54fa5d3c689383c4ab29"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 252714250.0,
+        "apply-ms/op": 144.7,
+        "client-ms/op": 64.54,
+        "cpu-ms/op": 53.5,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 34.77
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 2,
+      "log": "09-watch-small-parents.txt",
+      "log_sha256": "c67e3835bd6619fd8d75cf6da00ab63a132e276713d9b815805fb25a2c2608f8"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 241272333.0,
+        "apply-ms/op": 142.7,
+        "client-ms/op": 58.99,
+        "cpu-ms/op": 44.29,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.1
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "09-watch-small-reference-a.txt",
+      "log_sha256": "587cc5806ac43cc8b7ce8c510c12834c55cae9bb4f1c180192be4da90a1f0dd7"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 100833125.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "09-tiny-reference-b.txt",
+      "log_sha256": "7730552ef5a93854d5ca7399e34d99fd989fe7a1c2f47f6d2c7d759e2672448f"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 99475416.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 1,
+      "log": "09-tiny-scratch.txt",
+      "log_sha256": "d7135c604a00177a3d0ebd842ef864d10aa0cf4908b5e5716c50e852eff196f1"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 104479959.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 2,
+      "log": "09-tiny-parents.txt",
+      "log_sha256": "053c964c04b90ec8e8c4392c49fcc62e63938c5824c2086381a26bb1fd5871e2"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 108394417.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "09-tiny-reference-a.txt",
+      "log_sha256": "ab9553a749ea15061785de9961bde72946100f7b8eb1399d06fdb5cdfda44564"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 125763500.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "09-large-reference-b.txt",
+      "log_sha256": "39ec73e139d174b306de118ceda949422d0f84a330c8eb8c2149bf6cbcb6a091"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 120803458.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 1,
+      "log": "09-large-scratch.txt",
+      "log_sha256": "58186c0311e87249b4ce19bd54d00fc997378f720a6d20667141ea7bf6e9996c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 120299000.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 2,
+      "log": "09-large-parents.txt",
+      "log_sha256": "e793877c5349813e86f56cbcb51843f797e339ba7dc577532ce10377b78c9ade"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 121451583.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "09-large-reference-a.txt",
+      "log_sha256": "2e40ce68aee8d9cf050b04d1d3ab579a5932a2ec111e3312b1951e4957dc7f76"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 99291792.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 0,
+      "log": "10-tiny-scratch.txt",
+      "log_sha256": "f3add8538fef3ddef9b90cc22ba1990ec307aad36dc7c708b5f057a9683f6303"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 102405000.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 1,
+      "log": "10-tiny-parents.txt",
+      "log_sha256": "810fe23df5a72234309ff32f09836cecef06f11e66df2f5749ce883b24bb7872"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 106440167.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "10-tiny-reference-a.txt",
+      "log_sha256": "474d724351f4e7bed5ce8691c9c6cad28213c88ef7f7ce68c9594a30e5361e28"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 104359958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "10-tiny-reference-b.txt",
+      "log_sha256": "c79906c3d110bcc6713c4fab02cfe61306e0fd608cd9be16e7a3d8140dadc2e9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 122008125.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 0,
+      "log": "10-large-scratch.txt",
+      "log_sha256": "ad846f0a59c5f1451549cf95fa558f6ff124bb65d9e754c19e33fa25570806a6"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 121408250.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 1,
+      "log": "10-large-parents.txt",
+      "log_sha256": "b456ea1f7b659bc5f77706b1f0460a33874001debf64b24db0ec526a0f78b802"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 129767625.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "10-large-reference-a.txt",
+      "log_sha256": "6705266791f03393c26bd8fcc2774e06f5e2b3867e11a1dae539b5df67268f40"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 126857667.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "10-large-reference-b.txt",
+      "log_sha256": "d55ca41a491a7fa28be265a3997e71ef30e7848d9ffd1b41b41b4cdbc0d3b662"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 238638542.0,
+        "apply-ms/op": 141.8,
+        "client-ms/op": 57.08,
+        "cpu-ms/op": 47.72,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.02
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 0,
+      "log": "10-watch-small-scratch.txt",
+      "log_sha256": "6af1b2f45dddadda63f0f1a55612d66ee2ad2c36fe7d6a7aef7ab538fa92712e"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 241038292.0,
+        "apply-ms/op": 139.7,
+        "client-ms/op": 60.05,
+        "cpu-ms/op": 43.49,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.16
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 1,
+      "log": "10-watch-small-parents.txt",
+      "log_sha256": "67d5097b39893e5661e9d0c4df7fc49eff5e7d391ed76aebb4b5be851c43c952"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 237788292.0,
+        "apply-ms/op": 139.7,
+        "client-ms/op": 60.07,
+        "cpu-ms/op": 44.34,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 28.12
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "10-watch-small-reference-a.txt",
+      "log_sha256": "3c46987d2f7bedc3e37819f19730fda2e386f4a56efa2150cd5b5a2e5e12e658"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 257930167.0,
+        "apply-ms/op": 147.4,
+        "client-ms/op": 64.11,
+        "cpu-ms/op": 52.01,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 37.08
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "10-watch-small-reference-b.txt",
+      "log_sha256": "01efe3db97761dd5ad58ae98273991432b0a7d75f456acc11b1f49aa29d631ca"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 103148459.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 0,
+      "log": "11-large-parents.txt",
+      "log_sha256": "053eaac1eedeb682db1275bf370fa0ee77abef5802b8332cb8b15a4280546d2a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 119881041.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "11-large-reference-a.txt",
+      "log_sha256": "e71e405638fa8fa6f8c5a30ec8bb0b200b122b489af9c43568d65d5127c4eeff"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 130250042.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "11-large-reference-b.txt",
+      "log_sha256": "829ea322ffb0e86421af9397625bb41ab6fb0a74925aba273dd7e1774ed8d690"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 115941458.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 3,
+      "log": "11-large-scratch.txt",
+      "log_sha256": "d0cbfe4d555aeec7910082688f3726929c3e6cacf21e7a749d459ef59556b420"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 246372458.0,
+        "apply-ms/op": 145.7,
+        "client-ms/op": 57.17,
+        "cpu-ms/op": 50.14,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 34.01
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 0,
+      "log": "11-watch-small-parents.txt",
+      "log_sha256": "b87e40e6181aa0462be630c2dd7b29419df6533e165397808152ea5548bb24ee"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 252505084.0,
+        "apply-ms/op": 152.4,
+        "client-ms/op": 59.83,
+        "cpu-ms/op": 51.24,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.58
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "11-watch-small-reference-a.txt",
+      "log_sha256": "9545ba082180349156c82c8811d5cc10d76b9746df266d9533c94eeaaba03d2d"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 233963625.0,
+        "apply-ms/op": 136.7,
+        "client-ms/op": 55.29,
+        "cpu-ms/op": 42.95,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.97
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "11-watch-small-reference-b.txt",
+      "log_sha256": "0be9d414bf6f49fa18e9a1cb8853502333da3ac21cfea73bde29afd84df6b00f"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 244005167.0,
+        "apply-ms/op": 147.7,
+        "client-ms/op": 57.37,
+        "cpu-ms/op": 48.55,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 29.8
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 3,
+      "log": "11-watch-small-scratch.txt",
+      "log_sha256": "a23baba041bac2fe0d8b7f13b8f316e46c31b0abe43bbb072fb436b5f8986242"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 105414209.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 0,
+      "log": "11-tiny-parents.txt",
+      "log_sha256": "d254ab3bef2ba2789ef0f81a4f30e3372978becd0be982dae591d637389dc10b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 116372542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "11-tiny-reference-a.txt",
+      "log_sha256": "6829dc1ac9bd9024996cc1cad73b149e78298fe87d47b6f27328ba760e704b88"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 109313750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "11-tiny-reference-b.txt",
+      "log_sha256": "1b835cb0daa65716c2205e868b167d35429e3cef4b91df33c829fa36b59ed58a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 103289792.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 3,
+      "log": "11-tiny-scratch.txt",
+      "log_sha256": "2f67de72dcb94f80bae297a11c3803244dee5fb1658833d054ddc55af0544095"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 243991333.0,
+        "apply-ms/op": 141.8,
+        "client-ms/op": 59.28,
+        "cpu-ms/op": 47.78,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.99
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "12-watch-small-reference-a.txt",
+      "log_sha256": "8d46d02b5a95d308db1863c99a2edddb18a5805f0a65004f37b7097da38e28f7"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 243292625.0,
+        "apply-ms/op": 149.6,
+        "client-ms/op": 58.85,
+        "cpu-ms/op": 43.92,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 25.97
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "12-watch-small-reference-b.txt",
+      "log_sha256": "571cae543bfd1d4fe7860e4925d690e658ac38011ad1932ca6c817653f4f24d6"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 235168167.0,
+        "apply-ms/op": 136.6,
+        "client-ms/op": 58.18,
+        "cpu-ms/op": 44.42,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.17
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 2,
+      "log": "12-watch-small-scratch.txt",
+      "log_sha256": "6accfad3f2007655767fd13e8b020547cd0d39d7ca0ccca623dded54f729add9"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 257983167.0,
+        "apply-ms/op": 150.6,
+        "client-ms/op": 63.41,
+        "cpu-ms/op": 55.23,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 35.0
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 3,
+      "log": "12-watch-small-parents.txt",
+      "log_sha256": "6dc930ec5bbfe7555f645d9ee270d6f606d2223462a2eaad1388cd38fabcc519"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 109455750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "12-tiny-reference-a.txt",
+      "log_sha256": "9bbf0f4fa912f003400c5884066587d8907f3adda318043bcabf3d296752633d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 115448583.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "12-tiny-reference-b.txt",
+      "log_sha256": "8e1d1f4f5a699a36ab48fbb0d2b8355a5797ff18dbac12fc3bce86e587bc9b70"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 106449916.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 2,
+      "log": "12-tiny-scratch.txt",
+      "log_sha256": "4ec073a95afee7a7a27bf0fa65bfde6a7f2ab32bf7a7dbe1b10b34f9041d24cf"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 104522625.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 3,
+      "log": "12-tiny-parents.txt",
+      "log_sha256": "1a75b0ab3edde582f9e112b1f00e2c69a08b905548edcf947d47b97f0408c2e3"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 131778500.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "12-large-reference-a.txt",
+      "log_sha256": "c0d156f100ac64cb61662ecff2871d6439f527ed7a2c68dd7b90b56c86f4490f"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 126835625.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "12-large-reference-b.txt",
+      "log_sha256": "d6902aa973657499df19a5cbb3d589d18fdec8dece42efebbb3f9d1bd5cf433c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 124896750.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 2,
+      "log": "12-large-scratch.txt",
+      "log_sha256": "999a06b61db42ff62b499e66e76660c1285fdb377b2f221474807f120679da6d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 109728709.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 3,
+      "log": "12-large-parents.txt",
+      "log_sha256": "2d108b0d860eb2dd7008a301c0a667241b85eed2492cfc5d6084889c73207287"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 257627583.0,
+        "apply-ms/op": 154.8,
+        "client-ms/op": 62.2,
+        "cpu-ms/op": 56.03,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.06
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "13-watch-small-reference-b.txt",
+      "log_sha256": "a12362d59ee7944eb6c888876cc690c6ba2897374867bb739889a32fdcc55229"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 253980917.0,
+        "apply-ms/op": 150.6,
+        "client-ms/op": 61.21,
+        "cpu-ms/op": 51.9,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 34.12
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 1,
+      "log": "13-watch-small-scratch.txt",
+      "log_sha256": "fde5f1cee75d80eee368f1a3fa4cd375f600d8e52ef1dea253bd6621823fb60e"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 249824709.0,
+        "apply-ms/op": 146.6,
+        "client-ms/op": 61.25,
+        "cpu-ms/op": 47.86,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.09
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 2,
+      "log": "13-watch-small-parents.txt",
+      "log_sha256": "9357b4d1c1e8559f6ac7ff4382bbcefc6f99d07274cb5ceea78e30ed1a3f8fab"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 251899291.0,
+        "apply-ms/op": 147.7,
+        "client-ms/op": 63.17,
+        "cpu-ms/op": 51.14,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.08
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "13-watch-small-reference-a.txt",
+      "log_sha256": "1642a7f8776df333708fc26ba501757eabac8312583ebd52d95ab784485b339e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 108359084.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "13-tiny-reference-b.txt",
+      "log_sha256": "5a4ea3ce41453f47fdce7dcc64bef390deb0d363900f865e2ce384a9db3b6414"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 102383917.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 1,
+      "log": "13-tiny-scratch.txt",
+      "log_sha256": "bdfa13f00e45c9531f631c37a565234adb1c1e018c622b441301e1d84525a6fa"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 102406958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 2,
+      "log": "13-tiny-parents.txt",
+      "log_sha256": "e3306431af776373b97aa086cc4dfb70831b6665a585fe249f7468301e58a596"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 109414042.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "13-tiny-reference-a.txt",
+      "log_sha256": "bd08748474a3375ff4fa61ad78b82c6f544d67ceb497930dac05b9d70d88af64"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 118934083.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "13-large-reference-b.txt",
+      "log_sha256": "531b3c5beedf5da4dab6792c26b6f699087ad71e16207381d287bf5979663d68"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 115806375.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 1,
+      "log": "13-large-scratch.txt",
+      "log_sha256": "07355e664fc64d1c97f37d962636a62ce6c69b8d9e87c7ced20118f3af9a68c4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 115194833.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 2,
+      "log": "13-large-parents.txt",
+      "log_sha256": "ec5ae98d86f18278a21f2f003c239ed46e53ad103cc74430d27b776eb8139d63"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 121211042.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "13-large-reference-a.txt",
+      "log_sha256": "21242c6b9700a56a1addd44bedeb146b63eca3c8bbbe3784671899efa581ba62"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 248670333.0,
+        "apply-ms/op": 145.6,
+        "client-ms/op": 62.36,
+        "cpu-ms/op": 45.88,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.99
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 0,
+      "log": "14-watch-small-scratch.txt",
+      "log_sha256": "865b7a500f86481acd6b73c221fcc6ffa6f87a390e9ef55d8af6537e5bff07fb"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 242696084.0,
+        "apply-ms/op": 143.7,
+        "client-ms/op": 57.36,
+        "cpu-ms/op": 48.66,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.01
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 1,
+      "log": "14-watch-small-parents.txt",
+      "log_sha256": "6cca58657c4459579213a0b81ffbf04c013def693ff524e8e5c0bc550d442883"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 255206958.0,
+        "apply-ms/op": 151.7,
+        "client-ms/op": 59.75,
+        "cpu-ms/op": 50.21,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 37.01
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "14-watch-small-reference-a.txt",
+      "log_sha256": "691b16f97b7d5d258ab5e6df0fae9a2673ada8b20dc1f8021351df15ebc567bb"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 240810459.0,
+        "apply-ms/op": 144.7,
+        "client-ms/op": 57.32,
+        "cpu-ms/op": 45.1,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 29.94
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "14-watch-small-reference-b.txt",
+      "log_sha256": "f297d766e7e34f1a0656c1f533723000ae1e2a39ea0732c09cf1f15119498694"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 102340292.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 0,
+      "log": "14-tiny-scratch.txt",
+      "log_sha256": "692f59899d0dc1bd7da5de3214d05403db8aa4024b18e0b0da4e7ef786cfd21e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 103357000.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 1,
+      "log": "14-tiny-parents.txt",
+      "log_sha256": "f45445fa260feac677249919cdfa503c14455b94db5c99a2bec8cc6453286882"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 104505875.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "14-tiny-reference-a.txt",
+      "log_sha256": "99df3df092414aeb5bb54c518c2b5d92b3e5a7f4600bcd52dd69d3cbc16fdb67"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 99353042.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "14-tiny-reference-b.txt",
+      "log_sha256": "2bb00444cf257dc1964db206bad87ad6ffa92f47376e1ace574a6689f5e39dad"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 116733333.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 0,
+      "log": "14-large-scratch.txt",
+      "log_sha256": "d90325b19902c29490d977dca9292ec0b7ad83a71450ed29405708bac26322ff"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 118906666.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 1,
+      "log": "14-large-parents.txt",
+      "log_sha256": "6fea602f28332d65f92f3e65c187af7a8eadb20ea3ff2eeaabe599b498990a56"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 119418541.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "14-large-reference-a.txt",
+      "log_sha256": "29d6dc04cfe8a4d5583e10611133330622df6333f77d793037de2ceabb9d627c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 125749375.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "14-large-reference-b.txt",
+      "log_sha256": "7b958a97166c5b4b88abea72b5cf62ea5e3f0715059a19b522f09db9163afeb5"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 245486625.0,
+        "apply-ms/op": 143.6,
+        "client-ms/op": 60.28,
+        "cpu-ms/op": 47.67,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.01
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 0,
+      "log": "15-watch-small-parents.txt",
+      "log_sha256": "ecd208a4d98587645d615cf6ceb7ec6728b5a244e822f70e1b8683e6bf314196"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 259815958.0,
+        "apply-ms/op": 158.8,
+        "client-ms/op": 58.97,
+        "cpu-ms/op": 51.28,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.19
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "15-watch-small-reference-a.txt",
+      "log_sha256": "7b01d3ba2dd0b6e9e9b9bc09c2ed4ce781ffa5b7e56b631f79f3993245fa61f8"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 240108083.0,
+        "apply-ms/op": 143.8,
+        "client-ms/op": 56.04,
+        "cpu-ms/op": 45.35,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.01
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "15-watch-small-reference-b.txt",
+      "log_sha256": "ad70ce81324515d4c03d98dbf890d95f31ac944d76a2496a1982d8dd26c545fb"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 237764042.0,
+        "apply-ms/op": 140.7,
+        "client-ms/op": 59.18,
+        "cpu-ms/op": 42.06,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 29.06
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 3,
+      "log": "15-watch-small-scratch.txt",
+      "log_sha256": "20d92da01a796658718f528497a1db4f4f10cddebef8e68b8ba65fccfdde2cfe"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 90924167.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 0,
+      "log": "15-tiny-parents.txt",
+      "log_sha256": "e525068c31214eb9a9af166a89a3d84e7cf4c01e00f6defe921595b9d6e2feda"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 96687208.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "15-tiny-reference-a.txt",
+      "log_sha256": "a682c001b8fbb22b90ce71d70495dcf3fb50f06714e5eab1c342a92385cc0dd0"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 102544417.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "15-tiny-reference-b.txt",
+      "log_sha256": "4f7941e6f7b8e49a61d324c1bd4b2863a02313db4b4597467cfdb76e2e412f74"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 106267167.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 3,
+      "log": "15-tiny-scratch.txt",
+      "log_sha256": "f8f986ac251591ff89f07f64bcb237c959b15818f54bf155d308a8f65441b758"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 118842958.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 0,
+      "log": "15-large-parents.txt",
+      "log_sha256": "4c24c3345ecbf963904047e33acd11411bb0505c8646162ab1890b703ae0a697"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 122267125.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "15-large-reference-a.txt",
+      "log_sha256": "1b73fbefa9ca65c44929d25fd9a9b41662a78eb580f4687def4462bfdb2f1089"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 121341458.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "15-large-reference-b.txt",
+      "log_sha256": "f6f10e9717bfbe0c3f71df97828a8739c70bf317be83a7985022c54e834c4cea"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 117325666.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 3,
+      "log": "15-large-scratch.txt",
+      "log_sha256": "35789efa591271161e4033ab9f2e25c3829278de46d49983d1d49c962d959141"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 245315625.0,
+        "apply-ms/op": 142.7,
+        "client-ms/op": 62.39,
+        "cpu-ms/op": 51.87,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.96
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "16-watch-small-reference-a.txt",
+      "log_sha256": "8ae3030d2ec4b4b99f1f7cd77b2491224cad85c9b1d39cff690678ea9f8c0946"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 240284583.0,
+        "apply-ms/op": 141.7,
+        "client-ms/op": 58.4,
+        "cpu-ms/op": 43.23,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.8
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "16-watch-small-reference-b.txt",
+      "log_sha256": "d19e8457b4f2dc66adec952792c1c7f3dd0c6cb57d100dd2ff91c1f402fb2da3"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 243191083.0,
+        "apply-ms/op": 144.7,
+        "client-ms/op": 59.32,
+        "cpu-ms/op": 44.98,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.02
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 2,
+      "log": "16-watch-small-scratch.txt",
+      "log_sha256": "59d8cc74950866f6c6575b46ce532a64a5cf1e9b429adaf45f5976d25b0cb533"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 230708958.0,
+        "apply-ms/op": 132.7,
+        "client-ms/op": 57.3,
+        "cpu-ms/op": 45.02,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.06
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 3,
+      "log": "16-watch-small-parents.txt",
+      "log_sha256": "8b1ff3a259f29cbef74cba2f365bcf9e065c4d6a2544d684fed57c4b2ec9b762"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 110421250.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "16-tiny-reference-a.txt",
+      "log_sha256": "0579b9a63205a0a35e1a52e97295b4d11db13d2ce4bac330ac8e15b72a500215"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 104404708.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "16-tiny-reference-b.txt",
+      "log_sha256": "6507428e4541392687da69bf122de107426c4a338a66c612b43aaa666948c3f6"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 100282541.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 2,
+      "log": "16-tiny-scratch.txt",
+      "log_sha256": "16affde0d5bf53852417dd9fb7c959fa538671499ca1088cf6a043bcf0385040"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 101210125.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 3,
+      "log": "16-tiny-parents.txt",
+      "log_sha256": "f4bbb34dc49dd569617d128e5f3f3c1755446edce0e59bfbb8d7d53d3ba6d478"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 128918834.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "16-large-reference-a.txt",
+      "log_sha256": "e26f95a786dc8889f71efd871368bbf7ab0dc963c3b04ffbc1367faea65ec73c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 117169167.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "16-large-reference-b.txt",
+      "log_sha256": "dbdb9c49ad7489882622c3643aab75c42c14e585320177cc14e5f29189eea528"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 126880708.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 2,
+      "log": "16-large-scratch.txt",
+      "log_sha256": "88710b4585595404860c69810c8c6f5ba95a952621280922fe8b679aed5d608a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 123044917.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 3,
+      "log": "16-large-parents.txt",
+      "log_sha256": "cef588ac42efeb1bd2d5694ae02078cb399562856084370a7a549c91156e3743"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 244039375.0,
+        "apply-ms/op": 142.6,
+        "client-ms/op": 60.23,
+        "cpu-ms/op": 46.2,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.01
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "17-watch-small-reference-b.txt",
+      "log_sha256": "32e2323f1e827399387d987e2cee276739242f434e9ebcc55e1028356ab1adab"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 237720750.0,
+        "apply-ms/op": 139.5,
+        "client-ms/op": 57.01,
+        "cpu-ms/op": 48.54,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.05
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 1,
+      "log": "17-watch-small-scratch.txt",
+      "log_sha256": "aa970961eed7e136c3861fef602098edfb474cc081740b22519d9f33f6a0325d"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 235702458.0,
+        "apply-ms/op": 135.7,
+        "client-ms/op": 58.86,
+        "cpu-ms/op": 42.6,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.09
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 2,
+      "log": "17-watch-small-parents.txt",
+      "log_sha256": "a2761032f9a2dd26ca463b65823228782f474ce2b9f63c3f08613de0e26ee5f3"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 240961542.0,
+        "apply-ms/op": 143.7,
+        "client-ms/op": 61.33,
+        "cpu-ms/op": 46.07,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 27.01
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "17-watch-small-reference-a.txt",
+      "log_sha256": "18c88b258cc623515d1b25ce2726f378bdcf116f32247557d806b08d30e1603d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 97684417.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "17-tiny-reference-b.txt",
+      "log_sha256": "2f33505c6062c21d1c0dccd2549dea2e05f9561e7d0c671a6df9cac7faf83fd0"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 102336792.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 1,
+      "log": "17-tiny-scratch.txt",
+      "log_sha256": "c30708b010df1702cc5d8d5ef9ba2d3177a6338386813d3da70747570486a9e3"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 97417625.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 2,
+      "log": "17-tiny-parents.txt",
+      "log_sha256": "ba95a22bf9345a3bf9f4a2b9ebd8eeb6ea29528867281cc45d5c6097ebf738c9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 101100500.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "17-tiny-reference-a.txt",
+      "log_sha256": "98a0dcb9c285c4526c68111c1ec0ef584e0b57258eca365ab54ee084ae934acc"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 121242625.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "17-large-reference-b.txt",
+      "log_sha256": "af1735d6fb19e96505624558013c5a5aca9c75d1b6fd3b52803291a15b90e18f"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 126558916.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 1,
+      "log": "17-large-scratch.txt",
+      "log_sha256": "d66fec95eb8083aa3fadff63ae09b611b2c84ed5e06652faf9e427a358711e1b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 115259042.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 2,
+      "log": "17-large-parents.txt",
+      "log_sha256": "64e3c29b3f0a65beb8ae4562d564e315f8aa9ed4c6a5a90a0efd16df7acfacbf"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 122924958.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 3,
+      "log": "17-large-reference-a.txt",
+      "log_sha256": "44d935a2cc9107df3633624cef0a981d716671670fecb6969496ae3ad4ff7618"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 227934750.0,
+        "apply-ms/op": 129.8,
+        "client-ms/op": 60.6,
+        "cpu-ms/op": 42.33,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 29.21
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 0,
+      "log": "18-watch-small-scratch.txt",
+      "log_sha256": "dc6c92726809e23dacb5e9cecdb03ca6d005bac2bc6ad323e008b7af4136acea"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 236675209.0,
+        "apply-ms/op": 133.6,
+        "client-ms/op": 61.34,
+        "cpu-ms/op": 49.2,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.98
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 1,
+      "log": "18-watch-small-parents.txt",
+      "log_sha256": "999e1210609a0c8ed85a118324efcbbb4cf6f29821e11b83485b38624c42ca0f"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 228869375.0,
+        "apply-ms/op": 131.1,
+        "client-ms/op": 57.06,
+        "cpu-ms/op": 43.89,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 32.03
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "18-watch-small-reference-a.txt",
+      "log_sha256": "2d39240f2ec68fd5572fee5576484884f98250b9deab368343fa877c5152026d"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 242338792.0,
+        "apply-ms/op": 139.6,
+        "client-ms/op": 63.06,
+        "cpu-ms/op": 49.96,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.17
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "18-watch-small-reference-b.txt",
+      "log_sha256": "dd067bdb80330ca5fa478f416d12501341ecf0ae46d1607928dd9ee73dbb74d1"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 101910541.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 0,
+      "log": "18-tiny-scratch.txt",
+      "log_sha256": "8af035460fb3ffc28650ff1568b37e206d0a97fd471cf813d04bcc85ebb26a9e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 99676125.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 1,
+      "log": "18-tiny-parents.txt",
+      "log_sha256": "070f7a9e9246337c7cf185ea062fd357b7982f4d3f3670cd3732544e2d5e6a20"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 100590166.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "18-tiny-reference-a.txt",
+      "log_sha256": "57dec8e32bda2cf560f824c7bdb0aa5afd599c95565f6e3d7904c99bcb761f05"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 109814750.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "18-tiny-reference-b.txt",
+      "log_sha256": "cb42055c4769554b17e0a8378186c048234a8cd244afdaeb74f0bb1e484df049"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 120221958.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 0,
+      "log": "18-large-scratch.txt",
+      "log_sha256": "5a44c0ee84b4f2ca8440976feb0546a9324bbae33d6a33b2448676cb832570e4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 115136542.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 1,
+      "log": "18-large-parents.txt",
+      "log_sha256": "6950d2893c2d2fa24506e44c97d13ebf81eac032d1f055f7b008cce0d6a5980b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 126316208.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "18-large-reference-a.txt",
+      "log_sha256": "83d9a9770bacf857a394ee4575c645c06cf1cb35728fa1f583fb65836472f279"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 120260125.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 3,
+      "log": "18-large-reference-b.txt",
+      "log_sha256": "a6e7c14e08471845e3a4910bee0ec38a2b0dfe6f21614749693b2c0ab1913d3c"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 231961042.0,
+        "apply-ms/op": 131.6,
+        "client-ms/op": 60.29,
+        "cpu-ms/op": 47.18,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.05
+      },
+      "case": "watch-small",
+      "mode": "parents",
+      "position": 0,
+      "log": "19-watch-small-parents.txt",
+      "log_sha256": "fa8d5b04494a4e05863e82e63bf6a887f7dc16602938d5d48deee8a37ae76815"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 244022958.0,
+        "apply-ms/op": 141.6,
+        "client-ms/op": 60.4,
+        "cpu-ms/op": 48.45,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 33.02
+      },
+      "case": "watch-small",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "19-watch-small-reference-a.txt",
+      "log_sha256": "c79235ca5f4b6d8384e757c344d944818fd51e9120c61c4b17e93f45a0452eab"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 231269541.0,
+        "apply-ms/op": 132.7,
+        "client-ms/op": 57.78,
+        "cpu-ms/op": 41.31,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 31.87
+      },
+      "case": "watch-small",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "19-watch-small-reference-b.txt",
+      "log_sha256": "ea050ee5f8056cfb375768c0f65e337fd1db31bd2b8a2fbac69f44c93ad28160"
+    },
+    {
+      "name": "BenchmarkWatchWorkloads/small",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 245708625.0,
+        "apply-ms/op": 146.7,
+        "client-ms/op": 60.13,
+        "cpu-ms/op": 49.2,
+        "negotiate-ms/op": 0.0,
+        "resamples/op": 0.0,
+        "stage-ms/op": 30.07
+      },
+      "case": "watch-small",
+      "mode": "scratch",
+      "position": 3,
+      "log": "19-watch-small-scratch.txt",
+      "log_sha256": "e0bb04f72ff7e776fda14ddef6ffa3a4843bc2bdd400e344d48aba648da722ac"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 100408458.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "parents",
+      "position": 0,
+      "log": "19-tiny-parents.txt",
+      "log_sha256": "3e9dbe92599396058adb1ee80ce39853393db5b636174c3c65ea7676d45ec020"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 107388875.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "19-tiny-reference-a.txt",
+      "log_sha256": "c02c8680b9090cdf3d70981195bb2421ddf392409b4722b34e6650a07a60f14f"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 100397333.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "19-tiny-reference-b.txt",
+      "log_sha256": "1a347858877cbf0990d9be1267343e86c5437f52ca5eac4af80341579c76fb20"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 100385542.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "scratch",
+      "position": 3,
+      "log": "19-tiny-scratch.txt",
+      "log_sha256": "ca9ff3e08583c50fbfb21f069043e613c6ad9a61574012606f6728ef1ccc2e2c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 118516416.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "parents",
+      "position": 0,
+      "log": "19-large-parents.txt",
+      "log_sha256": "bea6a8e608b739d76262437d77cf8bb3ca644e943485cde791bf76646ac42937"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 123170167.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "19-large-reference-a.txt",
+      "log_sha256": "3791b14d308957415f33aa4d65bad93efe1ba5739ef2b2ac62d12eb2e34a761d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 124797000.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "19-large-reference-b.txt",
+      "log_sha256": "65b3b30432709d75fd05b7a9080bea0a8b97500f589447e6df934cb12bdeb8a8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 120029625.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "scratch",
+      "position": 3,
+      "log": "19-large-scratch.txt",
+      "log_sha256": "0eed10eed46874db3591c511870928814bcf32b778d8761058f0432e7e5b9cce"
+    }
+  ],
+  "commands": [
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/Users/ody/.errand/jobs/01M2S5WW0YKMMWJ119NRN2QEWT/workspace/.followup-results/.scratch-kty3038w/baseline-changes.test",
+      "./internal/changes"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/Users/ody/.errand/jobs/01M2S5WW0YKMMWJ119NRN2QEWT/workspace/.followup-results/.scratch-kty3038w/baseline-cli.test",
+      "./cmd/errand"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/Users/ody/.errand/jobs/01M2S5WW0YKMMWJ119NRN2QEWT/workspace/.followup-results/.scratch-kty3038w/scratch-changes.test",
+      "./internal/changes"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/Users/ody/.errand/jobs/01M2S5WW0YKMMWJ119NRN2QEWT/workspace/.followup-results/.scratch-kty3038w/scratch-cli.test",
+      "./cmd/errand"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/Users/ody/.errand/jobs/01M2S5WW0YKMMWJ119NRN2QEWT/workspace/.followup-results/.scratch-kty3038w/parents-changes.test",
+      "./internal/changes"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/Users/ody/.errand/jobs/01M2S5WW0YKMMWJ119NRN2QEWT/workspace/.followup-results/.scratch-kty3038w/parents-cli.test",
+      "./cmd/errand"
+    ]
+  ],
+  "gomaxprocs": 2,
+  "case_rounds": {
+    "tiny": 20,
+    "large": 20,
+    "flat128": 4,
+    "parents8": 4,
+    "parents128": 4,
+    "creation": 4,
+    "deletion": 4,
+    "new-parent": 4,
+    "restricted": 4,
+    "watch-small": 20
+  },
+  "status": "complete",
+  "go": "go version go1.27.1 darwin/arm64",
+  "filesystem": "apfs"
+}

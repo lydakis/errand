@@ -2805,24 +2805,33 @@ func TestApplyWithConflictsSkipsStructuralConflictAndAppliesCleanRoot(t *testing
 }
 
 func TestMergeRegularFileReportsGitOperationalFailure(t *testing.T) {
-	bin := t.TempDir()
-	git := filepath.Join(bin, "git")
-	if err := os.WriteFile(git, []byte("#!/bin/sh\necho helper-exploded >&2\nexit 255\n"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin)
-	root := t.TempDir()
-	for name, value := range map[string]string{"ours": "ours\n", "base": "base\n", "remote": "remote\n"} {
-		if err := os.WriteFile(filepath.Join(root, name), []byte(value), 0o600); err != nil {
-			t.Fatal(err)
+	for _, code := range []int{1, 69, 255} {
+		for _, materialize := range []bool{false, true} {
+			t.Run(fmt.Sprintf("exit-%d/materialize-%t", code, materialize), func(t *testing.T) {
+				bin := t.TempDir()
+				git := filepath.Join(bin, "git")
+				if err := os.WriteFile(git, []byte(fmt.Sprintf("#!/bin/sh\necho helper-exploded >&2\nexit %d\n", code)), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				t.Setenv("PATH", bin)
+				root := t.TempDir()
+				for name, value := range map[string]string{"ours": "ours\n", "base": "base\n", "remote": "remote\n"} {
+					if err := os.WriteFile(filepath.Join(root, name), []byte(value), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				result, err := mergeRegularFile(
+					context.Background(), filepath.Join(root, "ours"), filepath.Join(root, "base"),
+					filepath.Join(root, "remote"), filepath.Join(root, "merged"), 0o600, materialize,
+				)
+				if err == nil || !strings.Contains(err.Error(), "helper-exploded") {
+					t.Fatalf("mergeRegularFile() = result %d, error %v", result, err)
+				}
+				if _, err := os.Stat(filepath.Join(root, "merged")); !os.IsNotExist(err) {
+					t.Fatalf("failed merge left output: %v", err)
+				}
+			})
 		}
-	}
-	result, err := mergeRegularFile(
-		context.Background(), filepath.Join(root, "ours"), filepath.Join(root, "base"),
-		filepath.Join(root, "remote"), filepath.Join(root, "merged"), 0o600, false,
-	)
-	if err == nil || !strings.Contains(err.Error(), "helper-exploded") {
-		t.Fatalf("mergeRegularFile() = result %d, error %v", result, err)
 	}
 }
 

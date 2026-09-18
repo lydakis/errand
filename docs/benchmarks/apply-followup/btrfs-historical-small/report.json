@@ -1,0 +1,2362 @@
+{
+  "platform": "Linux-7.1.9-arch1-2-x86_64-with-glibc2.44",
+  "cases": {
+    "tiny": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^tiny$"
+    ],
+    "large": [
+      "changes",
+      "^BenchmarkApplyWorkloads$/^large$"
+    ]
+  },
+  "modes": [
+    "reference-a",
+    "reference-b",
+    "baseline"
+  ],
+  "inputs": {
+    "pre-group": {
+      "revision": "16d747d+matched-workload",
+      "input_sha256": "40c61770d28cf3bf4ca4082605084000c73b278f71a8fd23da1a1e3f608b0b5f",
+      "note": "Historical pre-P1 source plus same apply workload without group instrumentation. No backup-data fix. Compare one-root only; fsnotify dependency differs."
+    },
+    "baseline": {
+      "revision": "092e88a",
+      "input_sha256": "088b2775a865a71f5421a891a99c4bec0b4afc22b3b2070cee62e5a1101d3812",
+      "note": "Committed P1 plus the new workload benchmark; production unchanged."
+    }
+  },
+  "samples": [
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 78161515.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-tiny-reference-a.txt",
+      "log_sha256": "4bb8d214ae7002fb37fee23d30dc9cef0b4384d503781636740a7d28bee73a2b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 82117785.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-tiny-reference-b.txt",
+      "log_sha256": "b675e0c96a1370e2f35b80d9baaf278627d80ca62fef436f7fcc54c94b68ab39"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 83993458.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 2,
+      "log": "00-tiny-baseline.txt",
+      "log_sha256": "8474d6399e06b59ede99ba90c2f88be35102834db7fbcad6e5b029d1a6371842"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 123950476.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "00-large-reference-a.txt",
+      "log_sha256": "0bd2f7833187f533f8e357c06888e584fcbe874f4a8b80c60c1c6e5746795188"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 130538983.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "00-large-reference-b.txt",
+      "log_sha256": "ac47e24ec80e2d8f73c0a6c9263d0a6f78bb421aaef5d93642e7eb1a0264a1eb"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 0,
+      "metrics": {
+        "ns/op": 125295311.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 2,
+      "log": "00-large-baseline.txt",
+      "log_sha256": "25a5af3a748960939927bd58c35d3afaa7c640dfb5d4bbb934068bd31bd05ca0"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 123374393.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-large-reference-b.txt",
+      "log_sha256": "a52afbebf16e5fe57321cc27c3ccbde23f350bc4d5d4dbe1f103a86b0813eeaa"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 127279280.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 1,
+      "log": "01-large-baseline.txt",
+      "log_sha256": "baef4fb9376a09bdce6b2c3a1252165f6959dab23548e81df70ef12e47275224"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 117327690.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "01-large-reference-a.txt",
+      "log_sha256": "395716efddd2a5d2ea704f6d1fe45e4667b3f4b2553ea75250024efa9d5568f6"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 73960710.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "01-tiny-reference-b.txt",
+      "log_sha256": "710cf47025db2b7bce3e0e01ecae68ee8d98f1f1d1f3c15b9276d94670052ade"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 151667978.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 1,
+      "log": "01-tiny-baseline.txt",
+      "log_sha256": "c7fae9f15c4501e60b829655b344d57289cbd3993b4deec1f0974b14b3b6f511"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 1,
+      "metrics": {
+        "ns/op": 131412095.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "01-tiny-reference-a.txt",
+      "log_sha256": "5b3ced603a8d6840059562838501345947dff7bc3f94673eb4dec6faf61c9142"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 113471489.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 0,
+      "log": "02-tiny-baseline.txt",
+      "log_sha256": "3fc356d64f16b324105fc4e04d6ce2f446d452f08a31d2e4c462e516d208e212"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 79142859.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "02-tiny-reference-a.txt",
+      "log_sha256": "4510fd50cdca2ba87ec50b522d25e2463cb122e34fded8eac1e964abb7187542"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 77625266.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "02-tiny-reference-b.txt",
+      "log_sha256": "1ad1ea4963ff084b0eeb22689f6e6528da8d63cf2db816b4c6547793c2c9e38a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 138620508.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 0,
+      "log": "02-large-baseline.txt",
+      "log_sha256": "6a4364afe005461d55594d8c869fb46dbeda41fa9de2a594e935fa1a5f75c13a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 127432547.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "02-large-reference-a.txt",
+      "log_sha256": "89fc6a2e2a553956383de0d177e0169f43e54d40516e8111c4a247062248a989"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 2,
+      "metrics": {
+        "ns/op": 118728617.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "02-large-reference-b.txt",
+      "log_sha256": "94a54989f9b269fadc806a6906259ac431baac8b68f66726b7fec3d3efd49c92"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 127694194.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "03-large-reference-a.txt",
+      "log_sha256": "5d03be29e4896690d8c5b70233870bcd70830241ade711afe2315a2b448e8c88"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 118446153.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "03-large-reference-b.txt",
+      "log_sha256": "f6d3c3b68151aeef25e6baa18bc6eb82da6a5d697df78c407355ea80bb9385af"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 124999070.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 2,
+      "log": "03-large-baseline.txt",
+      "log_sha256": "fbc67336357569f4a75d1b3933fcdf3e02acaa9bc8e31d0562eece08ed5a03d9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 75944313.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "03-tiny-reference-a.txt",
+      "log_sha256": "7c280b792d3c09a95f6e31e78ec8e3772563bee7d553609b0b8c5cc4a66e2d9b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 74345946.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "03-tiny-reference-b.txt",
+      "log_sha256": "2eb77e925d9dedf09c474ff37b3f2e5a3612fd119c9f5fd69a41b158df74df96"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 3,
+      "metrics": {
+        "ns/op": 85119485.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 2,
+      "log": "03-tiny-baseline.txt",
+      "log_sha256": "76be3a1982fb2b34c003dfe0666e69ba64ed02a45c64e8621b656921da48e1a3"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 77134992.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "04-tiny-reference-b.txt",
+      "log_sha256": "cc79fdbfd196ca7dadd99b35c143965d2c69cc8307a27fd81f33f696fd5e6606"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 84062680.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 1,
+      "log": "04-tiny-baseline.txt",
+      "log_sha256": "2109652ae66e1ed6b544855b48f13c68b7e28e0e0200c98e359674161734518b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 74819380.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "04-tiny-reference-a.txt",
+      "log_sha256": "89320df8f6319941b01493ee8fd8792597e145ef6e1ea1c618b71050b8517ec2"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 119580439.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "04-large-reference-b.txt",
+      "log_sha256": "6acaafa84c29351f5e6bdc4037ba803f203d540eea72ba23e7d4c0dd30420b12"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 122487362.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 1,
+      "log": "04-large-baseline.txt",
+      "log_sha256": "ba76157bac7c817d111558cde4ea6ad7a5d06782b064c9c9a96991eeb49affde"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 4,
+      "metrics": {
+        "ns/op": 120044688.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "04-large-reference-a.txt",
+      "log_sha256": "14021fbd2ac3e1877e377089370c1e7a2f0b065509d7a67ce25a49fb030e904c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 124790193.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 0,
+      "log": "05-large-baseline.txt",
+      "log_sha256": "e03a14af85f7e356f48b9d6be9e0c42cc7393e1143eef2fa68f0c75d23cd327d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 123341213.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "05-large-reference-a.txt",
+      "log_sha256": "44cb40b44875a3ba1d5eeb434f540b69d057fade50bf8863ced50c7a2e8c4967"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 119160675.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "05-large-reference-b.txt",
+      "log_sha256": "ce72c512e6b2d307a94feda700344ba48ecc728eecd03c40e5d0490c7d0eec70"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 83512481.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 0,
+      "log": "05-tiny-baseline.txt",
+      "log_sha256": "b6c34830c1df771a9499592852f12723b3cb034268eee23d1bb1a3600960088f"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 75629947.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "05-tiny-reference-a.txt",
+      "log_sha256": "05641320459f68dcb616fbf852d90c6aa96449caaf9f2fcff5bc6b7a1a45e643"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 5,
+      "metrics": {
+        "ns/op": 80543618.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "05-tiny-reference-b.txt",
+      "log_sha256": "9fb2789f3939e7dc94de859cd084890872881174f7021bf5998e85352c2d1830"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 74053644.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "06-tiny-reference-a.txt",
+      "log_sha256": "d1e9fc2f7962760a03a4d98df0679bbdf1c0e27af9ae036e4f1fb600d4b67173"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 82586175.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "06-tiny-reference-b.txt",
+      "log_sha256": "1cc1e9470b466490d3ac19582ec1c98b6a278b628d67d1642c91d2ecb201c166"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 80407332.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 2,
+      "log": "06-tiny-baseline.txt",
+      "log_sha256": "953220087455d6d2e4c6692677f5547fe6785c0375355f03ab7d6649c8e7bbe2"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 119040185.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "06-large-reference-a.txt",
+      "log_sha256": "652c5bec121bc469cf9c6a4f36b68cb0bd76f9f032daebd4c0ef32db7b24ea63"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 117445447.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "06-large-reference-b.txt",
+      "log_sha256": "87a7d4998e490abcfac1cc45aee7ab97df1d8c79a8e7d49bab20e260c54f41c2"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 6,
+      "metrics": {
+        "ns/op": 121111011.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 2,
+      "log": "06-large-baseline.txt",
+      "log_sha256": "ea7b63df574baac147f58a86af8b02ab8b86f8fd8d151d5c2f6947b65a2ccd62"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 123038174.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "07-large-reference-b.txt",
+      "log_sha256": "bef3f1165404bcfc956e3b9edfd1b33726556af3d9872dad53440121cbdd2e41"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 126657916.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 1,
+      "log": "07-large-baseline.txt",
+      "log_sha256": "f2af527e6c18dba15ae63468c42e7af78c68198a6775b978992d3437e0556a3c"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 119614522.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "07-large-reference-a.txt",
+      "log_sha256": "143a40217d49bb951f93d9e1d45037be3e73756ed30c7901b5e89a6c7f81350b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 74676749.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "07-tiny-reference-b.txt",
+      "log_sha256": "8ef89defb689d9fa412bff6610a4b43f2e672b8e4fc3215cf7a420ac23b6d843"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 76288171.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 1,
+      "log": "07-tiny-baseline.txt",
+      "log_sha256": "9ca2537fd2c141f172affcf0b0c3608b52e69f07d8461d07ac2dd830ee5bc478"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 7,
+      "metrics": {
+        "ns/op": 80058713.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "07-tiny-reference-a.txt",
+      "log_sha256": "6e8618d169a04d2c790fd1fa95c124ef04b1b30f0dc8490d03ea1e05d97d2e06"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 80703559.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 0,
+      "log": "08-tiny-baseline.txt",
+      "log_sha256": "ad0b708d348040b8393fb09c6a7375257239ec85ad385e66246fa9c73c8872c8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 71980958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "08-tiny-reference-a.txt",
+      "log_sha256": "20ff8f008b49e0341dc7365e2eab406dbefb36ecaddd66afc0926de7da743ffa"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 80294924.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "08-tiny-reference-b.txt",
+      "log_sha256": "92688b979d3e520e4f6d587fa5bb44ac9f405b5436c106c0dc4e8bbda50edd4f"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 126029281.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 0,
+      "log": "08-large-baseline.txt",
+      "log_sha256": "f5befa357a6ed2adefe12323206171640ae9326c3d20c1bc9b82a220406e84be"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 120228200.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "08-large-reference-a.txt",
+      "log_sha256": "07187aed5e0c42b5d5792971bf7d2ef4d61dae5113e8beb10d5ebc268189d28e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 8,
+      "metrics": {
+        "ns/op": 125424166.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "08-large-reference-b.txt",
+      "log_sha256": "6a0931ce2bb948b4b950d92d5326de7aaf1b9424a92205d90932c5bd5ff653a0"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 842794617.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "09-large-reference-a.txt",
+      "log_sha256": "23b4b26ebef75af87456c29708f69b784bd2cf2308da346679b2b3466c511046"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 276972003.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "09-large-reference-b.txt",
+      "log_sha256": "1cf09fb916cdcfb70b457e99f9167bc06b1490c15bbf08b1b32aeb2a7dda50ad"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 229625964.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 2,
+      "log": "09-large-baseline.txt",
+      "log_sha256": "ee8a9d94350700480d4016be1f6fe443a99cfa354514651fe6c16ba961ccdc6b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 152967393.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "09-tiny-reference-a.txt",
+      "log_sha256": "6a92ca3b7d82f6aa1885561cac0e09d05c2f2c926846e6f86191be61020867e4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 88704456.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "09-tiny-reference-b.txt",
+      "log_sha256": "61e214495334012040d2e1df86300de406703baa7fec9680e6754e6ca833326b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 9,
+      "metrics": {
+        "ns/op": 88252353.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 2,
+      "log": "09-tiny-baseline.txt",
+      "log_sha256": "a1f8de6d8462de5dcdfbeb3566b5dc7a408f35177abf87ab14cd14cadab9c3d3"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 73472310.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "10-tiny-reference-b.txt",
+      "log_sha256": "103b49a20948920e6447329a458dbc0800db796f7e9f8ca803a249ed6ccddf79"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 82948443.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 1,
+      "log": "10-tiny-baseline.txt",
+      "log_sha256": "b51a7dc175c5164d2672b386a94c821b053e4858f99d189db923b9579293b245"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 73669589.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "10-tiny-reference-a.txt",
+      "log_sha256": "03fc6ad333f42ed183f5d4bf751c2fc25ce4fc19ff47547be5a958117accbea4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 128698816.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "10-large-reference-b.txt",
+      "log_sha256": "58aa51a451df53d945428978e10d682570c0105b09475d98328035c5332b318b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 122878142.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 1,
+      "log": "10-large-baseline.txt",
+      "log_sha256": "5181dbea908da8b7ab7f97e39a22a5b6d5a1360011cc55efbc538adc2897e8aa"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 10,
+      "metrics": {
+        "ns/op": 122537487.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "10-large-reference-a.txt",
+      "log_sha256": "4a8ca44634d74974d62de9c9acbc783f71662918dc8b30d2c125411540a403af"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 128189635.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 0,
+      "log": "11-large-baseline.txt",
+      "log_sha256": "932a3c4b653731d0d99079a3463e7837e30f42498370aff51f89ed76021d5f5e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 118030873.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "11-large-reference-a.txt",
+      "log_sha256": "3f0e0f991efadefb59ba849e0dbc173ba9532f2df25c829fb8d2c8b20925a985"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 124138490.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "11-large-reference-b.txt",
+      "log_sha256": "3fd96eb558d977864597a1c642562ceca6feb4fc6ec0b1a419f16833ca2178c4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 75124134.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 0,
+      "log": "11-tiny-baseline.txt",
+      "log_sha256": "2b28564c7fa23fcf0c2b353fe6277e61b103fbe71dbf71a3936caec4ebe8a0fd"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 74586578.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "11-tiny-reference-a.txt",
+      "log_sha256": "5ee8fd7717c0114559621f758f77d9dd813993192eb3c31fb0aca3dfc0f6d503"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 11,
+      "metrics": {
+        "ns/op": 72227958.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "11-tiny-reference-b.txt",
+      "log_sha256": "952d3d4b4011a8f1cf6e6e92667a40295ed2780728b7021d4cbc44877c49aa0b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 70523063.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "12-tiny-reference-a.txt",
+      "log_sha256": "2b5bef41dabc39b8dd9ae73ad9c41db13c6ce0fb2a31bdf262b341f6bb4e4fc8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 73095802.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "12-tiny-reference-b.txt",
+      "log_sha256": "9702465ba44464c7a6e1b1a74f87a2f19df91959222f3c166ac41b97b9d66d2f"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 85990218.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 2,
+      "log": "12-tiny-baseline.txt",
+      "log_sha256": "72dcab53ff4a38814a6b09609ee15d8627bd4bcdc9d54e46dd53c615e207b877"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 120744793.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "12-large-reference-a.txt",
+      "log_sha256": "587e5cd98123b59232e0cc227cde94d854128240f942424835aa7704dfea98a2"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 116952381.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "12-large-reference-b.txt",
+      "log_sha256": "718a971eae635cceae893c2d4c9e17e2802ce452a8bc6bf38c98e41a686776fc"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 12,
+      "metrics": {
+        "ns/op": 119926279.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 2,
+      "log": "12-large-baseline.txt",
+      "log_sha256": "816bc00b54ab5f73a9eba73aebddc8fa766129993777af471f440c0c585495d0"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 129063464.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "13-large-reference-b.txt",
+      "log_sha256": "e9c42d587dbb2a6fcaddc23c35be74ade2d765ddf0477990e8f90f3c665bbc82"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 134103406.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 1,
+      "log": "13-large-baseline.txt",
+      "log_sha256": "94f7944f7788d6d535157025e6d7d8053d079fee32d91731e97c4b60713f679a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 118490302.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "13-large-reference-a.txt",
+      "log_sha256": "3c29cd3abdf4a89ec5949ffe349c05f608cc97a5fd4905a3bc9889d3b9d6fec8"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 73332336.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "13-tiny-reference-b.txt",
+      "log_sha256": "d1712e9f283feeb3d6c079bcd8581636821005b5968f639e92b4aaab025a1c61"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 83811582.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 1,
+      "log": "13-tiny-baseline.txt",
+      "log_sha256": "46cad18d270851b14465481699a2e6e40ad58eb844f050307e1561fd875ede8b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 13,
+      "metrics": {
+        "ns/op": 75669834.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "13-tiny-reference-a.txt",
+      "log_sha256": "28217770065f27373e3117280e74a190b5c1a407d28a18b3f48168b1cbfb4b88"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 76286381.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 0,
+      "log": "14-tiny-baseline.txt",
+      "log_sha256": "8b75b64682a496544cb7fdc97bdd366cf8a1030de88fe46721006c3056b855b7"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 79457256.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "14-tiny-reference-a.txt",
+      "log_sha256": "231857841d5856d3efece127786827244cd7cab5025b9dfa5e3a677ae0c83b96"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 73486990.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "14-tiny-reference-b.txt",
+      "log_sha256": "93ff1d2ba6a186be7a496bf8388e0b147bdb90c3539a16d8e20ab89fd1be580a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 120109870.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 0,
+      "log": "14-large-baseline.txt",
+      "log_sha256": "09e6a7cb17732f2e02c69bf9f4c63e988d1a68c5003845ea797bc49628d9b477"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 121859703.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "14-large-reference-a.txt",
+      "log_sha256": "c711642a2e506d4eb0726ec60779b0cf92187feb9109b9e9cd6805ace61f4277"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 14,
+      "metrics": {
+        "ns/op": 125577013.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "14-large-reference-b.txt",
+      "log_sha256": "1dba0878b6dd486f5649bb023c3d715f2e536dc54ae6787848ac8d197b52432b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 122165816.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "15-large-reference-a.txt",
+      "log_sha256": "08da7f54f58c9f3248e423f07f8231eb7fb44dd4035d0a877e3881e4127439ad"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 117773626.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "15-large-reference-b.txt",
+      "log_sha256": "fce34f755663de1989d43771fd7ef90fd8e2891d353af44e9988f3ceb5d0ebd4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 127896438.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 2,
+      "log": "15-large-baseline.txt",
+      "log_sha256": "b467924355e22240f4fe361488f129330fa75299dd0344683b839cc362f5248d"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 147857144.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "15-tiny-reference-a.txt",
+      "log_sha256": "1ef525fd7002c8817948954d845a1e90fa6a9b969b3a04fbbbb8ede9e512167b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 137517581.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "15-tiny-reference-b.txt",
+      "log_sha256": "104b6c4f9bacc4a226a16552779630721e49bb60df1fb4071cc957f6e83f6cea"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 15,
+      "metrics": {
+        "ns/op": 150729749.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 2,
+      "log": "15-tiny-baseline.txt",
+      "log_sha256": "63c1d72cd5f1d10b7263f10018d53447238b3dcba0f91959a8f3f482b129b5d6"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 136436594.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "16-tiny-reference-b.txt",
+      "log_sha256": "9ebbb8cb093cc0cd24747154b523862b3628344e84451481b0cec6101b520df4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 98244544.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 1,
+      "log": "16-tiny-baseline.txt",
+      "log_sha256": "275f48f7bb6eebbaab30809b2f4975d46dd16ce82d5767e76ecf866aebb5ee68"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 83397042.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "16-tiny-reference-a.txt",
+      "log_sha256": "71e296ed20d1a8d5ee3dc4ef0c8c653e37e150692dfc7113e78d15dd18f29ec6"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 118827174.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "16-large-reference-b.txt",
+      "log_sha256": "88f3859a7f04109e2e68a3ec5422d3ded64194d1c3d35624d428c11386d09306"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 126337352.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 1,
+      "log": "16-large-baseline.txt",
+      "log_sha256": "074e525c06dd9cf87f5f4d4ca1455802bf972ea731f3afe24644d6775d40dfc0"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 16,
+      "metrics": {
+        "ns/op": 125052437.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "16-large-reference-a.txt",
+      "log_sha256": "f5d753e097b3e569374d770b2a58450a5b354e1d7351658aeeec72f42d0a5a80"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 122003286.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 0,
+      "log": "17-large-baseline.txt",
+      "log_sha256": "7837fdfaf1210070078ab84decfcd756f3f40075f073063cbab7794672b9ad20"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 121331374.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "17-large-reference-a.txt",
+      "log_sha256": "21c4340ed7cef0663d9b5ebdab80519aaf8254255e981bd88286caa011497a84"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 117273382.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "17-large-reference-b.txt",
+      "log_sha256": "c9a7f5ccc66ab6fe7daae908f9f7f9386418d71ab73eb83e484788f081c152c5"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 83874015.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 0,
+      "log": "17-tiny-baseline.txt",
+      "log_sha256": "4e0186265d22c84604dc0b8038d277cd6f1ca50fba31e3a9e51031effa96cc39"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 73311851.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "17-tiny-reference-a.txt",
+      "log_sha256": "8ab11f1337a5fcc6b34ea164296afaf36e7cf977ebd518d279fe191843c85ab0"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 17,
+      "metrics": {
+        "ns/op": 72671031.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "17-tiny-reference-b.txt",
+      "log_sha256": "734c0be756810b7d6e233ef5ee3901b3575c5fff8ed183b0edf8278cbde7e837"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 72707170.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "18-tiny-reference-a.txt",
+      "log_sha256": "ab8b7b5482c87b258e881c3f9f36fba0adfb74494170af8ab007169f07a4e924"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 78661913.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "18-tiny-reference-b.txt",
+      "log_sha256": "d65ade523f3178ea8513d68874f0df47a16033a748d6f45ae7715a3e150b3614"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 74960448.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 2,
+      "log": "18-tiny-baseline.txt",
+      "log_sha256": "dd8d493867935c2de5d7d17d64d17509477862b014ec2e2bcbc91e24fd846b78"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 119872160.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "18-large-reference-a.txt",
+      "log_sha256": "114d5e003a3bad4b7f973d54ea323a807a106935b63269420583c886707aa420"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 121800468.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "18-large-reference-b.txt",
+      "log_sha256": "8ac865e194f8ab04f1c34e98b4cb6a64cc6b0b6697a6e2076315fd7dad4a1271"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 18,
+      "metrics": {
+        "ns/op": 123178543.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 2,
+      "log": "18-large-baseline.txt",
+      "log_sha256": "7518ed27e69c59e50095f908ab1e88defd4e70d9449bca7ed07f829bfc474ae7"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 116709910.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "19-large-reference-b.txt",
+      "log_sha256": "8de3899e5c2a03002f10509e0b50101851c5a16210acc7cff0c585b2355e97e3"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 122079982.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 1,
+      "log": "19-large-baseline.txt",
+      "log_sha256": "c268c6ef331a9061d3875f2e7ac3367efe8299cb06c360b1f1e5dbe19cdc6e09"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 124086503.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "19-large-reference-a.txt",
+      "log_sha256": "bbdec1c425ca3108b518db75c4f17d2e1d3f8574889c0d5ed87bb6a267b0b230"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 75141894.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "19-tiny-reference-b.txt",
+      "log_sha256": "112ee85dfc707223b268571c7320cd1720257da0e103960b88fddfc97d41fe86"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 77269178.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 1,
+      "log": "19-tiny-baseline.txt",
+      "log_sha256": "7c5bbb3a9ee7868204430437253cfa8964416d63b8028deeb8478d16297c5f5a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 19,
+      "metrics": {
+        "ns/op": 84869386.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "19-tiny-reference-a.txt",
+      "log_sha256": "a9c98119be88e1b38312931e525cb49167a5eda69aa4cf080026fad533503128"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 20,
+      "metrics": {
+        "ns/op": 85561696.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 0,
+      "log": "20-tiny-baseline.txt",
+      "log_sha256": "416c2e11eef33433a61bbe5019e4e0f7a554c58cde09d2497ec650b922d853d4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 20,
+      "metrics": {
+        "ns/op": 78990538.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "20-tiny-reference-a.txt",
+      "log_sha256": "30d898bded88f91135f89bf9165cc6dbbaf3b973123008019c32d51921cf4747"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 20,
+      "metrics": {
+        "ns/op": 74766721.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "20-tiny-reference-b.txt",
+      "log_sha256": "7ac57b3033e39aa4c32f11bd2a0beebf1585ae84475e220312c97c11d0a1e51b"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 20,
+      "metrics": {
+        "ns/op": 130022022.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 0,
+      "log": "20-large-baseline.txt",
+      "log_sha256": "15097c74a13d646960a7e6f2a8e867316574220cae4a2a41b3677475ee2b6d03"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 20,
+      "metrics": {
+        "ns/op": 119645769.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "20-large-reference-a.txt",
+      "log_sha256": "5ba56d954203d22bd3461deb2bfc01ca6605c359733cdea772d6a36c0dc01569"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 20,
+      "metrics": {
+        "ns/op": 122043087.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "20-large-reference-b.txt",
+      "log_sha256": "f2eca210a8dee5f53e6b625de8a1b3dac8afe42d46f056a29b9fbccfabbe865a"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 21,
+      "metrics": {
+        "ns/op": 118801526.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "21-large-reference-a.txt",
+      "log_sha256": "881ce4f15e0446b89db05dfc47bb839403f6d6e4708a13cf0e03ea918e331bed"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 21,
+      "metrics": {
+        "ns/op": 125191950.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "21-large-reference-b.txt",
+      "log_sha256": "17da109014e2cc70498af47495870d8596144d9928decf3aacae49ef86df3cd4"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 21,
+      "metrics": {
+        "ns/op": 120983397.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 2,
+      "log": "21-large-baseline.txt",
+      "log_sha256": "c1db2285aacd94b33a3db9d5a24141f801b4fa76c346636d3a690b34706cca24"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 21,
+      "metrics": {
+        "ns/op": 79045531.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 0,
+      "log": "21-tiny-reference-a.txt",
+      "log_sha256": "2515e152925be31ca4c83e667bef27a31229b7d712cb410039af50ac81cbbe99"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 21,
+      "metrics": {
+        "ns/op": 73098469.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 1,
+      "log": "21-tiny-reference-b.txt",
+      "log_sha256": "98e323fdb8860767a40c8fad79870d8307bf9d52f1fc65151db972b75f46efa5"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 21,
+      "metrics": {
+        "ns/op": 82539591.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 2,
+      "log": "21-tiny-baseline.txt",
+      "log_sha256": "f9c32c0cedabbcce8602d31d5c9a21d69972b5fa52ae8209f09d260d5a280a16"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 22,
+      "metrics": {
+        "ns/op": 76949801.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "22-tiny-reference-b.txt",
+      "log_sha256": "8d6cabbba4f1ff486ea18fed8df7de34f216d4b73f71902916297a0d92f6bc67"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 22,
+      "metrics": {
+        "ns/op": 77836497.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 1,
+      "log": "22-tiny-baseline.txt",
+      "log_sha256": "8735edbc574a1e739547b726e0213a0b7b7d17454d05f007b83eb71720755565"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 22,
+      "metrics": {
+        "ns/op": 73402066.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "22-tiny-reference-a.txt",
+      "log_sha256": "da1bd5043c7e77e9751029b4cf1089f12fd02fa69d715eafe07cbb54331a2f12"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 22,
+      "metrics": {
+        "ns/op": 130888717.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 0,
+      "log": "22-large-reference-b.txt",
+      "log_sha256": "40d97814e816ceac3f8f4d637b5332e973266046605765924fc796f50a7b9d01"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 22,
+      "metrics": {
+        "ns/op": 127927355.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 1,
+      "log": "22-large-baseline.txt",
+      "log_sha256": "e80e19f765f34120bf67cf4b88c92e5f01081127cb8bfff61f6711bf834b75e9"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 22,
+      "metrics": {
+        "ns/op": 131839021.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 2,
+      "log": "22-large-reference-a.txt",
+      "log_sha256": "5eb353678d9fdb70e4848a62403d11474776cc9239abf18ff577029213f61c38"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 23,
+      "metrics": {
+        "ns/op": 122176507.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "baseline",
+      "position": 0,
+      "log": "23-large-baseline.txt",
+      "log_sha256": "c52c8e8379a48070d0f89c7d82b1a2a6db499cae538015f990b9fc69f4711c36"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 23,
+      "metrics": {
+        "ns/op": 121967710.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "23-large-reference-a.txt",
+      "log_sha256": "0608d8f81f3262a4d946ba9f52b21802c064a34d50e4d45a2fb2f81980f3364e"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/large",
+      "iterations": 1,
+      "round": 23,
+      "metrics": {
+        "ns/op": 126281017.0,
+        "file-bytes/op": 1048576.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "large",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "23-large-reference-b.txt",
+      "log_sha256": "df0e7974bc379036eb66f41b50b119c63d42f99f3dc650bf286d7b4d4222b036"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 23,
+      "metrics": {
+        "ns/op": 76283406.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "baseline",
+      "position": 0,
+      "log": "23-tiny-baseline.txt",
+      "log_sha256": "ce4d1670629320271939b28ebf1f5b54e639171bf8d7095cb92343922758ce91"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 23,
+      "metrics": {
+        "ns/op": 79990202.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-a",
+      "position": 1,
+      "log": "23-tiny-reference-a.txt",
+      "log_sha256": "4a6d5533ff23bc33ac8b8536cc232da220d8dda4e41ea1f0baf9f46f7d8a83a7"
+    },
+    {
+      "name": "BenchmarkApplyWorkloads/tiny",
+      "iterations": 1,
+      "round": 23,
+      "metrics": {
+        "ns/op": 75833983.0,
+        "file-bytes/op": 4096.0,
+        "grouped/op": 0.0,
+        "roots/op": 1.0
+      },
+      "case": "tiny",
+      "mode": "reference-b",
+      "position": 2,
+      "log": "23-tiny-reference-b.txt",
+      "log_sha256": "619deb619f496b1390db9c4a25e27a0eb6d7f189642c6df40de7cd13c7d14f5b"
+    }
+  ],
+  "commands": [
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/home/lydakis/.errand/jobs/01M2S6WG2BWJ51MCX93REHWPVW/workspace/.historical-small/.scratch-8w5ccaqv/pre-group-changes.test",
+      "./internal/changes"
+    ],
+    [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/home/lydakis/.errand/jobs/01M2S6WG2BWJ51MCX93REHWPVW/workspace/.historical-small/.scratch-8w5ccaqv/baseline-changes.test",
+      "./internal/changes"
+    ]
+  ],
+  "gomaxprocs": 2,
+  "case_rounds": {
+    "tiny": 24,
+    "large": 24
+  },
+  "status": "complete",
+  "go": "go version go1.27.1 linux/amd64",
+  "filesystem": "btrfs"
+}

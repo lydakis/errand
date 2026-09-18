@@ -1,0 +1,29 @@
+{
+  "commands": [
+    [
+      "go",
+      "test",
+      "./internal/changes",
+      "-run",
+      "^Test(Exchange|Merge|Transfer|Apply|CopyToRoot)",
+      "-skip",
+      "^TestApplySynchronization",
+      "-count=1"
+    ],
+    [
+      "go",
+      "test",
+      "-race",
+      "./internal/changes",
+      "-run",
+      "^TestExchange",
+      "-count=1"
+    ]
+  ],
+  "status": "complete",
+  "input": {
+    "revision": "092e88a+experimental-exchange",
+    "input_sha256": "7dcd201d29197356de6a143fb75332ccde759cd17ca8619559f0e73f6524199c",
+    "note": "Isolated exchange prototype on frozen parents; not production; patch retained in experiments/applyexchange."
+  }
+}

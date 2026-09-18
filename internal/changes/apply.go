@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -323,7 +324,15 @@ func ApplyToWorkspace(
 		}
 	}
 	synchronization := applySynchronization{observe: options.syncCheckpoint}
-	group := planApplyFileGroup(destination, journal, inputs, mergedAccess, options.groupCheckpoint)
+	group, reason := planApplyFileGroup(destination, journal, inputs, mergedAccess, options.groupCheckpoint)
+	if os.Getenv("ERRAND_TRACE_APPLY") == "1" {
+		strategy, parents := "reference", 0
+		if group != nil {
+			strategy = "grouped"
+			parents = len(group.parents)
+		}
+		log.Printf("errand apply: strategy=%s reason=%s roots=%d parents=%d", strategy, reason, len(journal.Items), parents)
+	}
 	if err := writeApplyJournalAtRoot(destination.root, journal); err != nil {
 		return ApplyResult{}, fmt.Errorf("writing apply journal: %w", err)
 	}
@@ -987,16 +996,19 @@ func moveOriginalToBackup(root *os.Root, journal applyJournal, item applyJournal
 }
 
 func captureChangeParentIdentity(root *os.Root, changePath string) (fsidentity.Identity, error) {
-	if err := rejectSymlinkParentsAtRoot(root, changePath); err != nil {
+	return captureApplyDirectoryIdentity(root, path.Dir(changePath))
+}
+
+func captureApplyDirectoryIdentity(root *os.Root, parent string) (fsidentity.Identity, error) {
+	if err := rejectSymlinkParentsAtRoot(root, parent); err != nil {
 		return fsidentity.Identity{}, err
 	}
-	parent := path.Dir(changePath)
 	info, err := root.Lstat(parent)
 	if err != nil {
 		return fsidentity.Identity{}, err
 	}
 	if !info.IsDir() {
-		return fsidentity.Identity{}, fmt.Errorf("change path %q passes through non-directory %q", changePath, parent)
+		return fsidentity.Identity{}, fmt.Errorf("apply parent %q is not a directory", parent)
 	}
 	return fsidentity.FromInfo(info)
 }
@@ -1006,7 +1018,14 @@ func openChangeParent(
 	changePath string,
 	want fsidentity.Identity,
 ) (*os.File, error) {
-	parent := path.Dir(changePath)
+	dir, err := openApplyDirectory(root, path.Dir(changePath), want)
+	if err != nil {
+		return nil, fmt.Errorf("change %q: %w", changePath, err)
+	}
+	return dir, nil
+}
+
+func openApplyDirectory(root *os.Root, parent string, want fsidentity.Identity) (*os.File, error) {
 	dir, err := root.Open(parent)
 	if err != nil {
 		return nil, err
@@ -1019,11 +1038,12 @@ func openChangeParent(
 	got, err := fsidentity.FromInfo(info)
 	if err != nil || got != want {
 		dir.Close()
-		return nil, fmt.Errorf("change %q conflicts with a replaced parent directory", changePath)
+		return nil, fmt.Errorf("replaced parent directory %q", parent)
 	}
-	if err := verifyChangeParent(root, changePath, want); err != nil {
+	current, err := captureApplyDirectoryIdentity(root, parent)
+	if err != nil || current != want {
 		dir.Close()
-		return nil, err
+		return nil, errors.Join(fmt.Errorf("replaced parent directory %q", parent), err)
 	}
 	return dir, nil
 }
@@ -1196,7 +1216,9 @@ func sameBaselineContent(a, b Baseline) bool {
 	return a.Missing == b.Missing && a.Digest == b.Digest
 }
 
-func copyPath(src, dest string) error {
+// copyMergeScratch is only for disposable merge output. Apply subsequently copies,
+// verifies and durably publishes every value in its transaction before install.
+func copyMergeScratch(src, dest string) error {
 	info, err := os.Lstat(src)
 	if err != nil {
 		return err
@@ -1213,9 +1235,8 @@ func copyPath(src, dest string) error {
 			return err
 		}
 		_, copyErr := io.Copy(out, in)
-		syncErr := out.Sync()
 		closeErr := out.Close()
-		if err := errors.Join(copyErr, syncErr, closeErr); err != nil {
+		if err := errors.Join(copyErr, closeErr); err != nil {
 			return err
 		}
 		return os.Chmod(dest, info.Mode().Perm())
@@ -1228,14 +1249,14 @@ func copyPath(src, dest string) error {
 			return err
 		}
 		for _, entry := range entries {
-			if err := copyPath(filepath.Join(src, entry.Name()), filepath.Join(dest, entry.Name())); err != nil {
+			if err := copyMergeScratch(filepath.Join(src, entry.Name()), filepath.Join(dest, entry.Name())); err != nil {
 				return err
 			}
 		}
 		if err := os.Chmod(dest, info.Mode().Perm()); err != nil {
 			return err
 		}
-		return syncDirectory(dest)
+		return nil
 	case info.Mode()&fs.ModeSymlink != 0:
 		target, err := os.Readlink(src)
 		if err != nil {

@@ -1,0 +1,5 @@
+{
+  "revision": "092e88a+followup",
+  "input_sha256": "ff78b9d5ab8df8c05149f1f511b29a484526cf3ef5c41e86b1698d7d2df0730a",
+  "note": "Scratch policy, Git failure reporting, and multiple existing parents; creations and deletions remain reference."
+}
