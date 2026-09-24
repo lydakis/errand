@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -16,6 +17,9 @@ import (
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
 )
+
+// traceWatch logs each preparation's mode and fallback reason for benchmarks.
+var traceWatch = os.Getenv("ERRAND_TRACE_WATCH") == "1"
 
 // watchPreparation contains observed source metadata, never destination state.
 // Native hints identify which observations to refresh. Every shipped body still
@@ -71,6 +75,28 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 	dirty, full, reset := s.dirty, s.fullScan, s.resetHashes
 	s.dirty, s.fullScan, s.resetHashes = nil, false, false
 	s.dirtyMu.Unlock()
+	reason := "incremental"
+	switch {
+	case reset:
+		reason = "invalidated"
+	case full:
+		reason = "structural"
+	}
+	if traceWatch {
+		started := time.Now()
+		defer func() {
+			mode := "incremental"
+			if full {
+				mode = "full"
+			}
+			entries := 0
+			if state != nil {
+				entries = state.Len()
+			}
+			log.Printf("errand watch: prepare=%s reason=%s dirty=%d entries=%d elapsed_us=%d err=%t",
+				mode, reason, len(dirty), entries, time.Since(started).Microseconds(), err != nil)
+		}()
+	}
 	defer func() {
 		if err != nil {
 			s.InvalidatePreparation()
@@ -91,24 +117,31 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 			}
 		}
 	}
-	if prior == nil || prior.evidence == nil || time.Since(prior.fullAt) > 30*time.Second {
-		full = true
+	if !full {
+		switch {
+		case prior == nil:
+			full, reason = true, "first"
+		case prior.evidence == nil:
+			full, reason = true, "no-evidence"
+		case time.Since(prior.fullAt) > 30*time.Second:
+			full, reason = true, "expired"
+		}
 	}
 	if !full && prior.evidence.verifySelection() != nil {
-		full = true
+		full, reason = true, "evidence-changed"
 	}
 	var changed []string
 	if !full {
 		for name := range dirty {
 			rel, e := filepath.Rel(s.root, name)
 			if e != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				full = true
+				full, reason = true, "outside-root"
 				break
 			}
 			rel = filepath.ToSlash(rel)
 			entry, ok := prior.state.Lookup(rel)
 			if !ok || entry.Type == proto.EntryDir {
-				full = true
+				full, reason = true, "unknown-path"
 				break
 			}
 			changed = append(changed, rel)
