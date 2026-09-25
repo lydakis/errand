@@ -21,11 +21,31 @@ func (d *Daemon) pushSession(row workspaceRecord, clientID string) *changeops.Tr
 	return &changeops.TransferSession{Reuse: d.workspaces.checkpointCache, Directory: filepath.Join(d.workspaces.dir, row.ID, "push", clientID), Root: filepath.Join(d.workspaces.dir, row.ID, "data"), RootID: row.Identity, Owner: row.Owner, SourceID: clientID, MaxSourceBytes: d.cfg.MaxLimits.MaxWorkspaceBytes, MaxChangeBytes: d.cfg.MaxLimits.MaxChangeBytes}
 }
 func (d *Daemon) pushWorkspace(r *http.Request, id Identity) (workspaceRecord, error) {
+	d.workspaces.mu.Lock()
+	defer d.workspaces.mu.Unlock()
+	return d.pushWorkspaceLocked(r, id)
+}
+
+// pinPushWorkspace also opens the data directory before removal can run.
+// Removal may unlink it mid-upload, but the open handle keeps its inode
+// allocated, so a workspace later published under the same ID cannot present
+// row.Identity to the upload's final revalidation.
+func (d *Daemon) pinPushWorkspace(r *http.Request, id Identity) (workspaceRecord, *os.File, error) {
+	d.workspaces.mu.Lock()
+	defer d.workspaces.mu.Unlock()
+	row, err := d.pushWorkspaceLocked(r, id)
+	if err != nil {
+		return row, nil, err
+	}
+	pin, err := openWorkspaceData(filepath.Join(d.workspaces.dir, row.ID, "data"), row.Identity)
+	return row, pin, err
+}
+
+// Callers hold the inventory mutex.
+func (d *Daemon) pushWorkspaceLocked(r *http.Request, id Identity) (workspaceRecord, error) {
 	if !proto.ValidULID(r.PathValue("id")) {
 		return workspaceRecord{}, os.ErrNotExist
 	}
-	d.workspaces.mu.Lock()
-	defer d.workspaces.mu.Unlock()
 	row, err := d.workspaces.lookup(d.workspaceOwner(id), r.PathValue("id"))
 	if err != nil {
 		return row, err
@@ -33,11 +53,12 @@ func (d *Daemon) pushWorkspace(r *http.Request, id Identity) (workspaceRecord, e
 	return row, workspaceDataIdentity(filepath.Join(d.workspaces.dir, row.ID, "data"), row.Identity)
 }
 func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id Identity) {
-	row, err := d.pushWorkspace(r, id)
+	row, pin, err := d.pinPushWorkspace(r, id)
 	if err != nil {
 		workspaceHTTPError(w, err)
 		return
 	}
+	defer pin.Close()
 	upload, err := d.workspaces.beginUpload(r.Context(), row)
 	if err != nil {
 		httpError(w, 409, err.Error())
@@ -143,6 +164,7 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 	defer unlock()
 	// Revalidate ownership and directory identity after network I/O. The name
 	// may have been removed and recreated; this upload still addresses its ID.
+	// The pin keeps row.Identity unique even if the ID was reused meanwhile.
 	current, err := d.pushWorkspace(r, id)
 	if err != nil {
 		workspaceHTTPError(w, err)

@@ -273,6 +273,29 @@ func workspaceDataIdentity(path string, want fsidentity.Identity) error {
 	return nil
 }
 
+// openWorkspaceData opens a data directory and confirms the handle has the
+// recorded identity. A filesystem may reuse an inode number once its
+// directory is removed, but not while a handle to it is still open.
+func openWorkspaceData(path string, want fsidentity.Identity) (*os.File, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	var id fsidentity.Identity
+	if err == nil {
+		id, err = fsidentity.FromInfo(info)
+	}
+	if err == nil && (!info.IsDir() || id != want) {
+		err = fmt.Errorf("persistent workspace directory identity changed")
+	}
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
 // Serialize binding changes and last-member settlement per workspace. The
 // global inventory mutex never covers cache I/O or process cleanup.
 type workspaceGate struct {
