@@ -30,6 +30,7 @@ type Watch struct {
 	opts         SelectOptions
 	selected     map[string]bool
 	controls     map[string]bool
+	external     map[string]bool // global controls, watched only as files
 	directories  map[string]bool
 	observedInfo map[string]fs.FileInfo
 	generation   atomic.Uint64
@@ -63,7 +64,7 @@ func watchFiles(root string, opts SelectOptions, selectFiles func(string, Select
 	}
 	s := &Watch{Changed: make(chan struct{}, 1), Errors: make(chan error, 1), w: w,
 		done: make(chan struct{}), root: root, matcher: m, opts: opts,
-		selected: make(map[string]bool), controls: make(map[string]bool)}
+		selected: make(map[string]bool), controls: make(map[string]bool), external: make(map[string]bool)}
 	s.identity, err = os.Lstat(root)
 	if err != nil {
 		w.Close()
@@ -79,13 +80,20 @@ func watchFiles(root string, opts SelectOptions, selectFiles func(string, Select
 	// worktree. Object writes and lock files do not invalidate source selection.
 	_, explicitPolicy := os.Lstat(filepath.Join(root, ".errandignore"))
 	if gi.Repository && os.IsNotExist(explicitPolicy) {
+		// Global controls sit beside unrelated user files. A directory watch on
+		// $HOME opens every entry under kqueue, which can block on a macOS
+		// privacy prompt, so refresh watches these files themselves.
+		userControl := func(p string) {
+			p = filepath.Clean(p)
+			s.controls[p], s.external[p] = true, true
+		}
 		if home, e := os.UserHomeDir(); e == nil {
-			s.controls[filepath.Join(home, ".gitconfig")] = true
+			userControl(filepath.Join(home, ".gitconfig"))
 			xdg := os.Getenv("XDG_CONFIG_HOME")
 			if xdg == "" {
 				xdg = filepath.Join(home, ".config")
 			}
-			s.controls[filepath.Join(xdg, "git", "config")] = true
+			userControl(filepath.Join(xdg, "git", "config"))
 		}
 		for _, name := range []string{"index", "HEAD", "config", "info/exclude"} {
 			p, e := gitPath(root, name)
@@ -122,7 +130,7 @@ func watchFiles(root string, opts SelectOptions, selectFiles func(string, Select
 			if !filepath.IsAbs(global) {
 				global = filepath.Join(worktree, global)
 			}
-			s.controls[global] = true
+			userControl(global)
 		}
 	}
 	s.observedInfo = make(map[string]fs.FileInfo)
@@ -243,8 +251,19 @@ func (s *Watch) refresh() error {
 		return nil
 	}
 	for p := range s.controls {
-		// Watch the closest existing ancestor so creating a missing info/ or
-		// global ignore directory is observed as well.
+		if s.external[p] {
+			// Watch an existing global control itself, never a directory above
+			// it. Each refresh re-adds one replaced by rename or created since;
+			// preparation rereads them all, so a missed event only delays a push.
+			if fi, e := os.Stat(p); e == nil && fi.Mode().IsRegular() {
+				if err := add(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+			}
+			continue
+		}
+		// Watch the closest existing ancestor so creating a missing info/
+		// directory is observed as well.
 		for dir := filepath.Dir(p); ; dir = filepath.Dir(dir) {
 			if fi, e := os.Stat(dir); e == nil && fi.IsDir() {
 				if err := add(dir); err != nil {
