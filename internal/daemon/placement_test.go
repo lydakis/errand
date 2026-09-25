@@ -59,6 +59,7 @@ func TestWhereAdmissionRevalidationAndReplay(t *testing.T) {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		t.Fatalf("replayed admitted job was re-rejected: %s %s", resp.Status, body)
 	}
+	waitTerminal(t, ts.URL, id) // The job still writes its receipt under the temp state dir.
 	r := proto.NewReceiptSpec(spec)
 	if r.Where != "go" || r.SpecWithoutEnv().Where != "go" {
 		t.Fatal("lost requirements in receipt")
