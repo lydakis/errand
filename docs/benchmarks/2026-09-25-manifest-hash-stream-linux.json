@@ -1,0 +1,4243 @@
+{
+ "host": "cloud container, Linux amd64, ext4 on virtio, 4 vCPU",
+ "baseline_revision": "487d36c",
+ "candidate_revision": "1e3c1af",
+ "runs": {
+  "r0-10000-explicit-inplace-edit@baseline": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "b758c15c68ab3d0abfe4205b95e2868f248330fbff643f79cae17388aa60c683",
+   "files": 10000,
+   "selection": "explicit",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "none",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.15371415700064972
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.148583963999954
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.14607883499957097
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.14830505000008998
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.14981061199978285
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.147015898999598
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.14941185400039103
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.2680757279995305,
+     "delivery_seconds": 0.21551920599995356,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 262
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.26627433999965433,
+     "delivery_seconds": 0.21871241200005898,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 260
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.24805561599987414,
+     "delivery_seconds": 0.20265601800019795,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 242
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.2985024910003631,
+     "delivery_seconds": 0.25896162099979847,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 292
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.25882007599921053,
+     "delivery_seconds": 0.20612226399953215,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 253
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.2323824720006087,
+     "delivery_seconds": 0.20310633900044195,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 226
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.2211016479996033,
+     "delivery_seconds": 0.1930664199999228,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 215
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 2.5430694500000754,
+   "idle": {
+    "seconds": 2.0116091649997543,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.5485281030005353,
+    "delivery_seconds": 0.5011914340002477,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 463
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 264.249,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 6.561,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.134,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.864,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.947,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.807,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.203,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.366,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.747,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 223.977,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 6.019,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       264.249
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       6.561,
+       5.134,
+       5.864,
+       4.947,
+       4.807,
+       5.203,
+       5.366,
+       4.747,
+       6.019
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       223.977
+      ]
+     }
+    }
+   }
+  },
+  "r0-10000-explicit-inplace-edit@candidate": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "bbb97690b49ac6c29d454b0458abf6dc730d5d4f9aa884a195d89e19b31f24e6",
+   "files": 10000,
+   "selection": "explicit",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "none",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.14242584000021452
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.1536218640003426
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.15546649800035084
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.1480655969999134
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.1491944039998998
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.15052789299988945
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.1497615689995655
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.21338862999982666,
+     "delivery_seconds": 0.15761047700016206,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 207
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.21715411399964069,
+     "delivery_seconds": 0.17445129999941855,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 211
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.2180701589995806,
+     "delivery_seconds": 0.180895679999594,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 212
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.2000963029995546,
+     "delivery_seconds": 0.16391745500004617,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 194
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.22833511199951317,
+     "delivery_seconds": 0.1768754300001092,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 222
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.22910424400015472,
+     "delivery_seconds": 0.1788116870002341,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 223
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.2051044500003627,
+     "delivery_seconds": 0.17352397200011183,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 199
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 4.035609169999589,
+   "idle": {
+    "seconds": 2.011634153000159,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.5718215839997356,
+    "delivery_seconds": 0.5287487059995328,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 484
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 269.187,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.054,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.317,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.478,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.043,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.526,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.115,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.771,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.365,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 235.122,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.926,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       269.187
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       5.054,
+       5.317,
+       5.478,
+       5.043,
+       5.526,
+       5.115,
+       4.771,
+       5.365,
+       4.926
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       235.122
+      ]
+     }
+    }
+   }
+  },
+  "r0-10000-git-tracked-inplace-edit@baseline": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "b758c15c68ab3d0abfe4205b95e2868f248330fbff643f79cae17388aa60c683",
+   "files": 10000,
+   "selection": "git",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "all",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.15113425300023664
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.14612717500040162
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.14315974900000583
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.1475954779998574
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.1442530849999457
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.1455892029998722
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.14936251699964487
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.26731386099982046,
+     "delivery_seconds": 0.24113223400036077,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 261
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.2712484220000988,
+     "delivery_seconds": 0.23240285700012464,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 265
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.26399124399995344,
+     "delivery_seconds": 0.23526620999928127,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 258
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.29435158300020703,
+     "delivery_seconds": 0.26349036200008413,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 288
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.2589692589999686,
+     "delivery_seconds": 0.22769117600000754,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 253
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.31137446199954866,
+     "delivery_seconds": 0.2711091369992573,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 305
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.24968314399939118,
+     "delivery_seconds": 0.22098732299946278,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 244
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 4.485640872999284,
+   "idle": {
+    "seconds": 2.0075551700001597,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.8712853879997056,
+    "delivery_seconds": 0.8321715570000379,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 764
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 459.666,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.615,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.814,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.904,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 18.898,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.088,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.923,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.995,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.355,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 452.977,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       459.666
+      ]
+     },
+     "incremental:incremental": {
+      "count": 8,
+      "elapsed_ms": [
+       15.615,
+       14.814,
+       15.904,
+       18.898,
+       15.088,
+       14.923,
+       14.995,
+       15.355
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       452.977
+      ]
+     }
+    }
+   }
+  },
+  "r0-10000-git-tracked-inplace-edit@candidate": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "bbb97690b49ac6c29d454b0458abf6dc730d5d4f9aa884a195d89e19b31f24e6",
+   "files": 10000,
+   "selection": "git",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "all",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.14916662899941002
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.14570038599958934
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.1400690209993627
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.14329165600065608
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.14196224300030735
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.13934529299967835
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.1521619200002533
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.21226898199984134,
+     "delivery_seconds": 0.18841348000023572,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 206
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.21806027499951597,
+     "delivery_seconds": 0.18254075799995917,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 212
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.2102608129998771,
+     "delivery_seconds": 0.17502892199991038,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 204
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.20790893600042182,
+     "delivery_seconds": 0.1825409290004245,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 202
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.20792689900008554,
+     "delivery_seconds": 0.17866731100002653,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 202
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.22497917000055168,
+     "delivery_seconds": 0.19452732100035064,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 219
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.20284617399920535,
+     "delivery_seconds": 0.1761906559995623,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 197
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 2.6215854560005027,
+   "idle": {
+    "seconds": 2.011513045999891,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.8331303869999829,
+    "delivery_seconds": 0.7936248830001205,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 737
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 450.614,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.391,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.111,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.345,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.378,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 13.854,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 16.223,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.256,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.691,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 445.686,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 15.367,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       450.614
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       14.391,
+       14.111,
+       15.345,
+       14.378,
+       13.854,
+       16.223,
+       14.256,
+       15.691,
+       15.367
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       445.686
+      ]
+     }
+    }
+   }
+  },
+  "r1-10000-explicit-inplace-edit@baseline": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "b758c15c68ab3d0abfe4205b95e2868f248330fbff643f79cae17388aa60c683",
+   "files": 10000,
+   "selection": "explicit",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "none",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.14790849299970432
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.14379203999942547
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.14125754700035031
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.14093366999986756
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.14192560900028184
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.13959115100078634
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.14407995999954437
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.24029917900043074,
+     "delivery_seconds": 0.19917103500029043,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 234
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.2622963330004495,
+     "delivery_seconds": 0.22815908800021134,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 256
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.23575049499959277,
+     "delivery_seconds": 0.19950121999954717,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 230
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.2322122510004192,
+     "delivery_seconds": 0.19532025900025474,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 226
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.24390454700005648,
+     "delivery_seconds": 0.21492142399984004,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 238
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.25969073200030834,
+     "delivery_seconds": 0.2247438639997199,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 254
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.2847228330001599,
+     "delivery_seconds": 0.24324435300059122,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 279
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 3.889873449999868,
+   "idle": {
+    "seconds": 2.0144756950003284,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.6668631190004817,
+    "delivery_seconds": 0.6062320099999852,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 571
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 223.616,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.966,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.298,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.678,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.853,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.349,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.819,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.818,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.883,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 261.602,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 5.845,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       223.616
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       4.966,
+       5.298,
+       4.678,
+       4.853,
+       5.349,
+       4.819,
+       4.818,
+       4.883,
+       5.845
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       261.602
+      ]
+     }
+    }
+   }
+  },
+  "r1-10000-explicit-inplace-edit@candidate": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "bbb97690b49ac6c29d454b0458abf6dc730d5d4f9aa884a195d89e19b31f24e6",
+   "files": 10000,
+   "selection": "explicit",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "none",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.14919179899970914
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.1434331430000384
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.1447451190006177
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.1564128059999348
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.15647915200042917
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.1490951980003956
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.14451191399984964
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.17454487499981042,
+     "delivery_seconds": 0.1499151170000914,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 168
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.21483134400023118,
+     "delivery_seconds": 0.18105339700014156,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 209
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.18097012999987783,
+     "delivery_seconds": 0.1458634799992069,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 175
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.1943467419996523,
+     "delivery_seconds": 0.1543967640000119,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 188
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.20827329000076134,
+     "delivery_seconds": 0.16587591300049098,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 202
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.20916626899997937,
+     "delivery_seconds": 0.17730968299929373,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 203
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.21569529799944576,
+     "delivery_seconds": 0.17395045400007803,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 210
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 3.5524255670006823,
+   "idle": {
+    "seconds": 2.0107074139996257,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.5213965860002645,
+    "delivery_seconds": 0.47009216500009643,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 441
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 238.786,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.885,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.869,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.803,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.805,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.994,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.791,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.969,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.851,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 220.318,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.947,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       238.786
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       4.885,
+       4.869,
+       4.803,
+       4.805,
+       4.994,
+       4.791,
+       4.969,
+       4.851,
+       4.947
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       220.318
+      ]
+     }
+    }
+   }
+  },
+  "r1-10000-git-tracked-inplace-edit@baseline": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "b758c15c68ab3d0abfe4205b95e2868f248330fbff643f79cae17388aa60c683",
+   "files": 10000,
+   "selection": "git",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "all",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.17353094200007035
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.16872269000032247
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.13909458499983884
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.15150643400011177
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.14332042599926353
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.16271040299943706
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.15879411999958393
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.25354466599947045,
+     "delivery_seconds": 0.22976742399987415,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 247
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.305820811000558,
+     "delivery_seconds": 0.2717591310001808,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 300
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.2659869549997893,
+     "delivery_seconds": 0.23547895399951813,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 260
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.32548508800027776,
+     "delivery_seconds": 0.26873378100026457,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 319
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.2853059769995525,
+     "delivery_seconds": 0.22689371399974334,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 279
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.28460915300001943,
+     "delivery_seconds": 0.22811601299963513,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 278
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.28467894200002775,
+     "delivery_seconds": 0.2343257350003114,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 278
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 2.5897356269997545,
+   "idle": {
+    "seconds": 2.009579713999301,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.808487790000072,
+    "delivery_seconds": 0.7722019679995356,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 705
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 451.945,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 16.417,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 16.955,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 16.14,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.077,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.904,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 20.304,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.057,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.788,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 444.945,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       451.945
+      ]
+     },
+     "incremental:incremental": {
+      "count": 8,
+      "elapsed_ms": [
+       16.417,
+       16.955,
+       16.14,
+       15.077,
+       14.904,
+       20.304,
+       15.057,
+       14.788
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       444.945
+      ]
+     }
+    }
+   }
+  },
+  "r1-10000-git-tracked-inplace-edit@candidate": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "bbb97690b49ac6c29d454b0458abf6dc730d5d4f9aa884a195d89e19b31f24e6",
+   "files": 10000,
+   "selection": "git",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "all",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.1479123939998317
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.14353487200060044
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.1409199540003101
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.15523559600023873
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.1423710230001234
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.14830079000057594
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.14171101800002361
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.21834202500031097,
+     "delivery_seconds": 0.18088338500001555,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 212
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.21485443799974746,
+     "delivery_seconds": 0.18714631500006362,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 209
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.2436775950000083,
+     "delivery_seconds": 0.2155307860002722,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 238
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.21526182499928836,
+     "delivery_seconds": 0.1791939889999412,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 209
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.230808624999554,
+     "delivery_seconds": 0.1952743140000166,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 225
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.22553762099960295,
+     "delivery_seconds": 0.18043276000025799,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 219
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.22960018799949466,
+     "delivery_seconds": 0.19939371599957667,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 223
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 4.218234153000594,
+   "idle": {
+    "seconds": 2.0098021920002793,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.7711377810001068,
+    "delivery_seconds": 0.7267589709999811,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 679
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 440.191,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.732,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 13.56,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 16.682,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 13.636,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 13.571,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.623,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 16.058,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.39,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 440.213,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 16.722,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       440.191
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       14.732,
+       13.56,
+       16.682,
+       13.636,
+       13.571,
+       15.623,
+       16.058,
+       14.39,
+       16.722
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       440.213
+      ]
+     }
+    }
+   }
+  },
+  "r2-10000-explicit-inplace-edit@baseline": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "b758c15c68ab3d0abfe4205b95e2868f248330fbff643f79cae17388aa60c683",
+   "files": 10000,
+   "selection": "explicit",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "none",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.1461080140006743
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.14922600499994587
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.14730890200007707
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.14429077500062704
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.15865749299973686
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.1496897409997473
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.14429737699992984
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.22644670400040923,
+     "delivery_seconds": 0.19839612800024042,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 220
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.22531846499987296,
+     "delivery_seconds": 0.19419948199993087,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 219
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.22534213899962197,
+     "delivery_seconds": 0.19561232999967615,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 219
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.2133713240000361,
+     "delivery_seconds": 0.18770318099996075,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 207
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.2512148099995102,
+     "delivery_seconds": 0.213692104999609,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 245
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.2513104800000292,
+     "delivery_seconds": 0.21522915600053238,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 245
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.23728177399971173,
+     "delivery_seconds": 0.19673757500004285,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 231
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 3.6829860779998853,
+   "idle": {
+    "seconds": 2.0085702060005133,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.5691954050007553,
+    "delivery_seconds": 0.5319002730002467,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 482
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 243.316,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.585,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.965,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 6.257,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.686,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.894,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.028,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.839,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.637,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 220.711,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 4.549,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       243.316
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       5.585,
+       4.965,
+       6.257,
+       4.686,
+       4.894,
+       5.028,
+       4.839,
+       4.637,
+       4.549
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       220.711
+      ]
+     }
+    }
+   }
+  },
+  "r2-10000-explicit-inplace-edit@candidate": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "bbb97690b49ac6c29d454b0458abf6dc730d5d4f9aa884a195d89e19b31f24e6",
+   "files": 10000,
+   "selection": "explicit",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "none",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.14680812299957324
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.141749350000282
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.14130123100039782
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.1397513940000863
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.14136085799964349
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.14929878900056792
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.1423638349997418
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.21971383500022057,
+     "delivery_seconds": 0.18575368900019384,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 214
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.21760131500013813,
+     "delivery_seconds": 0.1853216830004385,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 211
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.1976180760002535,
+     "delivery_seconds": 0.1729969070001971,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 191
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.18965721799941093,
+     "delivery_seconds": 0.1626722429991787,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 184
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.19961217200034298,
+     "delivery_seconds": 0.17183135600043897,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 194
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.1876938400000654,
+     "delivery_seconds": 0.16498159999991913,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 182
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.17479301700041106,
+     "delivery_seconds": 0.1441903060003824,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 169
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 3.5741863199991712,
+   "idle": {
+    "seconds": 2.009932486999787,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.5572735220002869,
+    "delivery_seconds": 0.5179145689999132,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 455
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 219.154,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 6.742,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.934,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.969,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.013,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.771,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.877,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.821,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.636,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 224.047,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       219.154
+      ]
+     },
+     "incremental:incremental": {
+      "count": 8,
+      "elapsed_ms": [
+       6.742,
+       4.934,
+       4.969,
+       5.013,
+       4.771,
+       4.877,
+       4.821,
+       4.636
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       224.047
+      ]
+     }
+    }
+   }
+  },
+  "r2-10000-git-tracked-inplace-edit@baseline": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "b758c15c68ab3d0abfe4205b95e2868f248330fbff643f79cae17388aa60c683",
+   "files": 10000,
+   "selection": "git",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "all",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.14678801399986696
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.1453383930002019
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.14105261499935295
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.14465406900035305
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.14119206199939072
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.1750406049995945
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.14127673500024684
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.26184229600039544,
+     "delivery_seconds": 0.23156215400013025,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 256
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.24707070599924918,
+     "delivery_seconds": 0.20915261099980853,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 241
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.2895843000005698,
+     "delivery_seconds": 0.2581480550006745,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 283
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.29766687099981937,
+     "delivery_seconds": 0.26624067400007334,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 291
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.2755120399997395,
+     "delivery_seconds": 0.24919595400024264,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 269
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.2502549700002419,
+     "delivery_seconds": 0.21019786200031376,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 244
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.25281186099982733,
+     "delivery_seconds": 0.21995901900027093,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 247
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 4.217803673000162,
+   "idle": {
+    "seconds": 2.010894910999923,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.8764151859995764,
+    "delivery_seconds": 0.8378926369996407,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 772
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 468.261,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.713,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 16.299,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.776,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.585,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 17.012,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.528,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.407,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.467,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 529.755,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       468.261
+      ]
+     },
+     "incremental:incremental": {
+      "count": 8,
+      "elapsed_ms": [
+       14.713,
+       16.299,
+       15.776,
+       14.585,
+       17.012,
+       15.528,
+       14.407,
+       15.467
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       529.755
+      ]
+     }
+    }
+   }
+  },
+  "r2-10000-git-tracked-inplace-edit@candidate": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "bbb97690b49ac6c29d454b0458abf6dc730d5d4f9aa884a195d89e19b31f24e6",
+   "files": 10000,
+   "selection": "git",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "all",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.14884657299990067
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.14206971699968562
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.14317159600068408
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.14288806100012152
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.14494713899966882
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.14102789099979418
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.14024227899972175
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.2117869920002704,
+     "delivery_seconds": 0.18542212000011205,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 206
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.23033802400004788,
+     "delivery_seconds": 0.19641419499930635,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 224
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.21695183300016652,
+     "delivery_seconds": 0.18935064899960707,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 211
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.21730698900046264,
+     "delivery_seconds": 0.19094007600051555,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 211
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.19848716500018782,
+     "delivery_seconds": 0.17447834399990825,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 192
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.2038123029997223,
+     "delivery_seconds": 0.17966292700020858,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 198
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.22161340299953736,
+     "delivery_seconds": 0.17695891899984417,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 215
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 3.988224235999951,
+   "idle": {
+    "seconds": 2.0099867160006397,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.7730942770003821,
+    "delivery_seconds": 0.7421347490007975,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 675
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 427.776,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.032,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.175,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.104,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 16.465,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.439,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.025,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 13.844,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.587,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 478.12,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 15.789,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       427.776
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       15.032,
+       15.175,
+       14.104,
+       16.465,
+       14.439,
+       14.025,
+       13.844,
+       14.587,
+       15.789
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       478.12
+      ]
+     }
+    }
+   }
+  },
+  "r3-10000-explicit-inplace-edit@baseline": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "b758c15c68ab3d0abfe4205b95e2868f248330fbff643f79cae17388aa60c683",
+   "files": 10000,
+   "selection": "explicit",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "none",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.1487700939997012
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.1420075629994244
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.14037686299980123
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.14402281700040476
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.13964405700062343
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.13991063799949188
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.14541139999982988
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.24421267499928945,
+     "delivery_seconds": 0.20088488700002927,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 238
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.2241524869996283,
+     "delivery_seconds": 0.18907088800006022,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 218
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.2385228739995,
+     "delivery_seconds": 0.21733269600008498,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 232
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.22964621699975396,
+     "delivery_seconds": 0.1924794849992395,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 224
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.20273026199993183,
+     "delivery_seconds": 0.1786356459997478,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 197
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.24422409499948117,
+     "delivery_seconds": 0.1967739960000472,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 238
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.2624429469997267,
+     "delivery_seconds": 0.22894617799920525,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 256
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 3.7013868920003006,
+   "idle": {
+    "seconds": 2.0110193999998955,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.5468949309997697,
+    "delivery_seconds": 0.5093675400003121,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 456
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 231.947,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 7.136,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.924,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.876,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.799,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.726,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.81,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.624,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.799,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 217.739,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 4.746,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       231.947
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       7.136,
+       4.924,
+       4.876,
+       4.799,
+       4.726,
+       4.81,
+       5.624,
+       4.799,
+       4.746
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       217.739
+      ]
+     }
+    }
+   }
+  },
+  "r3-10000-explicit-inplace-edit@candidate": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "bbb97690b49ac6c29d454b0458abf6dc730d5d4f9aa884a195d89e19b31f24e6",
+   "files": 10000,
+   "selection": "explicit",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "none",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.14907038399996964
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.14791400900048757
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.14594919999944977
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.14093700500052364
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.14177950999965105
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.14472085099987453
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.14262401499945554
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.22572232200036524,
+     "delivery_seconds": 0.16136621500027104,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 220
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.1850678450000487,
+     "delivery_seconds": 0.15906566499961627,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 179
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.2130655509999997,
+     "delivery_seconds": 0.1733617170002617,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 207
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.19093609299943637,
+     "delivery_seconds": 0.14897808699970483,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 185
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.2117505739997796,
+     "delivery_seconds": 0.17025967399968067,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 206
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.21366551900064223,
+     "delivery_seconds": 0.17863559700072074,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 208
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.19794773400008125,
+     "delivery_seconds": 0.17376944399984495,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 192
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 2.203994810999575,
+   "idle": {
+    "seconds": 2.0152863889998116,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.5180185790004543,
+    "delivery_seconds": 0.47215352800049004,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 430
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 220.15,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.309,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.703,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.866,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.411,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.717,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 4.924,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.031,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 5.073,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 225.139,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 4.787,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       220.15
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       5.309,
+       4.703,
+       4.866,
+       5.411,
+       4.717,
+       4.924,
+       5.031,
+       5.073,
+       4.787
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       225.139
+      ]
+     }
+    }
+   }
+  },
+  "r3-10000-git-tracked-inplace-edit@baseline": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "b758c15c68ab3d0abfe4205b95e2868f248330fbff643f79cae17388aa60c683",
+   "files": 10000,
+   "selection": "git",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "all",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.15220787500038568
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.14834354699996766
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.14466465300029085
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.14592058099970018
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.144676994999827
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.15080160399975284
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.1431242429998747
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.30680695199953334,
+     "delivery_seconds": 0.27484793799976615,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 301
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.24996581400046125,
+     "delivery_seconds": 0.21536097900025197,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 244
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.3157037589999163,
+     "delivery_seconds": 0.2816938810001375,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 310
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.255721296000047,
+     "delivery_seconds": 0.2233226050002486,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 250
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.2265629519997674,
+     "delivery_seconds": 0.19066865399963717,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 221
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.2604604260004635,
+     "delivery_seconds": 0.21422840099967289,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 254
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.246761451000566,
+     "delivery_seconds": 0.2211147580001125,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 241
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 4.046266436999758,
+   "idle": {
+    "seconds": 2.0092721570008507,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.8569508569999016,
+    "delivery_seconds": 0.7964855730006093,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 756
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 432.939,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 18.513,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.552,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 13.696,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.389,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 13.962,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.004,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.324,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.491,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 458.786,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 16.776,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       432.939
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       18.513,
+       14.552,
+       13.696,
+       14.389,
+       13.962,
+       15.004,
+       14.324,
+       15.491,
+       16.776
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       458.786
+      ]
+     }
+    }
+   }
+  },
+  "r3-10000-git-tracked-inplace-edit@candidate": {
+   "complete": true,
+   "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+   "filesystem": "ext4   /dev/vda rw,relatime,resv_strict,resuid=65534,resgid=65534",
+   "binary_sha256": "bbb97690b49ac6c29d454b0458abf6dc730d5d4f9aa884a195d89e19b31f24e6",
+   "files": 10000,
+   "selection": "git",
+   "save_mode": "inplace",
+   "pause_seconds": 0,
+   "git_tracking": "all",
+   "change": "edit",
+   "samples": [
+    {
+     "mode": "rsync-checksum",
+     "sample": 0,
+     "seconds": 0.14971313500063843
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 1,
+     "seconds": 0.14892680100001598
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 2,
+     "seconds": 0.1529988759994012
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 3,
+     "seconds": 0.1473193510000783
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 4,
+     "seconds": 0.14474418600002537
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 5,
+     "seconds": 0.14707024000017554
+    },
+    {
+     "mode": "rsync-checksum",
+     "sample": 6,
+     "seconds": 0.1540045290003036
+    },
+    {
+     "mode": "watch",
+     "sample": 0,
+     "seconds": 0.24762895200001367,
+     "delivery_seconds": 0.20204124900010356,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 241
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 1,
+     "seconds": 0.2457008629999109,
+     "delivery_seconds": 0.20162330899984227,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 240
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 2,
+     "seconds": 0.23542146100044192,
+     "delivery_seconds": 0.20152780300031736,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 229
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 3,
+     "seconds": 0.22576745599963033,
+     "delivery_seconds": 0.18719254600000568,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 220
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 4,
+     "seconds": 0.2387968639995961,
+     "delivery_seconds": 0.19512801800010493,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 233
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 5,
+     "seconds": 0.2253169909999997,
+     "delivery_seconds": 0.1954940629993871,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 219
+     }
+    },
+    {
+     "mode": "watch",
+     "sample": 6,
+     "seconds": 0.23306352899999183,
+     "delivery_seconds": 0.1879119660006836,
+     "transfer": {
+      "changed_paths": 1,
+      "transferred_bytes": 3060,
+      "elapsed_ms": 227
+     }
+    }
+   ],
+   "rsync": "rsync  version 3.2.7  protocol version 31",
+   "watch_start_seconds": 3.9682479690000036,
+   "idle": {
+    "seconds": 2.0107501599995885,
+    "cpu_seconds": 0.0,
+    "cpu_resolution_seconds": 0.01,
+    "unexpected_receipts": 0
+   },
+   "burst": {
+    "edits": 20,
+    "receipts": 1,
+    "seconds": 0.8077931050002007,
+    "delivery_seconds": 0.7675412010003129,
+    "transfer": {
+     "changed_paths": 1,
+     "transferred_bytes": 3060,
+     "elapsed_ms": 710
+    }
+   },
+   "watch_exit_code": 0,
+   "whole_tree_verified": true,
+   "watch_trace": {
+    "preparations": [
+     {
+      "mode": "full",
+      "reason": "first",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 448.719,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.931,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.178,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.07,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 16.229,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.795,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.926,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 15.802,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 14.661,
+      "error": false
+     },
+     {
+      "mode": "full",
+      "reason": "invalidated",
+      "dirty": 1,
+      "entries": 10102,
+      "elapsed_ms": 458.548,
+      "error": false
+     },
+     {
+      "mode": "incremental",
+      "reason": "incremental",
+      "dirty": 0,
+      "entries": 10102,
+      "elapsed_ms": 14.235,
+      "error": false
+     }
+    ],
+    "by_reason": {
+     "full:first": {
+      "count": 1,
+      "elapsed_ms": [
+       448.719
+      ]
+     },
+     "incremental:incremental": {
+      "count": 9,
+      "elapsed_ms": [
+       14.931,
+       14.178,
+       15.07,
+       16.229,
+       14.795,
+       14.926,
+       15.802,
+       14.661,
+       14.235
+      ]
+     },
+     "full:invalidated": {
+      "count": 1,
+      "elapsed_ms": [
+       458.548
+      ]
+     }
+    }
+   }
+  }
+ }
+}

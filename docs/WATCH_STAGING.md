@@ -47,7 +47,43 @@ At 10K, one-file edits are about 30% faster and creates about 18% faster. The
 
 Raw reports: [benchmarks/2026-09-25-workspace-record-cache-linux.json](benchmarks/2026-09-25-workspace-record-cache-linux.json).
 
+## Change 2: stream manifest root hashes (`1e3c1af`)
+
+After change 1, a 10K one-file push still hashed about four whole manifests
+(`expandSourceSnapshot`, the client's push, `checkInitialized`, and checkpoint
+records), ~53 ms of CPU. `Manifest.RootHash` JSON-encoded the manifest by
+reflection and then hashed it. It now streams the same bytes into SHA-256
+through a hand-written encoder, which hands any string that needs escaping
+to `json.Marshal`. A test checks byte equality with `json.Marshal` on edge
+cases (quotes, HTML characters, control bytes, invalid UTF-8, U+2028) and
+random manifests. The wire identity is unchanged.
+
+A 10K-entry hash drops from 10.7 to 5.9 ms and from 2.7 MB to 33 KB allocated
+(`BenchmarkManifestRootHash10K`). Phase benchmark, three pairs: 161–165 →
+142–160 ms per operation.
+
+Watch matrix at 10K files, four rounds, against change 1 (`487d36c`):
+
+| Case | Baseline | Candidate | Paired ratio (range) | Candidate faster |
+|---|---:|---:|---:|---:|
+| explicit-inplace-edit | 201 | 171 | 0.856 (0.772–0.873) | 4/4 |
+| git-tracked-inplace-edit | 233 | 186 | 0.800 (0.776–0.884) | 4/4 |
+
+The watch gain is larger than the CPU saved per push. The lower allocation
+rate (less GC work on a 4-vCPU host) may explain part of it; that has not
+been isolated.
+
+Raw reports: [benchmarks/2026-09-25-manifest-hash-stream-linux.json](benchmarks/2026-09-25-manifest-hash-stream-linux.json).
+
+## Cumulative, 10K files, Linux
+
+Git-tracked in-place edit, median visible delivery: 700 ms (v0.5.0) → 316 ms
+(Git evidence) → 217 ms (record cache) → 186 ms (streamed hashes). These
+medians come from separate paired campaigns on the same host. Treat the
+chain as approximate.
+
 ## Remaining candidates
 
-- Reuse manifest root hashes instead of re-encoding whole manifests (~40 ms at 10K).
+- Redundant hashes of the same manifest (for example `checkInitialized`
+  re-hashing the unchanged creation manifest on every push).
 - Checkpoint read/validation (~20 ms at 10K).
