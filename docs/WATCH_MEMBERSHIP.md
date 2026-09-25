@@ -122,8 +122,8 @@ Raw reports: [benchmarks/2026-09-25-watch-membership-linux.json](benchmarks/2026
 
 ## Not covered
 
-- Native APFS and Btrfs runs. These were requested on the Mac, the Mini and
-  Cabal separately.
+- Native APFS and Btrfs runs of this change alone. The whole branch was
+  compared with v0.5.0 on APFS and Btrfs in [WATCH_NATIVE.md](WATCH_NATIVE.md).
 - Creating or removing directories (`mkdir`, `git checkout` across branches,
   unpacking archives) still uses full selection.
 - Relisting reads the whole directory, and after a lost event it also lstats
