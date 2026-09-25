@@ -241,6 +241,10 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "errand: local change gc: %v\n", err)
 			failed = true
 		}
+		if result.Stale > 0 {
+			fmt.Fprintf(stderr, "errand: local change gc: skipped %d workspace transfer %s whose workspace was moved or deleted\n",
+				result.Stale, plural(result.Stale, "record"))
+		}
 		if err == nil || result.Removed > 0 || result.Protected > 0 || result.Failed > 0 {
 			if result.DryRun {
 				fmt.Fprintf(stdout, "local changes: would remove %d records and free %d bytes (%d protected, %d failed)\n",

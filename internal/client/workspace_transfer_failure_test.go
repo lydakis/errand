@@ -220,6 +220,69 @@ func TestTransferGCContinuesPastCorruptOrigin(t *testing.T) {
 	}
 }
 
+func TestTransferGCSkipsMovedOrDeletedWorkspace(t *testing.T) {
+	for _, dryRun := range []bool{true, false} {
+		t.Run(fmt.Sprintf("dry-run=%v", dryRun), func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			parent := t.TempDir()
+			const peer = "http://runner"
+			var roots, dirs []string
+			for i, id := range []string{"01M2280R0T4152A3BSV4C2976R", "01M2280R0T4152A3BSV4C2976S", "01M2280R0T4152A3BSV4C2976T"} {
+				root := filepath.Join(parent, fmt.Sprintf("workspace-%d", i))
+				if err := os.Mkdir(root, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(root, "data"), []byte("data"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				prep := prepareSnapshot(root, true, false)
+				if prep.err != nil {
+					t.Fatal(prep.err)
+				}
+				if err := recordWorkspaceOrigin(RunOptions{PeerURL: peer, Root: root}, id, prep.manifest); err != nil {
+					t.Fatal(err)
+				}
+				dir, err := workspaceTransferDir(peer, id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Abandoned upload sources never need the workspace to be collected.
+				if err := os.Mkdir(filepath.Join(dir, ".source-abandoned"), 0700); err != nil {
+					t.Fatal(err)
+				}
+				roots, dirs = append(roots, root), append(dirs, dir)
+			}
+			if err := os.RemoveAll(roots[0]); err != nil {
+				t.Fatal(err)
+			}
+			// Keep the moved directory so the replacement cannot reuse its inode.
+			if err := os.Rename(roots[1], roots[1]+"-moved"); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(roots[1], 0700); err != nil {
+				t.Fatal(err)
+			}
+			result, err := workspaceTransferGC(time.Now().Add(time.Hour), dryRun)
+			if err != nil || result.Failed != 0 || result.Stale != 2 || result.Removed != 3 {
+				t.Fatalf("GC with moved and deleted workspaces: %+v %v", result, err)
+			}
+			for _, dir := range dirs[:2] {
+				for _, name := range []string{"origin.json", filepath.Join("fetch", "checkpoint.json")} {
+					if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+						t.Fatalf("skipped relationship lost %s: %v", name, err)
+					}
+				}
+			}
+			for _, dir := range dirs {
+				_, err := os.Stat(filepath.Join(dir, ".source-abandoned"))
+				if dryRun && err != nil || !dryRun && !os.IsNotExist(err) {
+					t.Fatalf("abandoned source after GC (dry run %v): %v", dryRun, err)
+				}
+			}
+		})
+	}
+}
+
 func TestTransferObserversDoNotReportEachOtherBusy(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root := t.TempDir()

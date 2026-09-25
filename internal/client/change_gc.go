@@ -15,10 +15,13 @@ import (
 )
 
 type ChangeGCResult struct {
-	Selected   int
-	Removed    int
-	Protected  int
-	Failed     int
+	Selected  int
+	Removed   int
+	Protected int
+	Failed    int
+	// Stale counts workspace transfer relationships whose workspace was moved
+	// or deleted. Their state is preserved and skipped, not a failure.
+	Stale      int
 	FreedBytes int64
 	DryRun     bool
 }
@@ -179,6 +182,7 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 	result.Removed += transfers.Removed
 	result.Protected += transfers.Protected
 	result.Failed += transfers.Failed
+	result.Stale += transfers.Stale
 	result.FreedBytes += transfers.FreedBytes
 	return result, err
 }

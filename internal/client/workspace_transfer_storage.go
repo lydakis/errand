@@ -55,13 +55,23 @@ func workspaceTransferGC(cutoff time.Time, dryRun bool) (ChangeGCResult, error) 
 			result.FreedBytes += size
 			return nil
 		}
-		gc, err := o.session(dir).GC(context.Background(), cutoff, dryRun, []proto.Manifest{o.Initial})
-		result.Removed += gc.Removed
-		result.Selected += gc.Removed + gc.Protected
-		result.Protected += gc.Protected
-		result.FreedBytes += gc.FreedBytes
+		// Staging and checkpoints are bound to the workspace directory. Keep them
+		// until it returns, but still collect storage that never needs it.
+		moved, err := o.rootMoved()
 		if err != nil {
 			return fmt.Errorf("collecting workspace %s transfers: %w", o.WorkspaceID, err)
+		}
+		if moved {
+			result.Stale++
+		} else {
+			gc, err := o.session(dir).GC(context.Background(), cutoff, dryRun, []proto.Manifest{o.Initial})
+			result.Removed += gc.Removed
+			result.Selected += gc.Removed + gc.Protected
+			result.Protected += gc.Protected
+			result.FreedBytes += gc.FreedBytes
+			if err != nil {
+				return fmt.Errorf("collecting workspace %s transfers: %w", o.WorkspaceID, err)
+			}
 		}
 		children, err := os.ReadDir(dir)
 		if err != nil {

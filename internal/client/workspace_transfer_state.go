@@ -3,9 +3,12 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/fsidentity"
@@ -46,6 +49,20 @@ func readWorkspaceOrigin(dir string) (workspaceOrigin, error) {
 		err = fmt.Errorf("invalid workspace origin")
 	}
 	return o, err
+}
+
+// rootMoved reports whether the recorded workspace path no longer holds the
+// directory that created this relationship, because it was deleted, moved, or
+// replaced. Transfer state cannot be opened until that directory returns.
+func (o workspaceOrigin) rootMoved() (bool, error) {
+	identity, info, err := fsidentity.Lstat(o.Root)
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || identity != o.RootID, nil
 }
 func (o workspaceOrigin) session(dir string) *changeops.TransferSession {
 	return &changeops.TransferSession{Directory: filepath.Join(dir, "fetch"), Root: o.Root, RootID: o.RootID, Owner: localChangeKey(o.PeerURL, o.WorkspaceID), SourceID: o.WorkspaceID, MaxSourceBytes: proto.DefaultLimits().MaxWorkspaceBytes, MaxChangeBytes: proto.DefaultLimits().MaxChangeBytes}

@@ -401,6 +401,9 @@ Definitively rejected workspace creation removes its local origin snapshot.
 An uncertain creation outcome preserves that snapshot; check `workspaces` before
 retrying. GC preserves damaged transfer state, continues collecting healthy
 relationships, and reports partial progress with a nonzero exit status.
+Transfer state for a workspace whose directory was moved or deleted is kept
+and reported as skipped, not failed; GC collects it again if the directory
+returns.
 `df` reports incomplete inventory instead of waiting for a busy local transfer;
 `gc changes --dry-run` counts such relationships as protected.
 Concurrent inventory and dry-run reads do not mark one another as active transfers.
