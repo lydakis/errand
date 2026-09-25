@@ -414,35 +414,47 @@ func verifyTransferPaths(paths ...*applyDestination) error {
 }
 
 func writeVerifiedTransferRecord(destination, storage *applyDestination, name string, record any) error {
+	_, err := writeVerifiedTransferRecordRaw(destination, storage, name, record)
+	return err
+}
+
+// writeVerifiedTransferRecordRaw also returns the exact bytes published.
+func writeVerifiedTransferRecordRaw(destination, storage *applyDestination, name string, record any) ([]byte, error) {
 	if err := verifyTransferPaths(destination, storage); err != nil {
-		return err
+		return nil, err
 	}
-	if err := writeTransferRecord(storage.root, name, record); err != nil {
-		return err
+	raw, err := writeTransferRecordRaw(storage.root, name, record)
+	if err != nil {
+		return nil, err
 	}
-	return verifyTransferPaths(destination, storage)
+	return raw, verifyTransferPaths(destination, storage)
 }
 
 func writeTransferRecord(root *os.Root, name string, record any) error {
+	_, err := writeTransferRecordRaw(root, name, record)
+	return err
+}
+
+func writeTransferRecordRaw(root *os.Root, name string, record any) ([]byte, error) {
 	raw, err := json.Marshal(record)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(raw) > MaxBundleMetadataBytes {
-		return fmt.Errorf("transfer state exceeds size limit")
+		return nil, fmt.Errorf("transfer state exceeds size limit")
 	}
 	tmpName := ".transfer-" + proto.NewULID()
 	f, err := root.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer root.Remove(tmpName)
 	_, writeErr := f.Write(raw)
 	if err := errors.Join(writeErr, f.Sync(), f.Close()); err != nil {
-		return err
+		return nil, err
 	}
 	if err := root.Rename(tmpName, name); err != nil {
-		return err
+		return nil, err
 	}
-	return syncApplyRootDirectory(root, ".")
+	return raw, syncApplyRootDirectory(root, ".")
 }

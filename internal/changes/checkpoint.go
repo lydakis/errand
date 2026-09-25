@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"unicode/utf8"
 
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/fsidentity"
@@ -351,12 +352,43 @@ func (c *TransferCheckpoint) open(statePath string) (*applyDestination, *applyDe
 }
 
 func (c *TransferCheckpoint) save(destination, storage *applyDestination, name string, state checkpointState) error {
-	// Publication may fail after rename. Never keep a cache across a write.
+	// Publication may fail after rename. Never keep a cache across a failed write.
 	if c.cache != nil {
 		*c.cache = checkpointReadCache{}
 	}
 	c.Reuse.forget(c.StatePath)
-	return writeVerifiedTransferRecord(destination, storage, name, state)
+	raw, err := writeVerifiedTransferRecordRaw(destination, storage, name, state)
+	if err != nil {
+		return err
+	}
+	// After a complete publication, retain what was written. The next read
+	// still loads the file in full and reuses this record only if its bytes
+	// are identical, so an interrupted or later replacement is decoded afresh.
+	// JSON replaces invalid UTF-8, so only states made of valid strings are
+	// retained: for those, decoding the published bytes yields this state.
+	if !checkpointStateRoundTrips(state) {
+		return nil
+	}
+	state.Manifest = cloneSourceManifest(state.Manifest) // own it, as a decoded record would
+	if record, err := c.validatedRecord(raw, state); err == nil {
+		c.remember(record)
+		c.Reuse.put(c.StatePath, record)
+	}
+	return nil
+}
+
+func checkpointStateRoundTrips(state checkpointState) bool {
+	for _, s := range []string{state.Owner, state.SourceID, state.InitialRoot, state.LastReceipt, state.LastRequest} {
+		if !utf8.ValidString(s) {
+			return false
+		}
+	}
+	for _, e := range state.Manifest.Entries {
+		if !utf8.ValidString(e.Path) || !utf8.ValidString(e.Type) || !utf8.ValidString(e.SHA256) || !utf8.ValidString(e.Target) {
+			return false
+		}
+	}
+	return true
 }
 
 func validateCheckpointManifest(manifest proto.Manifest) error {
