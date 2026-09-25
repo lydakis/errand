@@ -2162,3 +2162,65 @@ func TestApplyRefusesWorkspaceReplacedAtSamePath(t *testing.T) {
 		t.Fatalf("change reached replacement workspace: %v", err)
 	}
 }
+
+func TestChangeGCRescansDownloadRenamedIntoPlaceAfterScan(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root, err := localChangeRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	downloads := filepath.Join(root, "downloads")
+	key := localChangeKey("http://runner.test", proto.NewULID())
+	staging := filepath.Join(downloads, ".changes-"+key+"-1")
+	if err := os.MkdirAll(filepath.Join(staging, "remote"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "remote", "part"), []byte("partial"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-48 * time.Hour)
+	if err := os.Chtimes(staging, old, old); err != nil {
+		t.Fatal(err)
+	}
+	candidates := map[string]*localChangeCandidate{}
+	if err := collectChangeGCCandidates(filepath.Join(root, "jobs"), downloads, candidates); err != nil {
+		t.Fatal(err)
+	}
+	stale := *candidates[key]
+	// The fetch finishes after the scan and moves its download into place.
+	if err := os.WriteFile(filepath.Join(staging, "remote", "rest"), []byte("the rest of it"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "bundle.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(downloads, key)
+	if err := os.Rename(staging, dest); err != nil {
+		t.Fatal(err)
+	}
+	cutoff := time.Now().Add(-24 * time.Hour)
+	var result ChangeGCResult
+	candidate := stale
+	collectLocalChangeLocked(downloads, &candidate, cutoff, &result)
+	if result != (ChangeGCResult{}) {
+		t.Fatalf("collected a download fetched after the scan: %+v", result)
+	}
+	if _, err := os.Stat(dest); err != nil {
+		t.Fatalf("fetched download removed: %v", err)
+	}
+	if err := os.Chtimes(dest, old, old); err != nil {
+		t.Fatal(err)
+	}
+	want, _, err := changeops.MeasureTreeContext(t.Context(), dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate = stale
+	collectLocalChangeLocked(downloads, &candidate, cutoff, &result)
+	if result.Removed != 1 || result.FreedBytes != want {
+		t.Fatalf("collected %+v, download measured %d bytes", result, want)
+	}
+	if _, err := os.Stat(dest); !os.IsNotExist(err) {
+		t.Fatalf("expired download kept: %v", err)
+	}
+}

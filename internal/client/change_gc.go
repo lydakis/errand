@@ -140,32 +140,7 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 			}
 			continue
 		}
-		unlock, acquired, lockErr := tryAcquireLocalChangeLock(localChangeTransferLockName(candidate.key))
-		if lockErr != nil {
-			result.Failed++
-			continue
-		}
-		if !acquired {
-			result.Protected++
-			continue
-		}
-		removed, eligible, protected, removeErr := collectLocalChangeCandidate(candidate, cutoff, dryRun)
-		unlock()
-		if removeErr != nil {
-			result.Failed++
-			continue
-		}
-		if protected {
-			result.Protected++
-			continue
-		}
-		if !eligible {
-			continue
-		}
-		if removed {
-			result.Removed++
-			result.FreedBytes += candidate.bytes
-		}
+		collectLocalChangeLocked(downloads, candidate, cutoff, &result)
 	}
 	if !dryRun {
 		if err := errors.Join(
@@ -182,6 +157,75 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 	result.Failed += transfers.Failed
 	result.FreedBytes += transfers.FreedBytes
 	return result, err
+}
+
+func collectLocalChangeLocked(downloads string, candidate *localChangeCandidate, cutoff time.Time, result *ChangeGCResult) {
+	unlock, acquired, lockErr := tryAcquireLocalChangeLock(localChangeTransferLockName(candidate.key))
+	if lockErr != nil {
+		result.Failed++
+		return
+	}
+	if !acquired {
+		result.Protected++
+		return
+	}
+	defer unlock()
+	// The scan ran without the transfer lock, so a fetch may have renamed its
+	// staging directory into place since. Rescan while no fetch can run.
+	if err := rescanLocalChangeCandidate(downloads, candidate); err != nil {
+		result.Failed++
+		return
+	}
+	removed, eligible, protected, removeErr := collectLocalChangeCandidate(candidate, cutoff, false)
+	if removeErr != nil {
+		result.Failed++
+		return
+	}
+	if protected {
+		result.Protected++
+		return
+	}
+	if eligible && removed {
+		result.Removed++
+		result.FreedBytes += candidate.bytes
+	}
+}
+
+// rescanLocalChangeCandidate refreshes a candidate's downloads and bytes. The
+// caller holds the candidate's transfer lock, so no fetch is writing them.
+func rescanLocalChangeCandidate(downloads string, candidate *localChangeCandidate) error {
+	var bytes int64
+	if candidate.statePath != "" {
+		info, err := os.Stat(candidate.statePath)
+		if err == nil {
+			bytes += info.Size()
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	paths := []string{filepath.Join(downloads, candidate.key)}
+	for _, path := range candidate.downloadPaths {
+		if filepath.Base(path) != candidate.key {
+			paths = append(paths, path)
+		}
+	}
+	var present []string
+	for _, path := range paths {
+		size, _, err := changeops.MeasureTreeContext(context.Background(), path)
+		if errors.Is(err, fs.ErrPermission) {
+			size, err = changeops.TreeSizeContext(context.Background(), path)
+		}
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		present = append(present, path)
+		bytes += size
+	}
+	candidate.downloadPaths, candidate.bytes = present, bytes
+	return nil
 }
 
 func syncExistingLocalDirectory(path string) error {
