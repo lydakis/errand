@@ -4,13 +4,20 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
+	"github.com/lydakis/errand/internal/namedcache"
 	"github.com/lydakis/errand/internal/proto"
 )
+
+// Storage reads start new named-cache measurements only within this budget, so
+// a large store is sized over several reads instead of stalling one.
+const namedCacheMeasureBudget = 10 * time.Second
 
 func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id Identity) {
 	stats := proto.StorageStats{Changes: &proto.ChangeStorageStats{}}
@@ -64,6 +71,17 @@ func (d *Daemon) handleStorageStats(w http.ResponseWriter, r *http.Request, id I
 		}
 	}
 	if d.namedCaches != nil {
+		// Shared tree caches are otherwise sized only by a real GC, so df would
+		// report less than gc says it can free. Measure the caller's idle ones.
+		owned := func(entry namedcache.Entry) bool {
+			return d.cfg.InsecureNoAuth || entry.Key.Owner == id.Owner()
+		}
+		if err := d.namedCaches.MeasureUnknown(r.Context(), owned, time.Now().Add(namedCacheMeasureBudget)); err != nil {
+			if r.Context().Err() != nil {
+				return
+			}
+			log.Printf("named cache measurement: %v", err)
+		}
 		entries, err := d.namedCaches.Inventory(r.Context())
 		if err != nil {
 			httpError(w, http.StatusInternalServerError, err.Error())

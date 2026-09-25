@@ -1607,8 +1607,11 @@ func TestChangeStatsAndGCHandleRestrictiveStaging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stats.Items != 1 || stats.Bytes == 0 {
+	if stats.Items != 1 || stats.Bytes < int64(len("retained")) {
 		t.Fatalf("ChangeStats() = %+v", stats)
+	}
+	if info, err := os.Lstat(sealed); err != nil || info.Mode().Perm() != 0 {
+		t.Fatalf("ChangeStats() left restrictive staging at %v %v", info.Mode(), err)
 	}
 	result, err := ChangeGC(24*time.Hour, false)
 	if err != nil {
@@ -1622,48 +1625,96 @@ func TestChangeStatsAndGCHandleRestrictiveStaging(t *testing.T) {
 	}
 }
 
-func TestChangeStatsWaitsForStagedTreeTransfer(t *testing.T) {
+func TestChangeStatsDoesNotWaitForTransfersOrCreateLocks(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root, err := localChangeRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
 	downloads := filepath.Join(root, "downloads")
-	if err := os.MkdirAll(downloads, 0o700); err != nil {
-		t.Fatal(err)
+	var keys []string
+	for range 2 {
+		key := localChangeKey("http://runner.test", proto.NewULID())
+		download := filepath.Join(downloads, key)
+		if err := os.MkdirAll(download, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(download, "artifact"), []byte("retained"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		keys = append(keys, key)
 	}
-	key := localChangeKey("http://runner.test", proto.NewULID())
-	download := filepath.Join(downloads, key)
-	if err := os.Mkdir(download, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(download, "artifact"), []byte("retained"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	unlock, err := acquireLocalChangeLock(localChangeTransferLockName(key))
+	unlock, err := acquireLocalChangeLock(localChangeTransferLockName(keys[0]))
 	if err != nil {
 		t.Fatal(err)
 	}
-	done := make(chan error, 1)
+	defer unlock()
+	type result struct {
+		stats proto.StorageCategory
+		err   error
+	}
+	done := make(chan result, 1)
 	go func() {
-		_, err := ChangeStats()
-		done <- err
+		stats, err := ChangeStats()
+		done <- result{stats, err}
 	}()
 	select {
-	case err := <-done:
-		unlock()
-		t.Fatalf("ChangeStats() completed while transfer lock was held: %v", err)
-	case <-time.After(100 * time.Millisecond):
-	}
-	unlock()
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
+	case got := <-done:
+		if got.err != nil || got.stats.Items != 2 || got.stats.Bytes < 2*int64(len("retained")) {
+			t.Fatalf("ChangeStats() = %+v %v", got.stats, got.err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("ChangeStats() did not resume after transfer lock was released")
+		t.Fatal("ChangeStats() waited for an active transfer")
+	}
+	lock := filepath.Join(root, "locks", localChangeTransferLockName(keys[1])+".lock")
+	if _, err := os.Lstat(lock); !os.IsNotExist(err) {
+		t.Fatalf("inventory created a transfer lock: %v", err)
+	}
+}
+
+func TestChangeStatsMatchesGCReclaimableBytes(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root, err := localChangeRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	downloads := filepath.Join(root, "downloads")
+	old := time.Now().Add(-48 * time.Hour)
+	for i, files := range []map[string]string{
+		{"out/report.txt": "report", "out/nested/data.bin": strings.Repeat("x", 4096)},
+		{"artifact": "retained", "empty/.keep": ""},
+	} {
+		download := filepath.Join(downloads, localChangeKey("http://runner.test", proto.NewULID()))
+		for rel, content := range files {
+			path := filepath.Join(download, rel)
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if i == 0 {
+			if err := os.Symlink("report.txt", filepath.Join(download, "out", "latest")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.Chtimes(download, old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	stats, err := ChangeStats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := ChangeGC(24*time.Hour, true)
+	if err != nil || plan.Removed != stats.Items || plan.FreedBytes != stats.Bytes {
+		t.Fatalf("df reports %+v, gc dry run %+v %v", stats, plan, err)
+	}
+	collected, err := ChangeGC(24*time.Hour, false)
+	if err != nil || collected.Removed != stats.Items || collected.FreedBytes != stats.Bytes {
+		t.Fatalf("df reports %+v, gc freed %+v %v", stats, collected, err)
 	}
 }
 

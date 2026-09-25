@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/lydakis/errand/internal/namedcache"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -97,5 +99,45 @@ func TestStorageEndpointIncludesOwnedFailedGCTombstones(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || stats.Jobs.Items != 1 ||
 		stats.Jobs.Bytes != int64(len("stranded")) {
 		t.Fatalf("storage response = %s %+v", resp.Status, stats)
+	}
+}
+
+func TestStorageEndpointMeasuresIdleTreeCachesOnly(t *testing.T) {
+	d, ts := testDaemon(t)
+	idle := namedcache.Key{Owner: "insecure-test", Project: strings.Repeat("a", 32), Name: "idle"}
+	held := namedcache.Key{Owner: "insecure-test", Project: strings.Repeat("a", 32), Name: "held"}
+	idleJob, heldJob := proto.NewULID(), proto.NewULID()
+	data, err := d.namedCaches.AcquireTree(t.Context(), idle, idleJob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "object"), []byte("cached"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.namedCaches.ReleaseTree(t.Context(), idle, idleJob); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.namedCaches.AcquireTree(t.Context(), held, heldJob); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := http.Get(ts.URL + "/v0/storage?verbose=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var stats proto.StorageStats
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		t.Fatal(err)
+	}
+	named := stats.NamedCaches
+	if resp.StatusCode != http.StatusOK || named == nil || named.Items != 2 || named.Bytes != int64(len("cached")) ||
+		named.Unmeasured != 1 || named.Protected != 1 || stats.Details == nil {
+		t.Fatalf("storage response = %s %+v", resp.Status, named)
+	}
+	for _, detail := range stats.Details.NamedCaches {
+		if detail.BytesUnknown != (detail.Name == "held") {
+			t.Fatalf("named cache details = %+v", stats.Details.NamedCaches)
+		}
 	}
 }

@@ -25,6 +25,7 @@ type treeAccess struct {
 	physical     map[string]uint32
 	identity     map[string]fsidentity.Identity
 	size         int64
+	regular      int64
 }
 
 type treePathFilter func(rel string, info fs.FileInfo) (include bool, descend bool)
@@ -147,6 +148,9 @@ func makeTreeAccessibleAtRootFilteredContext(
 		}
 		if include {
 			access.size += info.Size()
+			if info.Mode().IsRegular() {
+				access.regular += info.Size()
+			}
 		}
 		mode := info.Mode().Perm()
 		physical := mode
@@ -469,21 +473,63 @@ func TreeSize(rootPath string) (int64, error) {
 
 // TreeSizeContext supports canceling an inventory while restoring temporary access.
 func TreeSizeContext(ctx context.Context, rootPath string) (int64, error) {
+	size, _, err := TreeUsageContext(ctx, rootPath)
+	return size, err
+}
+
+// TreeUsageContext is TreeSizeContext that also reports regular-file bytes.
+func TreeUsageContext(ctx context.Context, rootPath string) (all, regular int64, err error) {
 	if err := ctx.Err(); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	info, err := os.Lstat(rootPath)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
-		return info.Size(), nil
+		if info.Mode().IsRegular() {
+			regular = info.Size()
+		}
+		return info.Size(), regular, nil
 	}
 	access, err := makeTreeAccessibleContext(ctx, rootPath, -1, -1)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	return access.size, access.restore()
+	return access.size, access.regular, access.restore()
+}
+
+// MeasureTreeContext sizes a retained tree without changing permissions,
+// following symlinks, or taking the tree's lock. all counts every entry as
+// TreeSizeContext does; regular counts regular files only. Entries removed
+// during the walk are skipped. A directory whose retained mode denies
+// traversal fails with fs.ErrPermission; only a caller holding the tree's lock
+// may then widen modes with TreeUsageContext.
+func MeasureTreeContext(ctx context.Context, rootPath string) (all, regular int64, err error) {
+	err = filepath.WalkDir(rootPath, func(path string, entry fs.DirEntry, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if walkErr != nil {
+			if path != rootPath && errors.Is(walkErr, fs.ErrNotExist) {
+				return nil
+			}
+			return walkErr
+		}
+		info, err := entry.Info()
+		if err != nil {
+			if path != rootPath && errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		all += info.Size()
+		if info.Mode().IsRegular() {
+			regular += info.Size()
+		}
+		return nil
+	})
+	return all, regular, err
 }
 
 // RemoveTree removes a retained tree after granting temporary owner traversal.

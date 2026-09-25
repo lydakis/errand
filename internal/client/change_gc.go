@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -445,6 +446,9 @@ func collectChangeGCCandidatesContext(ctx context.Context, jobs, downloads strin
 				continue
 			}
 			info, err := entry.Info()
+			if os.IsNotExist(err) {
+				continue // Collected or replaced after the listing.
+			}
 			if err != nil {
 				return err
 			}
@@ -463,6 +467,9 @@ func collectChangeGCCandidatesContext(ctx context.Context, jobs, downloads strin
 				return err
 			}
 			info, err := entry.Info()
+			if os.IsNotExist(err) {
+				continue // Removed or renamed into place after the listing.
+			}
 			if err != nil {
 				return err
 			}
@@ -471,10 +478,9 @@ func collectChangeGCCandidatesContext(ctx context.Context, jobs, downloads strin
 			downloadPath := filepath.Join(downloads, entry.Name())
 			candidate.downloadPaths = append(candidate.downloadPaths, downloadPath)
 			candidate.modified = laterTime(candidate.modified, info.ModTime())
-			var unlock func()
+			var size int64
 			if readOnly {
-				var acquired bool
-				unlock, acquired, err = tryAcquireExistingLocalChangeLock(localChangeTransferLockName(key))
+				unlock, acquired, err := tryAcquireExistingLocalChangeLock(localChangeTransferLockName(key))
 				if err != nil {
 					candidate.scanFailed = true
 					continue
@@ -483,25 +489,23 @@ func collectChangeGCCandidatesContext(ctx context.Context, jobs, downloads strin
 					candidate.transferActive = true
 					continue
 				}
-			} else {
-				unlock, err = acquireLocalChangeLockContext(ctx, localChangeTransferLockName(key))
-				if err != nil {
-					return err
+				size, _, err = changeops.MeasureTreeContext(ctx, downloadPath)
+				unlock()
+				if os.IsNotExist(err) {
+					continue
 				}
-			}
-			var size int64
-			if readOnly {
-				size, err = readOnlyTreeSize(downloadPath)
-			} else {
-				size, err = changeops.TreeSizeContext(ctx, downloadPath)
-			}
-			unlock()
-			if err != nil {
-				if readOnly {
+				if err != nil {
 					candidate.scanFailed = true
 					continue
 				}
-				return err
+			} else {
+				size, err = measureLocalDownload(ctx, key, downloadPath)
+				if os.IsNotExist(err) {
+					continue
+				}
+				if err != nil {
+					return err
+				}
 			}
 			candidate.bytes += size
 		}
@@ -511,20 +515,20 @@ func collectChangeGCCandidatesContext(ctx context.Context, jobs, downloads strin
 	return nil
 }
 
-func readOnlyTreeSize(root string) (int64, error) {
-	var total int64
-	err := filepath.WalkDir(root, func(_ string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		total += info.Size()
-		return nil
-	})
-	return total, err
+// Measuring needs neither the transfer lock nor wider modes, so inventory
+// never waits for a fetch or writes lock files. Only a tree whose retained
+// modes deny traversal is widened, under its transfer lock.
+func measureLocalDownload(ctx context.Context, key, path string) (int64, error) {
+	size, _, err := changeops.MeasureTreeContext(ctx, path)
+	if !errors.Is(err, fs.ErrPermission) {
+		return size, err
+	}
+	unlock, err := acquireLocalChangeLockContext(ctx, localChangeTransferLockName(key))
+	if err != nil {
+		return 0, err
+	}
+	defer unlock()
+	return changeops.TreeSizeContext(ctx, path)
 }
 
 func localChangeCandidateKey(name string) string {
