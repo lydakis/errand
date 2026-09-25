@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/lydakis/errand/internal/pathpolicy"
 )
@@ -33,13 +34,49 @@ type gitSelectionEvidence struct {
 // returns nil evidence, not an error, when the repository layout is outside
 // what the proof covers; the caller then keeps using full selection.
 func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence, map[string]bool, error) {
-	out, err := exec.Command("git", "-C", root, "rev-parse", "--show-toplevel",
-		"--git-path", "index", "--git-path", "info/exclude").Output()
-	if err != nil {
+	// The Git queries are independent; run them together so full cycles pay
+	// roughly one process round trip for capture.
+	var (
+		paths, origins        []byte
+		global                string
+		globalSet             bool
+		excluded              map[string]bool
+		e                     = &gitSelectionEvidence{contents: map[string][]byte{}}
+		pathsErr, digestErr   error
+		globalErr, originsErr error
+		excludedErr           error
+		reads                 sync.WaitGroup
+	)
+	reads.Go(func() {
+		paths, pathsErr = exec.Command("git", "-C", root, "rev-parse", "--show-toplevel",
+			"--git-path", "index", "--git-path", "info/exclude").Output()
+		if pathsErr != nil {
+			return
+		}
+		// Stamp the index before hashing the tracked set it describes.
+		index := strings.SplitN(string(paths), "\n", 3)
+		if len(index) == 3 {
+			e.index = index[1]
+			if !filepath.IsAbs(e.index) {
+				e.index = filepath.Join(root, e.index)
+			}
+			e.index = filepath.Clean(e.index)
+			e.indexInfo, _ = os.Lstat(e.index)
+		}
+		e.indexDigest, digestErr = trackedDigest(root)
+	})
+	reads.Go(func() { global, globalSet, globalErr = gitConfigPath(root, "core.excludesFile") })
+	reads.Go(func() {
+		// Every configuration file Git consulted, including included files.
+		origins, originsErr = exec.Command("git", "-C", root, "config", "--list", "--show-origin", "-z").Output()
+	})
+	reads.Go(func() { excluded, excludedErr = excludedDirectories(root) })
+	reads.Wait()
+	if errors.Join(pathsErr, digestErr, globalErr, originsErr, excludedErr) != nil {
 		return nil, nil, nil
 	}
-	lines := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
-	if len(lines) != 3 {
+	lines := strings.Split(strings.TrimSuffix(string(paths), "\n"), "\n")
+	if len(lines) != 3 || e.index == "" {
 		return nil, nil, nil
 	}
 	resolve := func(name string) string {
@@ -48,21 +85,13 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		}
 		return filepath.Clean(name)
 	}
-	worktree, index, exclude := filepath.Clean(lines[0]), resolve(lines[1]), resolve(lines[2])
-	if resolved, e := filepath.EvalSymlinks(worktree); e == nil {
+	worktree := filepath.Clean(lines[0])
+	if resolved, err := filepath.EvalSymlinks(worktree); err == nil {
 		worktree = resolved
 	}
-	e := &gitSelectionEvidence{index: index, contents: map[string][]byte{}}
-	e.indexInfo, _ = os.Lstat(index)
-	if e.indexDigest, err = trackedDigest(root); err != nil {
-		return nil, nil, nil
-	}
-	sources := []string{exclude}
-	global, ok, err := gitConfigPath(root, "core.excludesFile")
-	if err != nil {
-		return nil, nil, nil
-	}
-	if !ok {
+	sources := []string{resolve(lines[2])}
+	if !globalSet {
+		var err error
 		if global, err = defaultGitExcludesPath(); err != nil {
 			return nil, nil, nil
 		}
@@ -70,11 +99,6 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		global = filepath.Join(worktree, global)
 	}
 	sources = append(sources, global)
-	// Every configuration file Git consulted, including included files.
-	origins, err := exec.Command("git", "-C", root, "config", "--list", "--show-origin", "-z").Output()
-	if err != nil {
-		return nil, nil, nil
-	}
 	for _, record := range strings.Split(string(origins), "\x00") {
 		if name, ok := strings.CutPrefix(record, "file:"); ok && name != "" {
 			sources = append(sources, resolve(name))
@@ -98,12 +122,8 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		e.contents[name] = data
 	}
 
-	excluded, err := excludedDirectories(root)
-	if err != nil {
-		return nil, nil, nil
-	}
 	directories := map[string]bool{}
-	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
