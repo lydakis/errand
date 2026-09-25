@@ -50,10 +50,12 @@ type selectionEvidence struct {
 
 // Prepare refreshes a source snapshot for a serialized watch session. Ordinary
 // writes under an explicit .errandignore refresh only hinted files. First use,
-// structural/control events, overflow, changed selection evidence, and expired
-// preparations use full selection. Events arriving during preparation remain
-// pending for the next cycle. A failed preparation forces full reconciliation.
-// Expiry is checked on preparation; it does not schedule work while idle.
+// structural/control events, overflow and changed selection evidence use full
+// selection. Events arriving during preparation remain pending for the next
+// cycle. A failed preparation forces full reconciliation. Expiry is checked on
+// preparation; it does not schedule work while idle. When an expired
+// preparation has only content hints, those files are delivered first and the
+// owed full reconciliation runs as the immediately following cycle.
 // The returned guard must still be verified after freezing the source.
 func (s *Watch) Prepare(builder *Builder) (manifest proto.Manifest, gi GitInfo, policy proto.SelectionPolicy, guard *SelectionGuard, err error) {
 	state, gi, policy, guard, err := s.PrepareSnapshot(builder)
@@ -75,8 +77,8 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 		return nil, gi, policy, nil, fmt.Errorf("watched checkout was removed or replaced")
 	}
 	s.dirtyMu.Lock()
-	dirty, full, reset := s.dirty, s.fullScan, s.resetHashes
-	s.dirty, s.fullScan, s.resetHashes = nil, false, false
+	dirty, full, reset, owed := s.dirty, s.fullScan, s.resetHashes, s.owedFull
+	s.dirty, s.fullScan, s.resetHashes, s.owedFull = nil, false, false, false
 	s.dirtyMu.Unlock()
 	reason := "incremental"
 	switch {
@@ -84,6 +86,8 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 		reason = "invalidated"
 	case full:
 		reason = "structural"
+	case owed:
+		full, reason = true, "expired-followup"
 	}
 	if traceWatch {
 		started := time.Now()
@@ -120,6 +124,7 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 			}
 		}
 	}
+	expired := false
 	if !full {
 		switch {
 		case prior == nil:
@@ -127,7 +132,7 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 		case prior.evidence == nil:
 			full, reason = true, "no-evidence"
 		case time.Since(prior.fullAt) > 30*time.Second:
-			full, reason = true, "expired"
+			expired, reason = true, "expired"
 		}
 	}
 	if !full && prior.evidence.verifySelection() != nil {
@@ -150,6 +155,9 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 			changed = append(changed, rel)
 		}
 	}
+	if expired && len(changed) == 0 {
+		full = true // nothing to deliver first
+	}
 	if full {
 		return s.prepareFull(builder)
 	}
@@ -164,6 +172,15 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 	next := *prior
 	next.state = state
 	s.prepared = &next
+	if expired {
+		// The hinted files are current and selection is proven. Periodic full
+		// reconciliation still guards against lost events, one cycle later.
+		reason = "expired-deferred"
+		s.dirtyMu.Lock()
+		s.owedFull = true
+		s.dirtyMu.Unlock()
+		s.notifyChange()
+	}
 	guard = &SelectionGuard{root: s.root, identity: s.identity, evidence: prior.evidence}
 	return state, prior.gi, clonePolicy(prior.policy), guard, nil
 }

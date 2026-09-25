@@ -46,7 +46,7 @@ def run_matrix(args):
                     continue
                 cmd = [sys.executable, str(script), "--binary", binary, "--files", str(files),
                        "--samples", str(args.samples), "--idle-seconds", "2", "--skip-once", "--trace",
-                       "--output", str(target), *CASES[name]]
+                       "--pause-seconds", str(args.pause_seconds), "--output", str(target), *CASES[name]]
                 if args.mutagen and r == 0 and not label:
                     cmd += ["--mutagen", args.mutagen]
                 started = time.monotonic()
@@ -120,6 +120,7 @@ def main():
     parser.add_argument("--baseline", help="baseline Errand binary for a paired comparison")
     parser.add_argument("--rounds", type=int, default=2)
     parser.add_argument("--samples", type=int, default=7)
+    parser.add_argument("--pause-seconds", type=float, default=0, help="idle interval before each measured watch save")
     parser.add_argument("--sizes", type=int, nargs="+", default=[1000, 10000])
     parser.add_argument("--cases", nargs="+", choices=sorted(CASES), default=list(CASES))
     parser.add_argument("--summarize-only", action="store_true")

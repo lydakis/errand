@@ -239,3 +239,48 @@ func TestWatchInvalidatePreparationResamplesWithoutScheduling(t *testing.T) {
 	}
 	assertPreparedMatchesFull(t, w, b)
 }
+
+func TestWatchPrepareDeliversHintsBeforeExpiredReconciliation(t *testing.T) {
+	w, b := prepareWatchFixture(t)
+	if err := os.WriteFile(filepath.Join(w.root, "other"), []byte("old"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	assertPreparedMatchesFull(t, w, b)
+	w.prepared.fullAt = time.Now().Add(-time.Minute)
+	expiredAt := w.prepared.fullAt
+	// A lost event: this file's contents change without a hint.
+	if err := os.WriteFile(filepath.Join(w.root, "other"), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(w.root, "value"), []byte("after!"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for len(w.Changed) > 0 {
+		<-w.Changed
+	}
+	w.invalidatePath(filepath.Join(w.root, "value"), false)
+	<-w.Changed
+	got, _, _, _, err := w.PrepareSnapshot(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.prepared.fullAt != expiredAt {
+		t.Fatal("expired preparation with a content hint ran full selection first")
+	}
+	if entry, ok := got.Lookup("value"); !ok || entry.Size != int64(len("after!")) {
+		t.Fatalf("hinted edit was not delivered: %+v", entry)
+	}
+	select {
+	case <-w.Changed:
+	default:
+		t.Fatal("deferred reconciliation was not scheduled")
+	}
+	// The follow-up cycle reconciles fully and finds the unhinted change.
+	assertPreparedMatchesFull(t, w, b)
+	if w.prepared.fullAt == expiredAt {
+		t.Fatal("follow-up cycle did not run full reconciliation")
+	}
+	if entry, ok := w.prepared.state.Lookup("other"); !ok || entry.Size != int64(len("changed")) {
+		t.Fatalf("full reconciliation missed the unhinted edit: %+v", entry)
+	}
+}

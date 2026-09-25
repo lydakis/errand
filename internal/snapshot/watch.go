@@ -37,6 +37,7 @@ type Watch struct {
 	dirty        map[string]bool
 	fullScan     bool
 	resetHashes  bool
+	owedFull     bool              // an expired preparation deferred its full reconciliation
 	prepared     *watchPreparation // used only by serialized Prepare calls
 }
 
