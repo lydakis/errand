@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,6 +30,26 @@ func TestParseErrorsAndHelpReturnThroughCLI(t *testing.T) {
 			}
 			if code := runCLI([]string{command, "--help"}); code != 0 {
 				t.Fatalf("help exit = %d", code)
+			}
+		})
+	}
+}
+
+func TestVersionFlagPrintsVersion(t *testing.T) {
+	if raw := os.Getenv("ERRAND_VERSION_FLAG_ARGS"); raw != "" {
+		os.Exit(runCLI(strings.Fields(raw)))
+	}
+	for _, args := range []string{"--version", "version"} {
+		t.Run(args, func(t *testing.T) {
+			command := exec.Command(os.Args[0], "-test.run=^TestVersionFlagPrintsVersion$")
+			command.Env = append(os.Environ(), "ERRAND_VERSION_FLAG_ARGS="+args)
+			var stdout, stderr bytes.Buffer
+			command.Stdout, command.Stderr = &stdout, &stderr
+			if err := command.Run(); err != nil || stderr.Len() != 0 {
+				t.Fatalf("errand %s: %v, stdout=%q, stderr=%q", args, err, &stdout, &stderr)
+			}
+			if want := "errand " + version + "\n"; stdout.String() != want {
+				t.Fatalf("errand %s stdout = %q, want %q", args, &stdout, want)
 			}
 		})
 	}

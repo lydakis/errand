@@ -127,7 +127,7 @@ func runCLI(args []string) int {
 		return cmdDf(args[1:])
 	case "gc":
 		return cmdGC(args[1:])
-	case "version":
+	case "version", "--version":
 		return cmdVersion(args[1:])
 	case "_automatic-apply":
 		return cmdAutomaticApply(args[1:])
