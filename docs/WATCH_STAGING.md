@@ -75,10 +75,39 @@ been isolated.
 
 Raw reports: [benchmarks/2026-09-25-manifest-hash-stream-linux.json](benchmarks/2026-09-25-manifest-hash-stream-linux.json).
 
+## Change 3: retain published checkpoint records (`193b592`)
+
+Each push decoded the checkpoint written by the previous push, which carries
+the full source manifest (~10 ms at 10K). `TransferCheckpoint.save` used to
+drop its caches ("never keep a cache across a write"). It now retains the
+record it just published, built from the exact published bytes and passed
+through the same validation `read` applies. The read-side contract is
+unchanged: every read loads the file in full and reuses a record only on an
+exact byte match, so an interrupted or later replacement is decoded as before.
+A failed publication retains nothing. States containing invalid UTF-8, which
+JSON would rewrite, are not retained. Tests check that the retained state
+equals decoding the published file, that it does not alias the caller's
+manifest, and that invalid UTF-8 states are skipped. Retention adds ~4 ms of
+validation per push; the saved decode is larger.
+
+The phase benchmark was too noisy to separate this change (staging −5 to −13 ms,
+apply mixed). Watch matrix at 10K, four rounds, against change 2 (`1e3c1af`):
+
+| Case | Baseline | Candidate | Paired ratio (range) | Candidate faster |
+|---|---:|---:|---:|---:|
+| explicit-inplace-edit | 175 | 154 | 0.885 (0.804–0.943) | 4/4 |
+| git-tracked-inplace-edit | 184 | 173 | 0.949 (0.880–0.949) | 4/4 |
+
+The Git-case effect is close to this host's ~5% noise floor, but the candidate
+won every round in both cases.
+
+Raw reports: [benchmarks/2026-09-25-checkpoint-retention-linux.json](benchmarks/2026-09-25-checkpoint-retention-linux.json).
+
 ## Cumulative, 10K files, Linux
 
 Git-tracked in-place edit, median visible delivery: 700 ms (v0.5.0) → 316 ms
-(Git evidence) → 217 ms (record cache) → 186 ms (streamed hashes). These
+(Git evidence) → 217 ms (record cache) → 186 ms (streamed hashes) → 173 ms
+(checkpoint retention). Explicit in-place edit: 307 → 154 ms. These
 medians come from separate paired campaigns on the same host. Treat the
 chain as approximate.
 
@@ -86,4 +115,5 @@ chain as approximate.
 
 - Redundant hashes of the same manifest (for example `checkInitialized`
   re-hashing the unchanged creation manifest on every push).
-- Checkpoint read/validation (~20 ms at 10K).
+- Checkpoint encoding on every save (~12 ms at 10K; reflection-based JSON of
+  the full manifest).
