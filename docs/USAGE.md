@@ -566,7 +566,8 @@ applied by each runner before its bounded receipt window, so retained terminal
 jobs cannot hide a long-running job. `--all` includes terminal receipts;
 `--last N` includes all states and applies one global limit after merging.
 `--on` and `--url` explicitly narrow either view to one runner. Bare
-`errand peers` and `errand df` follow the same all-configured-peers rule.
+`errand peers`, `errand df`, and `errand workspaces` follow the same
+all-configured-peers rule.
 `df` groups local runner storage and fetched changes into one `local` row.
 `df --verbose` (`-v`) adds individual workspace, named-cache, and job storage
 tables. `df --verbose --json` includes the corresponding `details` object;

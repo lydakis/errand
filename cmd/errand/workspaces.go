@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -29,8 +30,13 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 	fs := flag.NewFlagSet("errand workspaces "+verb, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var settings runConfigFlags
-	fs.StringVar(&settings.on, "on", "", "peer name, or local")
-	fs.StringVar(&settings.url, "url", "", "peer base URL")
+	if verb == "list" {
+		fs.StringVar(&settings.on, "on", "", "restrict to one peer name")
+		fs.StringVar(&settings.url, "url", "", "restrict to one peer base URL")
+	} else {
+		fs.StringVar(&settings.on, "on", "", "peer name, or local")
+		fs.StringVar(&settings.url, "url", "", "peer base URL")
+	}
 	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
 	includeAll := false
 	if verb == "create" {
@@ -98,7 +104,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 		}
 		opts = client.RunOptions{Where: effective.Where, Root: effective.Root, Project: effective.Project, Caches: effective.Caches, Artifacts: effective.Artifacts, NoSnapshot: effective.NoSnapshot, IncludeAll: includeAll, Stderr: stderr}
 
-	} else {
+	} else if verb == "rm" {
 		url, label, err = resolvePeerTarget(settings.url, settings.on)
 		if err != nil {
 			fmt.Fprintln(stderr, "errand:", err)
@@ -142,31 +148,52 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 			}
 		}
 	case "list":
-		rows, err := client.ListWorkspaces(url)
-		if err != nil {
-			fmt.Fprintln(stderr, "errand:", err)
-			return 1
-		}
-		if *jsonOutput {
-			if err := json.NewEncoder(out).Encode(rows); err != nil {
-				fmt.Fprintln(stderr, "errand:", err)
-				return 1
-			}
-			return 0
-		}
-		tw := tabwriter.NewWriter(out, 2, 8, 2, ' ', 0)
-		fmt.Fprintln(tw, "NAME\tSTATE\tJOBS\tPROJECT")
-		for _, r := range rows {
-			state, job := "idle", "-"
-			if len(r.JobIDs) != 0 {
-				state, job = "busy", strings.Join(r.JobIDs, ",")
-			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", terminalSafeField(r.Name), state, job, terminalSafeField(r.Project))
-		}
-		if err := tw.Flush(); err != nil {
-			fmt.Fprintln(stderr, "errand:", err)
-			return 1
-		}
+		return listWorkspaces(settings.url, settings.on, *jsonOutput, out, stderr)
 	}
 	return 0
+}
+
+type workspaceRow struct {
+	Peer string `json:"peer"`
+	proto.WorkspaceSummary
+}
+
+// listWorkspaces follows the discovery contract: every configured peer unless
+// --on or --url narrows it. Names are scoped per runner, so rows carry theirs.
+func listWorkspaces(rawURL, on string, jsonOutput bool, out, stderr io.Writer) int {
+	read, err := readFleet(rawURL, on, stderr, client.ListWorkspaces)
+	if err != nil {
+		fmt.Fprintln(stderr, "errand:", err)
+		if errors.Is(err, errNoUsablePeers) {
+			return 1
+		}
+		return 2
+	}
+	rows := make([]workspaceRow, 0)
+	for _, result := range read.results {
+		for _, summary := range result.value {
+			rows = append(rows, workspaceRow{Peer: result.target.name, WorkspaceSummary: summary})
+		}
+	}
+	if jsonOutput {
+		if err := json.NewEncoder(out).Encode(rows); err != nil {
+			fmt.Fprintln(stderr, "errand:", err)
+			return 1
+		}
+		return read.exitCode()
+	}
+	tw := tabwriter.NewWriter(out, 2, 8, 2, ' ', 0)
+	fmt.Fprintln(tw, "PEER\tNAME\tSTATE\tJOBS\tPROJECT")
+	for _, r := range rows {
+		state, job := "idle", "-"
+		if len(r.JobIDs) != 0 {
+			state, job = "busy", strings.Join(r.JobIDs, ",")
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", terminalSafeField(r.Peer), terminalSafeField(r.Name), state, job, terminalSafeField(r.Project))
+	}
+	if err := tw.Flush(); err != nil {
+		fmt.Fprintln(stderr, "errand:", err)
+		return 1
+	}
+	return read.exitCode()
 }
