@@ -28,20 +28,23 @@ type watchPreparation struct {
 	state    *manifeststate.Snapshot
 	gi       GitInfo
 	policy   proto.SelectionPolicy
-	evidence *explicitSelectionEvidence
+	evidence *selectionEvidence
 	fullAt   time.Time
 }
 
-// explicitSelectionEvidence proves that a previously enumerated selection is
+// selectionEvidence proves that a previously enumerated selection is
 // still authorized without enumerating every entry again. Directory identity,
 // native ctime, mtime and modes detect structural changes independently of event
-// delivery; fresh policy contents determine exclusions. This optimization is
-// deliberately unavailable for Git-driven selection or unsupported stat types.
-type explicitSelectionEvidence struct {
+// delivery; fresh policy contents determine exclusions. Git-driven selection
+// also binds the tracked set and every ignore/config source Git reads (see
+// gitSelectionEvidence). Unsupported stat types and non-Git recursive
+// selection have no evidence and always use full selection.
+type selectionEvidence struct {
 	root        string
 	opts        SelectOptions
 	directories map[string]fs.FileInfo
-	ignore      []byte
+	ignore      []byte                // explicit .errandignore; unused for Git
+	git         *gitSelectionEvidence // nil for explicit selection
 	gi          GitInfo
 }
 
@@ -161,7 +164,7 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 	next := *prior
 	next.state = state
 	s.prepared = &next
-	guard = &SelectionGuard{root: s.root, identity: s.identity, explicit: prior.evidence}
+	guard = &SelectionGuard{root: s.root, identity: s.identity, evidence: prior.evidence}
 	return state, prior.gi, clonePolicy(prior.policy), guard, nil
 }
 
@@ -175,7 +178,7 @@ func (s *Watch) prepareFull(builder *Builder) (*manifeststate.Snapshot, GitInfo,
 	if err != nil {
 		return nil, gi, policy, nil, fmt.Errorf("building watched source: %w", err)
 	}
-	evidence, err := captureExplicitSelection(s.root, s.opts, manifest, gi, policy)
+	evidence, err := captureSelectionEvidence(s.root, s.opts, manifest, gi, policy)
 	if err != nil {
 		return nil, gi, policy, nil, err
 	}
@@ -189,7 +192,7 @@ func (s *Watch) prepareFull(builder *Builder) (*manifeststate.Snapshot, GitInfo,
 		if err := evidence.verify(); err != nil {
 			return nil, gi, policy, nil, err
 		}
-		guard.explicit = evidence
+		guard.evidence = evidence
 	}
 	state, err := manifeststate.New(context.Background(), manifest)
 	if err != nil {
@@ -204,19 +207,30 @@ func (s *Watch) prepareFull(builder *Builder) (*manifeststate.Snapshot, GitInfo,
 	return state, gi, clonePolicy(policy), guard, nil
 }
 
-func captureExplicitSelection(root string, opts SelectOptions, m proto.Manifest, gi GitInfo, policy proto.SelectionPolicy) (*explicitSelectionEvidence, error) {
+func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest, gi GitInfo, policy proto.SelectionPolicy) (*selectionEvidence, error) {
 	data, err := os.ReadFile(filepath.Join(root, ".errandignore"))
+	var git *gitSelectionEvidence
+	var names map[string]bool
 	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
+		if !gi.Repository {
+			return nil, nil
+		}
+		// Unignored directories come from the walk; ancestors of tracked files
+		// inside ignored directories are added below from the manifest.
+		git, names, err = captureGitSelection(root, opts)
+		if err != nil || git == nil {
+			return nil, err
+		}
+		data = nil
+	} else if err != nil {
 		return nil, err
-	}
-	if !slices.Equal(policyLines(data), policy.Ignore) {
+	} else if !slices.Equal(policyLines(data), policy.Ignore) {
 		return nil, sourceChangedf("snapshot: explicit policy changed during preparation; retry")
+	} else {
+		names = map[string]bool{}
 	}
 	directories := map[string]fs.FileInfo{}
-	names := map[string]bool{".": true}
+	names["."] = true
 	for _, e := range m.Entries {
 		if e.Type == proto.EntryDir {
 			names[e.Path] = true
@@ -239,10 +253,10 @@ func captureExplicitSelection(root string, opts SelectOptions, m proto.Manifest,
 		directories[name] = info
 	}
 	opts.Caches = slices.Clone(opts.Caches)
-	return &explicitSelectionEvidence{root: root, opts: opts, directories: directories, ignore: data, gi: gi}, nil
+	return &selectionEvidence{root: root, opts: opts, directories: directories, ignore: data, git: git, gi: gi}, nil
 }
 
-func (e *explicitSelectionEvidence) verify() error {
+func (e *selectionEvidence) verify() error {
 	if err := e.verifySelection(); err != nil {
 		return err
 	}
@@ -255,7 +269,10 @@ func (e *explicitSelectionEvidence) verify() error {
 	return e.verifyPolicy()
 }
 
-func (e *explicitSelectionEvidence) verifyPolicy() error {
+func (e *selectionEvidence) verifyPolicy() error {
+	if e.git != nil {
+		return e.git.verify(e.root)
+	}
 	data, err := os.ReadFile(filepath.Join(e.root, ".errandignore"))
 	if err != nil {
 		return sourceReadError(err)
@@ -266,7 +283,7 @@ func (e *explicitSelectionEvidence) verifyPolicy() error {
 	return nil
 }
 
-func (e *explicitSelectionEvidence) verifySelection() error {
+func (e *selectionEvidence) verifySelection() error {
 	if err := validateSnapshotRoot(e.root, e.opts); err != nil {
 		return err
 	}

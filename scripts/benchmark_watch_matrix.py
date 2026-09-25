@@ -4,6 +4,8 @@
 Each round runs every size x case once, alternating forward and reverse order.
 Competitors (rsync, optional Mutagen) run in the first round only. Summaries
 report medians across rounds plus watch preparation modes and fallback reasons.
+With --baseline, every size x case runs both binaries back to back, alternating
+which goes first by round and position, and the summary adds paired ratios.
 """
 
 import argparse
@@ -34,28 +36,36 @@ def run_matrix(args):
     args.output.mkdir(parents=True, exist_ok=True)
     matrix = list(itertools.product(args.sizes, args.cases))
     script = Path(__file__).with_name("benchmark_watch.py")
+    variants = [("", args.binary)] if not args.baseline else [("@baseline", args.baseline), ("@candidate", args.binary)]
     for r in range(args.rounds):
-        for files, name in (matrix if r % 2 == 0 else matrix[::-1]):
-            target = args.output / f"r{r}-{files}-{name}"
-            if (target / "report.json").exists():
-                continue
-            cmd = [sys.executable, str(script), "--binary", args.binary, "--files", str(files),
-                   "--samples", str(args.samples), "--idle-seconds", "2", "--skip-once", "--trace",
-                   "--output", str(target), *CASES[name]]
-            if args.mutagen and r == 0:
-                cmd += ["--mutagen", args.mutagen]
-            started = time.monotonic()
-            proc = subprocess.run(cmd, capture_output=True, text=True)
-            print(json.dumps(dict(round=r, files=files, case=name, code=proc.returncode,
-                                  seconds=round(time.monotonic()-started, 1),
-                                  error=proc.stderr[-400:] if proc.returncode else "")), flush=True)
+        for position, (files, name) in enumerate(matrix if r % 2 == 0 else matrix[::-1]):
+            order = variants if (r + position) % 2 == 0 else variants[::-1]
+            for label, binary in order:
+                target = args.output / f"r{r}-{files}-{name}{label}"
+                if (target / "report.json").exists():
+                    continue
+                cmd = [sys.executable, str(script), "--binary", binary, "--files", str(files),
+                       "--samples", str(args.samples), "--idle-seconds", "2", "--skip-once", "--trace",
+                       "--output", str(target), *CASES[name]]
+                if args.mutagen and r == 0 and not label:
+                    cmd += ["--mutagen", args.mutagen]
+                started = time.monotonic()
+                proc = subprocess.run(cmd, capture_output=True, text=True)
+                print(json.dumps(dict(round=r, files=files, case=name + label, code=proc.returncode,
+                                      seconds=round(time.monotonic()-started, 1),
+                                      error=proc.stderr[-400:] if proc.returncode else "")), flush=True)
 
 
 def summarize(root):
     groups = collections.defaultdict(lambda: dict(watch=[], receipt=[], mutagen=[], rsync=[], full=[], incremental=[],
                                                   reasons=collections.Counter(), incomplete=0))
+    rounds = collections.defaultdict(dict)  # (files, case) -> {(round, variant): median}
     for path in sorted(root.glob("r*-*/report.json")):
-        _, files, case = path.parent.name.split("-", 2)
+        round_label, files, case = path.parent.name.split("-", 2)
+        base, _, variant = case.partition("@")
+        watch = [s["delivery_seconds"]*1000 for s in json.loads(path.read_text()).get("samples", []) if s["mode"] == "watch"]
+        if variant and watch:
+            rounds[(int(files), base)][(round_label, variant)] = statistics.median(watch)
         report = json.loads(path.read_text())
         g = groups[(int(files), case)]
         if not report.get("complete"):
@@ -86,6 +96,19 @@ def summarize(root):
         lines.append(f"| {files:,} | {case} | {median(g['watch'])} ({spread}) | {median(g['receipt'])} | "
                      f"{median(g['mutagen'])} | {median(g['rsync'])} | {median(g['full'])} / {median(g['incremental'])} | "
                      f"{reasons} | {len(g['watch'])}{incomplete} |")
+    if rounds:
+        lines += ["", "| Files | Case | Baseline median | Candidate median | Paired ratio, median (range) | Candidate faster |",
+                  "|---:|---|---:|---:|---:|---:|"]
+        for (files, case), values in sorted(rounds.items()):
+            labels = sorted({r for r, _ in values})
+            pairs = [(values[(r, "baseline")], values[(r, "candidate")]) for r in labels
+                     if (r, "baseline") in values and (r, "candidate") in values]
+            if not pairs:
+                continue
+            ratios = [c / b for b, c in pairs]
+            lines.append(f"| {files:,} | {case} | {statistics.median(b for b, _ in pairs):.0f} | "
+                         f"{statistics.median(c for _, c in pairs):.0f} | {statistics.median(ratios):.3f} "
+                         f"({min(ratios):.3f}–{max(ratios):.3f}) | {sum(r < 1 for r in ratios)}/{len(ratios)} |")
     return "\n".join(lines)
 
 
@@ -94,6 +117,7 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--binary", help="Errand binary; omit with --summarize-only")
     parser.add_argument("--mutagen", help="optional Mutagen binary")
+    parser.add_argument("--baseline", help="baseline Errand binary for a paired comparison")
     parser.add_argument("--rounds", type=int, default=2)
     parser.add_argument("--samples", type=int, default=7)
     parser.add_argument("--sizes", type=int, nargs="+", default=[1000, 10000])
@@ -104,6 +128,8 @@ def main():
         if not args.binary:
             parser.error("--binary is required unless --summarize-only")
         args.binary = str(Path(args.binary).resolve())
+        if args.baseline:
+            args.baseline = str(Path(args.baseline).resolve())
         run_matrix(args)
     summary = summarize(args.output)
     (args.output / "summary.md").write_text(summary + "\n")
