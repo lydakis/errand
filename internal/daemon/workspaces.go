@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,6 +18,7 @@ import (
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/namedcache"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/snapshot"
 )
 
 var errWorkspaceBusy = errors.New("workspace is in use by another job")
@@ -43,6 +45,17 @@ type workspaceStore struct {
 	uploads         map[string]*workspaceUpload // protected by mu; independent of command gates
 	dir             string
 	root            *os.Root
+	// Decoded records keyed by workspace ID. A record holds the full creation
+	// manifest, so decoding it dominated one-file pushes on large workspaces.
+	// Records are only replaced by rename, so an unchanged file stamp proves
+	// the cached bytes are current.
+	recordMu    sync.Mutex
+	recordCache map[string]cachedWorkspaceRecord
+}
+
+type cachedWorkspaceRecord struct {
+	stamp  snapshot.ObservationStamp
+	record workspaceRecord
 }
 
 func openWorkspaces(dir string) (*workspaceStore, error) {
@@ -95,6 +108,46 @@ func (s *workspaceStore) read(id string) (workspaceRecord, error) {
 		return r, err
 	}
 	defer f.Close()
+	var stamp snapshot.ObservationStamp
+	stamped := false
+	if info, err := f.Stat(); err == nil {
+		stamp, err = snapshot.Fingerprint(info)
+		stamped = err == nil
+	}
+	if stamped {
+		s.recordMu.Lock()
+		cached, ok := s.recordCache[id]
+		s.recordMu.Unlock()
+		if ok && cached.stamp == stamp {
+			return cloneWorkspaceRecord(cached.record), nil
+		}
+	}
+	r, err = s.decode(id, f)
+	if err == nil && stamped {
+		s.recordMu.Lock()
+		if s.recordCache == nil {
+			s.recordCache = make(map[string]cachedWorkspaceRecord)
+		}
+		s.recordCache[id] = cachedWorkspaceRecord{stamp: stamp, record: cloneWorkspaceRecord(r)}
+		s.recordMu.Unlock()
+	}
+	return r, err
+}
+
+// cloneWorkspaceRecord copies everything a caller could mutate in place.
+func cloneWorkspaceRecord(r workspaceRecord) workspaceRecord {
+	r.JobIDs = slices.Clone(r.JobIDs)
+	r.Manifest.Entries = slices.Clone(r.Manifest.Entries)
+	r.Selection.Caches = slices.Clone(r.Selection.Caches)
+	r.Selection.Artifacts = slices.Clone(r.Selection.Artifacts)
+	r.Selection.Ignore = slices.Clone(r.Selection.Ignore)
+	r.TreeCaches = slices.Clone(r.TreeCaches)
+	r.TreeBaselines = maps.Clone(r.TreeBaselines)
+	return r
+}
+
+func (s *workspaceStore) decode(id string, f io.Reader) (workspaceRecord, error) {
+	var r workspaceRecord
 	raw, err := io.ReadAll(io.LimitReader(f, maxManifestBytes+maxSpecBytes+1))
 	if err != nil {
 		return r, err
