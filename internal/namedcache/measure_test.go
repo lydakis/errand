@@ -203,6 +203,15 @@ func TestMeasureUnknownRemeasuresSizesRecordedBeforeUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.MeasureUnknown(t.Context(), everyEntry, time.Now().Add(-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if entry := entryFor(t, s, key); entry.BytesUnknown || entry.Bytes != 1 {
+		t.Fatalf("upgrade invalidation ran past its budget: %+v", entry)
+	}
+	if _, err := os.Stat(filepath.Join(s.dir, legacySizesMarker)); !os.IsNotExist(err) {
+		t.Fatalf("unfinished upgrade invalidation recorded as done: %v", err)
+	}
 	if err := s.MeasureUnknown(t.Context(), everyEntry, time.Now().Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
@@ -211,5 +220,20 @@ func TestMeasureUnknownRemeasuresSizesRecordedBeforeUpgrade(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(s.dir, legacySizesMarker)); err != nil {
 		t.Fatalf("upgrade invalidation not recorded: %v", err)
+	}
+}
+
+func TestMeasureUnknownLeavesCachesToAMeasurementInProgress(t *testing.T) {
+	s := openTestStore(t, t.TempDir(), 1<<20)
+	key := Key{"owner", "project", "cache"}
+	useTree(t, s, key, "cached")
+	s.measureMu.Lock() // Another storage read is measuring.
+	err := s.MeasureUnknown(t.Context(), everyEntry, time.Now().Add(time.Minute))
+	s.measureMu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry := entryFor(t, s, key); !entry.BytesUnknown {
+		t.Fatalf("concurrent read repeated the measurement: %+v", entry)
 	}
 }

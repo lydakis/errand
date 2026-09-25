@@ -258,11 +258,12 @@ reflect the last measurement and omit workspace copies. Directory caches are
 measured at release. Shared tree caches are measured by GC, or by `errand df`,
 which measures the caller's idle tree caches that were never measured or were
 used since, the same way GC does; a job's release marks a tree cache's size
-stale, and the first read after upgrading from a release without that marking
-remeasures idle tree caches once. Like GC, df leaves out orphaned snapshot
-generations, which GC reclaims as temporaries. Each read starts new
-measurements for up to 10 seconds, resuming after the cache the previous read
-reached, so a large store can take a few reads to settle. Sizes count logical regular-file bytes rather
+stale, and after upgrading from a release without that marking, df remeasures
+idle tree caches once. Like GC, df leaves out orphaned snapshot generations,
+which GC reclaims as temporaries. Each read starts new measurements for up to
+10 seconds, resuming after the cache the previous read reached, so a large
+store can take a few reads to settle. A read made while another is measuring
+reports the sizes known so far. Sizes count logical regular-file bytes rather
 than physical disk usage or unique hardlinked inodes. Caches without a current
 size, such as one a running job holds, appear as `unmeasured`; JSON reports the
 count and verbose entries include `bytes_unknown`. Totals mark unmeasured
