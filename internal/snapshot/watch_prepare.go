@@ -3,12 +3,9 @@ package snapshot
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"io/fs"
 	"log"
-	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -49,19 +46,21 @@ type selectionEvidence struct {
 	ignore      []byte                // explicit .errandignore; unused for Git
 	git         *gitSelectionEvidence // nil for explicit selection
 	gi          GitInfo
-	// listings digests each stamped directory's names and entry types when the
+	// listings holds each stamped directory's names and entry types when the
 	// selection was proven, so a changed stamp can be re-proven by relisting.
-	listings map[string]directoryListing
+	listings map[string][]listingEntry
+	matcher  *pathpolicy.Matcher // explicit selection only
 }
 
 // Prepare refreshes a source snapshot for a serialized watch session. With
 // selection evidence (an explicit .errandignore or Git), ordinary writes
-// refresh only hinted files. A file created, removed or replaced (an editor's
-// rename-over save) relists its directory: if the names and entry types are
-// those the selection was proven with, the hinted files are refreshed and the
-// directory's new stamp is accepted. First use, directory and control events,
-// overflow, changed membership and changed selection evidence use full
-// selection. Events arriving during preparation remain pending for the next
+// refresh only hinted files. A directory whose stamp changed, or that holds a
+// hinted creation, removal or replacement (an editor's rename-over save), is
+// relisted against the names and entry types the selection was proven with:
+// created and removed files are selected or dropped as full selection would,
+// and other selected files there whose stat evidence changed are re-observed. First use, directory and
+// control events or names, overflow and changed policy or tracked-set
+// evidence use full selection. Events arriving during preparation remain pending for the next
 // cycle. A failed preparation forces full reconciliation. Expiry is checked on
 // preparation; it does not schedule work while idle. When an expired
 // preparation has only content hints, those files are delivered first and the
@@ -146,6 +145,7 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 		}
 	}
 	var evidence *selectionEvidence
+	var membership membershipDelta
 	if !full {
 		evidence = prior.evidence
 		relist := map[string]bool{}
@@ -159,19 +159,34 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 				relist[path.Dir(rel)] = true
 			}
 		}
+		if !full {
+			// Directory stamps prove membership independently of events;
+			// relist every directory whose stamp changed.
+			stale, err := evidence.changedDirectories()
+			if err != nil {
+				full, reason = true, "evidence-changed"
+			}
+			for _, name := range stale {
+				relist[name] = true
+			}
+		}
 		if !full && len(relist) > 0 {
-			if evidence = evidence.relist(relist); evidence == nil {
+			if evidence, membership = evidence.relist(relist); evidence == nil {
 				full, reason = true, "membership"
 			} else if !expired {
 				reason = "relisted"
+				if membership.changed() {
+					reason = "narrowed"
+				}
 			}
 		}
 	}
 	if !full && evidence.verifySelection() != nil {
 		full, reason = true, "evidence-changed"
 	}
-	var changed []string
+	var changed, deleted []string
 	if !full {
+		refresh := map[string]bool{}
 		for name, kind := range dirty {
 			rel, ok := s.relative(name)
 			if !ok {
@@ -179,26 +194,40 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 				break
 			}
 			entry, ok := prior.state.Lookup(rel)
-			if ok && entry.Type != proto.EntryDir {
+			switch {
+			case membership.removed[rel]:
+				// Dropped with its directory's membership below.
+			case ok && entry.Type != proto.EntryDir:
+				refresh[rel] = true
+			case !ok && kind == dirtyEntry:
+				// Relisting proved its directory: the name is transient (an
+				// editor's temporary file), unselected, or created and
+				// selected below.
+			default:
+				full, reason = true, "unknown-path"
+			}
+			if full {
+				break
+			}
+		}
+		if !full {
+			var err error
+			observed := func(rel string) bool { return builder.observed(filepath.Join(s.root, filepath.FromSlash(rel))) }
+			if deleted, err = membership.resolve(evidence, prior.state, refresh, observed); err != nil {
+				full, reason = true, "membership"
+			}
+			for rel := range refresh {
 				changed = append(changed, rel)
-				continue
 			}
-			if !ok && kind == dirtyEntry {
-				// Its directory holds the proven names, so this name was
-				// transient (an editor's temporary file) or is unselected.
-				continue
-			}
-			full, reason = true, "unknown-path"
-			break
 		}
 	}
-	if expired && len(changed) == 0 {
+	if expired && len(changed) == 0 && len(deleted) == 0 {
 		full = true // nothing to deliver first
 	}
 	if full {
 		return s.prepareFull(builder)
 	}
-	state, updateErr := builder.update(s.root, prior.state, changed)
+	state, updateErr := builder.update(s.root, prior.state, changed, deleted)
 	err = updateErr
 	if err != nil {
 		return nil, gi, policy, nil, fmt.Errorf("refreshing watched source: %w", err)
@@ -284,7 +313,7 @@ func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest,
 		names = map[string]bool{}
 	}
 	directories := map[string]fs.FileInfo{}
-	listings := map[string]directoryListing{}
+	listings := map[string][]listingEntry{}
 	names["."] = true
 	for _, e := range m.Entries {
 		if e.Type == proto.EntryDir {
@@ -313,62 +342,15 @@ func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest,
 		}
 		directories[name], listings[name] = info, listing
 	}
+	var matcher *pathpolicy.Matcher
+	if git == nil {
+		if matcher, err = pathpolicy.Compile(policy); err != nil {
+			return nil, err
+		}
+	}
 	opts.Caches = slices.Clone(opts.Caches)
-	return &selectionEvidence{root: root, opts: opts, directories: directories, listings: listings, ignore: data, git: git, gi: gi}, nil
-}
-
-// directoryListing digests a directory's entry names with their types.
-type directoryListing [sha256.Size]byte
-
-func listDirectory(name string) (directoryListing, error) {
-	entries, err := os.ReadDir(name) // sorted by name
-	if err != nil {
-		return directoryListing{}, err
-	}
-	h := sha256.New()
-	var record []byte
-	for _, entry := range entries {
-		record = append(record[:0], entry.Name()...)
-		record = append(record, 0)
-		record = binary.BigEndian.AppendUint32(record, uint32(entry.Type()))
-		h.Write(record)
-	}
-	var digest directoryListing
-	h.Sum(digest[:0])
-	return digest, nil
-}
-
-// relist re-proves directories whose stamps a created, removed or replaced
-// entry may have changed. Policy and tracked-set evidence are unchanged
-// (checked separately), so an unchanged directory, names and entry types imply
-// an unchanged selection there. It returns evidence carrying the new stamps,
-// or nil when any directory cannot be re-proven.
-func (e *selectionEvidence) relist(dirs map[string]bool) *selectionEvidence {
-	directories := maps.Clone(e.directories)
-	for name := range dirs {
-		old, stamped := e.directories[name]
-		listing, listed := e.listings[name]
-		if !stamped || !listed {
-			return nil
-		}
-		dir := filepath.Join(e.root, filepath.FromSlash(name))
-		// Stamp before listing; the evidence check after the source work
-		// rejects any membership change that follows.
-		info, err := os.Lstat(dir)
-		if err != nil || !info.IsDir() || !os.SameFile(old, info) || old.Mode() != info.Mode() {
-			return nil
-		}
-		if _, _, ok := changeStamp(info); !ok {
-			return nil
-		}
-		if now, err := listDirectory(dir); err != nil || now != listing {
-			return nil
-		}
-		directories[name] = info
-	}
-	next := *e
-	next.directories = directories
-	return &next
+	return &selectionEvidence{root: root, opts: opts, directories: directories, ignore: data, git: git, gi: gi,
+		listings: listings, matcher: matcher}, nil
 }
 
 func (e *selectionEvidence) verify() error {
@@ -431,6 +413,21 @@ func sameDirectoryEvidence(old, now fs.FileInfo) bool {
 	return ok && supported && a == c && b == d
 }
 
+// observed reports whether name's cached hash still matches its stat
+// evidence, so it need not be observed again.
+func (b *Builder) observed(name string) bool {
+	old, ok := b.hashes[name]
+	if !ok {
+		return false
+	}
+	info, err := os.Lstat(name)
+	if err != nil {
+		return false
+	}
+	stamp, err := Fingerprint(info)
+	return err == nil && sameObservation(old.stamp, stamp)
+}
+
 // relative returns name's slash-separated path under the watched root.
 func (s *Watch) relative(name string) (string, bool) {
 	rel, err := filepath.Rel(s.root, name)
@@ -449,7 +446,9 @@ func clonePolicy(p proto.SelectionPolicy) proto.SelectionPolicy {
 
 // update preserves prior observations of untouched entries. It does not certify
 // them as current bodies: Pack still verifies anything later selected for upload.
-func (b *Builder) update(root string, prior *manifeststate.Snapshot, paths []string) (*manifeststate.Snapshot, error) {
+// paths are selected files to observe (new or existing) and deleted are prior
+// entries full selection no longer includes.
+func (b *Builder) update(root string, prior *manifeststate.Snapshot, paths, deleted []string) (*manifeststate.Snapshot, error) {
 	// Hash evidence is advisory. Commit only the refreshed entries after metadata
 	// validation succeeds; untouched evidence does not need a full map copy.
 	b.next = make(map[string]fileHash, len(paths))
@@ -458,11 +457,12 @@ func (b *Builder) update(root string, prior *manifeststate.Snapshot, paths []str
 		b.next = nil
 		return nil, err
 	}
-	edits := make([]manifeststate.Edit, 0, len(part.Entries))
+	edits := make([]manifeststate.Edit, 0, len(part.Entries)+len(deleted))
 	for _, e := range part.Entries {
-		if _, ok := prior.Lookup(e.Path); ok {
-			edits = append(edits, manifeststate.Edit{Entry: e})
-		}
+		edits = append(edits, manifeststate.Edit{Entry: e})
+	}
+	for _, name := range deleted {
+		edits = append(edits, manifeststate.Edit{Entry: proto.ManifestEntry{Path: name}, Delete: true})
 	}
 	next, err := prior.Update(context.Background(), edits)
 	if err != nil {
