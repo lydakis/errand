@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -163,5 +166,40 @@ func TestGCCachePreviewReportsRunnerPolicies(t *testing.T) {
 				t.Errorf("missing runner and preview: %s", stdout.String())
 			}
 		})
+	}
+}
+
+func TestGCChangesSkipsDeletedWorkspaceWithoutFailing(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "data"), []byte("data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || strings.HasSuffix(r.URL.Path, "/snapshot/diff") {
+			http.NotFound(w, r)
+			return
+		}
+		io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(proto.Workspace{ID: strings.TrimPrefix(r.URL.Path, "/v0/workspaces/")})
+	}))
+	defer server.Close()
+	if _, err := client.CreateWorkspace(client.RunOptions{PeerURL: server.URL, Root: root, IncludeAll: true}, "gone"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"changes", "--older-than", "1d", "--dry-run"},
+		{"changes", "--older-than", "1d"},
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := cmdGCTo(args, &stdout, &stderr); code != 0 ||
+			!strings.Contains(stdout.String(), " 0 records") || !strings.HasSuffix(stdout.String(), "(0 protected, 0 failed)\n") ||
+			stderr.String() != "errand: local change gc: skipped 1 workspace transfer record whose workspace was moved or deleted\n" {
+			t.Fatalf("gc %v = %d, stdout=%q stderr=%q", args, code, stdout.String(), stderr.String())
+		}
 	}
 }
