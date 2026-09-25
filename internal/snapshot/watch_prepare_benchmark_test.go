@@ -39,7 +39,7 @@ func BenchmarkWatchPreparation(b *testing.B) {
 				}
 				prepare()
 				name := filepath.Join(root, "file-00000")
-				w.invalidatePath(name, false)
+				w.invalidatePath(name, dirtyContent)
 				prepare()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
@@ -54,7 +54,7 @@ func BenchmarkWatchPreparation(b *testing.B) {
 					if mode == "reconcile" {
 						w.InvalidatePreparation()
 					} else {
-						w.invalidatePath(name, false)
+						w.invalidatePath(name, dirtyContent)
 					}
 					b.StartTimer()
 					prepare()

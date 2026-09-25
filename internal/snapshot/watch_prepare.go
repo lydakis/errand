@@ -3,9 +3,12 @@ package snapshot
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"io/fs"
 	"log"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -46,11 +49,18 @@ type selectionEvidence struct {
 	ignore      []byte                // explicit .errandignore; unused for Git
 	git         *gitSelectionEvidence // nil for explicit selection
 	gi          GitInfo
+	// listings digests each stamped directory's names and entry types when the
+	// selection was proven, so a changed stamp can be re-proven by relisting.
+	listings map[string]directoryListing
 }
 
-// Prepare refreshes a source snapshot for a serialized watch session. Ordinary
-// writes under an explicit .errandignore refresh only hinted files. First use,
-// structural/control events, overflow and changed selection evidence use full
+// Prepare refreshes a source snapshot for a serialized watch session. With
+// selection evidence (an explicit .errandignore or Git), ordinary writes
+// refresh only hinted files. A file created, removed or replaced (an editor's
+// rename-over save) relists its directory: if the names and entry types are
+// those the selection was proven with, the hinted files are refreshed and the
+// directory's new stamp is accepted. First use, directory and control events,
+// overflow, changed membership and changed selection evidence use full
 // selection. Events arriving during preparation remain pending for the next
 // cycle. A failed preparation forces full reconciliation. Expiry is checked on
 // preparation; it does not schedule work while idle. When an expired
@@ -113,9 +123,9 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 	if reset {
 		builder.hashes = nil
 	} else {
-		for name, structural := range dirty {
+		for name, kind := range dirty {
 			delete(builder.hashes, name)
-			if structural {
+			if kind != dirtyContent {
 				for cached := range builder.hashes {
 					if strings.HasPrefix(cached, name+string(filepath.Separator)) {
 						delete(builder.hashes, cached)
@@ -135,24 +145,51 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 			expired, reason = true, "expired"
 		}
 	}
-	if !full && prior.evidence.verifySelection() != nil {
+	var evidence *selectionEvidence
+	if !full {
+		evidence = prior.evidence
+		relist := map[string]bool{}
+		for name, kind := range dirty {
+			if kind == dirtyEntry {
+				rel, ok := s.relative(name)
+				if !ok {
+					full, reason = true, "outside-root"
+					break
+				}
+				relist[path.Dir(rel)] = true
+			}
+		}
+		if !full && len(relist) > 0 {
+			if evidence = evidence.relist(relist); evidence == nil {
+				full, reason = true, "membership"
+			} else if !expired {
+				reason = "relisted"
+			}
+		}
+	}
+	if !full && evidence.verifySelection() != nil {
 		full, reason = true, "evidence-changed"
 	}
 	var changed []string
 	if !full {
-		for name := range dirty {
-			rel, e := filepath.Rel(s.root, name)
-			if e != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		for name, kind := range dirty {
+			rel, ok := s.relative(name)
+			if !ok {
 				full, reason = true, "outside-root"
 				break
 			}
-			rel = filepath.ToSlash(rel)
 			entry, ok := prior.state.Lookup(rel)
-			if !ok || entry.Type == proto.EntryDir {
-				full, reason = true, "unknown-path"
-				break
+			if ok && entry.Type != proto.EntryDir {
+				changed = append(changed, rel)
+				continue
 			}
-			changed = append(changed, rel)
+			if !ok && kind == dirtyEntry {
+				// Its directory holds the proven names, so this name was
+				// transient (an editor's temporary file) or is unselected.
+				continue
+			}
+			full, reason = true, "unknown-path"
+			break
 		}
 	}
 	if expired && len(changed) == 0 {
@@ -166,11 +203,11 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 	if err != nil {
 		return nil, gi, policy, nil, fmt.Errorf("refreshing watched source: %w", err)
 	}
-	if err = prior.evidence.verify(); err != nil {
+	if err = evidence.verify(); err != nil {
 		return nil, gi, policy, nil, err
 	}
 	next := *prior
-	next.state = state
+	next.state, next.evidence = state, evidence
 	s.prepared = &next
 	if expired {
 		// The hinted files are current and selection is proven. Periodic full
@@ -181,7 +218,7 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 		s.dirtyMu.Unlock()
 		s.notifyChange()
 	}
-	guard = &SelectionGuard{root: s.root, identity: s.identity, evidence: prior.evidence}
+	guard = &SelectionGuard{root: s.root, identity: s.identity, evidence: evidence}
 	return state, prior.gi, clonePolicy(prior.policy), guard, nil
 }
 
@@ -247,6 +284,7 @@ func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest,
 		names = map[string]bool{}
 	}
 	directories := map[string]fs.FileInfo{}
+	listings := map[string]directoryListing{}
 	names["."] = true
 	for _, e := range m.Entries {
 		if e.Type == proto.EntryDir {
@@ -267,10 +305,70 @@ func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest,
 		if _, _, ok := changeStamp(info); !ok {
 			return nil, nil
 		}
-		directories[name] = info
+		// List after stamping: the caller's verification rejects any
+		// membership change between the two.
+		listing, err := listDirectory(filepath.Join(root, filepath.FromSlash(name)))
+		if err != nil {
+			return nil, sourceReadError(err)
+		}
+		directories[name], listings[name] = info, listing
 	}
 	opts.Caches = slices.Clone(opts.Caches)
-	return &selectionEvidence{root: root, opts: opts, directories: directories, ignore: data, git: git, gi: gi}, nil
+	return &selectionEvidence{root: root, opts: opts, directories: directories, listings: listings, ignore: data, git: git, gi: gi}, nil
+}
+
+// directoryListing digests a directory's entry names with their types.
+type directoryListing [sha256.Size]byte
+
+func listDirectory(name string) (directoryListing, error) {
+	entries, err := os.ReadDir(name) // sorted by name
+	if err != nil {
+		return directoryListing{}, err
+	}
+	h := sha256.New()
+	var record []byte
+	for _, entry := range entries {
+		record = append(record[:0], entry.Name()...)
+		record = append(record, 0)
+		record = binary.BigEndian.AppendUint32(record, uint32(entry.Type()))
+		h.Write(record)
+	}
+	var digest directoryListing
+	h.Sum(digest[:0])
+	return digest, nil
+}
+
+// relist re-proves directories whose stamps a created, removed or replaced
+// entry may have changed. Policy and tracked-set evidence are unchanged
+// (checked separately), so an unchanged directory, names and entry types imply
+// an unchanged selection there. It returns evidence carrying the new stamps,
+// or nil when any directory cannot be re-proven.
+func (e *selectionEvidence) relist(dirs map[string]bool) *selectionEvidence {
+	directories := maps.Clone(e.directories)
+	for name := range dirs {
+		old, stamped := e.directories[name]
+		listing, listed := e.listings[name]
+		if !stamped || !listed {
+			return nil
+		}
+		dir := filepath.Join(e.root, filepath.FromSlash(name))
+		// Stamp before listing; the evidence check after the source work
+		// rejects any membership change that follows.
+		info, err := os.Lstat(dir)
+		if err != nil || !info.IsDir() || !os.SameFile(old, info) || old.Mode() != info.Mode() {
+			return nil
+		}
+		if _, _, ok := changeStamp(info); !ok {
+			return nil
+		}
+		if now, err := listDirectory(dir); err != nil || now != listing {
+			return nil
+		}
+		directories[name] = info
+	}
+	next := *e
+	next.directories = directories
+	return &next
 }
 
 func (e *selectionEvidence) verify() error {
@@ -331,6 +429,15 @@ func sameDirectoryEvidence(old, now fs.FileInfo) bool {
 	a, b, ok := changeStamp(old)
 	c, d, supported := changeStamp(now)
 	return ok && supported && a == c && b == d
+}
+
+// relative returns name's slash-separated path under the watched root.
+func (s *Watch) relative(name string) (string, bool) {
+	rel, err := filepath.Rel(s.root, name)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
 }
 
 func clonePolicy(p proto.SelectionPolicy) proto.SelectionPolicy {

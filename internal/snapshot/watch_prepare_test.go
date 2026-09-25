@@ -54,7 +54,7 @@ func TestWatchPrepareRehashesDirtyContentAndKeepsPriorEntries(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(w.root, "value"), []byte("after!"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	w.invalidatePath(filepath.Join(w.root, "value"), false)
+	w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
 	assertPreparedMatchesFull(t, w, b)
 }
 
@@ -79,7 +79,7 @@ func TestWatchPrepareInvalidatesHashesEvenWhenStatEvidenceMatches(t *testing.T) 
 			if reconcile {
 				w.InvalidatePreparation()
 			} else {
-				w.invalidatePath(name, false)
+				w.invalidatePath(name, dirtyContent)
 			}
 			assertPreparedMatchesFull(t, w, b)
 		})
@@ -118,7 +118,7 @@ func TestWatchPreparePolicyChangesNeverAuthorizeExcludedFiles(t *testing.T) {
 		t.Fatal("guard accepted changed policy before event delivery")
 	}
 	// A dirty event only identifies work; it cannot select an excluded source.
-	w.invalidatePath(filepath.Join(w.root, "secret"), false)
+	w.invalidatePath(filepath.Join(w.root, "secret"), dirtyContent)
 	assertPreparedMatchesFull(t, w, b)
 }
 
@@ -165,7 +165,7 @@ func TestWatchPrepareRetainsDirtyWorkAfterReadFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Chmod(name, 0600)
-	w.invalidatePath(name, false)
+	w.invalidatePath(name, dirtyContent)
 	if _, _, _, _, err := w.Prepare(b); err == nil {
 		t.Fatal("snapshot accepted unreadable changed content")
 	}
@@ -226,7 +226,7 @@ func TestWatchInvalidatePreparationResamplesWithoutScheduling(t *testing.T) {
 	if err := os.WriteFile(name, []byte("latest"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	w.invalidatePath(name, false)
+	w.invalidatePath(name, dirtyContent)
 	before = w.Generation()
 	w.InvalidatePreparation()
 	if w.Generation() != before {
@@ -258,7 +258,7 @@ func TestWatchPrepareDeliversHintsBeforeExpiredReconciliation(t *testing.T) {
 	for len(w.Changed) > 0 {
 		<-w.Changed
 	}
-	w.invalidatePath(filepath.Join(w.root, "value"), false)
+	w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
 	<-w.Changed
 	got, _, _, _, err := w.PrepareSnapshot(b)
 	if err != nil {

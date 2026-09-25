@@ -48,7 +48,7 @@ func prepareGitWatchFixture(t *testing.T) (*Watch, *Builder, func(...string)) {
 func assertIncremental(t *testing.T, w *Watch, b *Builder, name string) {
 	t.Helper()
 	before := w.prepared.fullAt
-	w.invalidatePath(filepath.Join(w.root, name), false)
+	w.invalidatePath(filepath.Join(w.root, name), dirtyContent)
 	assertPreparedMatchesFull(t, w, b)
 	if w.prepared.fullAt != before {
 		t.Fatal("content-only edit used full Git selection")
@@ -105,7 +105,7 @@ func TestGitWatchEvidenceDetectsSelectionChangesWithoutEvents(t *testing.T) {
 				t.Fatal("guard accepted changed Git selection before event delivery")
 			}
 			// A content hint cannot authorize the stale selection.
-			w.invalidatePath(filepath.Join(w.root, "value"), false)
+			w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
 			assertPreparedMatchesFull(t, w, b)
 		})
 	}
@@ -171,6 +171,6 @@ func TestGitWatchEvidenceCoversIgnoreFilesAboveSubdirectoryRoot(t *testing.T) {
 	if err := guard.Verify(); err == nil {
 		t.Fatal("guard accepted an ancestor .gitignore change")
 	}
-	w.invalidatePath(filepath.Join(root, "other"), false)
+	w.invalidatePath(filepath.Join(root, "other"), dirtyContent)
 	assertPreparedMatchesFull(t, w, b)
 }
