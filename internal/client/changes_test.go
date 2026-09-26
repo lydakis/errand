@@ -1633,8 +1633,13 @@ func TestChangeStatsDoesNotWaitForTransfersOrCreateLocks(t *testing.T) {
 	}
 	downloads := filepath.Join(root, "downloads")
 	var keys []string
-	for range 2 {
+	for len(keys) < 2 {
 		key := localChangeKey("http://runner.test", proto.NewULID())
+		// Transfer locks are striped; the second download needs its own lock
+		// file, or the held lock would be mistaken for one inventory created.
+		if len(keys) == 1 && localChangeTransferLockName(key) == localChangeTransferLockName(keys[0]) {
+			continue
+		}
 		download := filepath.Join(downloads, key)
 		if err := os.MkdirAll(download, 0o700); err != nil {
 			t.Fatal(err)
