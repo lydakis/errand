@@ -37,9 +37,10 @@ type Watch struct {
 	observedInfo map[string]fs.FileInfo
 	generation   atomic.Uint64
 	dirtyMu      sync.Mutex
-	dirty        map[string]bool
+	dirty        map[string]dirtyKind
 	fullScan     bool
 	resetHashes  bool
+	owedFull     bool              // an expired preparation deferred its full reconciliation
 	prepared     *watchPreparation // used only by serialized Prepare calls
 }
 
@@ -187,15 +188,24 @@ func (s *Watch) invalidate() {
 	s.notifyChange()
 }
 
-func (s *Watch) invalidatePath(name string, structural bool) {
+// dirtyKind orders what a native event can have changed about a path.
+type dirtyKind uint8
+
+const (
+	dirtyContent dirtyKind = iota // bytes or metadata of an existing entry
+	dirtyEntry                    // a non-directory was created, removed or replaced
+	dirtySubtree                  // a directory or selection control; full reconciliation
+)
+
+func (s *Watch) invalidatePath(name string, kind dirtyKind) {
 	s.dirtyMu.Lock()
-	if structural {
+	if kind == dirtySubtree {
 		s.fullScan = true
 	}
 	if s.dirty == nil {
-		s.dirty = make(map[string]bool)
+		s.dirty = make(map[string]dirtyKind)
 	}
-	s.dirty[name] = s.dirty[name] || structural
+	s.dirty[name] = max(s.dirty[name], kind)
 	s.dirtyMu.Unlock()
 	s.notifyChange()
 }
@@ -499,7 +509,16 @@ func (s *Watch) run() {
 					pendingRefresh = true
 				}
 			}
-			s.invalidatePath(event.Name, control || dir || event.Has(fsnotify.Create|fsnotify.Remove|fsnotify.Rename))
+			kind := dirtyContent
+			switch {
+			case control || dir:
+				kind = dirtySubtree
+			case event.Has(fsnotify.Create | fsnotify.Remove | fsnotify.Rename):
+				// Preparation proves the parent's membership before trusting
+				// this as a content change (an editor's rename-over save).
+				kind = dirtyEntry
+			}
+			s.invalidatePath(event.Name, kind)
 		}
 	}
 }

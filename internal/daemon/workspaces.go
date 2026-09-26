@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,6 +18,7 @@ import (
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/namedcache"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/snapshot"
 )
 
 var errWorkspaceBusy = errors.New("workspace is in use by another job")
@@ -43,6 +45,14 @@ type workspaceStore struct {
 	uploads         map[string]*workspaceUpload // protected by mu; independent of command gates
 	dir             string
 	root            *os.Root
+	// Decoded records keyed by workspace ID. A record holds the full creation
+	// manifest, so decoding it dominated one-file pushes on large workspaces.
+	// Records are only replaced by rename, so an unchanged file stamp proves
+	// the cached bytes are current.
+	recordCache workspaceRecordCache
+	// testHookUploadWaiting, when set, runs before an upload blocks behind
+	// the workspace's active upload. Protected by mu.
+	testHookUploadWaiting func(id string)
 }
 
 func openWorkspaces(dir string) (*workspaceStore, error) {
@@ -60,7 +70,7 @@ func openWorkspaces(dir string) (*workspaceStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &workspaceStore{dir: dir, root: root, checkpointCache: changeops.NewCheckpointCache(32, 64<<20)}
+	s := &workspaceStore{dir: dir, root: root, checkpointCache: changeops.NewCheckpointCache(32, 64<<20), recordCache: workspaceRecordCache{maxBytes: workspaceRecordCacheBytes}}
 	// Unpublished uploads and removal tombstones never contain running workspaces.
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -95,6 +105,38 @@ func (s *workspaceStore) read(id string) (workspaceRecord, error) {
 		return r, err
 	}
 	defer f.Close()
+	var stamp snapshot.ObservationStamp
+	stamped := false
+	if info, err := f.Stat(); err == nil {
+		stamp, err = snapshot.Fingerprint(info)
+		stamped = err == nil
+	}
+	if stamped {
+		if cached, ok := s.recordCache.get(id, stamp); ok {
+			return cached, nil
+		}
+	}
+	r, err = s.decode(id, f)
+	if err == nil && stamped {
+		s.recordCache.put(id, stamp, cloneWorkspaceRecord(r))
+	}
+	return r, err
+}
+
+// cloneWorkspaceRecord copies everything a caller could mutate in place.
+func cloneWorkspaceRecord(r workspaceRecord) workspaceRecord {
+	r.JobIDs = slices.Clone(r.JobIDs)
+	r.Manifest.Entries = slices.Clone(r.Manifest.Entries)
+	r.Selection.Caches = slices.Clone(r.Selection.Caches)
+	r.Selection.Artifacts = slices.Clone(r.Selection.Artifacts)
+	r.Selection.Ignore = slices.Clone(r.Selection.Ignore)
+	r.TreeCaches = slices.Clone(r.TreeCaches)
+	r.TreeBaselines = maps.Clone(r.TreeBaselines)
+	return r
+}
+
+func (s *workspaceStore) decode(id string, f io.Reader) (workspaceRecord, error) {
+	var r workspaceRecord
 	raw, err := io.ReadAll(io.LimitReader(f, maxManifestBytes+maxSpecBytes+1))
 	if err != nil {
 		return r, err
@@ -218,6 +260,29 @@ func workspaceDataIdentity(path string, want fsidentity.Identity) error {
 		return fmt.Errorf("persistent workspace directory identity changed")
 	}
 	return nil
+}
+
+// openWorkspaceData opens a data directory and confirms the handle has the
+// recorded identity. A filesystem may reuse an inode number once its
+// directory is removed, but not while a handle to it is still open.
+func openWorkspaceData(path string, want fsidentity.Identity) (*os.File, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	var id fsidentity.Identity
+	if err == nil {
+		id, err = fsidentity.FromInfo(info)
+	}
+	if err == nil && (!info.IsDir() || id != want) {
+		err = fmt.Errorf("persistent workspace directory identity changed")
+	}
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
 }
 
 // Serialize binding changes and last-member settlement per workspace. The

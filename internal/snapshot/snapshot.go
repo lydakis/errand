@@ -55,8 +55,8 @@ type SelectionGuard struct {
 	paths    []string
 	gitInfo  GitInfo
 	policy   proto.SelectionPolicy
-	explicit *explicitSelectionEvidence
-	identity fs.FileInfo // watch pins the originating checkout across preparation
+	evidence *selectionEvidence // incremental watch selection proof
+	identity fs.FileInfo        // watch pins the originating checkout across preparation
 }
 
 const localChangeTransactionPrefix = ".errand-change-"
@@ -149,8 +149,8 @@ func (g *SelectionGuard) Verify() (err error) {
 			}
 		}()
 	}
-	if g.explicit != nil {
-		return g.explicit.verify()
+	if g.evidence != nil {
+		return g.evidence.verify()
 	}
 	paths, gitInfo, policy, err := SelectFilesWithOptions(g.root, g.opts)
 	if err != nil {

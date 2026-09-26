@@ -2,9 +2,11 @@ package changes
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/lydakis/errand/internal/proto"
@@ -111,5 +113,53 @@ func TestCheckpointReadObservesOtherHandleAdvance(t *testing.T) {
 	got, err := c.Read()
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("stale checkpoint: %+v, %v", got, err)
+	}
+}
+
+// A record retained after publication must be exactly what decoding the
+// published bytes yields, and must not alias the caller's manifest.
+func TestCheckpointPublicationRetainsDecodedEquivalentRecord(t *testing.T) {
+	root, bundle, _ := applyFixture(t, "original\n", "source\n")
+	c := checkpointFor(t, transferTarget(t, root))
+	base := cloneSourceManifest(bundle.BaseManifest)
+	if _, err := c.Initialize(base); err != nil {
+		t.Fatal(err)
+	}
+	if c.cache == nil || c.cache.record == nil {
+		t.Fatal("published checkpoint was not retained")
+	}
+	raw, err := os.ReadFile(c.StatePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(raw, c.cache.record.raw) {
+		t.Fatal("retained bytes differ from the published record")
+	}
+	var decoded checkpointState
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(decoded, c.cache.record.state) {
+		t.Fatalf("retained state differs from decoding:\n%+v\n%+v", c.cache.record.state, decoded)
+	}
+	base.Entries[0].SHA256 = "caller mutation"
+	v, err := c.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(v.Manifest, bundle.BaseManifest) {
+		t.Fatal("caller mutation reached the retained checkpoint")
+	}
+}
+
+func TestCheckpointPublicationSkipsStatesJSONWouldRewrite(t *testing.T) {
+	c := checkpointFor(t, transferTarget(t, t.TempDir()))
+	base := proto.Manifest{Entries: []proto.ManifestEntry{{Path: "bad\xffname", Type: proto.EntryFile, Mode: 0o644,
+		SHA256: strings.Repeat("0", 64)}}}
+	if _, err := c.Initialize(base); err != nil {
+		t.Skip("manifest rejected before publication:", err)
+	}
+	if c.cache != nil && c.cache.record != nil {
+		t.Fatal("retained a record whose strings JSON rewrites")
 	}
 }

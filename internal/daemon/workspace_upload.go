@@ -39,9 +39,13 @@ func (s *workspaceStore) beginUpload(ctx context.Context, row workspaceRecord) (
 			return upload, nil
 		}
 		err := active.err
+		waiting := s.testHookUploadWaiting
 		s.mu.Unlock()
 		if err != nil {
 			return nil, fmt.Errorf("previous workspace upload cleanup failed: %w", err)
+		}
+		if waiting != nil {
+			waiting(row.ID)
 		}
 		select {
 		case <-ctx.Done():
