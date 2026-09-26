@@ -21,6 +21,8 @@ the watch records:
   case, for case-insensitive filesystems), and `.gitignore` files above a
   subdirectory root.
 - **Include targets:** all declared, even absent; `onbranch:` keeps full selection.
+- **Repository location:** a linked worktree's `.git` file and the Git
+  directory's `commondir` file, which locate the index, config and excludes.
 - **Standard config files, even absent:** `~/.gitconfig` and the XDG config
   (or the `GIT_CONFIG_GLOBAL` file), `config.worktree`, and the system config
   that `git var GIT_CONFIG_SYSTEM` reports, unless `GIT_CONFIG_NOSYSTEM` is
@@ -41,8 +43,8 @@ Any change to the proof falls back to full selection. Structural events,
 overflow and 30 s expiry behave as before. The capture queries run
 concurrently. Capture records every source before Git decides anything from
 it: `git check-ignore` confirms the listed ignored directories after the walk
-has recorded each `.gitignore`, and a repeated config listing that differs
-drops the evidence.
+has recorded each `.gitignore`, and repeated location and config queries that
+differ drop the evidence.
 
 Tests (`git_evidence_test.go`) cover detecting each of these without event hints:
 in-place `.gitignore` edits, a nested `.gitignore` reopening an ignored file,
@@ -51,9 +53,10 @@ configuring `core.excludesFile`, ancestor `.gitignore` above a subdirectory
 root, and creating an absent include target or standard config file. They
 also check that the system config path comes from Git and that
 `GIT_CONFIG_NOSYSTEM` leaves it out, and that an index stat refresh and churn
-inside an excluded `build/` do not invalidate the proof, and that ignore rules
-or config changed during capture are not trusted. `watch_relist_test.go`
-creates an empty directory during capture and files in it without events.
+inside an excluded `build/` do not invalidate the proof, and that ignore rules,
+config or a linked worktree's `.git` file changed during capture are not
+trusted. `watch_relist_test.go` creates an empty directory during capture and
+files in it without events.
 
 ## Results
 

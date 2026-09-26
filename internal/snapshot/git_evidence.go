@@ -43,8 +43,8 @@ var testHookBeforeGitQueries, testHookBeforeRecordingGitSources func()
 // Like directory stamps, sources are recorded before the work they justify.
 // The first queries only name the sources and list candidate excluded
 // directories. Once the sources are recorded, Git confirms the candidates and
-// the config listing is repeated, so a change before a source's record shows
-// in those results, and a change after it fails verification.
+// the queries that named them are repeated, so a change before a source's
+// record shows in those results, and a change after it fails verification.
 func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence, map[string]bool, error) {
 	if testHookBeforeGitQueries != nil {
 		testHookBeforeGitQueries()
@@ -65,9 +65,7 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		reads                 sync.WaitGroup
 	)
 	reads.Go(func() {
-		paths, pathsErr = exec.Command("git", "-C", root, "rev-parse", "--show-toplevel",
-			"--git-path", "index", "--git-path", "info/exclude", "--git-path", "config.worktree").Output()
-		if pathsErr != nil {
+		if paths, pathsErr = gitLocations(root); pathsErr != nil {
 			return
 		}
 		// Stamp the index before hashing the tracked set it describes.
@@ -99,7 +97,7 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		return nil, nil, nil
 	}
 	lines := strings.Split(strings.TrimSuffix(string(paths), "\n"), "\n")
-	if len(lines) != 4 || e.index == "" {
+	if len(lines) != 5 || e.index == "" {
 		return nil, nil, nil
 	}
 	resolve := func(name string) string {
@@ -114,7 +112,12 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 	}
 	// Git reads config.worktree only with extensions.worktreeConfig, which is
 	// itself recorded in the repository config; recording it always is simpler.
-	sources := []string{resolve(lines[2]), resolve(lines[3])}
+	// The .git file of a linked worktree names the directory holding its
+	// index, and that directory's commondir file names the shared one.
+	sources := []string{resolve(lines[2]), resolve(lines[3]), resolve(lines[4])}
+	if gitfile := filepath.Join(worktree, ".git"); regularFile(gitfile) {
+		sources = append(sources, gitfile)
+	}
 	if !globalSet {
 		var err error
 		if global, err = defaultGitExcludesPath(); err != nil {
@@ -173,17 +176,19 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		e.contents[name] = data
 	}
 
-	// Repeat the config listing during the walk; it differs if the config
-	// changed between the first listing and the record above.
+	// Repeat the queries that named the sources during the walk; they differ
+	// if a source changed between them and the record above.
 	var (
-		relisted  []byte
-		relistErr error
-		relist    sync.WaitGroup
+		relocated, relisted    []byte
+		relocateErr, relistErr error
+		repeat                 sync.WaitGroup
 	)
-	relist.Go(func() { relisted, relistErr = gitConfigOrigins(root) })
+	repeat.Go(func() { relocated, relocateErr = gitLocations(root) })
+	repeat.Go(func() { relisted, relistErr = gitConfigOrigins(root) })
 	directories, err := walkGitSelection(root, opts, ignored, e.contents)
-	relist.Wait()
-	if err != nil || relistErr != nil || !bytes.Equal(relisted, origins) {
+	repeat.Wait()
+	if errors.Join(err, relocateErr, relistErr) != nil || !bytes.Equal(relocated, paths) ||
+		!bytes.Equal(relisted, origins) {
 		// A concurrent change; the next preparation proves selection again.
 		return nil, nil, nil
 	}
@@ -333,6 +338,19 @@ func includeTarget(value, origin string) (string, bool) {
 		value = filepath.Join(filepath.Dir(origin), value)
 	}
 	return filepath.Clean(value), true
+}
+
+// gitLocations reports the top of the worktree, then the index, info/exclude,
+// config.worktree and commondir paths, as Git resolves them through .git.
+func gitLocations(root string) ([]byte, error) {
+	return exec.Command("git", "-C", root, "rev-parse", "--show-toplevel", "--git-path", "index",
+		"--git-path", "info/exclude", "--git-path", "config.worktree", "--git-path", "commondir").Output()
+}
+
+// regularFile reports whether name, following symbolic links, is a regular file.
+func regularFile(name string) bool {
+	info, err := os.Stat(name)
+	return err == nil && info.Mode().IsRegular()
 }
 
 // gitConfigOrigins lists every configuration entry with the file it came

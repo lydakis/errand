@@ -376,6 +376,89 @@ func TestGitWatchEvidenceRecordsCaseVariantIgnoreFiles(t *testing.T) {
 	assertPreparedMatchesFull(t, w, b)
 }
 
+// prepareLinkedWorktreeFixture adds linked worktrees one and two of the Git
+// fixture at its commit, each holding an ignored secret, and returns a watch
+// on one, the shared Git directory and two.
+func prepareLinkedWorktreeFixture(t *testing.T) (*Watch, *Builder, string, string) {
+	t.Helper()
+	main, b, git := prepareGitWatchFixture(t)
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	one, two := filepath.Join(parent, "one"), filepath.Join(parent, "two")
+	git("worktree", "add", "--quiet", "-b", "one", one)
+	git("worktree", "add", "--quiet", "-b", "two", two)
+	writeFile(t, one, "secret", "private")
+	writeFile(t, two, "secret", "private")
+	writeFile(t, one, "dirty", "dirty") // untracked whichever index Git reads
+	info, err := os.Lstat(one)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &Watch{root: one, identity: info, Changed: make(chan struct{}, 1)}
+	return w, b, filepath.Join(main.root, ".git"), two
+}
+
+func trackSecret(t *testing.T, worktree string) {
+	t.Helper()
+	if out, err := exec.Command("git", "-C", worktree, "add", "-f", "secret").CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v: %s", err, out)
+	}
+}
+
+// A linked worktree's .git file names the directory holding its index, and
+// that directory's commondir file names the shared config and exclude file.
+// Rewriting either in place changes what Git reads with no event and no
+// directory stamp change.
+func TestGitWatchEvidenceCoversLinkedWorktreeLocation(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		rewrite func(t *testing.T, one, metadata string)
+	}{
+		{"gitfile", func(t *testing.T, one, metadata string) {
+			// The other worktree's index tracks secret.
+			writeFile(t, one, ".git", "gitdir: "+filepath.Join(metadata, "worktrees", "two")+"\n")
+		}},
+		{"commondir", func(t *testing.T, _, metadata string) {
+			// The same directory, named differently.
+			writeFile(t, filepath.Join(metadata, "worktrees", "one"), "commondir", metadata+"\n")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, b, metadata, two := prepareLinkedWorktreeFixture(t)
+			trackSecret(t, two)
+			guard := assertPreparedMatchesFull(t, w, b)
+			if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
+				t.Fatal("Git selection captured no evidence")
+			}
+			tc.rewrite(t, w.root, metadata)
+			if err := guard.Verify(); err == nil {
+				t.Fatalf("guard accepted a rewritten %s", tc.name)
+			}
+			writeFile(t, w.root, "value", "edited")
+			w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+			assertPreparedMatchesFull(t, w, b)
+		})
+	}
+}
+
+// Git resolves the index through the .git file before capture records it. A
+// rewrite in between that leaves selection unchanged must not leave the
+// evidence stamping the index Git no longer reads.
+func TestGitWatchEvidenceCoversGitfileRewrittenDuringCapture(t *testing.T) {
+	w, b, metadata, two := prepareLinkedWorktreeFixture(t)
+	changeDuringGitCapture(t, nil, func() {
+		writeFile(t, w.root, ".git", "gitdir: "+filepath.Join(metadata, "worktrees", "two")+"\n")
+	})
+	assertPreparedMatchesFull(t, w, b)
+	assertGitCaptureHooksRan(t)
+	trackSecret(t, two)
+	writeFile(t, w.root, "value", "edited")
+	w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+	assertPreparedMatchesFull(t, w, b)
+}
+
 // changeDuringGitCapture runs each non-nil change once: before capture's first
 // Git queries, and after them but before capture records the sources they read.
 func changeDuringGitCapture(t *testing.T, beforeQueries, afterQueries func()) {
