@@ -123,7 +123,9 @@ func (s *Store) ReleaseTree(ctx context.Context, key Key, jobID string) error {
 	} else if !held {
 		return nil
 	}
-	r.LastUsed = s.now()
+	// The holder may have changed the tree. Keep the last size for GC budgets,
+	// but mark it stale so inventory measures the idle cache again.
+	r.LastUsed, r.BytesUnknown = s.now(), true
 	if err := s.write(name, r); err != nil {
 		return err
 	}

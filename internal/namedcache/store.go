@@ -93,6 +93,10 @@ type Store struct {
 	maxBytes   int64
 	ttl        time.Duration
 	now        func() time.Time
+
+	measureMu          sync.Mutex // held for a whole MeasureUnknown call
+	measureCursor      string     // key hash MeasureUnknown last started
+	legacySizesChecked bool       // guarded by measureMu
 }
 
 func Open(dir string, maxBytes int64, ttl time.Duration) (*Store, error) {

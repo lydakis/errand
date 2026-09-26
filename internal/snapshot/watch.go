@@ -30,6 +30,9 @@ type Watch struct {
 	opts         SelectOptions
 	selected     map[string]bool
 	controls     map[string]bool
+	external     map[string]bool         // global controls, watched only as files
+	stamps       map[string]controlStamp // what each global control last named
+	resolved     map[string]string       // global control -> the file watched for it
 	directories  map[string]bool
 	observedInfo map[string]fs.FileInfo
 	generation   atomic.Uint64
@@ -64,7 +67,7 @@ func watchFiles(root string, opts SelectOptions, selectFiles func(string, Select
 	}
 	s := &Watch{Changed: make(chan struct{}, 1), Errors: make(chan error, 1), w: w,
 		done: make(chan struct{}), root: root, matcher: m, opts: opts,
-		selected: make(map[string]bool), controls: make(map[string]bool)}
+		selected: make(map[string]bool), controls: make(map[string]bool), external: make(map[string]bool)}
 	s.identity, err = os.Lstat(root)
 	if err != nil {
 		w.Close()
@@ -80,13 +83,20 @@ func watchFiles(root string, opts SelectOptions, selectFiles func(string, Select
 	// worktree. Object writes and lock files do not invalidate source selection.
 	_, explicitPolicy := os.Lstat(filepath.Join(root, ".errandignore"))
 	if gi.Repository && os.IsNotExist(explicitPolicy) {
+		// Global controls sit beside unrelated user files. A directory watch on
+		// $HOME opens every entry under kqueue, which can block on a macOS
+		// privacy prompt, so refresh watches these files themselves.
+		userControl := func(p string) {
+			p = filepath.Clean(p)
+			s.controls[p], s.external[p] = true, true
+		}
 		if home, e := os.UserHomeDir(); e == nil {
-			s.controls[filepath.Join(home, ".gitconfig")] = true
+			userControl(filepath.Join(home, ".gitconfig"))
 			xdg := os.Getenv("XDG_CONFIG_HOME")
 			if xdg == "" {
 				xdg = filepath.Join(home, ".config")
 			}
-			s.controls[filepath.Join(xdg, "git", "config")] = true
+			userControl(filepath.Join(xdg, "git", "config"))
 		}
 		for _, name := range []string{"index", "HEAD", "config", "info/exclude"} {
 			p, e := gitPath(root, name)
@@ -123,12 +133,18 @@ func watchFiles(root string, opts SelectOptions, selectFiles func(string, Select
 			if !filepath.IsAbs(global) {
 				global = filepath.Join(worktree, global)
 			}
-			s.controls[global] = true
+			userControl(global)
 		}
 	}
 	s.observedInfo = make(map[string]fs.FileInfo)
 	for p := range s.controls {
 		s.observedInfo[p], _ = os.Lstat(p)
+	}
+	// Stamp global controls before refresh watches them, so polling reports
+	// whatever changes after the watch was placed.
+	s.stamps = make(map[string]controlStamp)
+	for p := range s.external {
+		s.stamps[p] = stampControl(p)
 	}
 	if err := s.refresh(); err != nil {
 		w.Close()
@@ -252,9 +268,26 @@ func (s *Watch) refresh() error {
 		watching[p] = true
 		return nil
 	}
+	resolved := make(map[string]string)
 	for p := range s.controls {
-		// Watch the closest existing ancestor so creating a missing info/ or
-		// global ignore directory is observed as well.
+		if s.external[p] {
+			// Watch the file an existing global control names, never a
+			// directory above it; polling in run reports the path naming
+			// another file or none. Symlinks are resolved here rather than by
+			// the backend, so every backend watches, reports and removes the
+			// same path.
+			if file, e := filepath.EvalSymlinks(p); e == nil {
+				if fi, e := os.Lstat(file); e == nil && fi.Mode().IsRegular() {
+					if err := add(file); err != nil && !errors.Is(err, fs.ErrNotExist) {
+						return err
+					}
+					resolved[p] = file
+				}
+			}
+			continue
+		}
+		// Watch the closest existing ancestor so creating a missing info/
+		// directory is observed as well.
 		for dir := filepath.Dir(p); ; dir = filepath.Dir(dir) {
 			if fi, e := os.Stat(dir); e == nil && fi.IsDir() {
 				if err := add(dir); err != nil {
@@ -295,7 +328,7 @@ func (s *Watch) refresh() error {
 			}
 		}
 	}
-	s.directories, s.observedInfo = wanted, observed
+	s.directories, s.observedInfo, s.resolved = wanted, observed, resolved
 	return nil
 }
 
@@ -319,6 +352,48 @@ func (s *Watch) reselect() error {
 	return nil
 }
 
+// externalControlPoll is how often a watch compares its global Git controls
+// with what their paths named when last seen. Only a directory watch could
+// report a path starting, stopping or changing to name a file, and those
+// directories hold unrelated user files.
+var externalControlPoll = time.Second
+
+// controlStamp is what a global control path names: the entry itself and, for a
+// symlink, the file it resolves to. Missing entries are nil.
+type controlStamp struct{ entry, target fs.FileInfo }
+
+func stampControl(name string) controlStamp {
+	var c controlStamp
+	c.entry, _ = os.Lstat(name)
+	if c.entry != nil && c.entry.Mode()&fs.ModeSymlink != 0 {
+		c.target, _ = os.Stat(name)
+	}
+	return c
+}
+
+func sameStamp(a, b fs.FileInfo) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return os.SameFile(a, b) && a.Mode() == b.Mode() && a.Size() == b.Size() && a.ModTime().Equal(b.ModTime())
+}
+
+// restamp records what a global control names now and reports whether that
+// changed. A replaced parent directory or symlink leaves the file watch on a
+// file the path no longer names, so a change drops it; the refresh each caller
+// then schedules watches the current file.
+func (s *Watch) restamp(name string) bool {
+	now, old := stampControl(name), s.stamps[name]
+	if sameStamp(old.entry, now.entry) && sameStamp(old.target, now.target) {
+		return false
+	}
+	s.stamps[name] = now
+	if file, ok := s.resolved[name]; ok {
+		_ = s.w.Remove(file) // already gone if the kernel dropped it with the file
+	}
+	return true
+}
+
 func (s *Watch) run() {
 	defer close(s.done)
 	fail := func(err error) { s.Errors <- err }
@@ -327,6 +402,12 @@ func (s *Watch) run() {
 	defer timer.Stop()
 	var pendingRefresh bool
 	var selectionChanged bool
+	var poll <-chan time.Time
+	if len(s.external) > 0 {
+		ticker := time.NewTicker(externalControlPoll)
+		defer ticker.Stop()
+		poll = ticker.C
+	}
 
 	for {
 		select {
@@ -344,6 +425,23 @@ func (s *Watch) run() {
 				return
 			}
 			s.invalidate() // also covers files created before their directory watch
+		case <-poll:
+			// No event reports a global control being created, reached through
+			// a replaced or retargeted symlink, or moved with its directory.
+			// Handle a changed stamp like an event on the control.
+			changed := false
+			for p := range s.external {
+				changed = s.restamp(p) || changed
+			}
+			if !changed {
+				continue
+			}
+			selectionChanged = true
+			if !pendingRefresh {
+				timer.Reset(20 * time.Millisecond)
+				pendingRefresh = true
+			}
+			s.invalidate()
 		case err, ok := <-s.w.Errors:
 			if !ok {
 				return
@@ -366,6 +464,11 @@ func (s *Watch) run() {
 			if !ok {
 				return
 			}
+			for p, file := range s.resolved {
+				if event.Name == file {
+					event.Name = p // report a resolved global control as itself
+				}
+			}
 			info, err := os.Lstat(event.Name)
 			dir := err == nil && info.IsDir()
 			if s.relevant(event.Name, dir) {
@@ -383,6 +486,9 @@ func (s *Watch) run() {
 				}
 			}
 			control := s.controls[event.Name] || filepath.Base(event.Name) == ".gitignore" || filepath.Base(event.Name) == ".errandignore"
+			if s.external[event.Name] {
+				s.restamp(event.Name) // so polling does not report this change again
+			}
 			if !s.relevant(event.Name, dir) {
 				// A missing policy directory may have just been created.
 				ancestor := false

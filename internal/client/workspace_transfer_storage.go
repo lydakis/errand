@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,7 @@ import (
 func workspaceTransferStats(ctx context.Context) (proto.StorageCategory, error) {
 	var stats proto.StorageCategory
 	busy, _, err := visitWorkspaceTransfers(ctx, true, func(dir string, o workspaceOrigin) error {
-		bytes, err := changeops.TreeSizeContext(ctx, dir)
+		bytes, err := workspaceTransferBytes(ctx, dir)
 		if err != nil {
 			return err
 		}
@@ -30,6 +31,18 @@ func workspaceTransferStats(ctx context.Context) (proto.StorageCategory, error) 
 	}
 	return stats, err
 }
+
+// Transfer collection counts regular-file bytes, so inventory does too. The
+// visitor holds the transfer's lock, so modes are widened only when retained
+// modes hide part of the tree.
+func workspaceTransferBytes(ctx context.Context, dir string) (int64, error) {
+	_, regular, err := changeops.MeasureTreeContext(ctx, dir)
+	if errors.Is(err, fs.ErrPermission) {
+		_, regular, err = changeops.TreeUsageContext(ctx, dir)
+	}
+	return regular, err
+}
+
 func workspaceTransferGC(cutoff time.Time, dryRun bool) (ChangeGCResult, error) {
 	var result ChangeGCResult
 	busy, failed, err := visitWorkspaceTransfers(context.Background(), dryRun, func(dir string, o workspaceOrigin) error {
@@ -55,13 +68,23 @@ func workspaceTransferGC(cutoff time.Time, dryRun bool) (ChangeGCResult, error) 
 			result.FreedBytes += size
 			return nil
 		}
-		gc, err := o.session(dir).GC(context.Background(), cutoff, dryRun, []proto.Manifest{o.Initial})
-		result.Removed += gc.Removed
-		result.Selected += gc.Removed + gc.Protected
-		result.Protected += gc.Protected
-		result.FreedBytes += gc.FreedBytes
+		// Staging and checkpoints are bound to the workspace directory. Keep them
+		// until it returns, but still collect storage that never needs it.
+		moved, err := o.rootMoved()
 		if err != nil {
 			return fmt.Errorf("collecting workspace %s transfers: %w", o.WorkspaceID, err)
+		}
+		if moved {
+			result.Stale++
+		} else {
+			gc, err := o.session(dir).GC(context.Background(), cutoff, dryRun, []proto.Manifest{o.Initial})
+			result.Removed += gc.Removed
+			result.Selected += gc.Removed + gc.Protected
+			result.Protected += gc.Protected
+			result.FreedBytes += gc.FreedBytes
+			if err != nil {
+				return fmt.Errorf("collecting workspace %s transfers: %w", o.WorkspaceID, err)
+			}
 		}
 		children, err := os.ReadDir(dir)
 		if err != nil {

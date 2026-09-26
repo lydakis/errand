@@ -102,28 +102,7 @@ func (s *Store) GC(ctx context.Context, dryRun bool) (GCResult, error) {
 			return result, ctx.Err()
 		}
 		cleanupErrors = errors.Join(cleanupErrors, cleanupErr)
-		var size int64
-		err := s.validateData(entry.Key.hash())
-		if err == nil {
-			size, err = s.measureConcurrent(ctx, entry.Key.hash()+"/data")
-		}
-		if err == nil {
-			trees := entry.Key.hash() + "/trees"
-			if _, statErr := s.root.Lstat(trees); !os.IsNotExist(statErr) {
-				var snapshots int64
-				if dryRun && reclaimed > 0 {
-					snapshots, err = s.measureRetainedTrees(ctx, entry.Key.hash())
-				} else {
-					snapshots, err = s.measureConcurrent(ctx, trees)
-				}
-				if err == nil && snapshots > math.MaxInt64-size {
-					err = fmt.Errorf("named cache byte count overflow")
-				}
-				if err == nil {
-					size += snapshots
-				}
-			}
-		}
+		size, err := s.measureTreeCache(ctx, entry.Key.hash(), dryRun && reclaimed > 0)
 		if err != nil {
 			if ctx.Err() != nil {
 				return result, ctx.Err()
@@ -340,6 +319,35 @@ func (s *Store) temporaryTrees(ctx context.Context) ([]string, error) {
 		}
 	}
 	return names, nil
+}
+
+// measureTreeCache sizes a tree cache's data and snapshot trees. retainedOnly
+// excludes generations a dry-run GC would reclaim.
+func (s *Store) measureTreeCache(ctx context.Context, name string, retainedOnly bool) (int64, error) {
+	if err := s.validateData(name); err != nil {
+		return 0, err
+	}
+	size, err := s.measureConcurrent(ctx, name+"/data")
+	if err != nil {
+		return 0, err
+	}
+	trees := name + "/trees"
+	if _, statErr := s.root.Lstat(trees); os.IsNotExist(statErr) {
+		return size, nil
+	}
+	var snapshots int64
+	if retainedOnly {
+		snapshots, err = s.measureRetainedTrees(ctx, name)
+	} else {
+		snapshots, err = s.measureConcurrent(ctx, trees)
+	}
+	if err != nil {
+		return 0, err
+	}
+	if snapshots > math.MaxInt64-size {
+		return 0, fmt.Errorf("named cache byte count overflow")
+	}
+	return size + snapshots, nil
 }
 
 // measure reads only regular-file sizes and never follows cache symlinks.

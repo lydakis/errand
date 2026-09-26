@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -158,6 +159,76 @@ func TestWorkspaceCommandsCreateReuseAndRemove(t *testing.T) {
 		if len(jobs) != want {
 			t.Fatalf("recreated name mixed histories: %s", &out)
 		}
+	}
+}
+
+func TestWorkspaceListQueriesEveryConfiguredPeer(t *testing.T) {
+	servers := map[string]*httptest.Server{}
+	for _, name := range []string{"cabal", "mini"} {
+		d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer d.Close()
+		servers[name] = httptest.NewServer(d.Handler())
+		defer servers[name].Close()
+	}
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	}))
+	defer broken.Close()
+	config := fmt.Sprintf("default_peer = 'cabal'\n[peers.cabal]\nurl = %q\n[peers.mini]\nurl = %q\n", servers["cabal"].URL, servers["mini"].URL)
+	writeClientConfig(t, config)
+	t.Chdir(t.TempDir())
+	var out, stderr bytes.Buffer
+	for peer, name := range map[string]string{"mini": "experiment", "cabal": "scratch"} {
+		if code := cmdWorkspacesTo([]string{"create", "--on", peer, "--no-snapshot", name}, &out, &stderr); code != 0 {
+			t.Fatalf("create on %s: %d %s", peer, code, &stderr)
+		}
+	}
+
+	// A workspace on a non-default runner must be listed without --on.
+	out.Reset()
+	stderr.Reset()
+	if code := cmdWorkspacesTo(nil, &out, &stderr); code != 0 {
+		t.Fatalf("list: %d %s", code, &stderr)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 3 || strings.Fields(lines[0])[0] != "PEER" ||
+		!strings.HasPrefix(strings.Join(strings.Fields(lines[1]), " "), "cabal scratch idle") ||
+		!strings.HasPrefix(strings.Join(strings.Fields(lines[2]), " "), "mini experiment idle") {
+		t.Fatalf("list table:\n%s", &out)
+	}
+
+	out.Reset()
+	if code := cmdWorkspacesTo([]string{"--json"}, &out, &stderr); code != 0 {
+		t.Fatalf("list --json: %d %s", code, &stderr)
+	}
+	var rows []workspaceRow
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil || len(rows) != 2 || rows[0].Peer != "cabal" || rows[0].Name != "scratch" || rows[1].Peer != "mini" || rows[1].Name != "experiment" || !proto.ValidULID(rows[1].ID) {
+		t.Fatalf("list --json: %s %v", &out, err)
+	}
+
+	for _, narrow := range [][]string{{"--on", "mini"}, {"--url", servers["mini"].URL}} {
+		out.Reset()
+		if code := cmdWorkspacesTo(append(narrow, "--json"), &out, &stderr); code != 0 {
+			t.Fatalf("list %v: %d %s", narrow, code, &stderr)
+		}
+		if err := json.Unmarshal(out.Bytes(), &rows); err != nil || len(rows) != 1 || rows[0].Name != "experiment" {
+			t.Fatalf("list %v: %s %v", narrow, &out, err)
+		}
+	}
+
+	// An unreachable runner is reported and fails the command, but the
+	// reachable runners' workspaces are still listed.
+	writeClientConfig(t, config+fmt.Sprintf("[peers.broken]\nurl = %q\n", broken.URL))
+	out.Reset()
+	stderr.Reset()
+	if code := cmdWorkspacesTo(nil, &out, &stderr); code != 1 {
+		t.Fatalf("partial list: %d %s", code, &stderr)
+	}
+	if !strings.Contains(out.String(), "experiment") || !strings.Contains(out.String(), "scratch") || !strings.Contains(stderr.String(), "peer broken") {
+		t.Fatalf("partial list: stdout=%s stderr=%s", &out, &stderr)
 	}
 }
 

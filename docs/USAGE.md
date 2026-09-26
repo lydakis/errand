@@ -401,6 +401,9 @@ Definitively rejected workspace creation removes its local origin snapshot.
 An uncertain creation outcome preserves that snapshot; check `workspaces` before
 retrying. GC preserves damaged transfer state, continues collecting healthy
 relationships, and reports partial progress with a nonzero exit status.
+Transfer state for a workspace whose directory was moved or deleted is kept
+and reported as skipped, not failed; GC collects it again if the directory
+returns.
 `df` reports incomplete inventory instead of waiting for a busy local transfer;
 `gc changes --dry-run` counts such relationships as protected.
 Concurrent inventory and dry-run reads do not mark one another as active transfers.
@@ -566,7 +569,8 @@ applied by each runner before its bounded receipt window, so retained terminal
 jobs cannot hide a long-running job. `--all` includes terminal receipts;
 `--last N` includes all states and applies one global limit after merging.
 `--on` and `--url` explicitly narrow either view to one runner. Bare
-`errand peers` and `errand df` follow the same all-configured-peers rule.
+`errand peers`, `errand df`, and `errand workspaces` follow the same
+all-configured-peers rule.
 `df` groups local runner storage and fetched changes into one `local` row.
 `df --verbose` (`-v`) adds individual workspace, named-cache, and job storage
 tables. `df --verbose --json` includes the corresponding `details` object;
