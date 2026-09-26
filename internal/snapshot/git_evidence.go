@@ -240,11 +240,22 @@ func walkGitSelection(root string, opts SelectOptions, ignored map[string]bool, 
 			return nil
 		})
 	}
-	if err := walk(".", ignored); err != nil {
-		return nil, err
+	// Start Git before the walk so its startup overlaps it. The sources Git
+	// reads as it starts are recorded by now, and it reads the .gitignore
+	// files the walk records only when asked, after the walk.
+	ask := func([]string) (map[string]bool, error) { return map[string]bool{}, nil }
+	if len(ignored) > 0 {
+		var err error
+		if ask, err = excludedDirectories(root); err != nil {
+			return nil, err
+		}
 	}
-	excluded, err := excludedDirectories(root, paused)
-	if err != nil {
+	walkErr := walk(".", ignored)
+	if walkErr != nil {
+		paused = nil
+	}
+	excluded, err := ask(paused)
+	if err = errors.Join(walkErr, err); err != nil {
 		return nil, err
 	}
 	for _, rel := range paused {
@@ -379,28 +390,48 @@ func ignoredDirectories(root string) (map[string]bool, error) {
 	return ignored, nil
 }
 
-// excludedDirectories returns which of dirs an ignore pattern excludes as
+// excludedDirectories starts git check-ignore and returns a function, to be
+// called once, that reports which of dirs an ignore pattern excludes as
 // directories. Git does not descend into them, so nested rules cannot reopen
 // their contents and they need no stamps. Tracked files inside them are covered
 // by the index digest; the caller stamps their ancestors from the manifest.
-func excludedDirectories(root string, dirs []string) (map[string]bool, error) {
-	excluded := map[string]bool{}
-	if len(dirs) == 0 {
-		return excluded, nil
-	}
+//
+// Git reads configuration and the exclude files outside the worktree as it
+// starts, and a directory's .gitignore only when asked about a path below it.
+func excludedDirectories(root string) (func(dirs []string) (map[string]bool, error), error) {
 	check := exec.Command("git", "-C", root, "check-ignore", "-z", "--stdin", "--no-index")
-	check.Stdin = strings.NewReader(strings.Join(dirs, "/\x00") + "/\x00")
-	out, err := check.Output()
-	var exitErr *exec.ExitError
-	if err != nil && !(errors.As(err, &exitErr) && exitErr.ExitCode() == 1) { // 1: none ignored
+	var out bytes.Buffer
+	check.Stdout = &out
+	stdin, err := check.StdinPipe()
+	if err != nil {
 		return nil, err
 	}
-	for _, name := range strings.Split(string(out), "\x00") {
-		if dir, ok := strings.CutSuffix(name, "/"); ok {
-			excluded[dir] = true
-		}
+	if err := check.Start(); err != nil {
+		return nil, err
 	}
-	return excluded, nil
+	return func(dirs []string) (map[string]bool, error) {
+		var input []byte
+		for _, dir := range dirs {
+			input = append(append(input, dir...), "/\x00"...)
+		}
+		_, writeErr := stdin.Write(input)
+		stdin.Close()
+		err := check.Wait()
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 { // none ignored
+			err = nil
+		}
+		if err = errors.Join(writeErr, err); err != nil {
+			return nil, err
+		}
+		excluded := map[string]bool{}
+		for _, name := range strings.Split(out.String(), "\x00") {
+			if dir, ok := strings.CutSuffix(name, "/"); ok {
+				excluded[dir] = true
+			}
+		}
+		return excluded, nil
+	}, nil
 }
 
 func (e *gitSelectionEvidence) verify(root string) error {
