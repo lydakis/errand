@@ -95,6 +95,22 @@ hardware.
 - A malformed record is rebuilt from a scan. A `.usage` that is not a regular
   file is an error, as the scan already treated it.
 
+## Results, 10K files, Linux
+
+Watch matrix at 10K, three rounds of seven saves, paired against main
+(`c2dbf0e`) with the order alternating per case ([run order](WATCH_NATIVE.md#run-order)).
+Visible delivery, median ms:
+
+| Case | Baseline | Candidate | Paired ratio (range) | Candidate faster |
+|---|---:|---:|---:|---:|
+| explicit-inplace-edit | 152 | 114 | 0.751 (0.743–0.780) | 3/3 |
+| git-tracked-inplace-edit | 174 | 138 | 0.795 (0.734–0.881) | 3/3 |
+
+Each run starts with about 8K stored bodies, so the saving grows with longer
+sessions: every edit adds a body until `gc changes`.
+
+Raw reports: [benchmarks/2026-09-26-blob-retain-linux.json](benchmarks/2026-09-26-blob-retain-linux.json).
+
 ## Tests
 
 `internal/changes/transfer_blobs_usage_test.go`:
