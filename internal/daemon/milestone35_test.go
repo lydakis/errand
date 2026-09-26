@@ -745,7 +745,7 @@ func TestClientRunsThroughQueueTransparently(t *testing.T) {
 	if out.String() != "queued payload" {
 		t.Fatalf("queued run output = %q", out.String())
 	}
-	if !bytes.Contains(errb.Bytes(), []byte("queued on the runner")) {
+	if !bytes.Contains(errb.Bytes(), []byte("errand: queued on ")) {
 		t.Fatalf("client did not report queueing: %s", errb.String())
 	}
 }

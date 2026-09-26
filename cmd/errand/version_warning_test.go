@@ -54,7 +54,7 @@ func TestVersionWarningDoesNotGateRunAttachOrFetch(t *testing.T) {
 				if code != wantExit {
 					t.Fatalf("exit %d want %d: %s", code, wantExit, &stderr)
 				}
-				count := strings.Count(stderr.String(), "errand: warning: CLI ")
+				count := strings.Count(stderr.String(), "runs errand older; this CLI is")
 				want := 0
 				if daemonVersion == "older" {
 					want = 1
@@ -62,7 +62,7 @@ func TestVersionWarningDoesNotGateRunAttachOrFetch(t *testing.T) {
 				if count != want {
 					t.Fatalf("warning count %d want %d: %s", count, want, &stderr)
 				}
-				if want == 1 && (!strings.Contains(stderr.String(), "runner older") || !strings.Contains(stderr.String(), "installed version")) {
+				if want == 1 && (!strings.Contains(stderr.String(), "runs errand older") || !strings.Contains(stderr.String(), "Run errand setup")) {
 					t.Fatalf("missing version distinction: %s", &stderr)
 				}
 				return out.String(), stderr.String()
@@ -71,7 +71,7 @@ func TestVersionWarningDoesNotGateRunAttachOrFetch(t *testing.T) {
 			if out != "output" {
 				t.Fatalf("stdout polluted: %q", out)
 			}
-			if daemonVersion == "older" && strings.Index(logs, "warning:") > strings.Index(logs, "errand: job ") {
+			if daemonVersion == "older" && strings.Index(logs, "warning:") > strings.Index(logs, " · job ") {
 				t.Fatal("warning arrived after admission")
 			}
 			jobs, err := client.List(server.URL)

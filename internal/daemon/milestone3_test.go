@@ -182,7 +182,7 @@ func TestNegotiatedEvictionAutomaticallyRetriesFullSnapshot(t *testing.T) {
 	}
 	evictNext.Store(true)
 	stdout, stderr := run()
-	if stdout != content || !strings.Contains(stderr, "re-shipping the full snapshot") {
+	if stdout != content || !strings.Contains(stderr, "uploading everything") {
 		t.Fatalf("fallback run output=%q stderr=%q", stdout, stderr)
 	}
 	d.mu.Lock()

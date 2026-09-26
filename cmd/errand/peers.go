@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/setup"
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 const peersUsage = `usage:
@@ -63,18 +65,21 @@ func cmdPeersTo(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 	switch args[0] {
 	case "add":
 		return cmdPeersAdd(args[1:], stdout, stderr, deps)
-	case "remove":
+	case "remove", "rm":
 		return cmdPeersRemove(args[1:], stdout, stderr, deps)
 	case "discover":
 		return cmdPeersDiscover(args[1:], stdout, stderr, deps)
-	case "-h", "--help":
-		fmt.Fprintln(stderr, peersUsage)
-		return 0
 	}
 	if strings.HasPrefix(args[0], "-") {
 		return cmdPeersList(args, stdout, stderr, deps)
 	}
-	fmt.Fprintf(stderr, "errand peers: unknown subcommand %q\n\n%s\n", args[0], peersUsage)
+	e := newConsole(stdout, stderr).Err
+	e.Errorf("unknown peers command '%s'", args[0])
+	if guess := termui.Suggest(args[0], []string{"add", "remove", "discover"}); guess != "" {
+		e.Hintf("did you mean errand peers %s?", guess)
+	} else {
+		e.Hintf("use add, remove or discover; errand peers --help")
+	}
 	return 2
 }
 
@@ -138,8 +143,9 @@ func peerURLOf(p config.Peer) string {
 }
 
 func cmdPeersAdd(args []string, stdout, stderr io.Writer, deps peersDeps) int {
+	con := newConsole(stdout, stderr)
+	e, o := con.Err, con.Out
 	fs := flag.NewFlagSet("errand peers add", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	sshMode := fs.Bool("ssh", false, "HOST is an ssh_config host; use the SSH transport")
 	remoteCommand := fs.String("remote-command", "", "absolute errand path on the SSH host when not on its login PATH")
 	remoteSocket := fs.String("remote-socket", "", "absolute daemon Unix socket path on the SSH host")
@@ -148,55 +154,57 @@ func cmdPeersAdd(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 	dryRun := fs.Bool("dry-run", false, "verify and show what would be written without writing")
 	fs.BoolVar(dryRun, "n", false, "verify and show what would be written without writing")
 	noVerify := fs.Bool("no-verify", false, "record the peer without probing it (offline runner)")
-	setFlagUsage(fs, "errand peers add [--ssh] [--remote-command PATH] [--remote-socket PATH] [-f | --force] [-n | --dry-run] [--no-verify] NAME HOST")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
+	if ok, code := parseFlags(fs, args, "peers add", stdout, e); !ok {
+		return code
 	}
 	if fs.NArg() != 2 {
-		fmt.Fprintln(stderr, "errand peers add: NAME and HOST are required")
+		e.Errorf("errand peers add needs a NAME and a HOST")
+		e.Hintf("for example errand peers add mini mini.tail6c3e93.ts.net")
 		return 2
 	}
 	name, host := fs.Arg(0), fs.Arg(1)
 	peer, err := parsePeerTarget(host, *sshMode, *remoteCommand, *remoteSocket)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand peers add: %v\n", err)
-		return 2
+		return usageError(e, "%v", err)
 	}
 	if err := config.ValidatePeer(name, peer); err != nil {
-		fmt.Fprintf(stderr, "errand peers add: %v\n", err)
-		return 2
+		return usageError(e, "%v", err)
 	}
 	path, err := deps.configPath()
 	if err != nil {
-		fmt.Fprintf(stderr, "errand peers add: %v\n", err)
-		return 1
+		return failWith(e, 1, err, errorScope{})
 	}
 	plan, err := config.PlanAddPeer(path, name, peer, *force)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand peers add: %v\n", err)
+		e.Errorf("%v", err)
+		if strings.Contains(err.Error(), "already") {
+			e.Hintf("replace it with errand peers add --force %s %s", name, host)
+		}
 		return 1
 	}
 	peerURL := peerURLOf(peer)
 	if !*noVerify {
 		dialURL := client.ConfigureSSHPeer(peerURL, name, peer.RemoteCommand, peer.RemoteSocket)
+		spin := e.Spin("Checking " + e.B(strings.TrimPrefix(strings.TrimPrefix(peerURL, "http://"), "https://")) + "…")
 		info, err := deps.probe(context.Background(), dialURL)
+		spin.Stop()
 		if err != nil {
-			printProbeFailure(stderr, name, peerURL, err, deps)
+			printProbeFailure(e, name, peerURL, err, deps)
 			return 1
 		}
-		fmt.Fprintf(stdout, "%s: errand %s on %s/%s, %d cpu, kvm=%v, %d slot(s)\n",
-			terminalSafeField(name), terminalSafeField(info.Version), terminalSafeField(info.Facts.OS),
-			terminalSafeField(info.Facts.Arch), info.Facts.NumCPU, info.Facts.KVM, info.MaxJobs)
+		facts := termui.Things(info.MaxJobs, "slot", "slots")
+		if system := peerSystem(&info); system != "" {
+			facts = system + " · " + facts
+		}
+		e.Say(termui.OK, e.B(terminalSafeField(name))+" is an errand "+terminalSafeField(info.Version)+" runner "+e.D("· "+facts))
 	}
 	if *dryRun {
-		action := "add to"
+		action := "Would add to"
 		if plan.Replacing {
-			action = "replace in"
+			action = "Would replace in"
 		}
-		fmt.Fprintf(stdout, "would %s %s:\n\n", action, path)
+		o.Print(action + " " + homeRelative(path) + ":")
+		o.Print("")
 		if plan.MadeDefault {
 			fmt.Fprintf(stdout, "    default_peer = %q\n\n", name)
 		}
@@ -216,38 +224,41 @@ func cmdPeersAdd(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 	}
 	madeDefault, err := config.AddPeer(path, name, peer, *force)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand peers add: %v\n", err)
-		return 1
+		return failWith(e, 1, err, errorScope{})
 	}
-	fmt.Fprintf(stdout, "added peer %s (%s) to %s\n", name, peerURL, path)
+	extra := ""
 	if madeDefault {
-		fmt.Fprintf(stdout, "%s is now the default peer: `errand -- CMD` runs there\n", name)
+		extra = " " + e.D("· it's your default runner now")
+	}
+	e.Say(termui.OK, "Added "+e.B(terminalSafeField(name))+" to "+homeRelative(path)+extra)
+	if madeDefault {
+		e.Next("errand -- make test", "runs on "+name)
 	} else {
-		fmt.Fprintf(stdout, "use it with: errand --on %s -- CMD\n", name)
+		e.Next("errand --on "+name+" -- make test", "")
 	}
 	return 0
 }
 
-func printProbeFailure(stderr io.Writer, name, peerURL string, err error, deps peersDeps) {
+func printProbeFailure(e *termui.Stream, name, peerURL string, err error, deps peersDeps) {
 	name = terminalSafeField(name)
-	peerURL = terminalSafeField(peerURL)
+	host := terminalSafeField(strings.TrimPrefix(strings.TrimPrefix(peerURL, "http://"), "https://"))
 	detail := terminalSafeField(err.Error())
 	kind, _ := client.ProbeKindOf(err)
 	switch kind {
 	case client.ProbeForbidden:
+		e.Errorf("%s is an errand runner, but it refused you", host)
 		login := callerLogin(deps)
-		fmt.Fprintf(stderr, "errand peers add: %s (%s) is an errand runner but refused this caller.\n", name, peerURL)
-		if login != "" {
-			fmt.Fprintf(stderr, "  on the runner, add %q to allow_users in the config used by its errand service, then rerun `errand setup` with the same `--config` value (omit it for the default config)\n", login)
-		} else {
-			fmt.Fprintln(stderr, "  on the runner, add your tailnet login to allow_users in the config used by its errand service, then rerun `errand setup` with the same `--config` value (omit it for the default config)")
+		if login == "" {
+			login = "YOUR_LOGIN"
 		}
-		fmt.Fprintf(stderr, "  runner said: %s\n", detail)
+		e.Hintf("on %s, run errand access add %s, then errand setup to restart it (pass both the same --config its service uses, if it isn't the default)", name, login)
+		e.Print("  " + e.D("runner said: "+detail))
 	case client.ProbeNotErrand:
-		fmt.Fprintf(stderr, "errand peers add: %s (%s) answered, but it is not an errand runner: %s\n", name, peerURL, detail)
+		e.Errorf("%s answered, but it isn't an errand runner", host)
+		e.Print("  " + e.D(detail))
 	default:
-		fmt.Fprintf(stderr, "errand peers add: %s (%s) did not answer: %s\n", name, peerURL, detail)
-		fmt.Fprintf(stderr, "  if errand is not installed there yet, run `errand setup` on that machine; to record it anyway, pass --no-verify\n")
+		e.Errorf("%s didn't answer (%s)", host, peerProblem(peerRow{Detail: detail}))
+		e.Hintf("run errand setup on that machine first, or add it anyway with --no-verify")
 	}
 }
 
@@ -269,32 +280,38 @@ func callerLogin(deps peersDeps) string {
 }
 
 func cmdPeersRemove(args []string, stdout, stderr io.Writer, deps peersDeps) int {
+	e := newConsole(stdout, stderr).Err
 	fs := flag.NewFlagSet("errand peers remove", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	setFlagUsage(fs, "errand peers remove NAME")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
+	if ok, code := parseFlags(fs, args, "peers remove", stdout, e); !ok {
+		return code
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "errand peers remove: NAME is required")
+		e.Errorf("errand peers remove needs a runner name")
+		e.Hintf("errand peers lists them")
 		return 2
 	}
+	name := fs.Arg(0)
 	path, err := deps.configPath()
 	if err != nil {
-		fmt.Fprintf(stderr, "errand peers remove: %v\n", err)
-		return 1
+		return failWith(e, 1, err, errorScope{})
 	}
-	clearedDefault, err := config.RemovePeer(path, fs.Arg(0))
+	clearedDefault, err := config.RemovePeer(path, name)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand peers remove: %v\n", err)
-		return 1
+		if strings.Contains(err.Error(), "not configured") {
+			e.Errorf("no runner named %s", name)
+			e.Hintf("%s", knownRunnersHint(name))
+			return 1
+		}
+		return failWith(e, 1, err, errorScope{})
 	}
-	fmt.Fprintf(stdout, "removed peer %s from %s\n", fs.Arg(0), path)
+	extra := ""
+	if cfg, err := deps.load(); err == nil && cfg.DefaultPeer != "" && !clearedDefault {
+		extra = " " + e.D("· "+cfg.DefaultPeer+" is still the default")
+	}
+	e.Say(termui.OK, "Removed "+e.B(terminalSafeField(name))+" from "+homeRelative(path)+extra)
 	if clearedDefault {
-		fmt.Fprintln(stdout, "it was the default peer; set another with `errand peers add` or edit default_peer")
+		e.Warnf("%s was your default runner; there's no default now", name)
+		e.Next("errand peers add NAME HOST", "the first runner you add becomes the default")
 	}
 	return 0
 }
@@ -307,46 +324,47 @@ type discoveredRow struct {
 	Version    string `json:"version,omitempty"`
 	Detail     string `json:"detail,omitempty"`
 	Configured string `json:"configured_as,omitempty"`
+	info       *proto.Info
 }
 
 func cmdPeersDiscover(args []string, stdout, stderr io.Writer, deps peersDeps) int {
+	con := newConsole(stdout, stderr)
+	e, o := con.Err, con.Out
 	fs := flag.NewFlagSet("errand peers discover", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
 	all := false
 	fs.BoolVar(&all, "all", false, "include offline nodes and nodes that are not runners")
 	fs.BoolVar(&all, "a", false, "include offline nodes and nodes that are not runners")
-	setFlagUsage(fs, "errand peers discover [-a | --all] [--json]")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
+	if ok, code := parseFlags(fs, args, "peers discover", stdout, e); !ok {
+		return code
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "errand peers discover: unexpected arguments: %s\n", strings.Join(fs.Args(), " "))
-		return 2
+		return usageError(e, "unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	cfg, err := deps.load()
 	if err != nil {
-		fmt.Fprintf(stderr, "errand peers discover: %v\n", err)
-		return 1
+		return failWith(e, 1, err, errorScope{})
 	}
 	provider, err := deps.provider()
 	if err != nil {
-		fmt.Fprintf(stderr, "errand peers discover: %v\n", err)
+		e.Errorf("couldn't talk to Tailscale: %v", err)
+		e.Hintf("discover finds runners on your tailnet; make sure Tailscale is running here")
 		return 1
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	nodes, err := provider.Peers(ctx)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand peers discover: listing tailnet peers: %v\n", err)
+		e.Errorf("couldn't list tailnet nodes: %v", err)
 		return 1
 	}
 	self, _ := provider.Self(ctx)
 	configuredHosts := configuredPeerHosts(cfg) // host (name, FQDN, or IP) -> alias
 
+	var spin *termui.Spinner
+	if !*jsonOutput {
+		spin = e.Spin("Probing " + termui.Things(countOnline(nodes), "online tailnet node", "online tailnet nodes") + "…")
+	}
 	rows := make([]discoveredRow, len(nodes))
 	sem := make(chan struct{}, 8)
 	var wg sync.WaitGroup
@@ -382,48 +400,103 @@ func cmdPeersDiscover(args []string, stdout, stderr io.Writer, deps peersDeps) i
 			}
 			rows[i].Status = "runner"
 			rows[i].Version = info.Version
-			rows[i].Detail = fmt.Sprintf("%s/%s, %d cpu, kvm=%v, %d slot(s)", info.Facts.OS, info.Facts.Arch, info.Facts.NumCPU, info.Facts.KVM, info.MaxJobs)
-			if info.Version != version {
-				rows[i].Detail += fmt.Sprintf("; CLI %s (different version)", version)
-			}
+			rows[i].info = &info
+			rows[i].Detail = fmt.Sprintf("%s/%s, %d cpu, kvm=%v, %s", info.Facts.OS, info.Facts.Arch, info.Facts.NumCPU, info.Facts.KVM, termui.Things(info.MaxJobs, "slot", "slots"))
 		}(i, target)
 	}
 	wg.Wait()
+	if spin != nil {
+		spin.Stop()
+	}
 
 	var shown []discoveredRow
+	runners, added, others := 0, 0, 0
 	for _, r := range rows {
+		switch {
+		case r.Status == "runner":
+			runners++
+			if r.Configured != "" {
+				added++
+			}
+		case r.Status != "offline":
+			others++
+		}
 		if all || r.Status == "runner" || r.Status == "forbidden" {
 			shown = append(shown, r)
 		}
 	}
+	sort.SliceStable(shown, func(i, j int) bool { return shown[i].Name < shown[j].Name })
 	if *jsonOutput {
 		return writeJSONRows(stdout, stderr, shown)
 	}
 	if len(shown) == 0 {
-		fmt.Fprintf(stdout, "no errand runners answered among %d online tailnet node(s); run `errand setup` on a machine to make it one (--all lists every node)\n", countOnline(nodes))
+		o.Print("No errand runners answered among " + termui.Things(countOnline(nodes), "online tailnet node", "online tailnet nodes") + ".")
+		o.Next("errand setup", "on a machine makes it a runner")
+		if !all {
+			o.Next("errand peers discover -a", "lists every node")
+		}
 		return 0
 	}
-	var values [][]string
+	t := o.Table("NODE", "RUNNER", "SYSTEM")
 	for _, r := range shown {
-		name := terminalSafeField(r.Name)
-		if r.Configured != "" {
-			name += " (configured as " + terminalSafeField(r.Configured) + ")"
+		name := termui.C(terminalSafeField(r.Name), termui.Bold)
+		switch r.Status {
+		case "runner":
+			status := termui.C("✓ added as "+terminalSafeField(r.Configured), termui.Green)
+			if r.Configured == "" {
+				status = termui.C("● not added yet", termui.Yellow)
+			}
+			parts := []string{}
+			if s := peerSystem(r.info); s != "" {
+				parts = append(parts, s)
+			}
+			parts = append(parts, termui.Things(r.info.MaxJobs, "slot", "slots"))
+			if r.Version != version {
+				parts = append(parts, "errand "+terminalSafeField(r.Version))
+			}
+			system := strings.Join(parts, " · ")
+			t.Row(name, status, termui.C(system))
+		case "forbidden":
+			t.Row(name, termui.C("○ refused you", termui.Red), termui.C(terminalSafeField(r.OS), termui.Dim))
+		default:
+			label := map[string]string{"none": "○ no answer", "not-errand": "○ not a runner", "offline": "○ offline"}[r.Status]
+			detail := r.OS
+			if cause := peerProblem(peerRow{Detail: r.Detail}); cause != "" && r.Detail != "" {
+				detail += " · " + cause
+			}
+			t.Row(termui.C(terminalSafeField(r.Name), termui.Dim), termui.C(label, termui.Dim), termui.C(terminalSafeField(detail), termui.Dim))
 		}
-		values = append(values, []string{name, r.OS, r.Status, r.Version, r.Detail})
 	}
-	writeNonemptyColumns(stdout, []string{"NODE", "OS", "STATUS", "VERSION", "DETAIL"}, values)
-	fmt.Fprintln(stdout)
+	t.Print()
+	summary := ""
+	switch {
+	case runners > 0 && added == runners && runners == 2:
+		summary = "Both runners are already added."
+	case runners > 0 && added == runners:
+		summary = "All " + termui.Things(runners, "runner is", "runners are") + " already added."
+		if runners == 1 {
+			summary = "The runner is already added."
+		}
+	case runners > added:
+		summary = termui.Things(runners-added, "runner isn't", "runners aren't") + " added yet."
+	}
+	if !all && others > 0 {
+		summary += " " + termui.Things(others, "other node isn't a runner", "other nodes aren't runners") + " (errand peers discover -a)."
+	}
+	if summary != "" {
+		o.Print(o.D(strings.TrimSpace(summary)))
+	}
 	for _, r := range shown {
 		switch r.Status {
 		case "runner":
 			if r.Configured == "" {
-				fmt.Fprintf(stdout, "  errand peers add %s %s\n", terminalSafeField(r.Name), terminalSafeField(r.DNSName))
+				o.Next("errand peers add "+terminalSafeField(r.Name)+" "+terminalSafeField(r.DNSName), "")
 			}
 		case "forbidden":
 			if self.Login != "" {
-				fmt.Fprintf(stdout, "  %s refused you; on it, add %q to allow_users in ~/.config/errand/errandd.toml, then run `errand setup` to restart it\n", terminalSafeField(r.Name), self.Login)
+				o.Warnf("%s refused you; on it, run errand access add %s, then errand setup", terminalSafeField(r.Name), self.Login)
 			} else {
-				fmt.Fprintf(stdout, "  %s refused you; add your tailnet login to its allow_users\n", terminalSafeField(r.Name))
+				o.Warnf("%s refused you; add your tailnet login to its allow_users", terminalSafeField(r.Name))
 			}
 		}
 	}

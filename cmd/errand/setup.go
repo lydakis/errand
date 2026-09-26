@@ -7,36 +7,24 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/setup"
+	"github.com/lydakis/errand/internal/termui"
 )
-
-const setupUsage = `usage: errand setup [options]
-
-Turn this machine into an errand runner. New runners default to both SSH
-and Tailscale; connect Tailscale later and rerun setup if it is unavailable.
---ssh and --tailscale save a single-transport preference in errandd.toml.
---local saves local-only access, without a network listener or SSH bridge.
-Plain setup respects the saved transport setting, which you can edit anytime.
-
-Install and start the platform service (systemd user unit + linger on Linux,
-a launch agent on macOS), and prove the daemon answers. Setup preserves
-unrelated configuration and service definitions unless --force is given.
-It refuses to restart while jobs are active. After upgrading, run setup when
-idle from a terminal or independent SSH connection, outside an Errand job
-on this runner.`
 
 func cmdSetup(args []string) int {
 	return cmdSetupTo(args, os.Stdout, os.Stderr, setup.RealSystem{})
 }
 
 func cmdSetupTo(args []string, stdout, stderr io.Writer, sys setup.System) int {
+	con := newConsole(stdout, stderr)
+	e := con.Err
 	fs := flag.NewFlagSet("errand setup", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	local := fs.Bool("local", false, "save local-only transport; no network listener or SSH bridge")
 	ssh := fs.Bool("ssh", false, "save SSH-only transport in the runner config")
 	tailscale := fs.Bool("tailscale", false, "save Tailscale-only transport in the runner config")
@@ -51,36 +39,25 @@ func cmdSetupTo(args []string, stdout, stderr io.Writer, sys setup.System) int {
 	printACL := fs.Bool("print-acl", false, "print the tailnet ACL grant for capability-based authorization and exit")
 	var allow stringList
 	fs.Var(&allow, "allow-user", "additional tailnet login granted full runner access (repeatable)")
-	fs.Usage = func() {
-		fmt.Fprintln(stderr, setupUsage)
-		fmt.Fprintln(stderr, "\noptions:")
-		fs.PrintDefaults()
-	}
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
+	var output outputFlags
+	output.bind(fs, "")
+	if ok, code := parseFlags(fs, args, "setup", stdout, e); !ok {
+		return code
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "errand setup: unexpected arguments: %s\n", strings.Join(fs.Args(), " "))
-		return 2
+		return usageError(e, "unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	if *maxJobs <= 0 {
-		fmt.Fprintln(stderr, "errand setup: --max-jobs must be positive")
-		return 2
+		return usageError(e, "--max-jobs must be at least 1")
 	}
 	if *socket != "" && *cli != "" {
-		fmt.Fprintln(stderr, "errand setup: --tailscaled-socket and --tailscale-cli are mutually exclusive")
-		return 2
+		return usageError(e, "--tailscaled-socket and --tailscale-cli can't be combined")
 	}
 	if *local && (*ssh || *tailscale || *socket != "" || *cli != "" || len(allow) != 0 || *printACL) {
-		fmt.Fprintln(stderr, "errand setup: --local conflicts with remote transport options")
-		return 2
+		return usageError(e, "--local can't be combined with network transport options")
 	}
 	if *ssh && (*tailscale || *socket != "" || *cli != "" || len(allow) != 0 || *printACL) {
-		fmt.Fprintln(stderr, "errand setup: --ssh conflicts with Tailscale options")
-		return 2
+		return usageError(e, "--ssh can't be combined with Tailscale options")
 	}
 	transport := ""
 	if *local {
@@ -99,15 +76,27 @@ func cmdSetupTo(args []string, stdout, stderr io.Writer, sys setup.System) int {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+	var spin *termui.Spinner
+	if !output.quiet {
+		verb := "Setting up this machine as a runner…"
+		if *dryRun {
+			verb = "Checking what setup would do…"
+		}
+		spin = e.Spin(verb)
+	}
 	report, err := setup.Run(ctx, setup.Options{
 		ExpectedVersion: version,
 		Transport:       transport, ConfigPath: *cfgPath, MaxJobs: *maxJobs, AllowUsers: allow,
 		Socket: *socket, CLI: *cli, Force: *force, DryRun: *dryRun,
 	}, sys)
-	printSetupReport(stdout, report, *dryRun)
+	if spin != nil {
+		spin.Stop()
+	}
+	if !output.quiet || report != nil && report.Failed() {
+		printSetupReport(con.Out, report, *dryRun, output.verbose)
+	}
 	if err != nil {
-		fmt.Fprintf(stderr, "errand setup: %v\n", err)
-		return 1
+		return failWith(e, 1, err, errorScope{})
 	}
 	if report.Failed() {
 		return 1
@@ -115,36 +104,103 @@ func cmdSetupTo(args []string, stdout, stderr io.Writer, sys setup.System) int {
 	return 0
 }
 
-func printSetupReport(w io.Writer, r *setup.Report, dryRun bool) {
+// setupStepNames are how setup's steps read on screen.
+var setupStepNames = map[string]string{
+	"tailnet": "Tailscale", "ssh": "SSH bridge", "config": "Config", "service": "Service",
+	"linger": "Linger", "path": "PATH", "probe": "Runner",
+}
+
+var setupNodeRE = regexp.MustCompile(`this node is ([^,]+), owned by (\S+)`)
+
+// setupStepText shortens a step's detail for the default view; -v keeps it.
+func setupStepText(step setup.Step, r *setup.Report, verbose bool) string {
+	detail := step.Detail
+	if verbose {
+		return strings.ReplaceAll(detail, "\n", "\n"+strings.Repeat(" ", 15))
+	}
+	first, _, _ := strings.Cut(detail, "\n")
+	first = strings.TrimSuffix(first, ":")
+	switch step.Name {
+	case "tailnet":
+		if m := setupNodeRE.FindStringSubmatch(first); m != nil {
+			return m[1] + " · " + m[2]
+		}
+	case "ssh":
+		head, _, _ := strings.Cut(first, ";")
+		return strings.Replace(head, "SSH bridge enabled", "on", 1)
+	case "config":
+		if step.Changed && r != nil {
+			return first + " · " + setupTransportText(r.Config) + " · " + termui.Things(r.Config.MaxJobs, "slot", "slots")
+		}
+	case "probe":
+		if first == "skipped (dry run)" {
+			return "skipped in a dry run"
+		}
+	}
+	return first
+}
+
+func setupTransportText(c setup.ConfigChoice) string {
+	switch {
+	case c.Transport == config.TransportLocal:
+		return "local only"
+	case c.Transport == config.TransportSSH, strings.EqualFold(strings.TrimSpace(c.Listen), "none"):
+		return "SSH only"
+	case c.Transport == config.TransportTailscale:
+		return "tailnet " + strings.TrimPrefix(c.Listen, "tailnet")
+	default:
+		return "SSH + tailnet " + strings.TrimPrefix(c.Listen, "tailnet")
+	}
+}
+
+func printSetupReport(s *termui.Stream, r *setup.Report, dryRun, verbose bool) {
 	if r == nil {
 		return
 	}
 	if dryRun {
-		fmt.Fprintln(w, "errand setup (dry run; nothing changed)")
+		s.Print(s.Paint("Dry run", termui.Yellow) + " " + s.D("· nothing changes"))
+		s.Print("")
 	}
-	for _, s := range r.Steps {
-		mark := "·"
+	for _, step := range r.Steps {
+		if !verbose && step.Err == nil && strings.HasPrefix(step.Detail, "would run: ") {
+			continue // the command behind a service change is -v detail
+		}
+		glyph := termui.OK
 		switch {
-		case s.Err != nil:
-			mark = "✗"
-		case s.Changed:
-			mark = "✓"
+		case step.Err != nil:
+			glyph = termui.Fail
+		case strings.HasPrefix(step.Detail, "skipped"), strings.HasPrefix(step.Detail, "unavailable"):
+			glyph = termui.Skip
 		}
-		fmt.Fprintf(w, "%s %-8s %s\n", mark, s.Name, s.Detail)
+		name := setupStepNames[step.Name]
+		if name == "" {
+			name = step.Name
+		}
+		text := homeRelativeText(setupStepText(step, r, verbose))
+		if step.Err != nil {
+			s.Print(s.G(glyph) + " " + padRight(name, 11) + " " + s.Paint(text, termui.Red))
+			continue
+		}
+		s.Print(s.G(glyph) + " " + padRight(name, 11) + " " + s.D(text))
 	}
-	if !r.Failed() && r.Config.Transport == config.TransportLocal {
+	if r.Failed() {
+		return
+	}
+	if r.Config.Transport == config.TransportLocal {
+		s.Print("")
 		if dryRun {
-			fmt.Fprintln(w, "\nlocal runner would be configured")
+			s.Print("This machine would accept local jobs only; no network listener or SSH bridge.")
 		} else {
-			fmt.Fprintln(w, "\nlocal runner is ready")
+			s.Print(s.B("Local runner ready.") + " It accepts local jobs only; no network listener or SSH bridge.")
 		}
-		fmt.Fprintln(w, "access: local Unix socket only; no network listener or SSH bridge")
-		fmt.Fprintln(w, "Run a local job: errand --on local -- COMMAND")
-		fmt.Fprintf(w, "For a custom runner config, set socket = %q in a personal [peers.NAME] table.\n", r.SocketPath)
+		s.Next("errand --on local -- make test", "")
+		if verbose {
+			s.Print(s.D(fmt.Sprintf("For a custom runner config, set socket = %q in a personal [peers.NAME] table.", r.SocketPath)))
+		}
 		return
 	}
 	sshOnly := strings.EqualFold(strings.TrimSpace(r.Config.Listen), "none")
-	if r.Failed() || r.Config.Listen == "" || (r.Self.DNSName == "" && !sshOnly) {
+	if r.Config.Listen == "" || (r.Self.DNSName == "" && !sshOnly) {
 		return
 	}
 	short := r.Self.DNSName
@@ -156,48 +212,69 @@ func printSetupReport(w io.Writer, r *setup.Report, dryRun bool) {
 		short = "buildbox"
 		sshHost = "YOUR_SSH_HOST"
 	}
-	runnerLabel := "runner"
-	if r.Self.DNSName != "" {
-		runnerLabel += " " + short
+	s.Print("")
+	who := "people with tailnet capability grants"
+	switch {
+	case sshOnly:
+		who = "anyone who can SSH in as this user"
+	case len(r.Config.AllowUsers) != 0:
+		who = strings.Join(r.Config.AllowUsers, ", ")
 	}
-	fmt.Fprintln(w)
-	if dryRun {
-		fmt.Fprintf(w, "%s would be configured", runnerLabel)
-	} else {
-		fmt.Fprintf(w, "%s is ready", runnerLabel)
+	name := s.B(short)
+	if r.Self.DNSName == "" {
+		name = "This machine"
 	}
+	facts := ""
 	if r.Info != nil {
-		fmt.Fprintf(w, " (%s/%s, %d cpu, kvm=%v, %d slot(s))", r.Info.Facts.OS, r.Info.Facts.Arch, r.Info.Facts.NumCPU, r.Info.Facts.KVM, r.Info.MaxJobs)
+		facts = " " + s.D("("+peerSystem(r.Info)+" · "+termui.Things(r.Info.MaxJobs, "slot", "slots")+")")
 	}
-	fmt.Fprintln(w)
-	if sshOnly {
-		fmt.Fprintln(w, "access: SSH as the user running this service (no tailnet listener)")
-	} else if len(r.Config.AllowUsers) == 0 {
-		fmt.Fprintln(w, "allows: tailnet capability grants")
+	if dryRun {
+		s.Print(name + " would accept jobs from " + who + ".")
 	} else {
-		fmt.Fprintf(w, "allows: %s\n", strings.Join(r.Config.AllowUsers, ", "))
+		s.Print(name + " is ready" + facts + ". It accepts jobs from " + who + ".")
 	}
 	if !sshOnly && len(r.Config.DenyUsers) != 0 {
-		fmt.Fprintf(w, "denies (overrides tailnet grants): %s\n", strings.Join(r.Config.DenyUsers, ", "))
+		s.Print(s.D("Denied even with a grant: " + strings.Join(r.Config.DenyUsers, ", ")))
 	}
-	if r.Config.Transport != config.TransportTailscale && sshHost == "YOUR_SSH_HOST" {
-		fmt.Fprintln(w, "Replace YOUR_SSH_HOST with your SSH host or ssh_config alias; buildbox is a name you choose.")
+	if sshHost == "YOUR_SSH_HOST" {
+		s.Print(s.D("Replace YOUR_SSH_HOST with your SSH host or ssh_config alias; buildbox is a name you choose."))
 	}
-	fmt.Fprintf(w, "\nOn a client, add to ~/.config/errand/config.toml:\n\n")
-	if peerURL, ok := setupPeerURL(r.Config.Listen, r.Self.DNSName); ok {
-		fmt.Fprintf(w, "    [peers.%s]\n    url = %q\n", short, peerURL)
-		if r.Config.Transport != config.TransportTailscale {
-			fmt.Fprintf(w, "\nOr use SSH:\n\n")
+	s.Print("On another machine, add it with:")
+	if _, ok := setupPeerURL(r.Config.Listen, r.Self.DNSName); ok {
+		s.Print("  " + s.Hint("errand peers add "+short+" "+r.Self.DNSName))
+	} else {
+		cmd := "errand peers add --ssh " + short + " " + sshHost
+		if r.RemoteCommand != "" {
+			cmd += " --remote-command " + r.RemoteCommand
 		}
+		s.Print("  " + s.Hint(cmd))
+	}
+	if !verbose {
+		return
+	}
+	s.Print("")
+	s.Print(s.D("Or add it to ~/.config/errand/config.toml yourself:"))
+	if peerURL, ok := setupPeerURL(r.Config.Listen, r.Self.DNSName); ok {
+		s.Print(s.D(fmt.Sprintf("    [peers.%s]\n    url = %q", short, peerURL)))
 	}
 	if r.Config.Transport == config.TransportTailscale {
 		return
 	}
-	fmt.Fprintf(w, "    [peers.%s]\n    ssh = %q\n", short, sshHost)
+	block := fmt.Sprintf("    [peers.%s]\n    ssh = %q", short, sshHost)
 	if r.RemoteCommand != "" {
-		fmt.Fprintf(w, "    remote_command = %q\n", r.RemoteCommand)
+		block += fmt.Sprintf("\n    remote_command = %q", r.RemoteCommand)
 	}
-	fmt.Fprintf(w, "    remote_socket = %q\n", r.SocketPath)
+	block += fmt.Sprintf("\n    remote_socket = %q", r.SocketPath)
+	s.Print(s.D(block))
+}
+
+// homeRelativeText shortens any home-directory paths inside a sentence.
+func homeRelativeText(text string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return text
+	}
+	return strings.ReplaceAll(text, home+"/", "~/")
 }
 
 func setupPeerURL(listen, dnsName string) (string, bool) {

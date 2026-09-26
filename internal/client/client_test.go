@@ -19,6 +19,7 @@ import (
 
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 func TestMain(m *testing.M) {
@@ -44,10 +45,19 @@ func testInterruptNotifications() interruptNotifications {
 	return newInterruptNotifications(func() {}, func() {})
 }
 
+// footer renders a terminal status the way an attached run ends, off a
+// terminal, and returns the exit code with the text.
+func footer(st proto.JobStatus) (int, string) {
+	var stdout, stderr bytes.Buffer
+	v := newRunView(RunOptions{Stdout: &stdout, Stderr: &stderr})
+	v.finished(st, "cabal/job", "cabal", "job", footerChanges{})
+	return resultCode(st), stderr.String()
+}
+
 func TestSignalExitUsesSignalNumber(t *testing.T) {
-	code := exitCode(proto.JobStatus{Result: &proto.Result{
+	code := resultCode(proto.JobStatus{Result: &proto.Result{
 		Signal: "segmentation fault", ChangesOK: true, CleanupOK: true, LogsComplete: true,
-	}}, &bytes.Buffer{}, "peer/job")
+	}})
 	if code != 139 {
 		t.Fatalf("SIGSEGV exit = %d, want 139", code)
 	}
@@ -345,16 +355,18 @@ func TestStorageStatsUsesStorageDeadline(t *testing.T) {
 }
 
 func TestSignaledExitReportsTransactionFailures(t *testing.T) {
-	var stderr bytes.Buffer
-	code := exitCode(proto.JobStatus{Result: &proto.Result{
-		Signal: "killed", SignalNum: 9, ChangesOK: true,
+	code, got := footer(proto.JobStatus{Result: &proto.Result{
+		Signal: "killed", SignalNum: 9, ChangesOK: true, Started: true, DurationMS: 6000,
 		CleanupOK: false, LogsComplete: false, TransactionError: "scope cleanup failed",
-	}}, &stderr, "peer/job")
+	}})
 	if code != 137 {
 		t.Fatalf("SIGKILL exit = %d, want 137", code)
 	}
-	want := "errand: remote process killed by killed (cleanup failed) (logs truncated) (transaction error: scope cleanup failed)\n"
-	if got := stderr.String(); got != want {
+	want := "errand: killed by SIGKILL after 6s\n" +
+		"errand: warning: cleanup on the runner didn't finish\n" +
+		"errand: warning: logs are incomplete\n" +
+		"errand: warning: scope cleanup failed\n"
+	if got != want {
 		t.Fatalf("signaled transaction report = %q, want %q", got, want)
 	}
 }
@@ -370,7 +382,7 @@ func TestExitDiagnosticsReportAllTransactionFailures(t *testing.T) {
 			status: proto.JobStatus{Result: &proto.Result{
 				ExitCode: &zero, CleanupOK: true, LogsComplete: true,
 			}},
-			want: "errand: transaction incomplete (remote_exit=0, workspace changes incomplete)\n",
+			want: "errand: exited 0 in 0ms\nerrand: warning: changed files weren't kept\n",
 			code: ExitTransaction,
 		},
 		"failed process with secondary transaction failures": {
@@ -378,16 +390,20 @@ func TestExitDiagnosticsReportAllTransactionFailures(t *testing.T) {
 				ExitCode: &seven, ChangesOK: true, CleanupOK: false, LogsComplete: false,
 				LimitExceeded: "runtime", TransactionError: "persisting result failed",
 			}},
-			want: "errand: transaction incomplete (remote_exit=7, cleanup failed, limit exceeded: runtime, logs truncated, persisting result failed)\n",
+			want: "errand: exited 7 in 0ms\n" +
+				"errand: warning: cleanup on the runner didn't finish\n" +
+				"errand: warning: hit the runtime limit\n" +
+				"errand: warning: logs are incomplete\n" +
+				"errand: warning: persisting result failed\n",
 			code: 7,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			var stderr bytes.Buffer
-			if got := exitCode(tc.status, &stderr, "peer/job"); got != tc.code {
-				t.Fatalf("exit code = %d, want %d", got, tc.code)
+			code, got := footer(tc.status)
+			if code != tc.code {
+				t.Fatalf("exit code = %d, want %d", code, tc.code)
 			}
-			if got := stderr.String(); got != tc.want {
+			if got != tc.want {
 				t.Fatalf("transaction report = %q, want %q", got, tc.want)
 			}
 		})
@@ -655,7 +671,7 @@ func TestDetachedApplyReportsWorkerLaunchFailure(t *testing.T) {
 	if !proto.ValidULID(strings.TrimSpace(strings.TrimPrefix(stdout.String(), server.URL+"/"))) {
 		t.Fatalf("detached apply did not preserve handle on stdout: %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "automatic workspace change application could not continue") {
+	if !strings.Contains(stderr.String(), "couldn't hand changed files to the background apply") || strings.Contains(stderr.String(), "detached; reattach") {
 		t.Fatalf("worker launch failure diagnostic = %q", stderr.String())
 	}
 	jobID := strings.TrimSpace(strings.TrimPrefix(stdout.String(), server.URL+"/"))
@@ -1507,23 +1523,26 @@ func TestQueuedInterruptAtAdmissionStaysLocal(t *testing.T) {
 	}
 }
 
-func TestQueueNoticeReportsAdmissionState(t *testing.T) {
-	for _, test := range []struct {
-		name  string
-		state string
-		want  bool
-	}{
-		{name: "queued", state: proto.StateQueued, want: true},
-		{name: "already running", state: proto.StateRunning, want: false},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			var stderr bytes.Buffer
-			reportAdmissionState(proto.JobStatus{State: test.state}, &stderr)
-			got := strings.Contains(stderr.String(), "queued on the runner; logs follow when it starts")
-			if got != test.want {
-				t.Fatalf("queue notice present = %v, want %v; output %q", got, test.want, stderr.String())
-			}
-		})
+func TestQueueLineShowsPositionOnlyWhileWaiting(t *testing.T) {
+	var screen bytes.Buffer
+	con := termui.New(&screen, &screen, termui.Options{OutTTY: true, ErrTTY: true, Width: 120})
+	v := newRunView(RunOptions{Display: RunDisplay{UI: con}})
+	two := 2
+	v.waiting(RunOptions{PeerName: "cabal", PeerURL: "http://cabal"}, proto.JobStatus{State: proto.StateQueued, QueueAhead: &two})
+	if got := termui.StripANSI(screen.String()); !strings.Contains(got, "Queued on cabal · 2 jobs ahead · Ctrl-C cancels, Ctrl-D detaches") {
+		t.Fatalf("queue line = %q", got)
+	}
+	con.Out.Write([]byte("first output\n"))
+	if v.showQueue(RunOptions{PeerName: "cabal"}, proto.JobStatus{State: proto.StateQueued, QueueAhead: &two}) {
+		t.Fatal("a stale queued poll redrew the queue line after the job's output started")
+	}
+
+	screen.Reset()
+	running := newRunView(RunOptions{Display: RunDisplay{UI: con}})
+	stop := watchQueue(RunOptions{}, running, "job", proto.JobStatus{State: proto.StateRunning})
+	stop()
+	if screen.Len() != 0 {
+		t.Fatalf("a job that started at once printed %q", screen.String())
 	}
 }
 
@@ -1661,16 +1680,20 @@ func TestControlJSONGetCancelsAStalledResponseBody(t *testing.T) {
 }
 
 func TestAmbiguousResultReportsTransactionExplanation(t *testing.T) {
-	var stderr bytes.Buffer
-	code := exitCode(proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{
+	code, got := footer(proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{
 		State: proto.StateAmbiguous, StartError: "exec format error", ChangesOK: false, CleanupOK: false, LogsComplete: false,
 		TransactionError: "execution state unknown; not replayed",
-	}}, &stderr, "cabal/job")
+	}})
 	if code != ExitTransaction {
 		t.Fatalf("ambiguous result exit = %d, want %d", code, ExitTransaction)
 	}
-	want := "errand: transaction incomplete (cabal/job, state=ambiguous, start error: exec format error, workspace changes incomplete, cleanup failed, logs truncated, execution state unknown; not replayed)\n"
-	if got := stderr.String(); got != want {
+	want := "errand: couldn't start: exec format error\n" +
+		"errand: warning: the runner couldn't confirm how this job ended\n" +
+		"errand: warning: changed files weren't kept\n" +
+		"errand: warning: cleanup on the runner didn't finish\n" +
+		"errand: warning: logs are incomplete\n" +
+		"errand: warning: execution state unknown; not replayed\n"
+	if got != want {
 		t.Fatalf("ambiguous transaction report = %q, want %q", got, want)
 	}
 }
@@ -1698,16 +1721,13 @@ func TestAmbiguousStatePreservesRecordedNonzeroProcessOutcome(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			var stderr bytes.Buffer
-			code := exitCode(proto.JobStatus{
-				State: proto.StateAmbiguous, Result: tc.result,
-			}, &stderr, "cabal/job")
+			code, got := footer(proto.JobStatus{State: proto.StateAmbiguous, Result: tc.result})
 			if code != tc.want {
 				t.Fatalf("ambiguous %s exit = %d, want %d", name, code, tc.want)
 			}
-			for _, want := range []string{"ambiguous", tc.result.TransactionError} {
-				if !strings.Contains(stderr.String(), want) {
-					t.Fatalf("ambiguous %s report %q does not contain %q", name, stderr.String(), want)
+			for _, want := range []string{"couldn't confirm how this job ended", tc.result.TransactionError} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("ambiguous %s report %q does not contain %q", name, got, want)
 				}
 			}
 		})
@@ -1716,10 +1736,10 @@ func TestAmbiguousStatePreservesRecordedNonzeroProcessOutcome(t *testing.T) {
 
 func TestAmbiguousSuccessfulExitRemainsTransactionFailure(t *testing.T) {
 	zero := 0
-	code := exitCode(proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{
+	code := resultCode(proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{
 		State: proto.StateAmbiguous, ExitCode: &zero, ChangesOK: true, CleanupOK: true,
 		LogsComplete: true, TransactionError: "persisting result failed",
-	}}, io.Discard, "cabal/job")
+	}})
 	if code != ExitTransaction {
 		t.Fatalf("ambiguous successful exit = %d, want %d", code, ExitTransaction)
 	}
@@ -1970,7 +1990,7 @@ func TestCacheMissGetsIndependentFullSubmitRetryBudget(t *testing.T) {
 	if got := attempts.Load(); got != 4 {
 		t.Fatalf("submit attempts = %d, want 4", got)
 	}
-	if !strings.Contains(stderr.String(), "re-shipping the full snapshot") {
+	if !strings.Contains(stderr.String(), "uploading everything") {
 		t.Fatalf("fallback diagnostic = %q", stderr.String())
 	}
 }

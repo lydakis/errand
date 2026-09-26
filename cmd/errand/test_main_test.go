@@ -20,6 +20,11 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("XDG_STATE_HOME", stateHome); err != nil {
 		panic(err)
 	}
+	// Output tests expect Unicode glyphs; TERM=dumb (as in CI or a remote job)
+	// would switch them to ASCII.
+	for _, name := range []string{"TERM", "NO_COLOR", "CLICOLOR_FORCE", "FORCE_COLOR"} {
+		_ = os.Unsetenv(name)
+	}
 	code := m.Run()
 	_ = os.RemoveAll(stateHome)
 	os.Exit(code)

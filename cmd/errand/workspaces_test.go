@@ -227,7 +227,7 @@ func TestWorkspaceListQueriesEveryConfiguredPeer(t *testing.T) {
 	if code := cmdWorkspacesTo(nil, &out, &stderr); code != 1 {
 		t.Fatalf("partial list: %d %s", code, &stderr)
 	}
-	if !strings.Contains(out.String(), "experiment") || !strings.Contains(out.String(), "scratch") || !strings.Contains(stderr.String(), "peer broken") {
+	if !strings.Contains(out.String(), "experiment") || !strings.Contains(out.String(), "scratch") || !strings.Contains(stderr.String(), "broken:") {
 		t.Fatalf("partial list: stdout=%s stderr=%s", &out, &stderr)
 	}
 }
@@ -269,7 +269,7 @@ func TestProfileWorkspaceRejectsIncompatibleRunOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 	stderr.Reset()
-	if code := cmdPushTo([]string{"--profile", "dev"}, &out, &stderr); code != 2 || !strings.Contains(stderr.String(), "pinned peer") {
+	if code := cmdPushTo([]string{"--profile", "dev"}, &out, &stderr); code != 2 || !strings.Contains(stderr.String(), "lives on one runner") {
 		t.Fatalf("push with automatic placement: %d %s", code, &stderr)
 	}
 }

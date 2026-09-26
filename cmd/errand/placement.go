@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"math/rand/v2"
 	"sort"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/placement"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 type placementProbe func(context.Context, string, string, time.Duration) (proto.Info, error)
@@ -21,21 +21,44 @@ type placementChoice struct {
 	config.RunCandidate
 	Info   proto.Info
 	Target string // transport identity; RunCandidate.URL remains the configured display URL
+	note   string // why it was chosen, for the run header
 }
 
 type placementExclusion struct {
-	Peer   string `json:"peer"`
-	Reason string `json:"reason"`
+	Peer   string      `json:"peer"`
+	Reason string      `json:"reason"`
+	info   *proto.Info // facts, when the runner answered but didn't match
 }
 type placementSelection struct {
 	Choices  []placementChoice
 	Excluded []placementExclusion
 }
 
-func (s placementSelection) printExcluded(w io.Writer) {
-	for _, e := range s.Excluded {
-		fmt.Fprintf(w, "errand: where skipped %s: %s\n", terminalSafeField(e.Peer), terminalSafeField(e.Reason))
+func (s placementSelection) printExcluded(e *termui.Stream) {
+	for _, x := range s.Excluded {
+		e.Detail("skipped", terminalSafeField(x.Peer)+": "+terminalSafeField(x.Reason))
 	}
+}
+
+// placementNote says why a runner was chosen, for the run header:
+// "matched os=darwin (cabal is linux)".
+func placementNote(where string, excluded []placementExclusion) string {
+	note := "matched " + where
+	if where == "*" {
+		note = "least busy runner"
+	}
+	var why []string
+	for _, x := range excluded {
+		if x.info != nil && strings.Contains(x.Reason, "os=") && x.info.Facts.OS != "" {
+			why = append(why, x.Peer+" is "+x.info.Facts.OS)
+			continue
+		}
+		why = append(why, x.Peer+" skipped: "+x.Reason)
+	}
+	if len(why) > 0 {
+		note += " (" + strings.Join(why, "; ") + ")"
+	}
+	return note
 }
 
 func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementProbe) (placementSelection, error) {
@@ -47,6 +70,7 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 	defer cancel()
 	choices := make([]placementChoice, len(e.Candidates))
 	reasons := make([]string, len(e.Candidates))
+	infos := make([]*proto.Info, len(e.Candidates))
 	var wg sync.WaitGroup
 	// Bound transport/process fan-out while all probes share one deadline.
 	slots := make(chan struct{}, 8)
@@ -67,6 +91,7 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 				reasons[i] = err.Error()
 				return
 			}
+			infos[i] = &info
 			switch {
 			case !info.Placement:
 				reasons[i] = "runner does not support requirement validation; upgrade it"
@@ -89,7 +114,7 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 	var result placementSelection
 	for i, c := range choices {
 		if reasons[i] != "" {
-			result.Excluded = append(result.Excluded, placementExclusion{Peer: e.Candidates[i].Name, Reason: reasons[i]})
+			result.Excluded = append(result.Excluded, placementExclusion{Peer: e.Candidates[i].Name, Reason: reasons[i], info: infos[i]})
 			exclusions = append(exclusions, fmt.Sprintf("%s: %s", terminalSafeField(e.Candidates[i].Name), terminalSafeField(reasons[i])))
 			continue
 		}
@@ -104,16 +129,22 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 	return result, nil
 }
 
-func announcePlacement(w io.Writer, c placementChoice, where string) {
+func announcePlacement(e *termui.Stream, c placementChoice) {
 	i := c.Info
-	fmt.Fprintf(w, "errand: selected %s for %s (%d/%d slots, %d staging, %d queued)\n", terminalSafeField(c.Name), terminalSafeField(where), i.StartingJobs+i.RunningJobs, i.MaxJobs, i.StagingJobs, i.QueuedJobs)
+	e.Detail("selected", fmt.Sprintf("%s · %d of %d slots busy · %d staging · %d queued", terminalSafeField(c.Name), i.StartingJobs+i.RunningJobs, i.MaxJobs, i.StagingJobs, i.QueuedJobs))
 }
 
-func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placementChoice, error) {
+func runChoices(e config.EffectiveRun, rawURL bool, stderr *termui.Stream, verbose bool) ([]placementChoice, error) {
 	if e.Where != "" {
+		spin := stderr.Spin("Choosing a runner for " + stderr.B(e.Where) + "…")
 		selection, err := chooseRunners(context.Background(), e, client.ProbeWhereInfo)
-		if err == nil {
+		spin.Stop()
+		if err == nil && verbose {
 			selection.printExcluded(stderr)
+		}
+		note := placementNote(e.Where, selection.Excluded)
+		for i := range selection.Choices {
+			selection.Choices[i].note = note
 		}
 		return selection.Choices, err
 	}
@@ -125,10 +156,10 @@ func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placeme
 	return []placementChoice{c}, nil
 }
 
-func configurePlacement(opts *client.RunOptions, choices []placementChoice, stderr io.Writer, selected func(placementChoice)) {
+func configurePlacement(opts *client.RunOptions, choices []placementChoice, stderr *termui.Stream, selected func(placementChoice)) {
 	byTarget := make(map[client.RunTarget]placementChoice, len(choices))
 	for _, c := range choices {
-		target := client.RunTarget{PeerURL: c.Target, PeerName: c.Name}
+		target := client.RunTarget{PeerURL: c.Target, PeerName: c.Name, Placement: c.note}
 		opts.Candidates = append(opts.Candidates, target)
 		byTarget[target] = c
 	}
@@ -136,8 +167,12 @@ func configurePlacement(opts *client.RunOptions, choices []placementChoice, stde
 	opts.OnSelected = func(target client.RunTarget) {
 		c := byTarget[target]
 		if where != "" {
-			announcePlacement(stderr, c, where)
-			warnKnownRunnerVersion(c.Info.Version, c.Name)
+			if opts.Display.Verbose {
+				announcePlacement(stderr, c)
+			}
+			if !opts.Display.Quiet {
+				warnKnownRunnerVersion(stderr, c.Info.Version, c.Name)
+			}
 		}
 		selected(c)
 	}

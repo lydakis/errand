@@ -75,7 +75,7 @@ func TestTransferReportingRoundTrip(t *testing.T) {
 	if code := cmdPushTo([]string{"--workspace", "dev"}, &out, &stderr); code != 0 {
 		t.Fatalf("push: %d %s", code, &stderr)
 	}
-	if !proto.ValidULID(strings.TrimSpace(out.String())) || !strings.Contains(stderr.String(), "push: staged 1 changed path") || !strings.Contains(stderr.String(), "transferred in") {
+	if !proto.ValidULID(strings.TrimSpace(out.String())) || !strings.Contains(stderr.String(), "staged 1 changed file for dev") || !strings.Contains(stderr.String(), "errand push --apply --workspace dev") {
 		t.Fatalf("stage output: %s %s", &out, &stderr)
 	}
 	out.Reset()
@@ -127,7 +127,7 @@ func TestTransferReportingRoundTrip(t *testing.T) {
 	if _, err := os.Stat(strings.TrimSpace(out.String())); err != nil {
 		t.Fatal("fetch stdout lost its staged path", err)
 	}
-	if !strings.Contains(stderr.String(), "fetch: staged 1 changed path") || !strings.Contains(stderr.String(), "transferred in") {
+	if !strings.Contains(stderr.String(), "downloaded 1 changed file from") || !strings.Contains(stderr.String(), "errand fetch --apply") {
 		t.Fatalf("fetch output: %s", &stderr)
 	}
 	out.Reset()
@@ -146,20 +146,23 @@ func TestTransferReportingRoundTrip(t *testing.T) {
 	}
 }
 
-func TestRunBindingOutputIsCompactUnlessVerbose(t *testing.T) {
-	e := config.EffectiveRun{Artifacts: []string{"out"}}
+func TestRunBindingsAreCountedInTheHeaderAndListedInVerbose(t *testing.T) {
+	e := config.EffectiveRun{Artifacts: []string{"out"}, Sources: map[string]string{"workspace_root": "current directory"}}
 	for i := 0; i < 26; i++ {
 		e.Caches = append(e.Caches, proto.CacheBinding{Name: fmt.Sprintf("cache%d", i), Path: fmt.Sprintf("packages/%d/node_modules", i)})
 	}
-	var out bytes.Buffer
-	printRunBindings(&out, e, false)
-	if strings.Count(out.String(), "\n") != 1 || !strings.Contains(out.String(), "26 caches") || strings.Contains(out.String(), "node_modules") {
-		t.Fatalf("noisy summary: %s", &out)
+	d := runDisplay(nil, e, outputFlags{verbose: true})
+	if d.Bindings != "26 caches, 1 artifact" {
+		t.Fatalf("header bindings = %q", d.Bindings)
 	}
-	out.Reset()
-	printRunBindings(&out, e, true)
-	if !strings.Contains(out.String(), "packages/25/node_modules") || !strings.Contains(out.String(), "out") {
-		t.Fatal("verbose output lost binding details")
+	var bound string
+	for _, detail := range d.Details {
+		if detail[0] == "bindings" {
+			bound = detail[1]
+		}
+	}
+	if !strings.Contains(bound, "packages/25/node_modules") || !strings.Contains(bound, "artifact out") {
+		t.Fatalf("verbose bindings lost details: %q", bound)
 	}
 }
 

@@ -72,7 +72,7 @@ func TestCLIWhereFallsBackAfterCapacityRace(t *testing.T) {
 	if rejections.Load() != 1 || admissions.Load() != 1 || !strings.Contains(output.String(), "selected runner received the snapshot") {
 		t.Fatalf("rejections=%d admissions=%d output=%s", rejections.Load(), admissions.Load(), &output)
 	}
-	for _, text := range []string{"selected first", "selected second"} {
+	for _, text := range []string{"first had no room", "second · least busy runner"} {
 		if !strings.Contains(output.String(), text) {
 			t.Fatalf("missing selection explanation: %s", &output)
 		}

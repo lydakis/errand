@@ -354,15 +354,24 @@ new job result to fetch subsequent remote work.
 
 ### Transfer output
 
-Push and fetch use the same summary format on stderr:
+Push and fetch report on stderr: one line saying what happened, then the files.
+On a terminal:
 
 ```text
-errand: push: applied 3 changed paths to workspace experiment on mac-mini; 12 KiB transferred in 0.42s
-errand: fetch: staged 3 changed paths from mac-mini/JOB_ID; 8.0 KiB transferred in 0.31s
+✓ Synced 3 files to experiment on mac-mini: go.mod, main.go and 1 more
+✓ Downloaded 3 changed files from mac-mini/01M3BFTQ6QD4 · 8 KiB · 310ms
+    go.mod
+    main.go
+    report.txt
+  → errand fetch --apply mac-mini/01M3BFTQ6QD4  apply them here
 ```
 
-`staged` means files are available for inspection. `applied` means the file
-application completed; it does not check application readiness or hot reload.
+Piped or in CI, the same lines start with `errand: ` and carry no color. `-v`
+adds transfer sizes and timings; `-q` prints only what scripts need on stdout
+(the staging directory or push id).
+
+Staged files are available for inspection. Applied means the files were
+replaced; errand doesn't rebuild, reload or restart anything.
 Fetch uses `exported` for `--output`. Recovered pushes are identified separately
 and still require another push to send newer local edits.
 

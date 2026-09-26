@@ -70,27 +70,31 @@ func ListWorkspaces(peerURL string) ([]proto.WorkspaceSummary, error) {
 	return result, err
 }
 
-func RemoveWorkspace(peerURL, name string) error {
+func RemoveWorkspace(peerURL, name string) (proto.WorkspaceRemoval, error) {
+	var removal proto.WorkspaceRemoval
 	workspace, err := GetWorkspace(peerURL, name)
 	if err != nil {
-		return err
+		return removal, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, strings.TrimSuffix(peerURL, "/")+"/v0/workspaces/"+workspace.ID, nil)
 	if err != nil {
-		return err
+		return removal, err
 	}
 	resp, err := directHTTP.Do(req)
 	if err != nil {
-		return err
+		return removal, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNoContent {
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return fmt.Errorf("removing workspace: %s: %s", resp.Status, apiError(raw))
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		return removal, &controlHTTPError{statusCode: resp.StatusCode, message: apiError(raw), err: fmt.Errorf("removing workspace: %s: %s", resp.Status, apiError(raw))}
 	}
-	return nil
+	if err := json.Unmarshal(raw, &removal); err != nil {
+		return removal, fmt.Errorf("removing workspace: decoding response: %w", err)
+	}
+	return removal, nil
 }
 
 func CreateWorkspace(opts RunOptions, name string) (proto.Workspace, error) {
@@ -237,11 +241,14 @@ func prepareWorkspaceRun(opts RunOptions) snapshotPreparation {
 		return snapshotPreparation{stage: "selecting workspace", err: fmt.Errorf("--workspace cannot be combined with --no-snapshot or --include-all")}
 	}
 	w, err := GetWorkspace(opts.PeerURL, opts.Workspace)
+	if IsNotFound(err) {
+		err = fmt.Errorf("%s has no workspace named %s; errand workspaces lists them", peerLabel(opts.PeerName, opts.PeerURL), opts.Workspace)
+	}
 	if err != nil {
 		return snapshotPreparation{stage: "selecting workspace", err: err}
 	}
 	if opts.Caches != nil && !slices.Equal(opts.Caches, w.Selection.Caches) {
-		return snapshotPreparation{stage: "selecting workspace", err: fmt.Errorf("named-cache bindings are fixed when the workspace is created")}
+		return snapshotPreparation{stage: "selecting workspace", err: fmt.Errorf("a workspace's cache bindings are fixed when it's created; drop --cache or make a new workspace")}
 	}
 	return snapshotPreparation{manifest: w.Manifest, selection: w.Selection, workspace: &w}
 }

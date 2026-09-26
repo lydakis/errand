@@ -9,12 +9,14 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/setup"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 type doctorCheck = setup.DiagnosticCheck
@@ -62,27 +64,30 @@ func localDoctor(ctx context.Context, path string) setup.Diagnosis {
 }
 
 func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServices) int {
+	con := newConsole(stdout, stderr)
+	e := con.Err
 	fs := flag.NewFlagSet("errand doctor", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	var flags runConfigFlags
 	flags.bind(fs)
 	asJSON := fs.Bool("json", false, "emit diagnostic checks, next steps, and effective configuration as JSON")
 	configPath := fs.String("config", "", "explicitly check this local runner configuration")
-	setFlagUsage(fs, "errand doctor [options]")
-	flagUsage := fs.Usage
-	fs.Usage = func() {
-		flagUsage()
-		fmt.Fprintln(stderr, "\n"+doctorScope)
-	}
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
+	var output outputFlags
+	output.bind(fs, "")
+	if ok, code := parseFlags(fs, args, "doctor", stdout, e); !ok {
+		return code
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "errand doctor: unexpected arguments: %s\n", strings.Join(fs.Args(), " "))
-		return 2
+		return usageError(e, "unexpected arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	var spin *termui.Spinner
+	if !*asJSON && !output.quiet {
+		spin = e.Spin("Checking this machine and your runners…")
+	}
+	finish := func(report doctorReport) int {
+		if spin != nil {
+			spin.Stop()
+		}
+		return finishDoctorReport(con, report, *asJSON, output)
 	}
 	var invalid string
 	fs.Visit(func(f *flag.Flag) {
@@ -91,13 +96,11 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 		}
 	})
 	if invalid != "" {
-		fmt.Fprintln(stderr, "errand doctor: "+invalid)
-		return 2
+		return usageError(e, "%s", invalid)
 	}
 	overrides, err := flags.overrides(fs)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand doctor: %v\n", err)
-		return 2
+		return usageError(e, "%v", err)
 	}
 	report := doctorReport{Scope: doctorScope}
 	if services.local != nil {
@@ -154,12 +157,12 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 				probe := services.where
 				selection, selectionErr := chooseRunners(context.Background(), effective, probe)
 				report.PlacementSkipped = selection.Excluded
-				if !*asJSON && selectionErr == nil {
-					selection.printExcluded(stderr)
+				if !*asJSON && selectionErr == nil && output.verbose {
+					selection.printExcluded(e)
 				}
 				if selectionErr != nil {
 					report.Checks = append(report.Checks, doctorCheck{Name: "runner", Status: "error", Detail: selectionErr.Error(), Hint: "Check peer connectivity and requirements with errand peers."})
-					return finishDoctorReport(stdout, stderr, report, *asJSON)
+					return finish(report)
 				}
 				chosen := selection.Choices[0]
 				effective.Peer, effective.URL = chosen.Name, chosen.URL
@@ -185,7 +188,7 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 						hint = "Check the remote shell's PATH or set this peer's remote_command to the absolute Errand executable path."
 					}
 					report.Checks = append(report.Checks, doctorCheck{Name: "ssh", Status: "error", Detail: sshErr.Error(), Hint: hint}, doctorCheck{Name: "runner", Status: "skipped", Detail: "No info probe was made because SSH readiness failed."})
-					return finishDoctorReport(stdout, stderr, report, *asJSON)
+					return finish(report)
 				}
 				report.Checks = append(report.Checks, doctorCheck{Name: "ssh", Status: "ok", Detail: "Non-interactive SSH connected and resolved the configured bridge executable."})
 			}
@@ -217,20 +220,75 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 			}
 		}
 	}
+	if report.Effective != nil && report.Effective.Where == "" && overrides.URL == "" {
+		report.Checks = append(report.Checks, otherRunnerChecks(report.Effective.Peer, services.probe)...)
+	}
 	report.Checks = append(report.Checks, doctorApplyChecks()...)
-	return finishDoctorReport(stdout, stderr, report, *asJSON)
+	return finish(report)
 }
 
-func finishDoctorReport(stdout, stderr io.Writer, report doctorReport, asJSON bool) int {
+// otherRunnerChecks probes every configured runner besides the selected one,
+// in parallel, so doctor answers "can I use my runners?" in one run.
+func otherRunnerChecks(selected string, probe doctorProbe) []doctorCheck {
+	if probe == nil {
+		return nil
+	}
+	targets, _, err := peerTargets("", "")
+	if err != nil {
+		return nil
+	}
+	var others []peerTarget
+	for _, t := range targets {
+		if t.name != selected && t.name != "local" {
+			others = append(others, t)
+		}
+	}
+	checks := make([]doctorCheck, len(others))
+	var wg sync.WaitGroup
+	for i, t := range others {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+			defer cancel()
+			info, err := probe(ctx, t.url)
+			if err != nil {
+				// Only the runner this setup selects decides doctor's verdict.
+				check := doctorProbeFailure(t.url, err)
+				check.Name = "runner." + t.name
+				check.Status = "warning"
+				checks[i] = check
+				return
+			}
+			check := doctorCheck{Name: "runner." + t.name, Status: "ok", Detail: fmt.Sprintf("Runner %s answered with protocol %d; this caller can read runner info.", info.Version, info.Proto)}
+			if info.Version != version {
+				check.Status = "warning"
+				check.Detail = fmt.Sprintf("Runner %s; CLI %s.", info.Version, version)
+				check.Hint = "If behavior differs, update the installations and run errand setup on the runner."
+			}
+			checks[i] = check
+		}()
+	}
+	wg.Wait()
+	return checks
+}
+
+func finishDoctorReport(con *termui.Console, report doctorReport, asJSON bool, output outputFlags) int {
 	report.OK = true
 	for _, check := range report.Checks {
 		if check.Status == "error" {
 			report.OK = false
 		}
 	}
-	if err := writeDoctorReport(stdout, report, asJSON); err != nil {
-		fmt.Fprintf(stderr, "errand doctor: writing report: %v\n", err)
-		return 1
+	if asJSON {
+		encoder := json.NewEncoder(con.Out.Writer())
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(report); err != nil {
+			con.Err.Errorf("writing report: %v", err)
+			return 1
+		}
+	} else if !output.quiet {
+		writeDoctorReport(con.Out, report, output.verbose)
 	}
 	if !report.OK {
 		return 1
@@ -256,55 +314,148 @@ func doctorProbeFailure(target string, err error) doctorCheck {
 	return check
 }
 
-func writeDoctorReport(w io.Writer, report doctorReport, asJSON bool) error {
-	if asJSON {
-		encoder := json.NewEncoder(w)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(report)
+// writeDoctorReport prints one line per check in plain words, the same way
+// whether things pass or fail, then a verdict.
+func writeDoctorReport(s *termui.Stream, report doctorReport, verbose bool) {
+	var binary, path *doctorCheck
+	for i := range report.Checks {
+		switch report.Checks[i].Name {
+		case "local.binary":
+			binary = &report.Checks[i]
+		case "local.path":
+			path = &report.Checks[i]
+		}
 	}
-	healthy := report.OK
-	var passed []string
+	problems, warnings := 0, 0
+	line := func(check doctorCheck, text string) {
+		glyph := termui.OK
+		switch check.Status {
+		case "error":
+			glyph = termui.Fail
+			problems++
+		case "warning":
+			glyph = termui.Warn
+			warnings++
+		case "skipped":
+			glyph = termui.Skip
+		}
+		s.Print(s.G(glyph) + " " + text)
+		if check.Hint != "" && (check.Status == "error" || check.Status == "warning" || verbose) {
+			for _, l := range wrapPlain(check.Hint, 90) {
+				s.Print("    " + s.D(l))
+			}
+		}
+		if verbose && check.Detail != "" && check.Status == "ok" {
+			s.Print("    " + s.D(check.Detail))
+		}
+	}
+	if binary != nil {
+		text := "errand " + version
+		exe := strings.TrimPrefix(binary.Detail, "Running executable: ")
+		if exe != "" && exe != binary.Detail {
+			text += " " + s.D("· "+homeRelative(exe))
+			if path != nil && path.Status == "ok" {
+				text += s.D(", first on PATH")
+			}
+		} else if binary.Status != "ok" {
+			text += ": " + binary.Detail
+		}
+		merged := *binary
+		if path != nil && path.Status != "ok" {
+			merged = *path
+			text += " " + s.D("· "+path.Detail)
+		}
+		line(merged, text)
+	}
 	for _, check := range report.Checks {
-		if check.Status == "ok" {
-			passed = append(passed, check.Name)
-		} else if check.Status != "skipped" {
-			healthy = false
-		}
-	}
-	if healthy {
-		if _, err := fmt.Fprintf(w, "OK: %s\n", terminalSafeField(strings.Join(passed, ", "))); err != nil {
-			return err
-		}
-		if report.Effective != nil && report.Effective.URL != "" {
-			if _, err := fmt.Fprintf(w, "Peer: %s\n", terminalSafeField(report.Effective.URL)); err != nil {
-				return err
+		switch {
+		case check.Name == "local.binary" || check.Name == "local.path":
+			continue
+		case check.Name == "local.runner" && check.Status == "skipped":
+			line(check, "No local runner on this machine "+s.D("· optional; errand setup adds one"))
+		case strings.HasPrefix(check.Name, "local."):
+			line(check, "Local runner: "+check.Detail)
+		case check.Name == "configuration":
+			line(check, doctorConfigText(s, report, check))
+		case check.Name == "environment":
+			line(check, "Environment: "+check.Detail)
+		case check.Name == "placement":
+			line(check, check.Detail)
+		case check.Name == "ssh":
+			line(check, "SSH: "+check.Detail)
+		case check.Name == "runner" || strings.HasPrefix(check.Name, "runner."):
+			name := strings.TrimPrefix(check.Name, "runner.")
+			if check.Name == "runner" && report.Effective != nil {
+				name = cmpOr(report.Effective.Peer, report.Effective.URL)
 			}
-		}
-		for _, check := range report.Checks {
-			if check.Status == "skipped" {
-				if _, err := fmt.Fprintf(w, "SKIPPED %s: %s\n", terminalSafeField(check.Name), terminalSafeField(check.Detail)); err != nil {
-					return err
-				}
-			}
-		}
-		_, err := fmt.Fprintln(w, "Full details: errand doctor --json")
-		return err
-	}
-	for _, check := range report.Checks {
-		if _, err := fmt.Fprintf(w, "%s %s: %s\n", strings.ToUpper(check.Status), check.Name, terminalSafeField(check.Detail)); err != nil {
-			return err
-		}
-		if check.Hint != "" {
-			if _, err := fmt.Fprintf(w, "  Next: %s\n", check.Hint); err != nil {
-				return err
-			}
+			line(check, doctorRunnerText(s, name, check))
+		case check.Name == "automatic_apply":
+			line(check, "Apply: "+check.Detail)
+		default:
+			line(check, check.Name+": "+check.Detail)
 		}
 	}
-	if report.Effective != nil {
-		if _, err := fmt.Fprintf(w, "Workspace: %s\nWorkdir: %s\n", terminalSafeField(report.Effective.Root), terminalSafeField(displaySourceWorkdir(*report.Effective))); err != nil {
-			return err
+	if verbose && report.Effective != nil {
+		s.Print("")
+		s.Print(s.D("Workspace " + homeRelative(report.Effective.Root) + " · workdir " + workdirLabel(report.Effective.Workdir)))
+		for _, l := range wrapPlain(report.Scope, 90) {
+			s.Print(s.D(l))
 		}
 	}
-	_, err := fmt.Fprintln(w, report.Scope)
-	return err
+	s.Print("")
+	switch {
+	case problems > 0:
+		s.Print(s.Paint(termui.Things(problems, "problem", "problems")+".", termui.Red, termui.Bold) + warningSuffix(s, warnings))
+	case warnings > 0:
+		s.Print(s.Paint(termui.Things(warnings, "warning", "warnings")+".", termui.Yellow, termui.Bold))
+	default:
+		s.Print(s.Paint("All good.", termui.Green, termui.Bold) + " " + s.D("errand doctor -v for details, --json for scripts"))
+	}
+}
+
+func warningSuffix(s *termui.Stream, warnings int) string {
+	if warnings == 0 {
+		return ""
+	}
+	return " " + s.D(termui.Things(warnings, "warning", "warnings")+" too.")
+}
+
+func doctorConfigText(s *termui.Stream, report doctorReport, check doctorCheck) string {
+	if check.Status != "ok" || report.Effective == nil {
+		return "Config: " + check.Detail
+	}
+	e := report.Effective
+	source := e.Sources["peer"]
+	if path, _, ok := strings.Cut(strings.TrimPrefix(source, "personal: "), " ("); ok && strings.HasPrefix(source, "personal: ") {
+		source = homeRelative(path)
+	}
+	switch {
+	case e.Where != "":
+		return "Config " + s.D("· runs go to any runner matching "+e.Where)
+	case e.Peer == "":
+		return "Config " + s.D("· no default runner; use --on NAME")
+	default:
+		return "Config " + s.D("· "+source+" · default runner "+e.Peer)
+	}
+}
+
+func doctorRunnerText(s *termui.Stream, name string, check doctorCheck) string {
+	switch check.Status {
+	case "ok":
+		v := ""
+		if _, rest, ok := strings.Cut(check.Detail, "Runner "); ok {
+			v, _, _ = strings.Cut(rest, " ")
+		}
+		return name + " answered " + s.D("· errand "+v)
+	case "warning":
+		return name + " answered, but " + strings.TrimSuffix(check.Detail, ".")
+	case "skipped":
+		return name + " " + s.D("· "+check.Detail)
+	default:
+		cause := check.Detail
+		if strings.Contains(cause, "no such host") {
+			cause = "no such host"
+		}
+		return name + " didn't answer " + s.D("("+cause+")")
+	}
 }

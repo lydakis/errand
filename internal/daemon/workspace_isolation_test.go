@@ -61,7 +61,7 @@ func TestWorkspaceRecoveryIsolatesUnreadableLeaseState(t *testing.T) {
 			defer restarted.Close()
 			server := httptest.NewServer(restarted.Handler())
 			defer server.Close()
-			if err := client.RemoveWorkspace(server.URL, "damaged"); err == nil {
+			if _, err := client.RemoveWorkspace(server.URL, "damaged"); err == nil {
 				t.Fatal("removed workspace with uncertain lease")
 			}
 			value, err := os.ReadFile(filepath.Join(j.workspacePath(), "value"))

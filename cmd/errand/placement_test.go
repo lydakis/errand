@@ -11,6 +11,7 @@ import (
 
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 func TestWhereSelectionFiltersAndBalances(t *testing.T) {
@@ -42,7 +43,7 @@ func TestWhereSelectionFiltersAndBalances(t *testing.T) {
 		t.Fatalf("choices=%+v", choices)
 	}
 	var errOut bytes.Buffer
-	selection.printExcluded(&errOut)
+	selection.printExcluded(termui.Plain(&errOut, &errOut).Err)
 	for _, s := range []string{"offline", "wrong-os", "unsupported", "busy"} {
 		if !strings.Contains(errOut.String(), s) {
 			t.Fatalf("missing exclusion %s: %s", s, &errOut)

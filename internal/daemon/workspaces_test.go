@@ -63,7 +63,7 @@ func TestPersistentWorkspaceRunsKeepFilesAndJobResults(t *testing.T) {
 	if err != nil || stats.Workspaces == nil || stats.Workspaces.Items != 1 || stats.Workspaces.Bytes == 0 {
 		t.Fatalf("workspace storage: %+v %v", stats, err)
 	}
-	if err := client.RemoveWorkspace(ts.URL, "experiment"); err != nil {
+	if _, err := client.RemoveWorkspace(ts.URL, "experiment"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := client.GetWorkspace(ts.URL, "experiment"); err == nil {
@@ -95,7 +95,7 @@ func TestPersistentWorkspaceQueuedLeaseAndMissingName(t *testing.T) {
 	}
 	resp.Body.Close()
 	defer client.Kill(ts.URL, id, true)
-	if err := client.RemoveWorkspace(ts.URL, "experiment"); err == nil {
+	if _, err := client.RemoveWorkspace(ts.URL, "experiment"); err == nil {
 		t.Fatal("removed busy workspace")
 	}
 	second := proto.NewULID()
@@ -111,14 +111,14 @@ func TestPersistentWorkspaceQueuedLeaseAndMissingName(t *testing.T) {
 	}
 	waitTerminal(t, ts.URL, id)
 	waitState(t, ts.URL, second, proto.StateRunning)
-	if err := client.RemoveWorkspace(ts.URL, "experiment"); err == nil {
+	if _, err := client.RemoveWorkspace(ts.URL, "experiment"); err == nil {
 		t.Fatal("removed workspace with remaining job")
 	}
 	if err := client.Kill(ts.URL, second, true); err != nil {
 		t.Fatal(err)
 	}
 	waitTerminal(t, ts.URL, second)
-	if err := client.RemoveWorkspace(ts.URL, "experiment"); err != nil {
+	if _, err := client.RemoveWorkspace(ts.URL, "experiment"); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer

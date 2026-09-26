@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 // Keep configuration and failed probes alongside live facts in every view.
@@ -26,30 +28,42 @@ type peerRow struct {
 }
 
 func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
+	con := newConsole(stdout, stderr)
+	e := con.Err
 	fs := flag.NewFlagSet("errand peers", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	jsonOutput := fs.Bool("json", false, "emit configuration and complete runner facts as JSON")
 	on := fs.String("on", "", "query only this configured peer")
 	rawURL := fs.String("url", "", "query a peer base URL directly")
-	setFlagUsage(fs, "errand peers [--json] [--on PEER | --url URL]")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
+	var output outputFlags
+	output.bind(fs, "")
+	if ok, code := parseFlags(fs, args, "peers", stdout, e); !ok {
+		return code
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "errand peers: unexpected arguments: %s\n", strings.Join(fs.Args(), " "))
-		return 2
+		return usageError(e, "unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	if *on != "" && *rawURL != "" {
-		fmt.Fprintln(stderr, "errand peers: --on and --url are mutually exclusive")
-		return 2
+		return usageError(e, "--on and --url can't be combined")
 	}
 	rows, targets, err := peerListTargets(*on, *rawURL, deps)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand peers: %v\n", err)
+		var unknown *config.UnknownPeerError
+		if errors.As(err, &unknown) {
+			return failWith(e, 2, err, errorScope{peer: *on})
+		}
+		e.Errorf("%v", err)
+		if strings.Contains(err.Error(), "no peers configured") {
+			e.Hintf("find runners on your tailnet with errand peers discover")
+		}
 		return 1
+	}
+	var spin *termui.Spinner
+	if !*jsonOutput && !output.quiet {
+		names := make([]string, 0, len(rows))
+		for _, row := range rows {
+			names = append(names, row.Name)
+		}
+		spin = e.Spin("Asking " + joinWords(names) + "…")
 	}
 	var wg sync.WaitGroup
 	for i, target := range targets {
@@ -77,12 +91,22 @@ func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 		}(i, target)
 	}
 	wg.Wait()
-	if *jsonOutput {
+	if spin != nil {
+		spin.Stop()
+	}
+	switch {
+	case *jsonOutput:
 		if code := writeJSONRows(stdout, stderr, rows); code != 0 {
 			return code
 		}
-	} else {
-		writePeers(stdout, rows)
+	case output.quiet:
+		for _, row := range rows {
+			if row.Info != nil {
+				fmt.Fprintln(stdout, row.Name)
+			}
+		}
+	default:
+		writePeers(con.Out, rows, output.verbose)
 	}
 	for _, row := range rows {
 		if row.Info == nil {
@@ -111,7 +135,7 @@ func peerListTargets(on, rawURL string, deps peersDeps) ([]peerRow, []string, er
 	}
 	if on != "" {
 		if _, ok := cfg.Peers[on]; !ok {
-			return nil, nil, fmt.Errorf("unknown peer %q", on)
+			return nil, nil, &config.UnknownPeerError{Name: on}
 		}
 		cfg.Peers = map[string]config.Peer{on: cfg.Peers[on]}
 	}

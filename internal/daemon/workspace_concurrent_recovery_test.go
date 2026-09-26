@@ -113,7 +113,7 @@ func TestConcurrentWorkspaceRecoveryProtectsOnlyUncertainJob(t *testing.T) {
 	if err != nil || len(entries) != 1 || !slices.Equal(entries[0].Holders, []string{jobs[0].ID}) {
 		t.Fatalf("protected cache released: %+v %v", entries, err)
 	}
-	if err := client.RemoveWorkspace(server.URL, ws.Name); err == nil {
+	if _, err := client.RemoveWorkspace(server.URL, ws.Name); err == nil {
 		t.Fatal("removed workspace with protected survivor")
 	}
 	// Repair the damaged scope and retry recovery. The final member releases

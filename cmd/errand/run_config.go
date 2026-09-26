@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 	"github.com/lydakis/errand/internal/workspace"
 )
 
@@ -181,100 +181,217 @@ func displaySourceWorkdir(effective config.EffectiveRun) string {
 }
 
 func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
+	con := newConsole(stdout, stderr)
+	e := con.Err
 	fs := flag.NewFlagSet("errand config", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	var flags runConfigFlags
 	flags.bind(fs)
 	asJSON := fs.Bool("json", false, "print effective run configuration and sources as JSON")
-	setFlagUsage(fs, "errand config [options]")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
+	var output outputFlags
+	output.bind(fs, "")
+	if ok, code := parseFlags(fs, args, "config", stdout, e); !ok {
+		return code
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "errand: unexpected config arguments: %s\n", strings.Join(fs.Args(), " "))
-		return 2
+		return usageError(e, "unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	overrides, err := flags.overrides(fs)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand: %v\n", err)
-		return 2
+		return usageError(e, "%v", err)
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(stderr, "errand: %v\n", err)
-		return client.ExitTransaction
+		return failWith(e, client.ExitTransaction, err, errorScope{})
 	}
 	effective, err := config.ResolveRun(cwd, overrides)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand: %v\n", err)
-		return client.ExitTransaction
+		return failWith(e, runConfigErrorCode(err), err, errorScope{peer: flags.on})
 	}
 	if err := effective.PrepareExecution(false); err != nil {
-		fmt.Fprintln(stderr, "errand:", err)
-		return 2
+		return usageError(e, "%v", err)
 	}
 	if *asJSON {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetIndent("", "  ")
-		err = encoder.Encode(effective)
-	} else {
-		w := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(w, "SETTING\tVALUE\tSOURCE")
-		for _, row := range []struct {
-			key   string
-			value any
-		}{
-			{"profile", effective.Profile},
-			{"workspace", effective.Workspace},
-			{"where", effective.Where}, {"peer", effective.Peer}, {"url", effective.URL},
-			{"remote_command", effective.RemoteCommand}, {"remote_socket", effective.RemoteSocket},
-			{"workspace_root", effective.Root}, {"workdir", displaySourceWorkdir(effective)},
-			{"project", effective.Project}, {"apply_on_success", effective.ApplyOnSuccess},
-			{"no_snapshot", effective.NoSnapshot},
-			{"forward", effective.Forwards},
-			{"artifacts", effective.Artifacts},
-			{"caches", fmt.Sprintf("%d bindings", len(effective.Caches))},
-		} {
-			if _, exists := effective.Sources[row.key]; !exists {
-				continue
-			}
-			if effective.Workspace != "" && (row.key == "caches" && !effective.CachesOverride || row.key == "artifacts" && !effective.ArtifactsOverride) {
-				row.value = "inherited (resolved on runner)"
-			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", row.key, terminalSafeField(fmt.Sprint(row.value)), terminalSafeField(effective.Sources[row.key]))
+		if err := encoder.Encode(effective); err != nil {
+			e.Errorf("writing config: %v", err)
+			return client.ExitTransaction
 		}
-		cacheRows := slices.Clone(effective.Caches)
-		slices.SortFunc(cacheRows, func(a, b proto.CacheBinding) int {
-			if order := cmp.Compare(effective.CacheSources[a.Name], effective.CacheSources[b.Name]); order != 0 {
-				return order
-			}
-			return cmp.Compare(a.Path, b.Path)
-		})
-		for _, cache := range cacheRows {
-			source := effective.CacheSources[cache.Name]
-			if source == "" {
-				source = effective.Sources["caches"]
-			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", terminalSafeField("cache."+cache.Name), terminalSafeField(cache.Path), terminalSafeField(source))
-		}
-		for _, entry := range effective.Environment {
-			state := entry.Kind + " (value hidden)"
-			if entry.Kind == "passenv" {
-				state = "passenv (available)"
-				if !entry.Available {
-					state = "passenv (missing)"
-				}
-			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", terminalSafeField("env."+entry.Name), state, terminalSafeField(entry.Source))
-		}
-		err = w.Flush()
+		return 0
 	}
-	if err != nil {
-		fmt.Fprintf(stderr, "errand: writing config: %v\n", err)
-		return client.ExitTransaction
-	}
+	writeConfig(con.Out, effective, output.verbose)
 	return 0
+}
+
+// configRow is one setting as shown by errand config.
+type configRow struct {
+	label, value, source string
+	isDefault, fromFlag  bool
+}
+
+// writeConfig groups settings by what they control, dims defaults, and
+// highlights what this invocation's flags changed.
+func writeConfig(s *termui.Stream, effective config.EffectiveRun, verbose bool) {
+	src := func(key string) (string, bool, bool) {
+		raw, ok := effective.Sources[key]
+		if !ok {
+			return "", false, false
+		}
+		return configSource(raw, verbose), strings.HasPrefix(raw, "default"), strings.HasPrefix(raw, "cli: ")
+	}
+	var rows []configRow
+	add := func(label, key, value string) {
+		source, isDefault, fromFlag := src(key)
+		if _, ok := effective.Sources[key]; !ok {
+			return
+		}
+		rows = append(rows, configRow{label, value, source, isDefault, fromFlag})
+	}
+	onOff := func(on bool) string {
+		if on {
+			return "on"
+		}
+		return "off"
+	}
+	listOr := func(values []string) string {
+		if len(values) == 0 {
+			return "none"
+		}
+		return strings.Join(values, ", ")
+	}
+	add("Profile", "profile", effective.Profile)
+	add("Persistent", "workspace", effective.Workspace)
+	add("Where", "where", effective.Where)
+	add("Runner", "peer", effective.Peer)
+	add("", "url", effective.URL)
+	add("", "remote_command", effective.RemoteCommand)
+	add("", "remote_socket", effective.RemoteSocket)
+	add("Workspace", "workspace_root", homeRelative(effective.Root))
+	workdir := workdirLabel(effective.Workdir)
+	if effective.NoSnapshot {
+		workdir = "empty workspace"
+	}
+	add("Workdir", "workdir", workdir)
+	add("Project", "project", effective.Project)
+	add("Apply", "apply_on_success", onOff(effective.ApplyOnSuccess))
+	add("Snapshot", "no_snapshot", onOff(!effective.NoSnapshot))
+	add("Forwards", "forward", listOr(effective.Forwards))
+	artifacts := listOr(effective.Artifacts)
+	caches := "none"
+	if len(effective.Caches) != 0 {
+		caches = termui.Things(len(effective.Caches), "binding", "bindings")
+	}
+	if effective.Workspace != "" {
+		if !effective.ArtifactsOverride {
+			artifacts = "from the workspace (resolved on the runner)"
+		}
+		if !effective.CachesOverride {
+			caches = "from the workspace (resolved on the runner)"
+		}
+	}
+	add("Artifacts", "artifacts", artifacts)
+	add("Caches", "caches", caches)
+	cacheRows := slices.Clone(effective.Caches)
+	slices.SortFunc(cacheRows, func(a, b proto.CacheBinding) int {
+		if order := cmp.Compare(effective.CacheSources[a.Name], effective.CacheSources[b.Name]); order != 0 {
+			return order
+		}
+		return cmp.Compare(a.Path, b.Path)
+	})
+	for _, cache := range cacheRows {
+		source := effective.CacheSources[cache.Name]
+		if source == "" {
+			source = effective.Sources["caches"]
+		}
+		rows = append(rows, configRow{label: "", value: cache.Name + " → " + cache.Path, source: configSource(source, verbose), fromFlag: strings.HasPrefix(source, "cli: ")})
+	}
+	for _, entry := range effective.Environment {
+		state := "set here (value hidden)"
+		switch {
+		case entry.Kind == "passenv" && entry.Available:
+			state = "from your shell"
+		case entry.Kind == "passenv":
+			state = "missing from your shell"
+		case entry.Kind == "file":
+			state = "from an env file (value hidden)"
+		}
+		rows = append(rows, configRow{label: "Env " + entry.Name, value: state, source: configSource(entry.Source, verbose), fromFlag: strings.HasPrefix(entry.Source, "cli: ")})
+	}
+	// Long values (deep paths) don't push every source to the far right.
+	const maxValueW = 40
+	labelW, valueW := 0, 0
+	for _, r := range rows {
+		labelW = max(labelW, termui.CellWidth(r.label))
+		if w := termui.CellWidth(terminalSafeField(r.value)); w <= maxValueW {
+			valueW = max(valueW, w)
+		}
+	}
+	for _, r := range rows {
+		value := terminalSafeField(r.value)
+		label := padRight(r.label, labelW)
+		pad := strings.Repeat(" ", max(3, valueW-termui.CellWidth(value)+3))
+		var line string
+		switch {
+		case r.fromFlag:
+			line = label + "   " + s.Paint(value, termui.Bold, termui.Yellow) + pad + s.Paint(r.source, termui.Yellow)
+		case r.isDefault:
+			line = s.D(label + "   " + value + pad + r.source)
+		case r.label == "":
+			line = label + "   " + s.D(value) + pad + s.D(r.source)
+		case r.label == "Runner":
+			line = label + "   " + s.B(value) + pad + s.D(r.source)
+		default:
+			line = label + "   " + value + pad + s.D(r.source)
+		}
+		if strings.HasPrefix(r.value, "missing") {
+			line = label + "   " + s.Paint(value, termui.Red) + pad + s.D(r.source)
+		}
+		s.Print(strings.TrimRight(line, " "))
+	}
+}
+
+// configSource shortens where a setting came from.
+func configSource(raw string, verbose bool) string {
+	switch {
+	case raw == "":
+		return ""
+	case strings.HasPrefix(raw, "cli: "):
+		flagText := strings.TrimPrefix(raw, "cli: ")
+		if before, _, ok := strings.Cut(flagText, "/"); ok && !verbose {
+			return before
+		}
+		return flagText
+	case strings.HasPrefix(raw, "default"):
+		if verbose {
+			return raw
+		}
+		return "default"
+	case raw == "current directory relative to workspace root":
+		return "current directory"
+	case raw == "derived from workspace root and current directory":
+		return "workspace folder name"
+	}
+	for _, prefix := range []string{"personal: ", "workspace: ", "profile "} {
+		if !strings.HasPrefix(raw, prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(raw, prefix)
+		path, key, hasKey := strings.Cut(rest, " (")
+		key = strings.TrimSuffix(key, ")")
+		if !hasKey {
+			if p, k, ok := strings.Cut(rest, " "); ok {
+				path, key, hasKey = p, k, true
+			}
+		}
+		path = homeRelative(path)
+		switch {
+		case !hasKey:
+			return path
+		case verbose || key == "default_peer":
+			return key + " · " + path
+		default:
+			return key
+		}
+	}
+	return raw
 }

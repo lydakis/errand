@@ -59,8 +59,8 @@ func TestAccessCLI(t *testing.T) {
 	if !reflect.DeepEqual(policy.AllowUsers, []string{"owner@example.com"}) || policy.Path != path {
 		t.Fatalf("list after preview: %+v", policy)
 	}
-	run("add", "--config", path, "friend@example.com")
-	for _, want := range []string{"Updated", "restart", "deny_users overrides", "removes comments", "errand setup --config"} {
+	run("add", "--config", path, "-v", "friend@example.com")
+	for _, want := range []string{"allowed friend@example.com", "Not active until the runner restarts", "deny_users overrides", "comments are dropped", "errand setup --config"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("missing %q in %s", want, &out)
 		}

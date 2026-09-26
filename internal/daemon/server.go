@@ -51,6 +51,8 @@ const (
 )
 
 type Config struct {
+	// JobLog, when set, receives one event per job lifecycle moment.
+	JobLog func(JobLogEvent)
 	// ChangeStorage reports aggregate fetched-change usage for this process's OS
 	// account. It exposes no workspace paths or contents to remote callers.
 	ChangeStorage    func(context.Context) (proto.ChangeStorageStats, error)
@@ -1086,7 +1088,7 @@ admissionCheck:
 		j.event("start-rejected", err.Error())
 		if res := j.settleStartFailure(); res != nil {
 			j.finalize(d, res, true)
-			writeJSON(w, http.StatusCreated, j.Status())
+			writeJSON(w, http.StatusCreated, d.statusWithQueue(j))
 			return
 		}
 		if cleanupErr := d.abortAdmission(j, err); cleanupErr != nil {
@@ -1108,7 +1110,7 @@ admissionCheck:
 		return
 	}
 	if settled { // killed during staging; already finalized durably
-		writeJSON(w, http.StatusCreated, j.Status())
+		writeJSON(w, http.StatusCreated, d.statusWithQueue(j))
 		return
 	}
 	cancelled, err := d.queueStaged(j)
@@ -1117,10 +1119,10 @@ admissionCheck:
 		return
 	}
 	if cancelled {
-		writeJSON(w, http.StatusCreated, j.Status())
+		writeJSON(w, http.StatusCreated, d.statusWithQueue(j))
 		return
 	}
-	writeJSON(w, http.StatusCreated, j.Status())
+	writeJSON(w, http.StatusCreated, d.statusWithQueue(j))
 }
 
 // queueStaged commits the durable queue phase. Every launch then flows through
@@ -1152,7 +1154,13 @@ func (d *Daemon) queueStaged(j *Job) (cancelled bool, err error) {
 		}
 	}
 	j.event("queued", fmt.Sprintf("position=%d", position))
+	// Every admission passes through the queue; only a job that must wait
+	// for another is worth a log line.
+	waits := position > 1 || len(d.running) >= d.cfg.MaxJobs
 	d.mu.Unlock()
+	if waits {
+		d.logJob(JobLogQueued, j, nil)
+	}
 	d.drainQueue()
 	return false, nil
 }
@@ -1463,9 +1471,18 @@ func (d *Daemon) handleList(w http.ResponseWriter, r *http.Request, id Identity)
 		httpError(w, http.StatusBadRequest, "workspace_id must be a ULID")
 		return
 	}
+	// prefix resolves the short job ids the CLI prints.
+	prefix := strings.ToUpper(r.URL.Query().Get("prefix"))
+	if prefix != "" && !proto.ValidULIDPrefix(prefix) {
+		httpError(w, http.StatusBadRequest, "prefix must be the start of a job ULID")
+		return
+	}
 	d.mu.Lock()
 	owned := make([]*Job, 0, len(d.jobs))
 	for _, j := range d.jobs {
+		if prefix != "" && !strings.HasPrefix(j.ID, prefix) {
+			continue
+		}
 		if d.ownsJob(id, j) {
 			if workspaceID != "" {
 				j.mu.Lock()
@@ -1529,7 +1546,9 @@ func projectMetadata(r *http.Request) (string, bool) {
 
 func (d *Daemon) handleStatus(w http.ResponseWriter, r *http.Request, id Identity) {
 	if j := d.lookup(w, r, id); j != nil {
-		body, err := json.Marshal(j.Details())
+		details := j.Details()
+		details.QueueAhead = d.queueAhead(j)
+		body, err := json.Marshal(details)
 		if err != nil {
 			httpError(w, http.StatusInternalServerError, "encoding job details")
 			return
