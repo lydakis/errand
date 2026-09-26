@@ -2,7 +2,9 @@ package changes
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,33 +113,45 @@ func TestTransferBlobBatchPublicationAndRetry(t *testing.T) {
 				return syncStagedData(f)
 			}, func(root *os.Root) error {
 				barriers++
-				if members.Load() != 2 {
-					t.Errorf("publication after %d distinct bodies", members.Load())
+				// Two distinct bodies plus the store's new usage record.
+				if members.Load() != 3 {
+					t.Errorf("publication after %d member syncs, want 3", members.Load())
+				}
+				entries, err := os.ReadDir(store.Directory)
+				if err != nil {
+					return err
+				}
+				if len(entries) != 3 {
+					t.Errorf("entries at barrier %d = %d, want 3", barriers, len(entries))
+				}
+				var usage int
+				for _, entry := range entries {
+					name := entry.Name()
+					if strings.HasPrefix(name, transferBlobTempPrefix) {
+						// The record stays unnamed until after the final barrier.
+						if bytes, ok := transferBlobUsageFile(t, filepath.Join(store.Directory, name)); ok && bytes == int64(len("first")+len("second")) {
+							usage++
+						} else if barriers != 1 {
+							t.Errorf("unpublished body %q after data barrier", name)
+						}
+					} else if barriers == 1 {
+						t.Errorf("published %q before data barrier", name)
+					} else if body, err := os.ReadFile(filepath.Join(store.Directory, name)); err != nil || fmt.Sprintf("%x", sha256.Sum256(body)) != name {
+						t.Errorf("invalid published body %q: %v", name, err)
+					}
+				}
+				if usage != 1 {
+					t.Errorf("pending usage records at barrier %d = %d, want 1", barriers, usage)
 				}
 				if barriers == 1 {
-					entries, err := os.ReadDir(store.Directory)
-					if err != nil {
-						return err
-					}
-					if len(entries) != 2 {
-						t.Errorf("prepared bodies = %d, want 2", len(entries))
-					}
-					for _, entry := range entries {
-						if !strings.HasPrefix(entry.Name(), transferBlobTempPrefix) {
-							t.Errorf("published %q before data barrier", entry.Name())
-						}
-					}
 					if failure == "data barrier" {
 						return injected
 					}
 					if failure == "canceled before publication" {
 						cancel()
 					}
-				} else {
-					assertTransferBlobsComplete(t, store.Directory)
-					if failure == "publication" {
-						return injected
-					}
+				} else if failure == "publication" {
+					return injected
 				}
 				return syncApplyRootDirectory(root, ".")
 			})
