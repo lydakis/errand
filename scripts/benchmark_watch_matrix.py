@@ -46,9 +46,13 @@ def run_matrix(args):
     variants = [("", args.binary)] if not args.baseline else [("@baseline", args.baseline), ("@candidate", args.binary)]
     # Mutagen runs once per size x case, beside the candidate when paired.
     competitor = variants[-1][0]
+    cells = list(enumerate(matrix))
     for r in range(args.rounds):
-        for position, (files, name) in enumerate(matrix if r % 2 == 0 else matrix[::-1]):
-            order = variants if (r + position) % 2 == 0 else variants[::-1]
+        for index, (files, name) in cells if r % 2 == 0 else cells[::-1]:
+            # Order by the cell's fixed index, not its position in this round's
+            # traversal: reversing an even-sized matrix preserves position
+            # parity, so each cell would run its variants in one order always.
+            order = variants if (r + index) % 2 == 0 else variants[::-1]
             for label, binary in order:
                 target = args.output / f"r{r}-{files}-{name}{label}"
                 if report_complete(target):

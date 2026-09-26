@@ -60,6 +60,31 @@ class WatchMatrixCommandTest(unittest.TestCase):
                 check(args.output)
         return commands
 
+    def test_paired_cells_alternate_which_variant_runs_first(self):
+        for cases in (["explicit-inplace-edit", "explicit-inplace-delete"],
+                      ["explicit-inplace-edit", "explicit-inplace-delete", "explicit-inplace-create"]):
+            order = []
+            def run(cmd, **_):
+                order.append(Path(cmd[cmd.index("--output") + 1]).name)
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            with tempfile.TemporaryDirectory() as directory:
+                args = argparse.Namespace(output=Path(directory), sizes=[1000, 10000], cases=cases,
+                                          binary="/candidate", baseline="/baseline", mutagen=None,
+                                          rounds=4, samples=1, pause_seconds=0)
+                with mock.patch.object(benchmark_watch_matrix.subprocess, "run", run), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    benchmark_watch_matrix.run_matrix(args)
+            first = {}
+            for name in order:
+                cell, variant = name.split("@")
+                first.setdefault(cell, variant)
+            for size in (1000, 10000):
+                for case in cases:
+                    leaders = [first[f"r{r}-{size}-{case}"] for r in range(4)]
+                    self.assertEqual(leaders[0::2], [leaders[0]] * 2, (len(cases), size, case))
+                    self.assertEqual(leaders[1::2], [leaders[1]] * 2, (len(cases), size, case))
+                    self.assertNotEqual(leaders[0], leaders[1], (len(cases), size, case))
+
     def test_rerun_retries_incomplete_cells_and_keeps_complete_ones(self):
         def setup(root):
             write_report(root, "r0-1000-explicit-inplace-edit", True, [100])
