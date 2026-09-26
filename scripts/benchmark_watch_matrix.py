@@ -63,14 +63,14 @@ def summarize(root):
     for path in sorted(root.glob("r*-*/report.json")):
         round_label, files, case = path.parent.name.split("-", 2)
         base, _, variant = case.partition("@")
-        watch = [s["delivery_seconds"]*1000 for s in json.loads(path.read_text()).get("samples", []) if s["mode"] == "watch"]
-        if variant and watch:
-            rounds[(int(files), base)][(round_label, variant)] = statistics.median(watch)
         report = json.loads(path.read_text())
         g = groups[(int(files), case)]
         if not report.get("complete"):
             g["incomplete"] += 1
             continue
+        watch = [s["delivery_seconds"]*1000 for s in report["samples"] if s["mode"] == "watch"]
+        if variant and watch:
+            rounds[(int(files), base)][(round_label, variant)] = statistics.median(watch)
         for s in report["samples"]:
             if s["mode"] == "watch":
                 g["watch"].append(s["delivery_seconds"]*1000)
