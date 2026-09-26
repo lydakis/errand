@@ -51,7 +51,10 @@ const (
 )
 
 type Config struct {
-	// JobLog, when set, receives one event per job lifecycle moment.
+	// JobLog, when set, receives one event per job lifecycle moment, in
+	// order, on its own goroutine. A slow JobLog never delays a job; its
+	// events wait in memory instead. Close delivers what's pending, waiting
+	// up to jobLogCloseWait for a JobLog that has stalled.
 	JobLog func(JobLogEvent)
 	// ChangeStorage reports aggregate fetched-change usage for this process's OS
 	// account. It exposes no workspace paths or contents to remote callers.
@@ -114,9 +117,7 @@ type Daemon struct {
 	closeOnce         sync.Once
 	closeErr          error
 
-	// jobLog feeds Config.JobLog from its own goroutine; see logJob.
-	jobLog     chan JobLogEvent
-	jobLogDone chan struct{}
+	jobLog *jobLogQueue // feeds Config.JobLog; nil without one
 }
 
 func New(cfg Config) (*Daemon, error) {
@@ -220,8 +221,7 @@ func New(cfg Config) (*Daemon, error) {
 		d.cache = cache
 	}
 	if cfg.JobLog != nil {
-		d.jobLog, d.jobLogDone = make(chan JobLogEvent, 256), make(chan struct{})
-		go d.deliverJobLog()
+		d.jobLog = newJobLogQueue(cfg.JobLog)
 	}
 	return d, nil
 }
@@ -246,8 +246,8 @@ func (d *Daemon) lockStateDir() error {
 // Close releases the process-wide ownership of the daemon state directory.
 func (d *Daemon) Close() error {
 	d.closeOnce.Do(func() {
-		if d.jobLogDone != nil {
-			close(d.jobLogDone)
+		if d.jobLog != nil {
+			d.jobLog.close(jobLogCloseWait)
 		}
 		if d.workspaces != nil {
 			_ = d.workspaces.root.Close()

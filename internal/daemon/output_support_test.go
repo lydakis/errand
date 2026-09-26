@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -152,23 +153,69 @@ func TestWorkspaceRemovalReportsWhatItFreed(t *testing.T) {
 	}
 }
 
-func TestAStalledJobLogNeverHoldsUpAJob(t *testing.T) {
+func TestAStalledJobLogNeverHoldsUpAJobOrLosesItsEvents(t *testing.T) {
 	stall := make(chan struct{})
-	t.Cleanup(func() { close(stall) })
+	var mu sync.Mutex
+	var events []JobLogEvent
 	d, err := New(Config{
 		StateDir: t.TempDir(), InsecureNoAuth: true, Version: "test",
-		JobLog: func(JobLogEvent) { <-stall }, // a service whose stderr nobody reads
+		JobLog: func(e JobLogEvent) {
+			<-stall // a service whose stderr nobody reads, until it does
+			mu.Lock()
+			events = append(events, e)
+			mu.Unlock()
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { d.Close() })
 	ts := httptest.NewServer(d.Handler())
 	t.Cleanup(ts.Close)
 	root := workspaceWith(t, nil)
+	var ids []string
 	for range 3 {
 		id := proto.NewULID()
 		rawSubmit(t, ts.URL, id, root, []string{"/bin/echo", "ok"}).Body.Close()
 		waitTerminal(t, ts.URL, id)
+		ids = append(ids, id)
+	}
+	close(stall)
+	d.Close() // delivers everything still queued
+	mu.Lock()
+	defer mu.Unlock()
+	var got []string
+	for _, e := range events {
+		got = append(got, e.ID[len(e.ID)-4:]+" "+string(e.Kind))
+	}
+	var want []string
+	for _, id := range ids {
+		want = append(want, id[len(id)-4:]+" started", id[len(id)-4:]+" finished")
+	}
+	if strings.Join(got, ", ") != strings.Join(want, ", ") {
+		t.Fatalf("events after the log unstalled = %v, want %v", got, want)
+	}
+}
+
+func TestJobLogQueueKeepsOrderAndBoundsClose(t *testing.T) {
+	release := make(chan struct{})
+	var got []string
+	q := newJobLogQueue(func(e JobLogEvent) { <-release; got = append(got, e.ID) })
+	for i := range 5000 {
+		q.push(JobLogEvent{ID: fmt.Sprint(i)})
+	}
+	close(release)
+	q.close(5 * time.Second)
+	if len(got) != 5000 || got[0] != "0" || got[4999] != "4999" {
+		t.Fatalf("delivered %d events, first %v", len(got), got[:min(3, len(got))])
+	}
+
+	blocked := make(chan struct{})
+	t.Cleanup(func() { close(blocked) })
+	stuck := newJobLogQueue(func(JobLogEvent) { <-blocked })
+	stuck.push(JobLogEvent{ID: "x"})
+	started := time.Now()
+	stuck.close(50 * time.Millisecond)
+	if time.Since(started) > time.Second {
+		t.Fatal("close waited on a stalled consumer")
 	}
 }
