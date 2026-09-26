@@ -114,7 +114,9 @@ func serveOutcome(event daemon.JobLogEvent) (termui.Glyph, string) {
 	ran := termui.Duration(time.Duration(res.DurationMS) * time.Millisecond)
 	switch {
 	case res.StartError != "":
-		return termui.Fail, "couldn't start: " + res.StartError
+		return termui.Fail, "couldn't start: " + terminalSafeField(res.StartError)
+	case res.Signal != "" && !res.Started:
+		return termui.Fail, "killed by " + client.SignalName(res.Signal, res.SignalNum) + " before the command started"
 	case res.Signal != "":
 		return termui.Fail, "killed by " + client.SignalName(res.Signal, res.SignalNum) + " after " + ran
 	case res.ExitCode != nil && *res.ExitCode == 0:
@@ -137,6 +139,9 @@ func serveOutcomeFields(event daemon.JobLogEvent) []string {
 		fields = append(fields, "start_error", res.StartError)
 	case res.Signal != "":
 		fields = append(fields, "signal", client.SignalName(res.Signal, res.SignalNum))
+		if !res.Started {
+			fields = append(fields, "started", "false")
+		}
 	case res.ExitCode != nil:
 		fields = append(fields, "exit", fmt.Sprint(*res.ExitCode))
 	}

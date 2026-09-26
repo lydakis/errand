@@ -146,6 +146,41 @@ func TestTransferReportingRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFetchJSONHasOneShapeWhenNothingChanged(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	server := httptest.NewServer(d.Handler())
+	t.Cleanup(server.Close)
+	writeClientConfig(t, fmt.Sprintf("default_peer='test'\n[peers.test]\nurl=%q\n", server.URL))
+	root := t.TempDir()
+	t.Chdir(root)
+	if err := os.WriteFile(".errandignore", nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if code := client.Run(client.RunOptions{PeerURL: server.URL, Root: root, Argv: []string{"true"}, Stdout: io.Discard, Stderr: io.Discard}); code != 0 {
+		t.Fatalf("run: %d", code)
+	}
+	jobs, err := client.List(server.URL)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs: %v %v", jobs, err)
+	}
+	var out, stderr bytes.Buffer
+	if code := cmdFetchTo([]string{"--json", "test/" + jobs[0].ID}, &out, &stderr); code != 0 {
+		t.Fatalf("fetch: %d %s", code, &stderr)
+	}
+	var report map[string]any
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := report["path"]; !ok || report["status"] != "unchanged" {
+		t.Fatalf("unchanged fetch JSON = %s", &out)
+	}
+}
+
 func TestRunBindingsAreCountedInTheHeaderAndListedInVerbose(t *testing.T) {
 	e := config.EffectiveRun{Artifacts: []string{"out"}, Sources: map[string]string{"workspace_root": "current directory"}}
 	for i := 0; i < 26; i++ {
@@ -226,6 +261,12 @@ func TestFetchReportingSelectionAndConflict(t *testing.T) {
 			}
 			if err := os.WriteFile("conflict", []byte("local\n"), 0600); err != nil {
 				t.Fatal(err)
+			}
+			// A conflict on one selected path suggests retrying just that path.
+			stderr.Reset()
+			if code := cmdFetchTo([]string{"--apply", handle, "conflict"}, &out, &stderr); code != client.ExitTransaction ||
+				!strings.Contains(stderr.String(), "errand fetch --apply --conflicts "+handle+" conflict") {
+				t.Fatalf("path-scoped conflict hint: %d %s", code, &stderr)
 			}
 			for _, materialize := range []bool{false, true} {
 				out.Reset()

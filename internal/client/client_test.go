@@ -75,6 +75,39 @@ func TestFooterQuotesRunnerTextAndKeepsStartFailuresWhenQuiet(t *testing.T) {
 	}
 }
 
+func TestRunHeaderQuotesCheckoutNames(t *testing.T) {
+	var stderr bytes.Buffer
+	v := newRunView(RunOptions{Stdout: io.Discard, Stderr: &stderr, Display: RunDisplay{Project: "evil\x1b[2J", Workdir: "sub\ndir"}})
+	v.admitted(RunOptions{PeerName: "cabal"}, "job", snapshot.GitInfo{Commit: "abc1234def"}, 1)
+	if strings.ContainsRune(stderr.String(), '\x1b') || strings.Count(stderr.String(), "\n") != 1 {
+		t.Fatalf("checkout names reached the terminal unquoted: %q", stderr.String())
+	}
+}
+
+func TestRunViewTakesUpdatesFromTheRunsGoroutines(t *testing.T) {
+	con := termui.New(io.Discard, io.Discard, termui.Options{OutTTY: true, ErrTTY: true, Width: 80})
+	v := newRunView(RunOptions{Display: RunDisplay{UI: con}})
+	v.shipFiles, v.shipBytes, v.streamSize = 1, 100, 100
+	opts := RunOptions{PeerName: "cabal"}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	// Upload progress comes from the packer while Ctrl-C narration comes
+	// from the interrupt controller; -race catches unserialized view state.
+	go func() {
+		defer wg.Done()
+		for i := range 100 {
+			v.progress(opts, int64(i))
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range 100 {
+			v.report("forwarding SIGINT to %s", "cabal/job")
+		}
+	}()
+	wg.Wait()
+}
+
 func TestSignalExitUsesSignalNumber(t *testing.T) {
 	code := resultCode(proto.JobStatus{Result: &proto.Result{
 		Signal: "segmentation fault", ChangesOK: true, CleanupOK: true, LogsComplete: true,

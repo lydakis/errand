@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lydakis/errand/internal/proto"
@@ -28,7 +29,11 @@ type RunDisplay struct {
 
 // runView renders one run: transient progress while preparing, a single
 // header once the job is admitted, and a footer that says how it ended.
+// runView is shared by the run's goroutines: upload progress arrives from the
+// packer, interrupt narration from the signal controller, and queue lines
+// from the queue watcher. mu serializes every method that touches its state.
 type runView struct {
+	mu      sync.Mutex
 	con     *termui.Console
 	ui      *termui.Stream
 	quiet   bool
@@ -61,21 +66,43 @@ func newRunView(opts RunOptions) *runView {
 		}
 		con = termui.Plain(out, errOut)
 	}
-	return &runView{con: con, ui: con.Err, quiet: opts.Display.Quiet, verbose: opts.Display.Verbose, display: opts.Display, began: time.Now()}
+	// Project, directory, and binding labels come from the checkout and its
+	// config, so they're quoted once here before any of them is drawn.
+	display := opts.Display
+	display.Project, display.Workdir, display.Bindings = termui.SafeText(display.Project), termui.SafeText(display.Workdir), termui.SafeText(display.Bindings)
+	display.Details = make([][2]string, len(opts.Display.Details))
+	for i, d := range opts.Display.Details {
+		display.Details[i] = [2]string{d[0], termui.SafeText(d[1])}
+	}
+	return &runView{con: con, ui: con.Err, quiet: display.Quiet, verbose: display.Verbose, display: display, began: time.Now()}
 }
 
 func (v *runView) errf(format string, args ...any) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.errLocked(format, args...)
+}
+
+func (v *runView) errLocked(format string, args ...any) {
 	v.stopSpin()
 	v.ui.Errorf(format, args...)
 }
 
 func (v *runView) warnf(format string, args ...any) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.warnLocked(format, args...)
+}
+
+func (v *runView) warnLocked(format string, args ...any) {
 	v.stopSpin()
 	v.ui.Warnf(format, args...)
 }
 
 // report is the interrupt controller's narration.
 func (v *runView) report(format string, args ...any) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.stopSpin()
 	v.ui.Say(termui.Warn, fmt.Sprintf(format, args...))
 }
@@ -106,6 +133,8 @@ func (v *runView) stopSpin() {
 func (v *runView) peer(opts RunOptions) string { return peerLabel(opts.PeerName, opts.PeerURL) }
 
 func (v *runView) preparing(opts RunOptions) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	for _, d := range v.display.Details {
 		v.detail(d[0], d[1])
 	}
@@ -120,6 +149,8 @@ func (v *runView) preparing(opts RunOptions) {
 }
 
 func (v *runView) prepared(opts RunOptions, files int, bytes int64, elapsed time.Duration) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.totalFiles = files
 	switch {
 	case opts.Workspace != "":
@@ -133,6 +164,8 @@ func (v *runView) prepared(opts RunOptions, files int, bytes int64, elapsed time
 }
 
 func (v *runView) selected(opts RunOptions) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.placement = opts.placement
 	if opts.Workspace == "" && !opts.NoSnapshot {
 		v.spinner("Syncing with " + v.ui.B(v.peer(opts)) + "…")
@@ -142,10 +175,14 @@ func (v *runView) selected(opts RunOptions) {
 }
 
 func (v *runView) negotiationFailed(err error) {
-	v.warnf("couldn't check what the runner already has (%v); uploading everything", err)
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.warnLocked("couldn't check what the runner already has (%v); uploading everything", err)
 }
 
 func (v *runView) planned(opts RunOptions, plan shipPlan, manifest proto.Manifest, files int) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.partial = plan.partial
 	v.shipFiles, v.shipBytes = 0, 0
 	var ships func(proto.ManifestEntry) bool
@@ -168,10 +205,16 @@ func (v *runView) planned(opts RunOptions, plan shipPlan, manifest proto.Manifes
 		return
 	}
 	v.upStart = time.Now()
-	v.progress(opts, 0)
+	v.progressLocked(opts, 0)
 }
 
 func (v *runView) progress(opts RunOptions, done int64) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.progressLocked(opts, done)
+}
+
+func (v *runView) progressLocked(opts RunOptions, done int64) {
 	if v.quiet || v.shipFiles == 0 || v.streamSize <= 0 {
 		return
 	}
@@ -195,10 +238,18 @@ func (v *runView) progress(opts RunOptions, done int64) {
 }
 
 func (v *runView) reshipping() {
-	v.warnf("the runner couldn't restore its cached files; uploading everything")
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.warnLocked("the runner couldn't restore its cached files; uploading everything")
 }
 
 func (v *runView) uploaded() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.uploadedLocked()
+}
+
+func (v *runView) uploadedLocked() {
 	if !v.upStart.IsZero() && v.upTime == 0 {
 		v.upTime = time.Since(v.upStart)
 	}
@@ -206,7 +257,9 @@ func (v *runView) uploaded() {
 
 // admitted prints the header: where the command runs and its job id.
 func (v *runView) admitted(opts RunOptions, jobID string, gitInfo snapshot.GitInfo, files int) {
-	v.uploaded()
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.uploadedLocked()
 	v.stopSpin()
 	if v.quiet {
 		return
@@ -287,6 +340,12 @@ func (v *runView) admitted(opts RunOptions, jobID string, gitInfo snapshot.GitIn
 
 // waiting shows the queue while the job hasn't started.
 func (v *runView) waiting(opts RunOptions, status proto.JobStatus) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.waitingLocked(opts, status)
+}
+
+func (v *runView) waitingLocked(opts RunOptions, status proto.JobStatus) {
 	if v.quiet || status.State != proto.StateQueued {
 		return
 	}
@@ -312,6 +371,8 @@ func (v *runView) waiting(opts RunOptions, status proto.JobStatus) {
 
 // started marks the end of any queue wait.
 func (v *runView) started() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	if !v.startedAt.IsZero() {
 		return
 	}
@@ -324,6 +385,8 @@ func (v *runView) started() {
 
 // detachedBackground reports a -d submission.
 func (v *runView) detachedBackground(handle, jobID, peer string) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.stopSpin()
 	if v.quiet {
 		return
@@ -339,6 +402,8 @@ func (v *runView) detachedBackground(handle, jobID, peer string) {
 
 // detachedLive reports Ctrl-D while attached.
 func (v *runView) detachedLive(handle, jobID, peer string) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.stopSpin()
 	if v.ui.Interactive() {
 		short := peer + "/" + termui.ShortID(jobID)
@@ -359,10 +424,12 @@ type footerChanges struct {
 
 // finished prints the footer line for a terminal status.
 func (v *runView) finished(st proto.JobStatus, handle, peer, jobID string, changes footerChanges) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.stopSpin()
 	res := st.Result
 	if res == nil {
-		v.errf("%s has no result (state %s)", handle, st.State)
+		v.errLocked("%s has no result (state %s)", handle, st.State)
 		return
 	}
 	tty := v.ui.Interactive()
@@ -658,15 +725,19 @@ func watchQueue(opts RunOptions, v *runView, jobID string, initial proto.JobStat
 // showQueue draws the queue line unless command output already took over
 // the terminal, which means the job has started.
 func (v *runView) showQueue(opts RunOptions, status proto.JobStatus) bool {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	if v.spin != nil && !v.spin.Active() && !v.queued.IsZero() {
 		return false
 	}
-	v.waiting(opts, status)
+	v.waitingLocked(opts, status)
 	return true
 }
 
 // attached prints attach's header: live or replay, and how old.
 func (v *runView) attached(peer, jobID string, details proto.JobDetails) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	if v.quiet {
 		return
 	}

@@ -100,7 +100,7 @@ func cmdFetchTo(args []string, out, stderr io.Writer) int {
 	}
 	if errors.Is(err, client.ErrNoChanges) {
 		if *jsonOutput {
-			json.NewEncoder(out).Encode(newTransferReport("unchanged", stats, nil))
+			json.NewEncoder(out).Encode(fetchReport{transferReport: newTransferReport("unchanged", stats, nil), Path: staged})
 			return 0
 		}
 		if !verbosity.quiet {
@@ -109,12 +109,7 @@ func cmdFetchTo(args []string, out, stderr io.Writer) int {
 		return 0
 	}
 	if *jsonOutput {
-		report := struct {
-			transferReport
-			Path         string   `json:"path"`
-			Conflicts    []string `json:"conflicts,omitempty"`
-			Materialized bool     `json:"materialized,omitempty"`
-		}{transferReport: newTransferReport(action, stats, err), Path: staged}
+		report := fetchReport{transferReport: newTransferReport(action, stats, err), Path: staged}
 		var conflict *changes.MergeConflictError
 		if errors.As(err, &conflict) {
 			report.Conflicts, report.Materialized = conflict.Paths, conflict.Materialized
@@ -128,7 +123,11 @@ func cmdFetchTo(args []string, out, stderr io.Writer) int {
 		// Errors go to stderr even with --json, which carries them on stdout too.
 		var conflict *changes.MergeConflictError
 		if errors.As(err, &conflict) {
-			reportConflicts(e, conflict, "errand fetch --apply --conflicts "+shown)
+			retry := "errand fetch --apply --conflicts " + shown
+			if changePath != "" {
+				retry += " " + termui.ShellQuote([]string{changePath})
+			}
+			reportConflicts(e, conflict, retry)
 		} else {
 			failWith(e, client.ExitTransaction, err, errorScope{peer: label, job: jobID})
 		}
@@ -166,6 +165,14 @@ func cmdFetchTo(args []string, out, stderr io.Writer) int {
 		e.Next(next, "apply them here")
 	}
 	return 0
+}
+
+// fetchReport is fetch's --json object; every outcome has the same shape.
+type fetchReport struct {
+	transferReport
+	Path         string   `json:"path"`
+	Conflicts    []string `json:"conflicts,omitempty"`
+	Materialized bool     `json:"materialized,omitempty"`
 }
 
 // writeChangeList prints changed paths, with A/M/D letters once they're

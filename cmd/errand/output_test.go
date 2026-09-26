@@ -15,6 +15,7 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
+	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/termui"
 )
@@ -200,5 +201,13 @@ func TestRunnerErrorsReadAsSentencesAboutTheThingAskedFor(t *testing.T) {
 	if code := failWith(termui.Plain(&stderr, &stderr).Err, 2, fmt.Errorf("wrapped: %w", &config.UnknownPeerError{Name: "nope"}), errorScope{}); code != 2 ||
 		!strings.HasPrefix(stderr.String(), "errand: error: no runner named nope\nerrand: hint: ") {
 		t.Fatalf("failWith = %d %q", code, stderr.String())
+	}
+}
+
+func TestServeLogSaysWhenAJobWasKilledBeforeItStarted(t *testing.T) {
+	_, queued := serveOutcome(daemon.JobLogEvent{Result: &proto.Result{Signal: "terminated", SignalNum: 15}})
+	_, ran := serveOutcome(daemon.JobLogEvent{Result: &proto.Result{Signal: "terminated", SignalNum: 15, Started: true, DurationMS: 1500}})
+	if queued != "killed by SIGTERM before the command started" || ran != "killed by SIGTERM after 1.5s" {
+		t.Fatalf("serve outcomes = %q / %q", queued, ran)
 	}
 }

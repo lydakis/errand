@@ -80,9 +80,6 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 		return usageError(e, "unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	var spin *termui.Spinner
-	if !*asJSON && !output.quiet {
-		spin = e.Spin("Checking this machine and your runners…")
-	}
 	finish := func(report doctorReport) int {
 		if spin != nil {
 			spin.Stop()
@@ -101,6 +98,11 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 	overrides, err := flags.overrides(fs)
 	if err != nil {
 		return usageError(e, "%v", err)
+	}
+	// Started only after the arguments check out, so a usage error never
+	// leaves a spinner behind.
+	if !*asJSON && !output.quiet {
+		spin = e.Spin("Checking this machine and your runners…")
 	}
 	report := doctorReport{Scope: doctorScope}
 	if services.local != nil {
@@ -233,9 +235,15 @@ func otherRunnerChecks(selected string, probe doctorProbe) []doctorCheck {
 	if probe == nil {
 		return nil
 	}
-	targets, _, err := peerTargets("", "")
+	targets, warnings, err := peerTargets("", "")
 	if err != nil {
 		return nil
+	}
+	// A runner that can't even be resolved from the config is still a
+	// runner doctor should mention.
+	var configured []doctorCheck
+	for _, warning := range warnings {
+		configured = append(configured, doctorCheck{Name: "runners", Status: "warning", Detail: fmt.Sprint(warning), Hint: "Fix or remove that runner's entry in your errand config."})
 	}
 	var others []peerTarget
 	for _, t := range targets {
@@ -270,7 +278,7 @@ func otherRunnerChecks(selected string, probe doctorProbe) []doctorCheck {
 		}()
 	}
 	wg.Wait()
-	return checks
+	return append(configured, checks...)
 }
 
 func finishDoctorReport(con *termui.Console, report doctorReport, asJSON bool, output outputFlags) int {

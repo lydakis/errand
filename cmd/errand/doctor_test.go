@@ -193,3 +193,16 @@ func TestDoctorHumanReportKeepsFailuresDetailed(t *testing.T) {
 		})
 	}
 }
+
+func TestDoctorMentionsRunnersItCannotResolve(t *testing.T) {
+	writeClientConfig(t, "default_peer = 'test'\n[peers.test]\nurl = 'http://test.invalid'\n[peers.broken]\nurl = 'http://broken.invalid'\nssh = 'broken'\n")
+	checks := otherRunnerChecks("test", func(context.Context, string) (proto.Info, error) {
+		return proto.Info{Proto: proto.ProtoVersion, Version: version}, nil
+	})
+	for _, check := range checks {
+		if check.Status == "warning" && strings.Contains(check.Detail, "broken") {
+			return
+		}
+	}
+	t.Fatalf("an unresolvable runner produced no check: %+v", checks)
+}
