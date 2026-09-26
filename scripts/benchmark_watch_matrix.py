@@ -37,6 +37,8 @@ def run_matrix(args):
     matrix = list(itertools.product(args.sizes, args.cases))
     script = Path(__file__).with_name("benchmark_watch.py")
     variants = [("", args.binary)] if not args.baseline else [("@baseline", args.baseline), ("@candidate", args.binary)]
+    # Mutagen runs once per size x case, beside the candidate when paired.
+    competitor = variants[-1][0]
     for r in range(args.rounds):
         for position, (files, name) in enumerate(matrix if r % 2 == 0 else matrix[::-1]):
             order = variants if (r + position) % 2 == 0 else variants[::-1]
@@ -47,7 +49,7 @@ def run_matrix(args):
                 cmd = [sys.executable, str(script), "--binary", binary, "--files", str(files),
                        "--samples", str(args.samples), "--idle-seconds", "2", "--skip-once", "--trace",
                        "--pause-seconds", str(args.pause_seconds), "--output", str(target), *CASES[name]]
-                if args.mutagen and r == 0 and not label:
+                if args.mutagen and r == 0 and label == competitor:
                     cmd += ["--mutagen", args.mutagen]
                 started = time.monotonic()
                 proc = subprocess.run(cmd, capture_output=True, text=True)
