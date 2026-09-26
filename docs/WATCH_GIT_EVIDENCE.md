@@ -12,9 +12,10 @@ Linux host, so Git-selected edits took about twice the explicit fast path.
 proof explicit `.errandignore` selection already had. After a full selection,
 the watch records:
 
-- **Tracked set:** the index's stamp. If Git rewrote the index (for example an
-  editor's background `git status` refreshing stat data), a digest of
-  `git ls-files --stage` without object ids decides instead.
+- **Tracked set:** the index's stamp, taken through any symbolic link. If Git
+  rewrote the index (for example an editor's background `git status`
+  refreshing stat data), a digest of `git ls-files --stage` without object ids
+  decides instead.
 - **Ignore and config sources, by contents:** `info/exclude`, the global
   excludes file, every config file `git config --show-origin` reports
   (including includes), every `.gitignore` in unexcluded directories (in any

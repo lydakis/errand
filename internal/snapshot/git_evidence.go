@@ -22,7 +22,7 @@ import (
 // can refresh hinted files without asking Git to enumerate the tree again.
 type gitSelectionEvidence struct {
 	index       string
-	indexInfo   fs.FileInfo // nil when absent
+	indexInfo   fs.FileInfo // of the file Git reads; nil when absent
 	indexDigest [sha256.Size]byte
 	// Ignore and configuration sources are small and can be edited in place
 	// without changing any directory stamp, so their contents are compared.
@@ -76,7 +76,10 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 				e.index = filepath.Join(root, e.index)
 			}
 			e.index = filepath.Clean(e.index)
-			e.indexInfo, _ = os.Lstat(e.index)
+			// Git reads the index through a symbolic link and writes its
+			// target, so stamp the target. A retargeted link resolves to a
+			// different file, and one resolving to the same file reads the same.
+			e.indexInfo, _ = os.Stat(e.index)
 		}
 		e.indexDigest, digestErr = trackedDigest(root)
 	})
@@ -444,7 +447,7 @@ func (e *gitSelectionEvidence) verify(root string) error {
 			return sourceChangedf("snapshot: Git selection policy changed after manifest construction; retry")
 		}
 	}
-	info, _ := os.Lstat(e.index)
+	info, _ := os.Stat(e.index)
 	if sameFileEvidence(e.indexInfo, info) {
 		return nil
 	}

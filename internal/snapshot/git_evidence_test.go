@@ -352,6 +352,36 @@ func TestGitWatchEvidenceFallsBackForBranchConditionalIncludes(t *testing.T) {
 	assertPreparedMatchesFull(t, w, b)
 }
 
+// Git reads the index through a symbolic link and replaces the link's target
+// when it writes, leaving the link itself unchanged.
+func TestGitWatchEvidenceFollowsSymlinkedIndex(t *testing.T) {
+	w, b, git := prepareGitWatchFixture(t)
+	index := filepath.Join(w.root, ".git", "index")
+	target := filepath.Join(w.root, ".git", "index.target")
+	if err := os.Rename(index, target); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, index); err != nil {
+		t.Fatal(err)
+	}
+	guard := assertPreparedMatchesFull(t, w, b)
+	if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
+		t.Fatal("Git selection captured no evidence")
+	}
+	writeFile(t, w.root, "value", "edited")
+	assertIncremental(t, w, b, "value")
+	git("add", "-f", "secret") // the untracked file keeps the repository dirty
+	if info, err := os.Lstat(index); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("git add replaced the index link: %v", err)
+	}
+	if err := guard.Verify(); err == nil {
+		t.Fatal("guard accepted a changed index behind a symbolic link")
+	}
+	writeFile(t, w.root, "value", "edited again")
+	w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+	assertPreparedMatchesFull(t, w, b)
+}
+
 // Git reads .gitignore by name, and a case-insensitive filesystem opens
 // .GITIGNORE for it. Evidence records ignore files in any case, so an in-place
 // edit falls back to full selection even where Git would not read the file.
