@@ -32,6 +32,13 @@ CASES = {
 }
 
 
+def report_complete(target):
+    try:
+        return json.loads((target / "report.json").read_text()).get("complete") is True
+    except (OSError, ValueError):
+        return False
+
+
 def run_matrix(args):
     args.output.mkdir(parents=True, exist_ok=True)
     matrix = list(itertools.product(args.sizes, args.cases))
@@ -44,8 +51,14 @@ def run_matrix(args):
             order = variants if (r + position) % 2 == 0 else variants[::-1]
             for label, binary in order:
                 target = args.output / f"r{r}-{files}-{name}{label}"
-                if (target / "report.json").exists():
+                if report_complete(target):
                     continue
+                if target.exists():
+                    # Rerun a failed cell. Keep the attempt for diagnosis, outside
+                    # the directories summarize reads.
+                    aside = args.output / "incomplete"
+                    aside.mkdir(exist_ok=True)
+                    target.rename(aside / f"{target.name}.{time.time_ns()}")
                 cmd = [sys.executable, str(script), "--binary", binary, "--files", str(files),
                        "--samples", str(args.samples), "--idle-seconds", "2", "--skip-once", "--trace",
                        "--pause-seconds", str(args.pause_seconds), "--output", str(target), *CASES[name]]

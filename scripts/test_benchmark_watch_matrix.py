@@ -40,7 +40,7 @@ class WatchMatrixSummaryTest(unittest.TestCase):
 
 
 class WatchMatrixCommandTest(unittest.TestCase):
-    def commands(self, baseline):
+    def commands(self, baseline, setup=None, check=None):
         """Return each variant's benchmark_watch command, keyed by output name."""
         commands = {}
         def run(cmd, **_):
@@ -51,10 +51,28 @@ class WatchMatrixCommandTest(unittest.TestCase):
                                       cases=["explicit-inplace-edit", "explicit-inplace-delete"],
                                       binary="/candidate", baseline=baseline, mutagen="/mutagen",
                                       rounds=2, samples=1, pause_seconds=0)
+            if setup:
+                setup(args.output)
             with mock.patch.object(benchmark_watch_matrix.subprocess, "run", run), \
                     contextlib.redirect_stdout(io.StringIO()):
                 benchmark_watch_matrix.run_matrix(args)
+            if check:
+                check(args.output)
         return commands
+
+    def test_rerun_retries_incomplete_cells_and_keeps_complete_ones(self):
+        def setup(root):
+            write_report(root, "r0-1000-explicit-inplace-edit", True, [100])
+            write_report(root, "r0-1000-explicit-inplace-delete", False, [100])
+            # A run that died before writing any report.
+            (root / "r1-1000-explicit-inplace-edit").mkdir()
+        def check(root):
+            aside = sorted(p.name.rsplit(".", 1)[0] for p in (root / "incomplete").iterdir())
+            self.assertEqual(aside, ["r0-1000-explicit-inplace-delete", "r1-1000-explicit-inplace-edit"])
+            self.assertFalse((root / "r0-1000-explicit-inplace-delete").exists())
+        commands = self.commands(None, setup, check)
+        self.assertEqual(sorted(commands), ["r0-1000-explicit-inplace-delete", "r1-1000-explicit-inplace-delete",
+                                            "r1-1000-explicit-inplace-edit"])
 
     def mutagen(self, cmd):
         return cmd[cmd.index("--mutagen") + 1] if "--mutagen" in cmd else None
