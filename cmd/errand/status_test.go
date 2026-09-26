@@ -11,6 +11,7 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 func TestCmdStatusShowsOneJobsExecutionAndArtifacts(t *testing.T) {
@@ -41,12 +42,21 @@ func TestCmdStatusShowsOneJobsExecutionAndArtifacts(t *testing.T) {
 		t.Fatalf("status exit = %d; stderr=%q", code, stderr.String())
 	}
 	for _, want := range []string{
-		server.URL + "/" + id, "exited", `"nix" "build"`, "atlas", "vm", "2m3s", "exit 0",
-		"retained (complete)", "Workspace changes", "dist/app", "42 bytes",
-		"errand attach " + server.URL + "/" + id, "errand fetch " + server.URL + "/" + id,
+		server.URL + "/" + id, "✓ exited 0", "ran 2m03s", "Command  nix build", "atlas · in vm",
+		"Changes  1 file · 42 B, still on", "dist/app",
+		"errand attach " + server.URL + "/" + id, "errand fetch --apply " + server.URL + "/" + id,
 	} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Fatalf("status output missing %q:\n%s", want, stdout.String())
+		}
+	}
+	stdout.Reset()
+	if code := cmdStatusTo([]string{"-v", "--url", server.URL, id}, &stdout, &stderr); code != 0 {
+		t.Fatalf("status -v exit = %d; stderr=%q", code, stderr.String())
+	}
+	for _, want := range []string{"Logs      retained (complete)", "Cleanup   ok", "Limits", "Admitted"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("status -v output missing %q:\n%s", want, stdout.String())
 		}
 	}
 }
@@ -117,9 +127,9 @@ func TestCmdStatusExplainsEmptyWorkspaceAndIncompleteRetention(t *testing.T) {
 		t.Fatalf("status exit = %d; stderr=%q", code, stderr.String())
 	}
 	for _, want := range []string{
-		"Source: empty workspace",
-		"Workspace changes: unknown (retention incomplete)",
-		"workspace changes not retained",
+		"empty workspace",
+		"Changes  not kept",
+		"changed files weren't kept",
 		"collection failed",
 	} {
 		if !strings.Contains(stdout.String(), want) {
@@ -130,7 +140,7 @@ func TestCmdStatusExplainsEmptyWorkspaceAndIncompleteRetention(t *testing.T) {
 
 func TestWriteStatusShowsTruncatedWorkspaceChangeCount(t *testing.T) {
 	var output bytes.Buffer
-	writeStatus(&output, "runner", "runner/"+proto.NewULID(), proto.JobDetails{
+	writeStatus(termui.Plain(&output, &output).Out, "runner", "runner/"+proto.NewULID(), proto.JobDetails{
 		JobStatus: proto.JobStatus{State: proto.StateExited, Result: &proto.Result{
 			ChangesOK: true, CleanupOK: true, LogsComplete: true,
 			Changes: &proto.ChangeSummary{
@@ -138,8 +148,8 @@ func TestWriteStatusShowsTruncatedWorkspaceChangeCount(t *testing.T) {
 			},
 		}},
 		Spec: proto.ReceiptSpec{Argv: []string{"true"}},
-	}, nil)
-	if !strings.Contains(output.String(), "… 2 more paths") {
+	}, nil, false, time.Now())
+	if !strings.Contains(output.String(), "3 files") || !strings.Contains(output.String(), "… and 2 more") {
 		t.Fatalf("truncated status output = %q", output.String())
 	}
 }
@@ -147,16 +157,17 @@ func TestWriteStatusShowsTruncatedWorkspaceChangeCount(t *testing.T) {
 func TestWriteStatusTreatsAmbiguousExecutionLogsAsUnknown(t *testing.T) {
 	id := proto.NewULID()
 	var output bytes.Buffer
-	writeStatus(&output, "runner", "runner/"+id, proto.JobDetails{
+	writeStatus(termui.Plain(&output, &output).Out, "runner", "runner/"+id, proto.JobDetails{
 		JobStatus: proto.JobStatus{ID: id, State: proto.StateAmbiguous, Result: &proto.Result{
 			Started: false, ChangesOK: false, CleanupOK: true, LogsComplete: false,
 			TransactionError: "execution state unknown",
 		}},
 		Spec: proto.ReceiptSpec{Argv: []string{"build"}},
-	}, nil)
+	}, nil, true, time.Now())
 
 	for _, want := range []string{
-		"Logs: availability unknown; attach to inspect retained logs",
+		"! state unknown",
+		"availability unknown; attach to inspect retained logs",
 		"errand attach runner/" + id,
 	} {
 		if !strings.Contains(output.String(), want) {

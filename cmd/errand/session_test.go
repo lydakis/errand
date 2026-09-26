@@ -27,7 +27,11 @@ func TestSessionInspectionAndDetach(t *testing.T) {
 		if asJSON {
 			args = append(args, "--json")
 		}
-		if code := cmdConfigTo(args, &out, &errOut); code != 0 || !strings.Contains(out.String(), "8080:3000") || !strings.Contains(out.String(), "cli:") {
+		source := "--forward"
+		if asJSON {
+			source = "cli:"
+		}
+		if code := cmdConfigTo(args, &out, &errOut); code != 0 || !strings.Contains(out.String(), "8080:3000") || !strings.Contains(out.String(), source) {
 			t.Fatalf("config: %d %s %s", code, &out, &errOut)
 		}
 	}

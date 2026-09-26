@@ -89,6 +89,10 @@ type RunOptions struct {
 	Forwards       []PortForward
 	changeClientID string
 	selectionGuard *snapshot.SelectionGuard
+	placement      string // why the current candidate was chosen, for the header
+	uploaded       func(bytes int64)
+	reshipping     func()
+	Display        RunDisplay
 	Stdout         io.Writer
 	Stderr         io.Writer
 }
@@ -124,9 +128,11 @@ func runWithDetachNotifications(
 	if opts.Stderr == nil {
 		opts.Stderr = os.Stderr
 	}
-	errf := func(format string, args ...any) {
-		fmt.Fprintf(opts.Stderr, "errand: "+format+"\n", args...)
-	}
+	view := newRunView(opts)
+	// Job output and errand's own lines share one console lock, so the queue
+	// watcher's line and forwarded output never write the same stream at once.
+	opts.Stdout, opts.Stderr = view.con.Out, view.con.Err
+	errf := view.errf
 	if opts.Detach && len(opts.Forwards) != 0 {
 		errf("--detach and --forward are mutually exclusive")
 		return ExitTransaction
@@ -162,16 +168,19 @@ func runWithDetachNotifications(
 	if len(env) == 0 {
 		env, envSources = nil, nil
 	}
-	forwarding, err := bindPortForwards(opts.Forwards, opts.Stderr)
+	forwarding, err := bindPortForwards(opts.Forwards, view.ui)
 	if err != nil {
 		errf("%v", err)
 		return ExitTransaction
 	}
 	defer forwarding.Close()
 	var prep *snapshotPreparation
-	return tryCandidates(opts, func(attempt RunOptions) (int, bool) {
+	lastRejected := false
+	code := tryCandidates(opts, func(attempt RunOptions) (int, bool) {
 		if prep == nil {
 			opts := attempt
+			view.preparing(opts)
+			preparedAt := time.Now()
 			prepared := make(chan snapshotPreparation, 1)
 			go func() {
 				if opts.Workspace != "" {
@@ -188,32 +197,41 @@ func runWithDetachNotifications(
 			case preparedSnapshot = <-prepared:
 			}
 			if preparedSnapshot.err != nil {
-				errf("%s: %v", preparedSnapshot.stage, preparedSnapshot.err)
+				if preparedSnapshot.stage == "selecting workspace" {
+					errf("%v", preparedSnapshot.err)
+				} else {
+					errf("%s: %v", preparedSnapshot.stage, preparedSnapshot.err)
+				}
 				return ExitTransaction, false
 			}
 			prep = &preparedSnapshot
 			files, snapshotBytes := snapshotSize(prep.manifest)
-			if opts.Workspace != "" {
-				fmt.Fprintf(opts.Stderr, "errand: using persistent workspace %s; local files are not uploaded\n", opts.Workspace)
-			} else if opts.NoSnapshot {
-				fmt.Fprintln(opts.Stderr, "errand: no snapshot; using an empty remote workspace")
-			} else {
-				fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
-			}
-
+			view.prepared(opts, files, snapshotBytes, time.Since(preparedAt))
 		}
-		return runPrepared(attempt, *prep, env, envSources, forwarding, sigCh, interruptsControl, detach)
+		view.selected(attempt)
+		code, retry := runPrepared(attempt, view, *prep, env, envSources, forwarding, sigCh, interruptsControl, detach)
+		lastRejected = retry
+		return code, retry
 	})
+	if lastRejected && opts.Where != "" {
+		view.errf("no runner matching %s had room", opts.Where)
+	}
+	return code
 }
 
-func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[string]string, forwarding *forwardSession, sigCh <-chan os.Signal, interruptsControl interruptNotifications, detach <-chan struct{}) (int, bool) {
-	errf := func(format string, args ...any) { fmt.Fprintf(opts.Stderr, "errand: "+format+"\n", args...) }
+func runPrepared(opts RunOptions, view *runView, prep snapshotPreparation, env, envSources map[string]string, forwarding *forwardSession, sigCh <-chan os.Signal, interruptsControl interruptNotifications, detach <-chan struct{}) (int, bool) {
+	errf := view.errf
 	var err error
 	jobID := proto.NewULID()
 	handle := peerLabel(opts.PeerName, opts.PeerURL) + "/" + jobID
 	interruptCtx, stopInterrupts := context.WithCancel(context.Background())
 	defer stopInterrupts()
-	target := newInterruptTarget(opts.PeerURL, jobID, handle, errf, interruptsControl)
+	target := newInterruptTarget(opts.PeerURL, jobID, handle, view.report, interruptsControl)
+	target.detached = func() { view.detachedLive(handle, jobID, peerLabel(opts.PeerName, opts.PeerURL)) }
+	if opts.Detach {
+		// detachedBackground already said where the job is.
+		target.detached = func() {}
+	}
 
 	opts.selectionGuard = prep.guard
 	if prep.workspace != nil {
@@ -302,20 +320,12 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 	}
 	plan, negErr := negotiation.plan, negotiation.err
 	if negErr != nil {
-		errf("snapshot negotiation failed (%v); shipping everything", negErr)
+		view.negotiationFailed(negErr)
 		plan = shipPlan{}
 	}
-	if plan.partial {
-		shipFiles, shipBytes := 0, int64(0)
-		for _, e := range manifest.Entries {
-			if e.Type == proto.EntryFile && plan.ships(e) {
-				shipFiles++
-				shipBytes += e.Size
-			}
-		}
-		fmt.Fprintf(opts.Stderr, "errand: shipping %d of %d files (%d bytes; the rest is cached on the runner)\n",
-			shipFiles, files, shipBytes)
-	}
+	view.planned(opts, plan, manifest, files)
+	opts.uploaded = func(done int64) { view.progress(opts, done) }
+	opts.reshipping = view.reshipping
 
 	if changeStateInitialized {
 		if err := markLocalChangeSubmissionStarted(opts.PeerURL, jobID); err != nil {
@@ -336,8 +346,13 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 	submissionStarted = true
 	status, admissionUncertain, err := submit(opts, jobID, spec, manifest, plan)
 	if err != nil {
-		errf("%v", err)
-		if !admissionUncertain && submitDefinitelyRejected(err) {
+		rejected := !admissionUncertain && submitDefinitelyRejected(err)
+		if rejected && opts.Where != "" && placementRejection(err) {
+			view.warnf("%s had no room (%v); trying the next matching runner", peerLabel(opts.PeerName, opts.PeerURL), err)
+		} else {
+			errf("%v", err)
+		}
+		if rejected {
 			submissionStarted = false
 			stopInterrupts()
 			<-controller.done
@@ -363,10 +378,11 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		}
 	}
 	automaticWorkerStarted, _ := ensureAutomaticApplyWorker(opts, jobID, false)
-	if opts.Workspace != "" {
-		fmt.Fprintf(opts.Stderr, "errand: job %s in workspace %s\n", handle, opts.Workspace)
+	view.uploaded()
+	if opts.Detach {
+		view.detachedBackground(handle, jobID, peerLabel(opts.PeerName, opts.PeerURL))
 	} else {
-		fmt.Fprintf(opts.Stderr, "errand: job %s (%d files, commit %s)\n", handle, len(paths), shortCommit(gitInfo))
+		view.admitted(opts, jobID, gitInfo, len(paths))
 	}
 	forwarding.Start(opts.PeerURL, jobID)
 
@@ -385,8 +401,9 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted), false
 	}
 
-	reportAdmissionState(status, opts.Stderr)
+	stopWatch := watchQueue(opts, view, jobID, status)
 	final, err, detached := streamUntilDetach(opts, jobID, status, detach)
+	stopWatch()
 	if detached {
 		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted), false
 	}
@@ -409,13 +426,7 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		return signalExit("interrupt", 2), false
 	}
 	forwarding.Close()
-	return finishTerminalChanges(opts, jobID, handle, final), false
-}
-
-func reportAdmissionState(status proto.JobStatus, stderr io.Writer) {
-	if status.State == proto.StateQueued {
-		fmt.Fprintln(stderr, "errand: queued on the runner; logs follow when it starts (Ctrl-C cancels)")
-	}
+	return finishTerminalChanges(opts, view, jobID, handle, final), false
 }
 
 func completeRunDetach(
@@ -431,8 +442,9 @@ func completeRunDetach(
 		return code
 	}
 	if workerErr != nil {
-		fmt.Fprintf(opts.Stderr, "errand: automatic workspace change application could not continue: %v\n", workerErr)
-		fmt.Fprintf(opts.Stderr, "errand: fetch and apply manually with: errand fetch --apply %s\n", handle)
+		ui := newRunView(opts).ui
+		ui.Errorf("couldn't hand changed files to the background apply: %v", workerErr)
+		ui.Hintf("apply them yourself with errand fetch --apply %s", handle)
 		return ExitTransaction
 	}
 	return 0
@@ -531,6 +543,7 @@ type AttachOptions struct {
 	Stdout        io.Writer
 	Stderr        io.Writer
 	Forwards      []PortForward
+	Display       RunDisplay
 }
 
 // Attach resumes following an existing job: it streams the log from the
@@ -564,11 +577,14 @@ func attachWithDetachNotifications(
 	if opts.Stderr == nil {
 		opts.Stderr = os.Stderr
 	}
-	errf := func(format string, args ...any) {
-		fmt.Fprintf(opts.Stderr, "errand: "+format+"\n", args...)
-	}
-	handle := peerLabel(opts.PeerName, opts.PeerURL) + "/" + opts.JobID
-	forwarding, err := bindPortForwards(opts.Forwards, opts.Stderr)
+	runOpts := RunOptions{PeerURL: opts.PeerURL, PeerName: opts.PeerName, Stdout: opts.Stdout, Stderr: opts.Stderr, Display: opts.Display}
+	view := newRunView(runOpts)
+	opts.Stdout, opts.Stderr = view.con.Out, view.con.Err
+	runOpts.Stdout, runOpts.Stderr = view.con.Out, view.con.Err
+	errf := view.errf
+	peer := peerLabel(opts.PeerName, opts.PeerURL)
+	handle := peer + "/" + opts.JobID
+	forwarding, err := bindPortForwards(opts.Forwards, view.ui)
 	if err != nil {
 		errf("%v", err)
 		return ExitTransaction
@@ -578,15 +594,17 @@ func attachWithDetachNotifications(
 		opts.BeforeContact()
 	}
 
-	status, err := getStatus(opts.PeerURL, opts.JobID)
+	details, err := GetJobDetails(opts.PeerURL, opts.JobID)
 	if err != nil {
 		errf("%v", err)
 		return ExitTransaction
 	}
+	status := details.JobStatus
 	if len(opts.Forwards) != 0 && status.Result != nil {
-		errf("cannot forward a terminal job")
+		errf("can't forward ports to a job that has finished")
 		return ExitTransaction
 	}
+	view.attached(peer, opts.JobID, details)
 	forwarding.Start(opts.PeerURL, opts.JobID)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -595,11 +613,16 @@ func attachWithDetachNotifications(
 	// first Ctrl-C; there is no pre-admission local-cancel phase here.
 	controller := startAdmittedJobController(
 		ctx, sigCh,
-		newInterruptTarget(opts.PeerURL, opts.JobID, handle, errf, interruptsControl),
+		func() interruptTarget {
+			target := newInterruptTarget(opts.PeerURL, opts.JobID, handle, view.report, interruptsControl)
+			target.detached = func() { view.detachedLive(handle, opts.JobID, peer) }
+			return target
+		}(),
 	)
 
-	runOpts := RunOptions{PeerURL: opts.PeerURL, Stdout: opts.Stdout, Stderr: opts.Stderr}
+	stopWatch := watchQueue(runOpts, view, opts.JobID, status)
 	final, err, detached := streamUntilDetach(runOpts, opts.JobID, status, detach)
+	stopWatch()
 	if detached {
 		return controller.completeDetach(ctx)
 	}
@@ -616,67 +639,56 @@ func attachWithDetachNotifications(
 		return signalExit("interrupt", 2)
 	}
 	forwarding.Close()
-	return finishTerminalChanges(runOpts, opts.JobID, handle, final)
+	return finishTerminalChanges(runOpts, view, opts.JobID, handle, final)
 }
 
-func finishTerminalChanges(opts RunOptions, jobID, handle string, final proto.JobStatus) int {
+func finishTerminalChanges(opts RunOptions, view *runView, jobID, handle string, final proto.JobStatus) int {
 	changeErr := markLocalChangeTerminal(opts.PeerURL, jobID)
-	code := exitCode(final, opts.Stderr, handle)
-	if changeErr != nil {
-		fmt.Fprintf(opts.Stderr, "errand: recording terminal workspace state failed: %v\n", changeErr)
-		if code == 0 {
-			return ExitTransaction
-		}
-	}
+	code := resultCode(final)
 	automatic, automaticRequested, automaticErr := automaticApplyForJob(opts.PeerURL, jobID)
 	if opts.ApplyOnSuccess && changeErr == nil {
 		automaticRequested = true
 		automatic, automaticErr = applyTerminalAutomatically(opts.PeerURL, jobID, final)
 	}
-	if automaticErr != nil {
-		label := "reading automatic apply state"
-		if opts.ApplyOnSuccess {
-			label = "automatic workspace change application failed"
-		}
-		fmt.Fprintf(opts.Stderr, "errand: %s: %v\n", label, automaticErr)
-		if automatic.staged != "" {
-			fmt.Fprintf(opts.Stderr, "errand: workspace changes remain staged at %s\n", automatic.staged)
-		}
-		if code == 0 {
-			return ExitTransaction
-		}
+	footer := footerChanges{}
+	if final.Result != nil {
+		footer.summary = final.Result.Changes
 	}
-	if final.Result == nil || final.Result.Changes == nil {
-		return code
-	}
-	changes := final.Result.Changes
-	if automaticRequested {
+	var applyProblem string
+	if automaticErr == nil && automaticRequested {
 		switch automatic.state {
 		case automaticApplyApplied:
-			fmt.Fprintf(opts.Stderr, "errand: workspace changes applied from %s\n", automatic.staged)
+			footer.applied = true
+			footer.appliedList, _ = StagedChanges(automatic.staged)
 		case automaticApplyFailed:
-			fmt.Fprintf(opts.Stderr, "errand: automatic workspace change application failed: %s\n", automatic.err)
-			if automatic.staged != "" {
-				fmt.Fprintf(opts.Stderr, "errand: workspace changes remain staged at %s\n", automatic.staged)
-			}
-			if code == 0 {
-				return ExitTransaction
-			}
+			applyProblem = automatic.err
 		case automaticApplyPending, automaticApplyRunning:
-			fmt.Fprintln(opts.Stderr, "errand: automatic workspace change application is pending")
-		default:
-			writeRetainedChanges(opts.Stderr, changes, handle)
+			footer.pending = true
 		}
-	} else {
-		writeRetainedChanges(opts.Stderr, changes, handle)
+	}
+	peer := peerLabel(opts.PeerName, opts.PeerURL)
+	view.finished(final, handle, peer, jobID, footer)
+	if changeErr != nil {
+		view.errf("couldn't record the job's changed files locally: %v", changeErr)
+		if code == 0 {
+			code = ExitTransaction
+		}
+	}
+	if automaticErr != nil || applyProblem != "" {
+		if automaticErr != nil {
+			applyProblem = automaticErr.Error()
+		}
+		view.errf("couldn't apply the changed files here: %s", applyProblem)
+		if automatic.staged != "" {
+			view.ui.Hintf("they're downloaded at %s; retry with errand fetch --apply %s", automatic.staged, displayJob(view.ui, peer, jobID))
+		} else {
+			view.ui.Hintf("retry with errand fetch --apply %s", displayJob(view.ui, peer, jobID))
+		}
+		if code == 0 {
+			code = ExitTransaction
+		}
 	}
 	return code
-}
-
-func writeRetainedChanges(stderr io.Writer, changes *proto.ChangeSummary, handle string) {
-	fmt.Fprintf(stderr,
-		"errand: %d workspace changes retained (%d bytes); fetch with errand fetch %s\n",
-		changes.PathCount, changes.Bytes, handle)
 }
 
 func getStatus(peerURL, jobID string) (proto.JobStatus, error) {
@@ -805,6 +817,7 @@ func getJSONWithClientContext(ctx context.Context, httpClient *http.Client, url 
 	if resp.StatusCode != http.StatusOK {
 		return &controlHTTPError{
 			statusCode: resp.StatusCode,
+			message:    apiError(body),
 			err:        fmt.Errorf("%s: %s: %s", label, resp.Status, apiError(body)),
 		}
 	}
@@ -847,11 +860,11 @@ func submit(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manif
 		admissionUncertain = admissionUncertain || uncertain
 		return err
 	}, func() {
-		stderr := opts.Stderr
-		if stderr == nil {
-			stderr = os.Stderr
+		if opts.reshipping != nil {
+			opts.reshipping()
+			return
 		}
-		fmt.Fprintln(stderr, "errand: runner could not restore negotiated blobs; re-shipping the full snapshot")
+		newRunView(opts).reshipping()
 	})
 	return status, admissionUncertain, err
 }
@@ -904,6 +917,9 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 			part, err = mw.CreateFormFile("workspace", "workspace.tar")
 			if err != nil {
 				return err
+			}
+			if opts.uploaded != nil {
+				part = &countingWriter{w: part, add: opts.uploaded}
 			}
 			var shipFile func(proto.ManifestEntry) bool
 			if plan.partial {
@@ -1386,7 +1402,18 @@ func Info(peerURL string) (proto.Info, error) {
 
 type controlHTTPError struct {
 	statusCode int
+	message    string // the runner's own explanation, without HTTP framing
 	err        error
+}
+
+// RemoteMessage returns the runner's explanation and HTTP status for a
+// rejected control request, so the CLI can phrase it without transport noise.
+func RemoteMessage(err error) (status int, message string, ok bool) {
+	var response *controlHTTPError
+	if !errors.As(err, &response) {
+		return 0, "", false
+	}
+	return response.statusCode, response.message, true
 }
 
 func (e *controlHTTPError) Error() string { return e.err.Error() }
@@ -1442,6 +1469,7 @@ func postJSONResultContextTimeout(
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return &controlHTTPError{
 			statusCode: resp.StatusCode,
+			message:    apiError(body),
 			err:        fmt.Errorf("%s: %s", resp.Status, apiError(body)),
 		}
 	}
@@ -1478,4 +1506,43 @@ func decodeAPIError(body []byte) proto.APIError {
 		return e
 	}
 	return proto.APIError{Error: strings.TrimSpace(string(body))}
+}
+
+// ResolveJobPrefix expands a short job id to the one job on the runner whose
+// ULID starts with it.
+func ResolveJobPrefix(peerURL, prefix string) (string, error) {
+	prefix = strings.ToUpper(prefix)
+	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
+	defer cancel()
+	var entries []proto.JobListEntry
+	if err := getJSONContext(ctx, peerURL+"/v0/jobs?prefix="+prefix, 1<<20, "job lookup", &entries); err != nil {
+		return "", err
+	}
+	var matches []string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.ID, prefix) {
+			matches = append(matches, entry.ID)
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return "", &JobPrefixError{Prefix: prefix}
+	default:
+		return "", &JobPrefixError{Prefix: prefix, Matches: matches}
+	}
+}
+
+// JobPrefixError reports a short job id that names no job or several.
+type JobPrefixError struct {
+	Prefix  string
+	Matches []string
+}
+
+func (e *JobPrefixError) Error() string {
+	if len(e.Matches) == 0 {
+		return "no job id starts with " + e.Prefix
+	}
+	return fmt.Sprintf("%s matches %d jobs; use more characters", e.Prefix, len(e.Matches))
 }

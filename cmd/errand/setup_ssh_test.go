@@ -11,6 +11,7 @@ import (
 
 	"github.com/lydakis/errand/internal/setup"
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 type sshSetupDryRunSystem struct {
@@ -29,11 +30,11 @@ func (sshSetupDryRunSystem) Run(context.Context, string, ...string) (string, err
 func TestSetupSSHDryRunCLI(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	sys := sshSetupDryRunSystem{home: t.TempDir()}
-	code := cmdSetupTo([]string{"-n"}, &stdout, &stderr, sys)
+	code := cmdSetupTo([]string{"-n", "-v"}, &stdout, &stderr, sys)
 	if code != 0 {
 		t.Fatalf("exit %d: %s / %s", code, stdout.String(), stderr.String())
 	}
-	for _, want := range []string{`listen = "none"`, "would be configured", `ssh = "YOUR_SSH_HOST"`, "remote_socket ="} {
+	for _, want := range []string{`listen = "none"`, "would accept jobs", `ssh = "YOUR_SSH_HOST"`, "remote_socket =", "Replace YOUR_SSH_HOST"} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Errorf("missing %q: %s", want, stdout.String())
 		}
@@ -51,7 +52,7 @@ func TestSetupSSHReportWithoutTailnetIdentity(t *testing.T) {
 		RemoteCommand: "/opt/errand", SocketPath: "/srv/errand.sock",
 	}
 	var output bytes.Buffer
-	printSetupReport(&output, r, false)
+	printSetupReport(termui.Plain(&output, &output).Out, r, false, true)
 	for _, want := range []string{"is ready", `ssh = "YOUR_SSH_HOST"`, `remote_command = "/opt/errand"`, `remote_socket = "/srv/errand.sock"`} {
 		if !strings.Contains(output.String(), want) {
 			t.Errorf("missing %q: %s", want, output.String())
@@ -59,6 +60,21 @@ func TestSetupSSHReportWithoutTailnetIdentity(t *testing.T) {
 	}
 	if strings.Contains(output.String(), "ignored@example.com") || strings.Contains(output.String(), "url =") {
 		t.Fatal(output.String())
+	}
+	// The suggested command must work when pasted.
+	var suggested []string
+	for _, line := range strings.Split(output.String(), "\n") {
+		if argv := strings.Fields(line); len(argv) > 3 && argv[1] == "peers" && argv[2] == "add" {
+			suggested = argv[3:]
+		}
+	}
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	var out, stderr bytes.Buffer
+	if code := cmdPeersTo(append([]string{"add", "--no-verify"}, suggested...), &out, &stderr, testDeps(t, cfgPath, stubProvider{})); code != 0 {
+		t.Fatalf("suggested peers add %q: %d %s%s", suggested, code, &out, &stderr)
+	}
+	if raw, err := os.ReadFile(cfgPath); err != nil || !strings.Contains(string(raw), `remote_socket = "/srv/errand.sock"`) {
+		t.Fatalf("suggested peers add wrote %q, %v", raw, err)
 	}
 }
 
@@ -74,7 +90,7 @@ func TestSetupTransportFlagConflicts(t *testing.T) {
 func TestSetupSSHFlagOverridesAutomaticDetection(t *testing.T) {
 	var out, errOut bytes.Buffer
 	sys := sshSetupDryRunSystem{home: t.TempDir()}
-	if code := cmdSetupTo([]string{"--ssh", "-n"}, &out, &errOut, sys); code != 0 {
+	if code := cmdSetupTo([]string{"--ssh", "-n", "-v"}, &out, &errOut, sys); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut.String())
 	}
 	if !strings.Contains(out.String(), `transport = "ssh"`) || strings.Contains(out.String(), "Tailscale is not installed") {
@@ -85,7 +101,7 @@ func TestSetupSSHFlagOverridesAutomaticDetection(t *testing.T) {
 func TestSetupTailscaleReportOmitsSSHInstructions(t *testing.T) {
 	r := &setup.Report{Config: setup.ConfigChoice{Transport: "tailscale", Listen: "tailnet:7443"}, Self: tailnet.Self{DNSName: "runner.example.ts.net"}}
 	var out bytes.Buffer
-	printSetupReport(&out, r, false)
+	printSetupReport(termui.Plain(&out, &out).Out, r, false, true)
 	if !strings.Contains(out.String(), "url =") || strings.Contains(out.String(), "ssh =") || strings.Contains(out.String(), "Or use SSH") {
 		t.Fatal(out.String())
 	}
@@ -129,9 +145,9 @@ func TestSetupTransportRepairFlagSpellings(t *testing.T) {
 				sys := transportSetupDryRunSystem{sshSetupDryRunSystem{home: home}}
 				var expected string
 				for i, args := range [][]string{
-					{"--" + mode, "--dry-run", "--config", path},
-					{"--" + mode, "-n", "--config", path},
-					{"-" + mode, "-n", "-config", path},
+					{"--" + mode, "--dry-run", "--config", path, "-v"},
+					{"--" + mode, "-n", "--config", path, "-v"},
+					{"-" + mode, "-n", "-config", path, "--verbose"},
 				} {
 					if force {
 						if i == 0 {

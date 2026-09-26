@@ -16,6 +16,7 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 func savedInterruptedApply(t *testing.T, peer, id, workspaceID string) string {
@@ -114,15 +115,15 @@ func TestPsApplyGuidanceStaysWithItsRow(t *testing.T) {
 		{Peer: "test", JobListEntry: proto.JobListEntry{ID: proto.NewULID(), State: proto.StateExited}, AutomaticApply: &client.AutomaticApplyStatus{State: client.AutomaticApplyNeedsRecovery}},
 	}
 	var out bytes.Buffer
-	writePsWithOptions(&out, rows, psRenderOptions{})
+	writePs(termui.Plain(&out, &out).Out, rows, false)
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	if len(lines) != 3 || strings.Contains(lines[1], "fetch --apply") || !strings.Contains(lines[2], "fetch --apply test/"+rows[1].ID) {
 		t.Fatalf("table guidance detached from row: %s", &out)
 	}
-	out.Reset()
-	writePsWithOptions(&out, rows, psRenderOptions{interactive: true, width: 160})
-	if strings.Count(out.String(), "fetch --apply") != 1 || strings.Contains(out.String(), "automatic apply: applied") {
-		t.Fatalf("cards: %s", &out)
+	con, screen := terminal(160)
+	writePs(con.Out, rows, false)
+	if strings.Count(screen.String(), "fetch --apply") != 1 || strings.Contains(screen.String(), "automatic apply: applied") {
+		t.Fatalf("terminal rows: %s", screen)
 	}
 }
 

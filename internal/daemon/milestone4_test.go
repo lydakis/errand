@@ -307,8 +307,8 @@ func TestRunReportsRetainedChangesUntilExplicitFetch(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run exit = %d; stderr: %s", code, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "workspace changes retained") ||
-		!strings.Contains(stderr.String(), "errand fetch") {
+	if !strings.Contains(stderr.String(), "1 file changed on") ||
+		!strings.Contains(stderr.String(), "errand fetch --apply") {
 		t.Fatalf("run did not explain retained changes: %s", stderr.String())
 	}
 	got, _ := os.ReadFile(filepath.Join(root, "report.txt"))
@@ -344,7 +344,7 @@ func TestRunAppliesRetainedChangesOnSuccessWhenRequested(t *testing.T) {
 	if err != nil || string(got) != "applied" {
 		t.Fatalf("automatically applied value = %q, %v", got, err)
 	}
-	if !strings.Contains(stderr.String(), "workspace changes applied") {
+	if !strings.Contains(stderr.String(), "applied 1 file here") {
 		t.Fatalf("automatic apply diagnostic = %q", stderr.String())
 	}
 }

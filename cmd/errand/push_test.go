@@ -62,7 +62,7 @@ func TestPushUsesConfiguredPeerAndExplicitApply(t *testing.T) {
 		t.Fatalf("remote: %d %s %s", code, &run, &stderr)
 	}
 	stderr.Reset()
-	if code := cmdPushTo(append(args, "--workspace", "missing"), &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "404") {
+	if code := cmdPushTo(append(args, "--workspace", "missing"), &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "has no workspace named missing") {
 		t.Fatalf("explicit workspace did not override profile: %d %s", code, &stderr)
 	}
 	// A different checkout cannot accidentally replace this workspace's source.

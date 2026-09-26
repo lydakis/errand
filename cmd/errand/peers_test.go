@@ -157,8 +157,8 @@ func TestPeersAddVerifiesThenWritesAndSetsDefault(t *testing.T) {
 	if !strings.Contains(string(raw), `default_peer = "cabal"`) || !strings.Contains(string(raw), `url = "`+runner.URL+`"`) {
 		t.Fatalf("config after add:\n%s", raw)
 	}
-	if !strings.Contains(out.String(), "now the default peer") {
-		t.Fatalf("stdout: %s", out.String())
+	if !strings.Contains(errb.String(), "Added cabal") && !strings.Contains(errb.String(), "added cabal") || !strings.Contains(errb.String(), "default runner now") {
+		t.Fatalf("stderr: %s", errb.String())
 	}
 	out.Reset()
 	if code := cmdPeersTo([]string{"add", "mini", runner.URL + "/"}, &out, &errb, deps); code != 0 {
@@ -194,9 +194,8 @@ func TestPeersAddRefusesForbiddenRunnerWithRemedyAndWritesNothing(t *testing.T) 
 	if _, err := os.Stat(cfgPath); !os.IsNotExist(err) {
 		t.Fatal("a refused peer must not be written")
 	}
-	if !strings.Contains(errb.String(), `add "george@example.com" to allow_users`) ||
-		!strings.Contains(errb.String(), "config used by its errand service") ||
-		!strings.Contains(errb.String(), "same `--config` value") ||
+	if !strings.Contains(errb.String(), "errand access add george@example.com") ||
+		!strings.Contains(errb.String(), "the same --config its service uses") ||
 		strings.Contains(errb.String(), "~/.config/errand/errandd.toml") ||
 		strings.Contains(errb.String(), "setup --allow-user") {
 		t.Fatalf("remedy missing: %s", errb.String())
@@ -374,16 +373,16 @@ func TestPeersHelpUsesEstablishedFlagAliases(t *testing.T) {
 	if code := cmdPeersTo([]string{"--help"}, &out, &errb, deps); code != 0 {
 		t.Fatalf("peers --help exit %d", code)
 	}
-	if !strings.Contains(errb.String(), "errand peers discover [-a | --all]") {
-		t.Fatalf("peers help omits discovery aliases:\n%s", errb.String())
+	if !strings.Contains(out.String(), "errand peers discover [-a] [--json]") {
+		t.Fatalf("peers help omits discovery aliases:\n%s", out.String())
 	}
 
 	for _, tc := range []struct {
 		args []string
 		want []string
 	}{
-		{[]string{"add", "--help"}, []string{"-f", "-force", "-n", "-dry-run", "-no-verify", "-remote-command", "-remote-socket", "-ssh"}},
-		{[]string{"discover", "--help"}, []string{"-a", "-all", "-json"}},
+		{[]string{"add", "--help"}, []string{"-f, --force", "-n, --dry-run", "--no-verify", "--remote-command PATH", "--remote-socket PATH", "--ssh"}},
+		{[]string{"discover", "--help"}, []string{"-a, --all", "--json"}},
 	} {
 		out.Reset()
 		errb.Reset()
@@ -391,8 +390,8 @@ func TestPeersHelpUsesEstablishedFlagAliases(t *testing.T) {
 			t.Fatalf("%v exit %d", tc.args, code)
 		}
 		for _, want := range tc.want {
-			if !strings.Contains(errb.String(), want) {
-				t.Errorf("%v help missing %q:\n%s", tc.args, want, errb.String())
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("%v help missing %q:\n%s", tc.args, want, out.String())
 			}
 		}
 	}
@@ -565,8 +564,7 @@ func TestPeersDiscoverClassifiesTailnetNodes(t *testing.T) {
 	}
 	text := out.String()
 	if !strings.Contains(text, "errand peers add cabal cabal.example.ts.net") ||
-		!strings.Contains(text, `add "george@example.com" to allow_users`) ||
-		!strings.Contains(text, "run `errand setup` to restart") ||
+		!strings.Contains(text, "locked refused you; on it, run errand access add george@example.com, then errand setup") ||
 		strings.Contains(text, "web ") {
 		t.Fatalf("discover output:\n%s", text)
 	}

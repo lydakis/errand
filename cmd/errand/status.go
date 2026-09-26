@@ -12,6 +12,7 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 type statusJSON struct {
@@ -26,39 +27,33 @@ func cmdStatus(args []string) int {
 }
 
 func cmdStatusTo(args []string, stdout, stderr io.Writer) int {
+	con := newConsole(stdout, stderr)
+	e := con.Err
 	fs := flag.NewFlagSet("errand status", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
-	setFlagUsage(fs, "errand status [options] HANDLE")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
+	var output outputFlags
+	output.bind(fs, "")
+	if ok, code := parseFlags(fs, args, "status", stdout, e); !ok {
+		return code
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "errand status: exactly one HANDLE (peer/ULID) is required")
-		return 2
+		return needHandle(e, "status")
 	}
 	peerURL, label, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
 	if err != nil {
-		fmt.Fprintf(stderr, "errand: %v\n", err)
-		return 2
+		return failWith(e, handleErrorCode(err), err, handleScope(fs.Arg(0), label, *on))
 	}
 	label = cmpOr(label, peerURL)
 	handle := label + "/" + jobID
 	automaticApply, applyErr := client.GetAutomaticApplyStatus(peerURL, jobID)
 	if applyErr != nil {
-		fmt.Fprintf(stderr, "errand: reading automatic apply state: %v\n", applyErr)
+		e.Warnf("couldn't read the local apply state: %v", applyErr)
 	}
 	details, detailErr := client.GetJobDetails(peerURL, jobID)
-	if detailErr != nil {
-		fmt.Fprintf(stderr, "errand: %v\n", detailErr)
-		if automaticApply == nil {
-			return 1
-		}
+	if detailErr != nil && automaticApply == nil {
+		return failWith(e, 1, detailErr, errorScope{peer: label, job: jobID})
 	}
 	if *jsonOutput {
 		var remote *proto.JobDetails
@@ -70,7 +65,7 @@ func cmdStatusTo(args []string, stdout, stderr io.Writer) int {
 		if err := encoder.Encode(statusJSON{
 			Peer: label, Handle: handle, AutomaticApply: automaticApply, JobDetails: remote,
 		}); err != nil {
-			fmt.Fprintf(stderr, "errand: encoding job status: %v\n", err)
+			e.Errorf("encoding job status: %v", err)
 			return 1
 		}
 		if applyErr != nil || detailErr != nil {
@@ -78,16 +73,23 @@ func cmdStatusTo(args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
-	if detailErr == nil {
-		writeStatus(stdout, label, handle, details, automaticApply)
-	} else {
-		writeStatusField(stdout, "Job", handle)
-		if client.IsNotFound(detailErr) {
-			writeStatusField(stdout, "State", "unknown; job receipt is no longer retained on this runner")
-		} else {
-			writeStatusField(stdout, "State", "unknown; runner unavailable")
+	o := con.Out
+	if output.quiet {
+		if detailErr == nil {
+			fmt.Fprintln(stdout, details.State)
 		}
-		writeStatusField(stdout, "Automatic apply", formatAutomaticApply(*automaticApply))
+	} else if detailErr == nil {
+		writeStatus(o, label, handle, details, automaticApply, output.verbose, time.Now())
+	} else {
+		o.Print(o.Paint(handle, termui.Bold, termui.Cyan))
+		reason := "the runner is unavailable"
+		if client.IsNotFound(detailErr) {
+			reason = "the runner no longer keeps this job's record"
+		}
+		o.Print(o.G(termui.Warn) + " unknown: " + reason)
+		o.Print("")
+		o.Print("  " + o.D(padRight("Apply", 8)) + " " + formatAutomaticApply(*automaticApply))
+		writeApplyRecoveryHint(o, handle, automaticApply)
 	}
 	if applyErr != nil || detailErr != nil {
 		return 1
@@ -95,83 +97,254 @@ func cmdStatusTo(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func writeStatus(
-	w io.Writer,
-	peer, handle string,
-	details proto.JobDetails,
-	automaticApply *client.AutomaticApplyStatus,
-) {
-	writeStatusField(w, "Job", handle)
-	writeStatusField(w, "State", details.State)
-	writeStatusField(w, "Runner", peer)
-	if details.Spec.WorkspaceID != "" {
-		writeStatusField(w, "Workspace", details.Spec.WorkspaceID)
-	}
-	if details.Project != "" {
-		writeStatusField(w, "Project", details.Project)
-	}
-	writeStatusField(w, "Command", quoteArgv(details.Spec.Argv))
-	workdir := details.Spec.Workdir
-	if workdir == "" || workdir == "." {
-		workdir = "workspace root"
-	} else {
-		workdir += " (relative to workspace root)"
-	}
-	writeStatusField(w, "Workdir", workdir)
-	writeStatusField(w, "Source", detailSource(details.Spec))
-	writeStatusField(w, "Admitted", formatLocalTime(details.AdmittedAt))
-	startedAt, durationMS := statusTiming(details)
-	if startedAt != nil {
-		writeStatusField(w, "Started", formatLocalTime(*startedAt))
-		writeStatusField(w, "Duration", shortDuration(time.Duration(durationMS)*time.Millisecond))
-	}
-	if details.Result != nil && details.Result.FinishedAt != nil {
-		writeStatusField(w, "Finished", formatLocalTime(*details.Result.FinishedAt))
-	}
-	if details.Result != nil {
-		writeStatusField(w, "Result", statusResult(details.Result))
-		writeStatusField(w, "Transaction", statusTransaction(details.Result))
-	}
-	writeStatusField(w, "Logs", statusLogs(details))
-	if automaticApply != nil {
-		writeStatusField(w, "Automatic apply", formatAutomaticApply(*automaticApply))
-		writeApplyRecoveryHint(w, handle, automaticApply)
-	}
-
-	if details.Result != nil && details.Result.Changes != nil {
-		fmt.Fprintln(w, "Workspace changes:")
-		for _, path := range details.Result.Changes.Paths {
-			fmt.Fprintf(w, "  %s\n", terminalSafeField(path))
+// statusLine is the one-line verdict under the handle.
+func statusLine(s *termui.Stream, peer string, d proto.JobDetails, now time.Time) string {
+	res := d.Result
+	startedAt, durationMS := statusTiming(d)
+	ran := time.Duration(durationMS) * time.Millisecond
+	finished := ""
+	if res != nil {
+		at := res.FinishedAt
+		if at == nil {
+			at = res.SettledAt
 		}
-		if details.Result.Changes.PathsTruncated {
-			fmt.Fprintf(w, "  … %d more paths\n", details.Result.Changes.PathCount-len(details.Result.Changes.Paths))
+		if at != nil {
+			finished = "finished " + termui.Ago(*at, now) + " on " + peer
+		} else {
+			finished = "on " + peer
 		}
-		fmt.Fprintf(w, "  %d bytes\n", details.Result.Changes.Bytes)
-	} else if details.Result != nil && !details.Result.ChangesOK {
-		writeStatusField(w, "Workspace changes", "unknown (retention incomplete)")
-	} else if details.Result != nil {
-		writeStatusField(w, "Workspace changes", "none")
 	}
-
-	next := make([]string, 0, 3)
-	if startedAt != nil || details.Result == nil || details.State == proto.StateAmbiguous {
-		next = append(next, "errand attach "+terminalSafeField(handle))
-	}
-	if details.Result != nil && details.Result.Changes != nil {
-		next = append(next, "errand fetch "+terminalSafeField(handle))
-	}
-	if details.Result == nil {
-		next = append(next, "errand kill "+terminalSafeField(handle))
-	}
-	if len(next) > 0 {
-		fmt.Fprintln(w, "Next:")
-		for _, command := range next {
-			fmt.Fprintf(w, "  %s\n", command)
+	join := func(glyph termui.Glyph, head string, attrs []termui.Attr, rest ...string) string {
+		line := s.G(glyph) + " " + s.Paint(head, attrs...)
+		var tail []string
+		for _, r := range rest {
+			if r != "" {
+				tail = append(tail, r)
+			}
 		}
+		if len(tail) > 0 {
+			line += " " + s.D("· "+strings.Join(tail, " · "))
+		}
+		return line
+	}
+	switch {
+	case d.State == proto.StateAmbiguous:
+		// Whatever the runner observed stays secondary: it couldn't confirm
+		// the job's transaction, so the verdict is unknown.
+		observed := ""
+		switch {
+		case res == nil:
+		case res.StartError != "":
+			observed = "couldn't start: " + termui.SafeText(res.StartError)
+		case res.Signal != "":
+			observed = "last seen killed by " + client.SignalName(res.Signal, res.SignalNum)
+		case res.ExitCode != nil:
+			observed = fmt.Sprintf("last seen exiting %d", *res.ExitCode)
+		}
+		return join(termui.Warn, "state unknown", []termui.Attr{termui.Yellow}, "the runner couldn't confirm how this job ended", observed, finished)
+	case res == nil && d.State == proto.StateRunning && startedAt != nil:
+		return join(termui.Run, "running", []termui.Attr{termui.Green}, "for "+termui.Duration(ran), "started "+termui.Clock(*startedAt, now)+" on "+peer)
+	case res == nil && d.State == proto.StateQueued:
+		ahead := ""
+		if d.QueueAhead != nil && *d.QueueAhead > 0 {
+			ahead = termui.Things(*d.QueueAhead, "job", "jobs") + " ahead"
+		}
+		return join(termui.Wait, "queued", []termui.Attr{termui.Yellow}, "on "+peer, ahead, "admitted "+termui.Ago(d.AdmittedAt, now))
+	case res == nil:
+		return join(termui.Wait, d.State, []termui.Attr{termui.Yellow}, "on "+peer, "admitted "+termui.Ago(d.AdmittedAt, now))
+	case res.StartError != "":
+		return join(termui.Fail, "couldn't start: "+termui.SafeText(res.StartError), []termui.Attr{termui.Red}, finished)
+	case res.Signal != "":
+		head := "killed by " + client.SignalName(res.Signal, res.SignalNum)
+		if !res.Started {
+			return join(termui.Fail, head, []termui.Attr{termui.Red}, "before the command started", finished)
+		}
+		return join(termui.Fail, head, []termui.Attr{termui.Red}, "ran "+termui.Duration(ran), finished)
+	case res.ExitCode != nil && *res.ExitCode == 0:
+		return join(termui.OK, "exited 0", []termui.Attr{termui.Green}, "ran "+termui.Duration(ran), finished)
+	case res.ExitCode != nil:
+		return join(termui.Fail, fmt.Sprintf("exited %d", *res.ExitCode), []termui.Attr{termui.Red}, "ran "+termui.Duration(ran), finished)
+	default:
+		return join(termui.Warn, "no process outcome", []termui.Attr{termui.Yellow}, finished)
 	}
 }
 
+func writeStatus(
+	s *termui.Stream,
+	peer, handle string,
+	details proto.JobDetails,
+	automaticApply *client.AutomaticApplyStatus,
+	verbose bool,
+	now time.Time,
+) {
+	s.Print(s.Paint(handle, termui.Bold, termui.Cyan))
+	s.Print(statusLine(s, peer, details, now))
+	if details.Result != nil {
+		for _, problem := range statusProblems(details.Result) {
+			s.Warnf("%s", problem)
+		}
+	}
+	s.Print("")
+	field := func(label, value string) {
+		width := 8
+		if verbose {
+			width = 9
+		}
+		s.Print("  " + s.D(padRight(label, width)) + " " + value)
+	}
+	cont := func(value string) {
+		width := 8
+		if verbose {
+			width = 9
+		}
+		s.Print("  " + strings.Repeat(" ", width) + " " + value)
+	}
+	spec := details.Spec
+	field("Command", terminalSafeField(termui.ShellQuote(spec.Argv)))
+	workdir := "workspace root"
+	if spec.Workdir != "" && spec.Workdir != "." {
+		workdir = "in " + spec.Workdir
+	}
+	if verbose {
+		field("Project", terminalSafeField(cmpOr(details.Project, "-")))
+		field("Workdir", terminalSafeField(workdir))
+		switch {
+		case spec.NoSnapshot:
+			field("Source", "empty workspace")
+		case spec.GitCommit != "":
+			dirty := ""
+			if spec.GitDirty {
+				dirty = ", dirty"
+			}
+			field("Source", spec.GitCommit+dirty)
+		}
+		if spec.WorkspaceID != "" {
+			field("Workspace", spec.WorkspaceID)
+		}
+		if spec.ManifestRoot != "" {
+			field("Snapshot", truncateHash(spec.ManifestRoot)+" · ignores "+termui.Things(len(spec.Selection.Ignore), "pattern", "patterns"))
+		}
+		field("Admitted", termui.Timestamp(details.AdmittedAt))
+		if startedAt, _ := statusTiming(details); startedAt != nil {
+			wait := startedAt.Sub(details.AdmittedAt)
+			field("Started", termui.Timestamp(*startedAt)+" · waited "+termui.Duration(wait))
+		}
+		if details.Result != nil && details.Result.FinishedAt != nil {
+			field("Finished", termui.Timestamp(*details.Result.FinishedAt))
+		}
+		field("Logs", statusLogs(details))
+		if details.Result != nil {
+			cleanup := "ok"
+			if !details.Result.CleanupOK {
+				cleanup = "incomplete"
+			}
+			field("Cleanup", cleanup)
+		}
+		l := spec.Limits
+		field("Limits", termui.Duration(time.Duration(l.MaxRuntimeSec)*time.Second)+" runtime · "+termui.Bytes(l.MaxLogBytes)+" logs · "+termui.Bytes(l.MaxWorkspaceBytes)+" workspace · "+termui.Bytes(l.MaxChangeBytes)+" changes")
+	} else {
+		parts := []string{}
+		if details.Project != "" {
+			parts = append(parts, details.Project)
+		}
+		parts = append(parts, workdir)
+		switch {
+		case spec.NoSnapshot:
+			parts = append(parts, "empty workspace")
+		case spec.WorkspaceID != "":
+			parts = append(parts, "persistent workspace")
+		case spec.GitCommit != "":
+			source := truncateString(spec.GitCommit, 7)
+			if spec.GitDirty {
+				source += " +dirty"
+			}
+			parts = append(parts, source)
+		case spec.ManifestRoot != "":
+			parts = append(parts, "snapshot "+truncateHash(spec.ManifestRoot))
+		}
+		field("Project", terminalSafeField(strings.Join(parts, " · ")))
+	}
+	if automaticApply != nil {
+		field("Apply", formatAutomaticApply(*automaticApply))
+	}
+	if res := details.Result; res != nil {
+		switch {
+		case res.Changes != nil:
+			where := "still on " + peer
+			if automaticApply != nil && automaticApply.State == "applied" {
+				where = "applied here"
+			}
+			bundle := ""
+			if verbose {
+				bundle = " · bundle " + truncateHash(res.Changes.BundleRoot)
+			}
+			field("Changes", s.B(termui.Things(res.Changes.PathCount, "file", "files"))+s.D(" · "+termui.Bytes(res.Changes.Bytes)+", "+where+bundle))
+			for _, path := range res.Changes.Paths {
+				cont(terminalSafeField(path))
+			}
+			if res.Changes.PathsTruncated {
+				cont(fmt.Sprintf("… and %d more", res.Changes.PathCount-len(res.Changes.Paths)))
+			}
+		case !res.ChangesOK:
+			field("Changes", "not kept")
+		default:
+			field("Changes", "none")
+		}
+	}
+	shortHandle := peer + "/" + termui.ShortID(details.ID)
+	if !s.Interactive() {
+		shortHandle = handle
+	}
+	var next [][2]string
+	if details.Result != nil && details.Result.Changes != nil && (automaticApply == nil || automaticApply.State != "applied") {
+		next = append(next, [2]string{"errand fetch --apply " + shortHandle, "bring the " + termui.Things(details.Result.Changes.PathCount, "file", "files") + " here"})
+	}
+	if startedAt, _ := statusTiming(details); startedAt != nil || details.Result == nil || details.State == proto.StateAmbiguous {
+		why := "follow the logs"
+		if details.Result != nil {
+			why = "replay the logs"
+		}
+		next = append(next, [2]string{"errand attach " + shortHandle, why})
+	}
+	if details.Result == nil {
+		next = append(next, [2]string{"errand kill " + shortHandle, "stop it"})
+	}
+	if len(next) > 0 {
+		s.Print("")
+		width := 0
+		for _, n := range next {
+			width = max(width, len(n[0]))
+		}
+		for _, n := range next {
+			s.Next(padRight(n[0], width), n[1])
+		}
+	}
+	writeApplyRecoveryHint(s, handle, automaticApply)
+}
+
+// statusProblems lists what went wrong around the process outcome.
+func statusProblems(result *proto.Result) []string {
+	var issues []string
+	if !result.ChangesOK {
+		issues = append(issues, "changed files weren't kept")
+	}
+	if !result.CleanupOK {
+		issues = append(issues, "cleanup on the runner didn't finish")
+	}
+	if result.LimitExceeded != "" {
+		issues = append(issues, "hit the "+termui.SafeText(result.LimitExceeded)+" limit")
+	}
+	if !result.LogsComplete {
+		issues = append(issues, "logs are incomplete")
+	}
+	if result.TransactionError != "" {
+		issues = append(issues, termui.SafeText(result.TransactionError))
+	}
+	return issues
+}
+
 func formatAutomaticApply(status client.AutomaticApplyStatus) string {
+	status.Error = termui.SafeText(status.Error)
 	switch status.State {
 	case client.AutomaticApplyNeedsRecovery:
 		if status.Error != "" {
@@ -211,69 +384,12 @@ func statusTiming(details proto.JobDetails) (*time.Time, int64) {
 	return nil, 0
 }
 
-func writeStatusField(w io.Writer, label, value string) {
-	if value == "" {
-		value = "-"
-	}
-	fmt.Fprintf(w, "%s: %s\n", label, terminalSafeField(value))
-}
-
 func quoteArgv(argv []string) string {
 	quoted := make([]string, len(argv))
 	for i, arg := range argv {
 		quoted[i] = strconv.Quote(arg)
 	}
 	return strings.Join(quoted, " ")
-}
-
-func detailSource(spec proto.ReceiptSpec) string {
-	if spec.NoSnapshot {
-		return "empty workspace"
-	}
-	if spec.GitCommit != "" {
-		source := spec.GitCommit
-		if spec.GitDirty {
-			source += "+dirty"
-		}
-		return source
-	}
-	return "snapshot:" + spec.ManifestRoot
-}
-
-func statusResult(result *proto.Result) string {
-	switch {
-	case result.StartError != "":
-		return "start failed: " + result.StartError
-	case result.Signal != "":
-		return "signal " + result.Signal
-	case result.ExitCode != nil:
-		return fmt.Sprintf("exit %d", *result.ExitCode)
-	default:
-		return "no process outcome"
-	}
-}
-
-func statusTransaction(result *proto.Result) string {
-	issues := make([]string, 0, 5)
-	if !result.LogsComplete {
-		issues = append(issues, "logs incomplete")
-	}
-	if !result.ChangesOK {
-		issues = append(issues, "workspace changes not retained")
-	}
-	if !result.CleanupOK {
-		issues = append(issues, "cleanup incomplete")
-	}
-	if result.LimitExceeded != "" {
-		issues = append(issues, "limit "+result.LimitExceeded)
-	}
-	if result.TransactionError != "" {
-		issues = append(issues, result.TransactionError)
-	}
-	if len(issues) == 0 {
-		return "complete"
-	}
-	return "incomplete: " + strings.Join(issues, "; ")
 }
 
 func statusLogs(details proto.JobDetails) string {

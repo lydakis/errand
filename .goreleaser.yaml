@@ -11,7 +11,7 @@ builds:
     goarch: [amd64, arm64]
     flags: [-trimpath]
     ldflags:
-      - -s -w -X main.version={{ .Version }}
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.buildDate={{ .Date }}
     hooks:
       post:
         - cmd: 'python3 scripts/notarize_macos.py "{{ .Path }}" "{{ .Target }}" "{{ .IsSnapshot }}"'

@@ -231,11 +231,17 @@ func (d *Daemon) handleWorkspaceRemove(w http.ResponseWriter, r *http.Request, i
 	}
 	s.mu.Unlock()
 	locked = false
+	// The tombstone is measured outside the store lock so a large removal
+	// doesn't stall other workspaces; a failed measurement doesn't block it.
+	freed := int64(-1)
+	if usage, err := workspaceStorageBytes(r.Context(), filepath.Join(s.dir, tombstone), row); err == nil {
+		freed = usage.Bytes
+	}
 	if err := removeOwnedTree(filepath.Join(s.dir, tombstone)); err != nil {
 		httpError(w, 500, fmt.Sprintf("workspace removed; storage cleanup pending: %v", err))
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, proto.WorkspaceRemoval{ID: row.ID, Name: row.Name, FreedBytes: freed})
 }
 
 func workspaceHTTPError(w http.ResponseWriter, err error) {

@@ -3,12 +3,11 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"strings"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 // Local-only rows carry identity and apply evidence, not fabricated timestamps
@@ -42,9 +41,9 @@ func applyRecoveryHint(handle string, status *client.AutomaticApplyStatus) strin
 	return prefix + "Once the job has finished, recover from its originating workspace: errand fetch --apply " + handle
 }
 
-func writeApplyRecoveryHint(w io.Writer, handle string, status *client.AutomaticApplyStatus) {
+func writeApplyRecoveryHint(s *termui.Stream, handle string, status *client.AutomaticApplyStatus) {
 	if hint := applyRecoveryHint(handle, status); hint != "" {
-		fmt.Fprintln(w, terminalSafeField(hint))
+		s.Warnf("%s", terminalSafeField(hint))
 	}
 }
 

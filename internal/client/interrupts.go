@@ -13,6 +13,7 @@ type interruptTarget struct {
 	jobID         string
 	handle        string
 	report        func(string, ...any)
+	detached      func() // optional: how a successful detach is announced
 	notifications interruptNotifications
 }
 
@@ -197,7 +198,11 @@ firstSignal:
 
 func (c *admittedJobController) completeDetach(ctx context.Context) int {
 	if c.detach(ctx) {
-		c.target.report("detached; reattach with: errand attach %s", c.target.handle)
+		if c.target.detached != nil {
+			c.target.detached()
+		} else {
+			c.target.report("detached; reattach with: errand attach %s", c.target.handle)
+		}
 		return 0
 	}
 	timer := time.NewTimer(controlRequestTimeout)

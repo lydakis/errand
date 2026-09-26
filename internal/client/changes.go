@@ -23,8 +23,13 @@ type ChangeFetchOptions struct {
 	CallerDir            string
 	OutputDir            string
 	Stats                *TransferStats
-	meter                *transferMeter
+	// Changes, when set, receives the fetched paths and what happened to each.
+	Changes *[]PathChange
+	meter   *transferMeter
 }
+
+// ErrNoChanges reports a job that finished without changing any files.
+var ErrNoChanges = errors.New("job produced no workspace changes")
 
 func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifestRoot string) error {
 	clientID, err := localChangeClientID()
@@ -113,7 +118,7 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 		if opts.Apply && opts.Path == "" {
 			return "", settleNoChangeApply(opts)
 		}
-		return "", fmt.Errorf("job produced no workspace changes")
+		return "", ErrNoChanges
 	}
 	var staged string
 	var bundle proto.ChangeBundle
@@ -138,6 +143,9 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 		return staged, err
 	}
 	opts.meter.paths(bundle.Paths, selected)
+	if opts.Changes != nil {
+		*opts.Changes = pathChanges(bundle, selected)
+	}
 	if opts.OutputDir != "" {
 		output, err := filepath.Abs(opts.OutputDir)
 		if err != nil {
@@ -156,6 +164,13 @@ func FetchChanges(opts ChangeFetchOptions) (string, error) {
 			opts.PeerURL, opts.JobID, opts.CallerDir, staged, bundle, selected, opts.MaterializeConflicts,
 		)
 		opts.meter.paths(applied, nil)
+		if opts.Changes != nil {
+			keep := map[string]bool{}
+			for _, p := range applied {
+				keep[p] = true
+			}
+			*opts.Changes = pathChanges(bundle, keep)
+		}
 		if err != nil {
 			return staged, err
 		}

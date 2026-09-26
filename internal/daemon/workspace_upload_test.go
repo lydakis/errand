@@ -91,7 +91,8 @@ func TestWorkspaceUploadDoesNotBlockCommandsOrRetargetReplacement(t *testing.T) 
 					operation <- io.ErrUnexpectedEOF
 					return
 				}
-				operation <- client.RemoveWorkspace(ts.URL, ws.Name)
+				_, err := client.RemoveWorkspace(ts.URL, ws.Name)
+				operation <- err
 			}()
 			select {
 			case err := <-operation:

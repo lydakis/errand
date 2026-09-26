@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -701,7 +702,8 @@ func TestClientRunsThroughQueueTransparently(t *testing.T) {
 	resp.Body.Close()
 
 	done := make(chan int, 1)
-	var out, errb bytes.Buffer
+	var out bytes.Buffer
+	var errb syncBuffer
 	var queuedID string
 	go func() {
 		done <- client.Run(client.RunOptions{
@@ -731,7 +733,13 @@ func TestClientRunsThroughQueueTransparently(t *testing.T) {
 	if queuedID == "" {
 		t.Fatalf("client job never queued; stderr: %s", errb.String())
 	}
-	time.Sleep(350 * time.Millisecond)
+	// The client reports a queue only once the job has waited a moment.
+	for !strings.Contains(errb.String(), "errand: queued on ") && time.Now().Before(deadline) {
+		time.Sleep(25 * time.Millisecond)
+	}
+	if !strings.Contains(errb.String(), "errand: queued on ") {
+		t.Fatalf("client did not report queueing: %s", errb.String())
+	}
 
 	forceKill(t, ts.URL, blocker)
 	select {
@@ -745,9 +753,24 @@ func TestClientRunsThroughQueueTransparently(t *testing.T) {
 	if out.String() != "queued payload" {
 		t.Fatalf("queued run output = %q", out.String())
 	}
-	if !bytes.Contains(errb.Bytes(), []byte("queued on the runner")) {
-		t.Fatalf("client did not report queueing: %s", errb.String())
-	}
+}
+
+// syncBuffer is a bytes.Buffer a test can read while another goroutine writes.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 func TestInfoReportsOccupancy(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/lydakis/errand/internal/termui"
 	"io"
 	"net"
 	"net/http"
@@ -108,7 +109,7 @@ func (s *forwardSession) Start(peerURL, jobID string) {
 	listeners := append([]forwardListener(nil), s.listeners...)
 	s.mu.Unlock()
 	for _, mapping := range forwards {
-		s.writef("errand: forwarding localhost:%d to job port %d\n", mapping.Local, mapping.Remote)
+		s.say(false, fmt.Sprintf("forwarding localhost:%d to port %d on the job", mapping.Local, mapping.Remote))
 	}
 	for _, bound := range listeners {
 		s.wg.Add(1)
@@ -122,7 +123,7 @@ func (s *forwardSession) accept(peerURL, jobID string, bound forwardListener) {
 		connection, err := bound.listener.Accept()
 		if err != nil {
 			if s.ctx.Err() == nil {
-				s.writef("errand: accepting forward on %s: %v\n", bound.listener.Addr(), err)
+				s.say(true, fmt.Sprintf("forward on %s stopped accepting connections: %v", bound.listener.Addr(), err))
 			}
 			return
 		}
@@ -199,14 +200,21 @@ func (s *forwardSession) forward(peerURL, jobID string, mapping PortForward, loc
 }
 
 func (s *forwardSession) report(mapping PortForward, err error) {
-	s.writef("errand: forward localhost:%d to job port %d failed: %v\n",
-		mapping.Local, mapping.Remote, err)
+	s.say(true, fmt.Sprintf("forward localhost:%d to port %d failed: %v", mapping.Local, mapping.Remote, err))
 }
 
-func (s *forwardSession) writef(format string, args ...any) {
+func (s *forwardSession) say(warning bool, msg string) {
 	s.outputMu.Lock()
 	defer s.outputMu.Unlock()
-	fmt.Fprintf(s.stderr, format, args...)
+	if ui, ok := s.stderr.(*termui.Stream); ok {
+		if warning {
+			ui.Warnf("%s", msg)
+		} else {
+			ui.Say(termui.Dot, msg)
+		}
+		return
+	}
+	fmt.Fprintf(s.stderr, "errand: %s\n", msg)
 }
 
 func (s *forwardSession) Close() {

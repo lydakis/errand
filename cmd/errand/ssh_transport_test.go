@@ -185,8 +185,8 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 				_, logs := runCLI(target.flag, target.value, "--include-all", policy, "--", "/bin/sh", "-c", "printf changed > report.txt")
 				handle := ""
 				for _, line := range strings.Split(logs, "\n") {
-					if strings.HasPrefix(line, "errand: job ") {
-						handle = strings.Fields(line)[2]
+					if _, rest, ok := strings.Cut(line, " · job "); ok && strings.HasPrefix(line, "errand: ") {
+						handle = strings.Fields(rest)[0]
 						break
 					}
 				}
@@ -230,8 +230,8 @@ func TestSSHTransportEndToEnd(t *testing.T) {
 			}
 			handle := ""
 			for _, line := range strings.Split(string(logs), "\n") {
-				if strings.HasPrefix(line, "errand: job ") {
-					handle = strings.Fields(line)[2]
+				if _, rest, ok := strings.Cut(line, " · job "); ok && strings.HasPrefix(line, "errand: ") {
+					handle = strings.Fields(rest)[0]
 					break
 				}
 			}

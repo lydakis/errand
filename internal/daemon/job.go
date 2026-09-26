@@ -188,6 +188,9 @@ func (j *Job) summary() proto.JobListEntry {
 			e.DurationMS = j.result.DurationMS
 		}
 		e.FinishedAt = j.result.FinishedAt
+		if j.result.Changes != nil {
+			e.ChangedPaths = j.result.Changes.PathCount
+		}
 	}
 	return e
 }
@@ -566,6 +569,7 @@ func (j *Job) launch(d *Daemon) error {
 	go copyPipe(stdoutR, "stdout")
 	go copyPipe(stderrR, "stderr")
 	j.event("started", fmt.Sprintf("pid=%d", cmd.Process.Pid))
+	d.logJob(JobLogStarted, j, nil)
 
 	timer := time.AfterFunc(time.Duration(j.Spec.Limits.MaxRuntimeSec)*time.Second, func() {
 		j.terminate("runtime", syscall.SIGKILL)
@@ -1086,6 +1090,7 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	j.state = state
 	j.result = res
 	j.mu.Unlock()
+	d.logJob(JobLogFinished, j, res)
 	close(j.done)
 	d.release(j)
 }

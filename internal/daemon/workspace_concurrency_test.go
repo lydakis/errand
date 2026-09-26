@@ -66,7 +66,7 @@ func TestConcurrentWorkspaceJobsKeepSiblingAndCachesAlive(t *testing.T) {
 				t.Fatalf("first cleanup: %+v", st)
 			}
 			waitState(t, ts.URL, second, proto.StateRunning)
-			if err := client.RemoveWorkspace(ts.URL, ws.Name); err == nil {
+			if _, err := client.RemoveWorkspace(ts.URL, ws.Name); err == nil {
 				t.Fatal("removed workspace while sibling running")
 			}
 			if cached {
@@ -95,7 +95,7 @@ func TestConcurrentWorkspaceJobsKeepSiblingAndCachesAlive(t *testing.T) {
 					t.Fatalf("last job left cache leased: %+v %v", inventory, err)
 				}
 			}
-			if err := client.RemoveWorkspace(ts.URL, ws.Name); err != nil {
+			if _, err := client.RemoveWorkspace(ts.URL, ws.Name); err != nil {
 				t.Fatal(err)
 			}
 		})

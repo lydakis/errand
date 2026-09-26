@@ -53,7 +53,7 @@ func TestGCMultiplePeersRequiresSelectionBeforeAnyWork(t *testing.T) {
 					}
 					var stdout, stderr bytes.Buffer
 					code := cmdGCTo(args, &stdout, &stderr)
-					if code == 0 || calls != 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "multiple runners configured; select one with --on PEER or --url URL") {
+					if code == 0 || calls != 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "pick a runner with --on") {
 						t.Fatalf("gc %v = %d, calls=%d, stdout=%q stderr=%q", args, code, calls, stdout.String(), stderr.String())
 					}
 				}
@@ -93,10 +93,10 @@ func TestGCPeerSelection(t *testing.T) {
 		args         []string
 		want         string
 	}{
-		{"sole peer without default", "[peers.only]\nurl=%q\n", nil, "only cache:"},
-		{"sole peer with stale default", "default_peer='gone'\n[peers.only]\nurl=%q\n", nil, "only cache:"},
-		{"explicit peer", "default_peer='wrong'\n[peers.wrong]\nurl='http://wrong.invalid'\n[peers.only]\nurl=%q\n", []string{"--on", "only"}, "only cache:"},
-		{"explicit URL", "default_peer='wrong'\n[peers.wrong]\nurl='http://wrong.invalid'\n[peers.only]\nurl=%q\n", []string{"--url"}, " cache:"},
+		{"sole peer without default", "[peers.only]\nurl=%q\n", nil, "collect on only (caches)"},
+		{"sole peer with stale default", "default_peer='gone'\n[peers.only]\nurl=%q\n", nil, "collect on only (caches)"},
+		{"explicit peer", "default_peer='wrong'\n[peers.wrong]\nurl='http://wrong.invalid'\n[peers.only]\nurl=%q\n", []string{"--on", "only"}, "collect on only (caches)"},
+		{"explicit URL", "default_peer='wrong'\n[peers.wrong]\nurl='http://wrong.invalid'\n[peers.only]\nurl=%q\n", []string{"--url"}, "collect on http://"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			for _, dryRun := range []bool{false, true} {
@@ -134,9 +134,10 @@ func TestGCOverviewExplainsPoliciesAndScope(t *testing.T) {
 	for _, args := range [][]string{nil, {"--help"}} {
 		var stdout, stderr bytes.Buffer
 		cmdGCTo(args, &stdout, &stderr)
-		for _, want := range []string{"snapshot blobs and named caches", "--older-than DURATION or --keep N", "local", "all categories, not all runners", "--on PEER", "--dry-run"} {
-			if !strings.Contains(stderr.String(), want) {
-				t.Errorf("gc %v help missing %q: %s", args, want, stderr.String())
+		help := stdout.String() + stderr.String()
+		for _, want := range []string{"snapshot blobs and named caches", "needs --older-than or --keep", "local changes", "not every runner", "--on", "--dry-run"} {
+			if !strings.Contains(help, want) {
+				t.Errorf("gc %v help missing %q: %s", args, want, help)
 			}
 		}
 	}
@@ -147,8 +148,8 @@ func TestGCCachePreviewReportsRunnerPolicies(t *testing.T) {
 		name, response string
 		want           []string
 	}{
-		{"separate policies", `{"dry_run":true,"policies":{"snapshot":{"max_bytes":1073741824,"ttl_seconds":604800},"named":{"max_bytes":2147483648,"ttl_seconds":1209600}}}`, []string{"snapshot cache policy: expire after 7d unused; budget 1.0 GiB", "named cache policy: expire after 14d unused; budget 2.0 GiB", "leased named caches are protected"}},
-		{"snapshot disabled", `{"dry_run":true,"policies":{"named":{"max_bytes":2147483648,"ttl_seconds":1209600}}}`, []string{"snapshot cache policy: collection disabled", "named cache policy: expire after 14d"}},
+		{"separate policies", `{"dry_run":true,"policies":{"snapshot":{"max_bytes":1073741824,"ttl_seconds":604800},"named":{"max_bytes":2147483648,"ttl_seconds":1209600}}}`, []string{"snapshot cache: expire after 7d unused, budget 1 GiB", "named caches: expire after 14d unused, budget 2 GiB"}},
+		{"snapshot disabled", `{"dry_run":true,"policies":{"named":{"max_bytes":2147483648,"ttl_seconds":1209600}}}`, []string{"snapshot cache: collection disabled", "named caches: expire after 14d"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, test.response) }))
@@ -162,7 +163,7 @@ func TestGCCachePreviewReportsRunnerPolicies(t *testing.T) {
 					t.Errorf("missing %q in %s", want, stdout.String())
 				}
 			}
-			if !strings.Contains(stdout.String(), server.URL+" cache: would remove") {
+			if !strings.Contains(stdout.String(), "Dry run") || !strings.Contains(stdout.String(), "Nothing to collect on "+server.URL) {
 				t.Errorf("missing runner and preview: %s", stdout.String())
 			}
 		})
@@ -197,8 +198,8 @@ func TestGCChangesSkipsDeletedWorkspaceWithoutFailing(t *testing.T) {
 	} {
 		var stdout, stderr bytes.Buffer
 		if code := cmdGCTo(args, &stdout, &stderr); code != 0 ||
-			!strings.Contains(stdout.String(), " 0 records") || !strings.HasSuffix(stdout.String(), "(0 protected, 0 failed)\n") ||
-			stderr.String() != "errand: local change gc: skipped 1 workspace transfer record whose workspace was moved or deleted\n" {
+			!strings.Contains(stdout.String(), "othing to collect on local (fetched changes)") ||
+			stderr.String() != "errand: warning: skipped 1 local record whose workspace was moved or deleted\n" {
 			t.Fatalf("gc %v = %d, stdout=%q stderr=%q", args, code, stdout.String(), stderr.String())
 		}
 	}
