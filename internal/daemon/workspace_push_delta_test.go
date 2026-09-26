@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http/httptest"
 	"os"
@@ -83,5 +84,78 @@ func TestPushDeltaValidatesRetainedBaseAndFullSourceLimit(t *testing.T) {
 				t.Fatalf("status=%d want=%d: %s", w.Code, want, w.Body)
 			}
 		})
+	}
+}
+
+// Pushes reuse the creation base retained with the workspace record, but only
+// for the record bytes it came from, and still compare it with each checkpoint.
+func TestPushChecksRetainedCreationBaseAgainstCurrentRecords(t *testing.T) {
+	d, ts := testDaemon(t)
+	root := workspaceWith(t, map[string]string{"value": "initial\n", "other": "fixed\n"})
+	ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: ts.URL, Root: root}, "creation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := client.PushOptions{PeerURL: ts.URL, Root: root, Workspace: ws.Name, Apply: true}
+	edit := 0
+	push := func() error {
+		edit++
+		if err := os.WriteFile(filepath.Join(root, "value"), []byte(fmt.Sprintf("edit %d\n", edit)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := client.PushChanges(opts)
+		return err
+	}
+	for range 2 {
+		if err := push(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	store := d.workspaces
+	original, err := store.read(ws.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err := store.read(ws.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed.Manifest.Entries[len(changed.Manifest.Entries)-1].SHA256 = strings.Repeat("0", 64)
+	if err := store.write(changed); err != nil {
+		t.Fatal(err)
+	}
+	if err := push(); err == nil || !strings.Contains(err.Error(), "creation snapshot does not match") {
+		t.Fatalf("push with a replaced creation snapshot: %v", err)
+	}
+	if err := store.write(original); err != nil {
+		t.Fatal(err)
+	}
+	if err := push(); err != nil {
+		t.Fatalf("restored creation snapshot: %v", err)
+	}
+
+	// A checkpoint naming another creation snapshot refuses the retained base.
+	clients, err := os.ReadDir(filepath.Join(store.dir, ws.ID, "push"))
+	if err != nil || len(clients) != 1 {
+		t.Fatalf("push clients: %v, %v", clients, err)
+	}
+	path := filepath.Join(store.dir, ws.ID, "push", clients[0].Name(), "checkpoint.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state map[string]any
+	if err := json.Unmarshal(raw, &state); err != nil {
+		t.Fatal(err)
+	}
+	state["initial_root"] = strings.Repeat("0", 64)
+	if raw, err = json.Marshal(state); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := push(); err == nil || !strings.Contains(err.Error(), "creation snapshot does not match") {
+		t.Fatalf("push against a changed checkpoint: %v", err)
 	}
 }

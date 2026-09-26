@@ -99,6 +99,12 @@ func (r *checkpointRecord) rootHash() string {
 	r.once.Do(func() { r.root = r.state.Manifest.RootHash() })
 	return r.root
 }
+
+// sourceBase borrows the manifest validatedRecord checked and shares the
+// record's identity, so every handle that reads these exact bytes shares one hash.
+func (r *checkpointRecord) sourceBase() *SourceBase {
+	return &SourceBase{manifest: r.state.Manifest, validate: func() error { return nil }, rootHash: r.rootHash}
+}
 func (r *checkpointRecord) export() CheckpointVersion { return r.state.export() }
 func (r *checkpointRecord) revision() uint64          { return r.state.Revision }
 func (r *checkpointRecord) delta(ctx context.Context, source proto.Manifest, limit int64) (proto.ChangeBundle, error) {
@@ -110,7 +116,8 @@ func (r *checkpointRecord) validateBase(ctx context.Context, bundle proto.Change
 
 // An existing session only needs to validate the creation relationship. Keep
 // the storage guard through that check without reopening and exporting it.
-func (c *TransferCheckpoint) checkInitialized(initial proto.Manifest) error {
+// The creation snapshot's validation and identity are reused when retained.
+func (c *TransferCheckpoint) checkInitialized(initial *SourceBase) error {
 	destination, storage, name, err := c.open(c.StatePath)
 	if err != nil {
 		return err
@@ -121,10 +128,10 @@ func (c *TransferCheckpoint) checkInitialized(initial proto.Manifest) error {
 	if err != nil {
 		return err
 	}
-	if err := validateCheckpointManifest(initial); err != nil {
+	if err := initial.validate(); err != nil {
 		return err
 	}
-	if record.state.InitialRoot != initial.RootHash() {
+	if record.state.InitialRoot != initial.rootHash() {
 		return fmt.Errorf("checkpoint creation snapshot does not match")
 	}
 	return verifyTransferPaths(destination, storage)

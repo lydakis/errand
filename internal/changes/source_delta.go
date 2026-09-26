@@ -24,14 +24,16 @@ func ExpandSourceDelta(base proto.Manifest, delta proto.ChangeBundle, root strin
 // ExpandSourceDeltaContext rejects malformed roots before reconstructing source
 // metadata and honors cancellation throughout validation and reconstruction.
 func ExpandSourceDeltaContext(ctx context.Context, base proto.Manifest, delta proto.ChangeBundle, root string, maxBytes int64) (proto.Manifest, error) {
-	state, err := expandSourceSnapshot(ctx, base, delta, root, maxBytes)
+	state, err := expandSourceSnapshot(ctx, NewSourceBase(base), delta, root, maxBytes)
 	if err != nil {
 		return proto.Manifest{}, err
 	}
 	return state.Manifest(ctx)
 }
 
-func expandSourceSnapshot(ctx context.Context, base proto.Manifest, delta proto.ChangeBundle, root string, maxBytes int64) (*manifest.Snapshot, error) {
+// The base's retained identity stands in for hashing before, which holds a copy
+// of exactly the base's entries. A checkpoint base shares it with the stage.
+func expandSourceSnapshot(ctx context.Context, base *SourceBase, delta proto.ChangeBundle, root string, maxBytes int64) (*manifest.Snapshot, error) {
 	if err := ValidateBundleContext(ctx, delta); err != nil {
 		return nil, err
 	}
@@ -39,14 +41,11 @@ func expandSourceSnapshot(ctx context.Context, base proto.Manifest, delta proto.
 		return nil, ErrByteLimitExceeded
 	}
 
-	before, err := manifest.New(ctx, base)
+	before, err := manifest.New(ctx, base.manifest)
 	if err != nil {
 		return nil, err
 	}
-	baselineRoot, err := before.RootHash(ctx)
-	if err != nil {
-		return nil, err
-	}
+	baselineRoot := base.rootHash()
 	if baselineRoot != delta.BaselineRoot {
 		return nil, ErrCheckpointChanged
 	}
@@ -57,7 +56,7 @@ func expandSourceSnapshot(ctx context.Context, base proto.Manifest, delta proto.
 		}
 		states[p] = "accepted"
 	}
-	state, err := acceptedSourceSnapshotContext(ctx, base, delta, transferOutcome{States: states})
+	state, err := acceptedSourceSnapshotContext(ctx, base.manifest, delta, transferOutcome{States: states})
 	if err != nil {
 		return nil, err
 	}
@@ -68,10 +67,11 @@ func expandSourceSnapshot(ctx context.Context, base proto.Manifest, delta proto.
 	if sourceRoot != root {
 		return nil, fmt.Errorf("source delta does not reconstruct the declared manifest")
 	}
-	expected, err := workspaceSnapshotDelta(ctx, before, state, maxBytes)
+	expected, err := selectSnapshotDelta(ctx, before, state, maxBytes)
 	if err != nil {
 		return nil, err
 	}
+	expected.BaselineRoot = baselineRoot
 	if expected.RootHash() != delta.RootHash() {
 		return nil, fmt.Errorf("source delta differs from checkpoint changes")
 	}
