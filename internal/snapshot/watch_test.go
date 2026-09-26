@@ -364,7 +364,7 @@ func expectGlobalChange(t *testing.T, w *Watch, included bool, controls []string
 			t.Fatal("idle checkout missed a global control change")
 		}
 	}
-	m, _, _, _, err := w.Prepare(new(Builder))
+	m, _, _, err := w.Prepare(new(Builder))
 	if err != nil {
 		t.Fatal(err)
 	}

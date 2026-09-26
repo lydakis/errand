@@ -26,7 +26,6 @@ var traceWatch = os.Getenv("ERRAND_TRACE_WATCH") == "1"
 // has to be verified against its manifest by the normal snapshot packer.
 type watchPreparation struct {
 	state    *manifeststate.Snapshot
-	gi       GitInfo
 	policy   proto.SelectionPolicy
 	evidence *selectionEvidence
 	fullAt   time.Time
@@ -45,7 +44,6 @@ type selectionEvidence struct {
 	directories map[string]fs.FileInfo
 	ignore      []byte                // explicit .errandignore; unused for Git
 	git         *gitSelectionEvidence // nil for explicit selection
-	gi          GitInfo
 	// listings holds each stamped directory's names and entry types when the
 	// selection was proven, so a changed stamp can be re-proven by relisting.
 	listings map[string][]listingEntry
@@ -66,10 +64,10 @@ type selectionEvidence struct {
 // preparation has only content hints, those files are delivered first and the
 // owed full reconciliation runs as the immediately following cycle.
 // The returned guard must still be verified after freezing the source.
-func (s *Watch) Prepare(builder *Builder) (manifest proto.Manifest, gi GitInfo, policy proto.SelectionPolicy, guard *SelectionGuard, err error) {
-	state, gi, policy, guard, err := s.PrepareSnapshot(builder)
+func (s *Watch) Prepare(builder *Builder) (manifest proto.Manifest, policy proto.SelectionPolicy, guard *SelectionGuard, err error) {
+	state, policy, guard, err := s.PrepareSnapshot(builder)
 	if err != nil {
-		return manifest, gi, policy, guard, err
+		return manifest, policy, guard, err
 	}
 	manifest, err = state.Manifest(context.Background())
 	return
@@ -77,13 +75,13 @@ func (s *Watch) Prepare(builder *Builder) (manifest proto.Manifest, gi GitInfo, 
 
 // PrepareSnapshot retains the immutable index across transfer preparation.
 // Callers export metadata only at a wire or durable-record boundary.
-func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot, gi GitInfo, policy proto.SelectionPolicy, guard *SelectionGuard, err error) {
+func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot, policy proto.SelectionPolicy, guard *SelectionGuard, err error) {
 	if builder == nil {
-		return nil, gi, policy, nil, fmt.Errorf("watch snapshot requires a builder")
+		return nil, policy, nil, fmt.Errorf("watch snapshot requires a builder")
 	}
 	info, statErr := os.Lstat(s.root)
 	if statErr != nil || !os.SameFile(s.identity, info) {
-		return nil, gi, policy, nil, fmt.Errorf("watched checkout was removed or replaced")
+		return nil, policy, nil, fmt.Errorf("watched checkout was removed or replaced")
 	}
 	s.dirtyMu.Lock()
 	dirty, full, reset, owed := s.dirty, s.fullScan, s.resetHashes, s.owedFull
@@ -181,7 +179,7 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 			}
 		}
 	}
-	if !full && evidence.verifySelection() != nil {
+	if !full && evidence.verify() != nil {
 		full, reason = true, "evidence-changed"
 	}
 	var changed, deleted []string
@@ -230,10 +228,10 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 	state, updateErr := builder.update(s.root, prior.state, changed, deleted)
 	err = updateErr
 	if err != nil {
-		return nil, gi, policy, nil, fmt.Errorf("refreshing watched source: %w", err)
+		return nil, policy, nil, fmt.Errorf("refreshing watched source: %w", err)
 	}
 	if err = evidence.verify(); err != nil {
-		return nil, gi, policy, nil, err
+		return nil, policy, nil, err
 	}
 	next := *prior
 	next.state, next.evidence = state, evidence
@@ -248,59 +246,60 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 		s.notifyChange()
 	}
 	guard = &SelectionGuard{root: s.root, identity: s.identity, evidence: evidence}
-	return state, prior.gi, clonePolicy(prior.policy), guard, nil
+	return state, clonePolicy(prior.policy), guard, nil
 }
 
-func (s *Watch) prepareFull(builder *Builder) (*manifeststate.Snapshot, GitInfo, proto.SelectionPolicy, *SelectionGuard, error) {
+func (s *Watch) prepareFull(builder *Builder) (*manifeststate.Snapshot, proto.SelectionPolicy, *SelectionGuard, error) {
 	paths, gi, policy, guard, err := SelectFilesGuarded(s.root, s.opts)
 	if err != nil {
-		return nil, gi, policy, nil, fmt.Errorf("selecting watched source: %w", err)
+		return nil, policy, nil, fmt.Errorf("selecting watched source: %w", err)
 	}
-	guard.identity = s.identity
+	// Push reports no repository metadata, so the guard does not bind it.
+	guard.identity, guard.gitInfo = s.identity, nil
 	manifest, err := builder.Build(s.root, paths)
 	if err != nil {
-		return nil, gi, policy, nil, fmt.Errorf("building watched source: %w", err)
+		return nil, policy, nil, fmt.Errorf("building watched source: %w", err)
 	}
-	evidence, err := captureSelectionEvidence(s.root, s.opts, manifest, gi, policy)
+	evidence, err := captureSelectionEvidence(s.root, s.opts, manifest, gi.Repository, policy)
 	if err != nil {
-		return nil, gi, policy, nil, err
+		return nil, policy, nil, err
 	}
 	// Capture directory stamps before re-enumerating selection, then check the
 	// same stamps afterward: changes between enumeration and capture cannot seed
 	// an apparently valid cache with an omitted or newly excluded path.
 	if err := guard.Verify(); err != nil {
-		return nil, gi, policy, nil, err
+		return nil, policy, nil, err
 	}
 	if evidence != nil {
 		if err := evidence.verify(); err != nil {
-			return nil, gi, policy, nil, err
+			return nil, policy, nil, err
 		}
 		guard.evidence = evidence
 	}
 	state, err := manifeststate.New(context.Background(), manifest)
 	if err != nil {
-		return nil, gi, policy, nil, err
+		return nil, policy, nil, err
 	}
 	if evidence != nil {
 		if err := state.PrepareUpdates(context.Background()); err != nil {
-			return nil, gi, policy, nil, err
+			return nil, policy, nil, err
 		}
 	}
-	s.prepared = &watchPreparation{state: state, gi: gi, policy: clonePolicy(policy), evidence: evidence, fullAt: time.Now()}
-	return state, gi, clonePolicy(policy), guard, nil
+	s.prepared = &watchPreparation{state: state, policy: clonePolicy(policy), evidence: evidence, fullAt: time.Now()}
+	return state, clonePolicy(policy), guard, nil
 }
 
 // testHookBeforeDirectoryStamps runs after selection has enumerated the tree
 // and before capture stamps directories.
 var testHookBeforeDirectoryStamps func()
 
-func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest, gi GitInfo, policy proto.SelectionPolicy) (*selectionEvidence, error) {
+func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest, repository bool, policy proto.SelectionPolicy) (*selectionEvidence, error) {
 	data, err := os.ReadFile(filepath.Join(root, ".errandignore"))
 	var git *gitSelectionEvidence
 	var walked map[string]bool // Git only
 	names := map[string]bool{}
 	if os.IsNotExist(err) {
-		if !gi.Repository {
+		if !repository {
 			return nil, nil
 		}
 		// Unignored directories come from the walk; ancestors of tracked files
@@ -382,21 +381,8 @@ func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest,
 		}
 	}
 	opts.Caches = slices.Clone(opts.Caches)
-	return &selectionEvidence{root: root, opts: opts, directories: directories, ignore: data, git: git, gi: gi,
+	return &selectionEvidence{root: root, opts: opts, directories: directories, ignore: data, git: git,
 		listings: listings, matcher: matcher}, nil
-}
-
-func (e *selectionEvidence) verify() error {
-	if err := e.verifySelection(); err != nil {
-		return err
-	}
-	// Check metadata after source work and again after freezing, not in the
-	// preliminary selection-only check as well.
-	gi, _ := gitInfo(e.root)
-	if gi != e.gi {
-		return sourceChangedf("snapshot: repository metadata changed after manifest construction; retry")
-	}
-	return e.verifyPolicy()
 }
 
 func (e *selectionEvidence) verifyPolicy() error {
@@ -413,7 +399,7 @@ func (e *selectionEvidence) verifyPolicy() error {
 	return nil
 }
 
-func (e *selectionEvidence) verifySelection() error {
+func (e *selectionEvidence) verify() error {
 	if err := validateSnapshotRoot(e.root, e.opts); err != nil {
 		return err
 	}
