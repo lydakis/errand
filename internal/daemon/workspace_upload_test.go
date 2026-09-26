@@ -10,7 +10,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -287,18 +289,23 @@ func TestWaitingWorkspacePushesHoldNoDataHandle(t *testing.T) {
 		return response, done
 	}
 	data := filepath.Join(d.workspaces.dir, ws.ID, "data")
+	info, err := os.Stat(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := info.Sys().(*syscall.Stat_t)
+	// Count descriptors by fstat: on macOS, stat of a /dev/fd entry does not
+	// describe the directory it references.
 	handles := func() int {
-		want, err := os.Stat(data)
+		entries, err := os.ReadDir("/dev/fd")
 		if err != nil {
 			t.Fatal(err)
 		}
-		entries, err := os.ReadDir("/dev/fd")
-		if err != nil {
-			t.Skipf("cannot list open descriptors: %v", err)
-		}
 		n := 0
 		for _, e := range entries {
-			if info, err := os.Stat(filepath.Join("/dev/fd", e.Name())); err == nil && os.SameFile(info, want) {
+			fd, err := strconv.Atoi(e.Name())
+			var st syscall.Stat_t
+			if err == nil && syscall.Fstat(fd, &st) == nil && st.Dev == want.Dev && st.Ino == want.Ino {
 				n++
 			}
 		}
@@ -309,12 +316,21 @@ func TestWaitingWorkspacePushesHoldNoDataHandle(t *testing.T) {
 	active := &pausedWorkspaceUpload{prefix: bytes.NewReader(payload.Bytes()[:split]), rest: bytes.NewReader(payload.Bytes()[split:]), stalled: make(chan struct{}), resume: make(chan struct{})}
 	var resume sync.Once
 	release := func() { resume.Do(func() { close(active.resume) }) }
-	defer release()
 	activeResponse, activeDone := push(active, contentType)
+	var dones []chan struct{}
+	// Every exit, including a failed assertion, finishes the pushes before
+	// the test's directories are removed.
+	defer func() {
+		release()
+		<-activeDone
+		for _, done := range dones {
+			<-done
+		}
+	}()
 	<-active.stalled
 	pinned := handles()
-	if pinned == 0 {
-		t.Skip("open descriptors do not report the directory they reference")
+	if pinned != 1 {
+		t.Fatalf("admitted push holds %d data directory handles, want 1", pinned)
 	}
 
 	const queued = 4
@@ -328,7 +344,6 @@ func TestWaitingWorkspacePushesHoldNoDataHandle(t *testing.T) {
 	}
 	d.workspaces.mu.Unlock()
 	var responses []*httptest.ResponseRecorder
-	var dones []chan struct{}
 	for range queued {
 		payload, contentType, _ := body()
 		response, done := push(payload, contentType)
