@@ -54,7 +54,7 @@ func TestWatchPrepareRehashesDirtyContentAndKeepsPriorEntries(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(w.root, "value"), []byte("after!"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	w.invalidatePath(filepath.Join(w.root, "value"), false)
+	w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
 	assertPreparedMatchesFull(t, w, b)
 }
 
@@ -79,7 +79,7 @@ func TestWatchPrepareInvalidatesHashesEvenWhenStatEvidenceMatches(t *testing.T) 
 			if reconcile {
 				w.InvalidatePreparation()
 			} else {
-				w.invalidatePath(name, false)
+				w.invalidatePath(name, dirtyContent)
 			}
 			assertPreparedMatchesFull(t, w, b)
 		})
@@ -118,7 +118,7 @@ func TestWatchPreparePolicyChangesNeverAuthorizeExcludedFiles(t *testing.T) {
 		t.Fatal("guard accepted changed policy before event delivery")
 	}
 	// A dirty event only identifies work; it cannot select an excluded source.
-	w.invalidatePath(filepath.Join(w.root, "secret"), false)
+	w.invalidatePath(filepath.Join(w.root, "secret"), dirtyContent)
 	assertPreparedMatchesFull(t, w, b)
 }
 
@@ -165,7 +165,7 @@ func TestWatchPrepareRetainsDirtyWorkAfterReadFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Chmod(name, 0600)
-	w.invalidatePath(name, false)
+	w.invalidatePath(name, dirtyContent)
 	if _, _, _, _, err := w.Prepare(b); err == nil {
 		t.Fatal("snapshot accepted unreadable changed content")
 	}
@@ -226,7 +226,7 @@ func TestWatchInvalidatePreparationResamplesWithoutScheduling(t *testing.T) {
 	if err := os.WriteFile(name, []byte("latest"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	w.invalidatePath(name, false)
+	w.invalidatePath(name, dirtyContent)
 	before = w.Generation()
 	w.InvalidatePreparation()
 	if w.Generation() != before {
@@ -238,4 +238,49 @@ func TestWatchInvalidatePreparationResamplesWithoutScheduling(t *testing.T) {
 		t.Fatal("queued native notification was discarded")
 	}
 	assertPreparedMatchesFull(t, w, b)
+}
+
+func TestWatchPrepareDeliversHintsBeforeExpiredReconciliation(t *testing.T) {
+	w, b := prepareWatchFixture(t)
+	if err := os.WriteFile(filepath.Join(w.root, "other"), []byte("old"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	assertPreparedMatchesFull(t, w, b)
+	w.prepared.fullAt = time.Now().Add(-time.Minute)
+	expiredAt := w.prepared.fullAt
+	// A lost event: this file's contents change without a hint.
+	if err := os.WriteFile(filepath.Join(w.root, "other"), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(w.root, "value"), []byte("after!"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for len(w.Changed) > 0 {
+		<-w.Changed
+	}
+	w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+	<-w.Changed
+	got, _, _, _, err := w.PrepareSnapshot(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.prepared.fullAt != expiredAt {
+		t.Fatal("expired preparation with a content hint ran full selection first")
+	}
+	if entry, ok := got.Lookup("value"); !ok || entry.Size != int64(len("after!")) {
+		t.Fatalf("hinted edit was not delivered: %+v", entry)
+	}
+	select {
+	case <-w.Changed:
+	default:
+		t.Fatal("deferred reconciliation was not scheduled")
+	}
+	// The follow-up cycle reconciles fully and finds the unhinted change.
+	assertPreparedMatchesFull(t, w, b)
+	if w.prepared.fullAt == expiredAt {
+		t.Fatal("follow-up cycle did not run full reconciliation")
+	}
+	if entry, ok := w.prepared.state.Lookup("other"); !ok || entry.Size != int64(len("changed")) {
+		t.Fatalf("full reconciliation missed the unhinted edit: %+v", entry)
+	}
 }

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import platform
 import queue
+import re
 import signal
 import shutil
 import subprocess
@@ -37,6 +38,73 @@ def write_edit(args, path, body):
         temporary.replace(path)
     else:
         path.write_text(body)
+
+
+def victim_body(prefix, sample):
+    return f"victim {prefix} {sample}\n"
+
+
+def require_victim(path, expected):
+    """Fail unless a deletion's destination victim is present before the unlink.
+
+    An already absent victim would make the deletion wait succeed at once and
+    report a missed delivery as a near-zero deletion time.
+    """
+    try:
+        found = path.read_text()
+    except OSError as error:
+        raise RuntimeError(f"deletion victim absent from destination before unlink: {path.name}") from error
+    if found != expected:
+        raise RuntimeError(f"deletion victim differs at destination before unlink: {path.name}")
+
+
+def wait_absent(path, timeout=60):
+    deadline = time.monotonic()+timeout
+    while time.monotonic() < deadline:
+        if not path.exists():
+            return time.monotonic()
+        time.sleep(.002)
+    raise RuntimeError(f"deletion delivery timed out: {path.name}")
+
+
+def apply_change(args, root, remote_root, sample, prefix):
+    """Make one measured source change; return its start time and a delivery waiter."""
+    if args.change == "create":
+        name, body = f"created-{prefix}-{sample}.txt", f"{prefix}-{sample}\n"
+        started = time.monotonic()
+        write_edit(args, root / name, body)
+        return started, lambda: wait_contents(remote_root / name, body), name
+    if args.change == "delete":
+        name = f"victim-{prefix}-{sample}.txt"
+        require_victim(remote_root / name, victim_body(prefix, sample))
+        started = time.monotonic()
+        (root / name).unlink()
+        return started, lambda: wait_absent(remote_root / name), name
+    body = f"{prefix}-{sample}\n"
+    started = time.monotonic()
+    write_edit(args, root / "edit.txt", body)
+    return started, lambda: wait_contents(remote_root / "edit.txt", body), "edit.txt"
+
+
+TRACE = re.compile(r"errand watch: prepare=(\S+) reason=(\S+) dirty=(\d+) entries=(\d+) elapsed_us=(\d+) err=(\S+)")
+
+
+def summarize_trace(log_path):
+    """Count watch preparation modes and fallback reasons from ERRAND_TRACE_WATCH output."""
+    rows = []
+    for line in log_path.read_text(errors="replace").splitlines():
+        match = TRACE.search(line)
+        if match:
+            mode, reason, dirty, entries, elapsed, err = match.groups()
+            rows.append(dict(mode=mode, reason=reason, dirty=int(dirty), entries=int(entries),
+                             elapsed_ms=int(elapsed)/1000, error=err == "true"))
+    summary = {}
+    for row in rows:
+        key = f"{row['mode']}:{row['reason']}"
+        item = summary.setdefault(key, dict(count=0, elapsed_ms=[]))
+        item["count"] += 1
+        item["elapsed_ms"].append(row["elapsed_ms"])
+    return dict(preparations=rows, by_reason=summary)
 
 
 def tree_contents(root):
@@ -80,10 +148,8 @@ def measure_mutagen(args, root, storage, report):
             for sample in range(args.samples):
                 # Let the preceding cycle settle before starting a warm edit.
                 command("sync", "flush", "bench")
-                body = f"mutagen-{sample}\n"
-                started = time.monotonic()
-                write_edit(args, root / "edit.txt", body)
-                delivered = wait_contents(target / "edit.txt", body)
+                started, check, _ = apply_change(args, root, target, sample, "mutagen")
+                delivered = check()
                 report["samples"].append(dict(mode="mutagen", sample=sample, delivery_seconds=delivered-started))
         finally:
             command("daemon", "stop")
@@ -108,10 +174,21 @@ def measure(args, storage, socket_dir, report):
             root = storage / "source"
             write_fixture(root, args.files, max(1, args.files // 100), 1024)
             (root / ".errandignore").write_text("ignored/\n")
+            if args.change == "delete":
+                for prefix in ("rsync", "mutagen", "once", "watch"):
+                    for sample in range(args.samples):
+                        (root / f"victim-{prefix}-{sample}.txt").write_text(victim_body(prefix, sample))
             if args.selection == "git":
                 (root / ".errandignore").unlink()
                 (root / ".gitignore").write_text("ignored/\n")
-                subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
+                git = ["git", "-C", str(root), "-c", "user.name=bench", "-c", "user.email=bench@example.invalid"]
+                subprocess.run([*git, "init", "-q"], check=True, capture_output=True)
+                if args.git_tracking != "none":
+                    tracked = ["."] if args.git_tracking == "all" else [
+                        ".gitignore", "edit.txt", *sorted(p.name for p in root.glob("package-*") if int(p.name.split("-")[1]) % 2 == 0),
+                        *sorted(p.name for p in root.glob("victim-*"))]
+                    subprocess.run([*git, "add", "--", *tracked], check=True, capture_output=True)
+                    subprocess.run([*git, "commit", "-q", "-m", "fixture"], check=True, capture_output=True)
             (root / "ignored").mkdir()
             ws, _ = run(binary, root, env, 60, "workspaces", "create", "--on", "local", "--json", "bench")
             remote = storage / "daemon" / "workspaces" / ws["id"] / "data" / "edit.txt"
@@ -122,30 +199,29 @@ def measure(args, storage, socket_dir, report):
                 command = [rsync, "-a", "--checksum", "--delete", "--exclude=ignored/", "--exclude=.git/", str(root)+"/", str(target)+"/"]
                 subprocess.run(command, check=True, capture_output=True)
                 for sample in range(args.samples):
-                    body = f"rsync-{sample}\n"
-                    write_edit(args, root / "edit.txt", body)
+                    _, check, _ = apply_change(args, root, target, sample, "rsync")
                     started = time.monotonic()
                     subprocess.run(command, check=True, capture_output=True)
                     elapsed = time.monotonic()-started
-                    if (target / "edit.txt").read_text() != body:
-                        raise RuntimeError("rsync did not deliver the edit")
+                    check()  # already delivered; raises only if rsync missed it
                     report["samples"].append(dict(mode="rsync-checksum", sample=sample, seconds=elapsed))
                 report["rsync"] = subprocess.check_output([rsync, "--version"], text=True).splitlines()[0]
             measure_mutagen(args, root, storage, report)
             push = ["push", "--on", "local", "--workspace", "bench", "--apply", "--json", "edit.txt"]
-            for sample in range(args.samples):
-                body = f"once-{sample}\n"
-                write_edit(args, root / "edit.txt", body)
-                receipt, elapsed = run(binary, root, env, 60, *push)
-                if remote.read_text() != body:
-                    raise RuntimeError("one-shot contents differ")
+            once = push[:-1] if args.change != "edit" else push
+            for sample in range(0 if args.skip_once else args.samples):
+                _, check, _ = apply_change(args, root, remote.parent, sample, "once")
+                receipt, elapsed = run(binary, root, env, 60, *once)
+                check()
                 report["samples"].append(dict(mode="once", sample=sample, seconds=elapsed, transfer=receipt["transfer"]))
                 save_report(args.output, report)
 
             rows = queue.Queue()
             started = time.monotonic()
             with (args.output / "watch.log").open("w") as watch_log:
-                watcher = subprocess.Popen([binary, *push[:-1], "--watch", push[-1]], cwd=root, env=env,
+                watch_env = dict(env, ERRAND_TRACE_WATCH="1") if args.trace else env
+                watch_paths = [push[-1]] if args.change == "edit" else []
+                watcher = subprocess.Popen([binary, *push[:-1], "--watch", *watch_paths], cwd=root, env=watch_env,
                                            text=True, stdout=subprocess.PIPE, stderr=watch_log)
                 def read_rows():
                     try:
@@ -165,13 +241,10 @@ def measure(args, storage, socket_dir, report):
                     report["watch_start_seconds"] = stamp - started
                     for sample in range(args.samples):
                         time.sleep(args.pause_seconds)
-                        body = f"watch-{sample}\n"
-                        started = time.monotonic()
-                        write_edit(args, root / "edit.txt", body)
-                        delivered = wait_contents(remote, body)
+                        started, check, _ = apply_change(args, root, remote.parent, sample, "watch")
+                        delivered = check()
                         stamp, receipt = next_row()
-                        if remote.read_text() != body:
-                            raise RuntimeError("watch contents differ")
+                        check()
                         row = dict(mode="watch", sample=sample, seconds=stamp-started, delivery_seconds=delivered-started, transfer=receipt["transfer"])
                         report["samples"].append(row)
                         print(json.dumps(row), flush=True)
@@ -235,6 +308,8 @@ def measure(args, storage, socket_dir, report):
                 if tree_contents(root) != tree_contents(remote.parent):
                     raise RuntimeError("watch destination tree differs")
                 report["whole_tree_verified"] = True
+                if args.trace:
+                    report["watch_trace"] = summarize_trace(args.output / "watch.log")
         finally:
             daemon.terminate()
             try:
@@ -253,15 +328,24 @@ def main():
     parser.add_argument("--idle-seconds", type=positive, default=3)
     parser.add_argument("--selection", choices=("explicit", "git"), default="explicit")
     parser.add_argument("--save-mode", choices=("inplace", "atomic"), default="inplace")
+    parser.add_argument("--git-tracking", choices=("none", "all", "mixed"), default="none",
+                        help="with --selection git: commit no files, every file, or half the packages")
+    parser.add_argument("--change", choices=("edit", "create", "delete"), default="edit",
+                        help="measured change: edit edit.txt, create a new root file, or delete a root file")
+    parser.add_argument("--skip-once", action="store_true", help="skip one-shot push samples")
+    parser.add_argument("--trace", action="store_true", help="record watch preparation modes and fallback reasons")
     parser.add_argument("--pause-seconds", type=float, default=0, help="idle interval before each measured watch save")
     args = parser.parse_args()
     if args.pause_seconds < 0:
         parser.error("--pause-seconds must be nonnegative")
+    if args.git_tracking != "none" and args.selection != "git":
+        parser.error("--git-tracking requires --selection git")
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False, mode=0o700)
     report = dict(complete=False, platform=platform.platform(), filesystem=filesystem_facts(args.output),
                   binary_sha256=hashlib.sha256(Path(args.binary).read_bytes()).hexdigest(), files=args.files,
-                  selection=args.selection, save_mode=args.save_mode, pause_seconds=args.pause_seconds, samples=[])
+                  selection=args.selection, save_mode=args.save_mode, pause_seconds=args.pause_seconds,
+                  git_tracking=args.git_tracking, change=args.change, samples=[])
     try:
         with tempfile.TemporaryDirectory(prefix="storage-", dir=args.output) as storage, tempfile.TemporaryDirectory(prefix="errand-watch-") as sockets:
             measure(args, Path(storage), Path(sockets), report)

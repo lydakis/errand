@@ -41,6 +41,17 @@ func (c *TransferCheckpoint) read(root *os.Root, name string) (*checkpointRecord
 	if err := json.Unmarshal(raw, &state); err != nil {
 		return nil, err
 	}
+	record, err := c.validatedRecord(raw, state)
+	if err != nil {
+		return nil, err
+	}
+	c.remember(record)
+	c.Reuse.put(c.StatePath, record)
+	return record, nil
+}
+
+// validatedRecord applies every check read performs on a decoded record.
+func (c *TransferCheckpoint) validatedRecord(raw []byte, state checkpointState) (*checkpointRecord, error) {
 	if err := c.validateRelationship(state); err != nil {
 		return nil, err
 	}
@@ -58,8 +69,6 @@ func (c *TransferCheckpoint) read(root *os.Root, name string) (*checkpointRecord
 	} else if _, err := hex.DecodeString(state.LastRequest); err != nil || len(state.LastRequest) != 64 || !filepath.IsAbs(state.LastReceipt) {
 		return nil, fmt.Errorf("invalid checkpoint application identity")
 	}
-	c.remember(record)
-	c.Reuse.put(c.StatePath, record)
 	return record, nil
 }
 func (c *TransferCheckpoint) remember(record *checkpointRecord) {

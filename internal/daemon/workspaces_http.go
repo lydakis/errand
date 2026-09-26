@@ -231,6 +231,7 @@ func (d *Daemon) handleWorkspaceRemove(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 	s.checkpointCache.ForgetDirectory(filepath.Join(s.dir, row.ID))
+	s.recordCache.forget(row.ID)
 	if err := syncDirectory(s.dir); err != nil {
 		httpError(w, 500, err.Error())
 		return

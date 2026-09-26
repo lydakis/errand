@@ -72,7 +72,9 @@ type Manifest struct {
 }
 
 func (m Manifest) RootHash() string {
-	return digest(m)
+	h := sha256.New()
+	writeManifestJSON(h, m)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // SelectionPolicy freezes the ignore rules and explicit artifact paths used
