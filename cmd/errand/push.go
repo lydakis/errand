@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -101,6 +102,7 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 			return reportPushResult(out, stderr, *event.Result, event.Stats, event.Err, *apply, *jsonOutput, event.State, target)
 		})
 		display.clear()
+		nameEarlierStateRecovery(err, settings, effective.Peer)
 		if err != nil {
 			fmt.Fprintln(stderr, "errand: watch stopped:", err)
 			return client.ExitTransaction
@@ -110,6 +112,7 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 	var stats client.TransferStats
 	opts.Stats = &stats
 	result, err := client.PushChanges(opts)
+	nameEarlierStateRecovery(err, settings, effective.Peer)
 	if writeErr := reportPushResult(out, stderr, result, stats, err, *apply, *jsonOutput, "", target); writeErr != nil {
 		fmt.Fprintln(stderr, "errand:", writeErr)
 		return 1
@@ -119,6 +122,15 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 		return client.ExitTransaction
 	}
 	return 0
+}
+
+// The recovery command for a workspace recorded by an earlier errand repeats
+// this push's peer and profile, so it recreates the same workspace.
+func nameEarlierStateRecovery(err error, settings runConfigFlags, peer string) {
+	var earlier *client.EarlierTransferStateError
+	if errors.As(err, &earlier) {
+		earlier.URL, earlier.Peer, earlier.Profile = settings.url, peer, settings.profile
+	}
 }
 
 func reportPushResult(out, stderr io.Writer, result proto.PushResult, stats client.TransferStats, err error, apply, jsonOutput bool, watchState, target string) error {

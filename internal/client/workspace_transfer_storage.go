@@ -77,7 +77,11 @@ func workspaceTransferGC(cutoff time.Time, dryRun bool) (ChangeGCResult, error) 
 		if moved {
 			result.Stale++
 		} else {
-			gc, err := o.session(dir).GC(context.Background(), cutoff, dryRun, []proto.Manifest{o.Initial})
+			initial, err := o.initial(dir)
+			if err != nil {
+				return fmt.Errorf("collecting workspace %s transfers: %w", o.WorkspaceID, err)
+			}
+			gc, err := o.session(dir).GC(context.Background(), cutoff, dryRun, []proto.Manifest{initial})
 			result.Removed += gc.Removed
 			result.Selected += gc.Removed + gc.Protected
 			result.Protected += gc.Protected
