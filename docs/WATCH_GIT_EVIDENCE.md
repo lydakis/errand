@@ -20,6 +20,9 @@ the watch records:
   (including includes), every `.gitignore` in unexcluded directories, and
   `.gitignore` files above a subdirectory root.
 - **Include targets:** all declared, even absent; `onbranch:` keeps full selection.
+- **Standard config files, even absent:** `~/.gitconfig` and the XDG config
+  (or the `GIT_CONFIG_GLOBAL` file), `config.worktree`, and a
+  `GIT_CONFIG_SYSTEM` file.
 - **Directory stamps:** every directory not excluded by a directory pattern,
   plus ancestors of every selected file. Directories that Git collapses only
   because their files are individually ignored (`logs/` under `*.log`) stay
@@ -82,6 +85,7 @@ Raw reports: [benchmarks/2026-09-25-p2d-git-evidence-linux.json](benchmarks/2026
   because their Git selection is slower, but that has not been measured.
 - Repositories with submodules (unsupported for Git selection anyway), sparse
   checkouts, `GIT_DIR`-based layouts, and system-level `/etc/gitconfig`
-  edits made without Git reporting that file as an origin.
+  edits made without Git reporting that file as an origin (unless
+  `GIT_CONFIG_SYSTEM` names it).
 - Very large ignored-but-not-excluded trees, where the directory walk at
   capture could grow. The walk runs on full cycles only.

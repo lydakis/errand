@@ -49,7 +49,7 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 	)
 	reads.Go(func() {
 		paths, pathsErr = exec.Command("git", "-C", root, "rev-parse", "--show-toplevel",
-			"--git-path", "index", "--git-path", "info/exclude").Output()
+			"--git-path", "index", "--git-path", "info/exclude", "--git-path", "config.worktree").Output()
 		if pathsErr != nil {
 			return
 		}
@@ -76,7 +76,7 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		return nil, nil, nil
 	}
 	lines := strings.Split(strings.TrimSuffix(string(paths), "\n"), "\n")
-	if len(lines) != 3 || e.index == "" {
+	if len(lines) != 4 || e.index == "" {
 		return nil, nil, nil
 	}
 	resolve := func(name string) string {
@@ -89,7 +89,9 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 	if resolved, err := filepath.EvalSymlinks(worktree); err == nil {
 		worktree = resolved
 	}
-	sources := []string{resolve(lines[2])}
+	// Git reads config.worktree only with extensions.worktreeConfig, which is
+	// itself recorded in the repository config; recording it always is simpler.
+	sources := []string{resolve(lines[2]), resolve(lines[3])}
 	if !globalSet {
 		var err error
 		if global, err = defaultGitExcludesPath(); err != nil {
@@ -99,6 +101,11 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		global = filepath.Join(worktree, global)
 	}
 	sources = append(sources, global)
+	standard, ok := standardGitConfigPaths()
+	if !ok {
+		return nil, nil, nil
+	}
+	sources = append(sources, standard...)
 	// Records alternate between an origin and a "key\nvalue" entry. Git runs
 	// from the top of the worktree, so relative origins are relative to it.
 	records := strings.Split(string(origins), "\x00")
@@ -179,6 +186,37 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		return nil, nil, nil
 	}
 	return e, directories, nil
+}
+
+// standardGitConfigPaths returns the global config files Git reads, and a
+// system config file named by GIT_CONFIG_SYSTEM. Git reads them only if they
+// exist, and --show-origin lists only files with entries, so they are recorded
+// either way. It reports false when a path cannot be resolved.
+func standardGitConfigPaths() ([]string, bool) {
+	var names []string
+	// Recorded even under GIT_CONFIG_NOSYSTEM; the default system file is not.
+	if system := os.Getenv("GIT_CONFIG_SYSTEM"); system != "" {
+		names = append(names, system)
+	}
+	if global, ok := os.LookupEnv("GIT_CONFIG_GLOBAL"); ok {
+		names = append(names, global) // replaces both files below
+	} else {
+		home, xdg := os.Getenv("HOME"), os.Getenv("XDG_CONFIG_HOME")
+		if home == "" {
+			return nil, false
+		}
+		if xdg == "" {
+			xdg = filepath.Join(home, ".config")
+		}
+		names = append(names, filepath.Join(home, ".gitconfig"), filepath.Join(xdg, "git", "config"))
+	}
+	for i, name := range names {
+		if !filepath.IsAbs(name) {
+			return nil, false
+		}
+		names[i] = filepath.Clean(name)
+	}
+	return names, true
 }
 
 // includeTarget resolves a declared include path as Git does: "~" is HOME, and

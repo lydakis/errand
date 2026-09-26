@@ -198,16 +198,57 @@ func TestGitWatchEvidenceCoversRepositoryConfigFromSubdirectoryRoot(t *testing.T
 	assertPreparedMatchesFull(t, w, b)
 }
 
-// Git reports an include only once its target exists. A declared target
-// created later can change selection while the including file, and the status
-// of an already dirty repository, stay the same.
+// absentConfigCase's declare makes Git consult a config file that does not
+// exist yet and returns its path.
+type absentConfigCase struct {
+	name    string
+	sub     bool // watch a subdirectory of the worktree
+	declare func(t *testing.T, root string, git func(...string)) string
+}
+
+// assertCreatedConfigDetected checks that an unchanged absent config file keeps
+// edits incremental, and that creating it to ignore an untracked file forces
+// full selection. Another untracked file keeps the repository dirty, so its
+// status does not change.
+func assertCreatedConfigDetected(t *testing.T, cases []absentConfigCase) {
+	t.Helper()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, b, git := prepareGitWatchFixture(t)
+			target := tc.declare(t, w.root, git)
+			if tc.sub {
+				writeFile(t, w.root, "sub/untracked", "untracked")
+				root := filepath.Join(w.root, "sub")
+				info, err := os.Lstat(root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				w = &Watch{root: root, identity: info, Changed: make(chan struct{}, 1)}
+			}
+			writeFile(t, w.root, "dirty", "dirty")
+			guard := assertPreparedMatchesFull(t, w, b)
+			if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
+				t.Fatal("Git selection captured no evidence")
+			}
+			writeFile(t, w.root, "untracked", "edited")
+			assertIncremental(t, w, b, "untracked")
+
+			dir := t.TempDir()
+			writeFile(t, dir, "excludes", "untracked\n")
+			writeFile(t, filepath.Dir(target), filepath.Base(target), "[core]\n\texcludesFile = "+filepath.Join(dir, "excludes")+"\n")
+			if err := guard.Verify(); err == nil {
+				t.Fatalf("guard accepted a created %s", target)
+			}
+			writeFile(t, w.root, "untracked", "edited again")
+			w.invalidatePath(filepath.Join(w.root, "untracked"), dirtyContent)
+			assertPreparedMatchesFull(t, w, b)
+		})
+	}
+}
+
+// Git reports an include only once its target exists.
 func TestGitWatchEvidenceCoversDeclaredIncludeTargets(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		sub  bool // watch a subdirectory of the worktree
-		// declare adds an include to the repository and returns its absent target.
-		declare func(t *testing.T, root string, git func(...string)) string
-	}{
+	assertCreatedConfigDetected(t, []absentConfigCase{
 		{"include-path", false, func(t *testing.T, _ string, git func(...string)) string {
 			target := filepath.Join(t.TempDir(), "absent.gitconfig")
 			git("config", "include.path", target)
@@ -238,39 +279,58 @@ func TestGitWatchEvidenceCoversDeclaredIncludeTargets(t *testing.T) {
 			git("config", "include.path", filepath.Join(dir, "outer.gitconfig"))
 			return filepath.Join(dir, "absent.gitconfig")
 		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			w, b, git := prepareGitWatchFixture(t)
-			target := tc.declare(t, w.root, git)
-			if tc.sub {
-				writeFile(t, w.root, "sub/untracked", "untracked")
-				root := filepath.Join(w.root, "sub")
-				info, err := os.Lstat(root)
-				if err != nil {
-					t.Fatal(err)
-				}
-				w = &Watch{root: root, identity: info, Changed: make(chan struct{}, 1)}
-			}
-			// Another untracked file keeps the status dirty after the change.
-			writeFile(t, w.root, "dirty", "dirty")
-			guard := assertPreparedMatchesFull(t, w, b)
-			if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
-				t.Fatal("Git selection captured no evidence")
-			}
-			// An unchanged absent target keeps the fast path.
-			writeFile(t, w.root, "untracked", "edited")
-			assertIncremental(t, w, b, "untracked")
+	})
+}
 
-			dir := t.TempDir()
-			writeFile(t, dir, "excludes", "untracked\n")
-			writeFile(t, filepath.Dir(target), filepath.Base(target), "[core]\n\texcludesFile = "+filepath.Join(dir, "excludes")+"\n")
-			if err := guard.Verify(); err == nil {
-				t.Fatal("guard accepted a created include target")
-			}
-			writeFile(t, w.root, "untracked", "edited again")
-			w.invalidatePath(filepath.Join(w.root, "untracked"), dirtyContent)
-			assertPreparedMatchesFull(t, w, b)
-		})
+// Git consults these files by location, and --show-origin lists only files
+// that exist and have entries.
+func TestGitWatchEvidenceCoversAbsentStandardConfigFiles(t *testing.T) {
+	// userConfig lets Git read the per-user files under a temporary HOME.
+	userConfig := func(t *testing.T) string {
+		t.Helper()
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		unsetenv(t, "GIT_CONFIG_GLOBAL")
+		return home
+	}
+	assertCreatedConfigDetected(t, []absentConfigCase{
+		{"home-gitconfig", false, func(t *testing.T, _ string, _ func(...string)) string {
+			return filepath.Join(userConfig(t), ".gitconfig")
+		}},
+		{"xdg-config", false, func(t *testing.T, _ string, _ func(...string)) string {
+			userConfig(t)
+			xdg := t.TempDir()
+			t.Setenv("XDG_CONFIG_HOME", xdg)
+			return filepath.Join(xdg, "git", "config")
+		}},
+		{"default-xdg-config", false, func(t *testing.T, _ string, _ func(...string)) string {
+			home := userConfig(t)
+			unsetenv(t, "XDG_CONFIG_HOME")
+			return filepath.Join(home, ".config", "git", "config")
+		}},
+		{"git-config-global", false, func(t *testing.T, _ string, _ func(...string)) string {
+			target := filepath.Join(t.TempDir(), "global.gitconfig")
+			t.Setenv("GIT_CONFIG_GLOBAL", target)
+			return target
+		}},
+		{"git-config-system", false, func(t *testing.T, _ string, _ func(...string)) string {
+			target := filepath.Join(t.TempDir(), "system.gitconfig")
+			t.Setenv("GIT_CONFIG_SYSTEM", target)
+			unsetenv(t, "GIT_CONFIG_NOSYSTEM")
+			return target
+		}},
+		{"config-worktree", false, func(t *testing.T, root string, git func(...string)) string {
+			git("config", "extensions.worktreeConfig", "true")
+			return filepath.Join(root, ".git", "config.worktree")
+		}},
+	})
+}
+
+func unsetenv(t *testing.T, key string) {
+	t.Helper()
+	t.Setenv(key, "") // restores the original value after the test
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatal(err)
 	}
 }
 
