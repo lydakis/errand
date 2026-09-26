@@ -3,11 +3,13 @@ package client
 import (
 	"context"
 	"errors"
-	"github.com/lydakis/errand/internal/proto"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	changeops "github.com/lydakis/errand/internal/changes"
+	"github.com/lydakis/errand/internal/proto"
 )
 
 func TestChangeStatsReportsLocalStateAndDownloads(t *testing.T) {
@@ -50,16 +52,24 @@ func TestChangeStatsKeepsKnownUsageWhenAnotherCandidateDisappears(t *testing.T) 
 	}
 }
 
-func TestChangeStorageStatsCancelsWhileTransferIsLocked(t *testing.T) {
+func TestChangeStorageStatsCancelsWhileWaitingToWidenStaging(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads restrictive staging without widening it")
+	}
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root, err := localChangeRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
 	key := localChangeKey("http://runner.test", proto.NewULID())
-	if err := os.MkdirAll(filepath.Join(root, "downloads", key), 0700); err != nil {
+	sealed := filepath.Join(root, "downloads", key, "sealed")
+	if err := os.MkdirAll(sealed, 0700); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Chmod(sealed, 0); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(sealed, 0o700)
 	unlock, err := acquireLocalChangeLock(localChangeTransferLockName(key))
 	if err != nil {
 		t.Fatal(err)
@@ -76,5 +86,34 @@ func TestChangeStorageStatsCancelsWhileTransferIsLocked(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("storage request ignored cancellation while waiting for a transfer")
+	}
+}
+
+func TestTransferInventoryCountsBytesAsTransferGCDoes(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "data"), []byte("data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	prep := prepareSnapshot(root, true, false)
+	if prep.err != nil {
+		t.Fatal(prep.err)
+	}
+	opts := RunOptions{PeerURL: "http://runner", Root: root}
+	const id = "01M2280R0T4152A3BSV4C2976R"
+	if err := recordWorkspaceOrigin(opts, id, prep.manifest); err != nil {
+		t.Fatal(err)
+	}
+	dir, err := workspaceTransferDir(opts.PeerURL, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := changeops.TransferStorageBytes(dir)
+	if err != nil || want == 0 {
+		t.Fatalf("transfer bytes %d %v", want, err)
+	}
+	stats, err := workspaceTransferStats(t.Context())
+	if err != nil || stats.Items != 1 || stats.Bytes != want {
+		t.Fatalf("inventory %+v %v, transfer GC counts %d", stats, err, want)
 	}
 }

@@ -254,11 +254,20 @@ older daemons cannot read it. Stop jobs and preserve or retire these caches befo
 downgrading a runner.
 
 `errand df` reports named-cache usage separately from snapshot blobs. Sizes
-reflect the last completed GC measurement and omit workspace copies. They count
-logical regular-file bytes rather than physical disk usage or unique hardlinked
-inodes. Never-measured caches appear as `unmeasured`; JSON reports the count and
-verbose entries include `bytes_unknown`. Totals mark unmeasured contributions
-explicitly. Active writes are not a live disk quota.
+reflect the last measurement and omit workspace copies. Directory caches are
+measured at release. Shared tree caches are measured by GC, or by `errand df`,
+which measures the caller's idle tree caches that were never measured or were
+used since, the same way GC does; a job's release marks a tree cache's size
+stale, and after upgrading from a release without that marking, df remeasures
+idle tree caches once. Like GC, df leaves out orphaned snapshot generations,
+which GC reclaims as temporaries. Each read starts new measurements for up to
+10 seconds, resuming after the cache the previous read reached, so a large
+store can take a few reads to settle. A read made while another is measuring
+reports the sizes known so far. Sizes count logical regular-file bytes rather
+than physical disk usage or unique hardlinked inodes. Caches without a current
+size, such as one a running job holds, appear as `unmeasured`; JSON reports the
+count and verbose entries include `bytes_unknown`. Totals mark unmeasured
+contributions explicitly. Active writes are not a live disk quota.
 
 `errand gc cache --on builder --dry-run` previews snapshot and named-cache
 collection. Omit `--dry-run` to collect. This uses `manage-caches` authorization
