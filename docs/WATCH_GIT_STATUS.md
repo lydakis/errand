@@ -62,6 +62,22 @@ failed, the watch resampled after 50 ms, and the retry used full selection.
 That edit is now an ordinary incremental cycle. An edit that lands while a
 clean worktree is being captured no longer fails the capture either.
 
+## Results, 10K files, Linux
+
+Watch matrix at 10K, three rounds of seven saves, paired against main
+(`c2dbf0e`) with the order alternating per case ([run order](WATCH_NATIVE.md#run-order)).
+Visible delivery, median ms:
+
+| Case | Baseline | Candidate | Paired ratio (range) | Candidate faster |
+|---|---:|---:|---:|---:|
+| explicit-inplace-edit | 157 | 143 | 0.918 (0.885–0.988) | 3/3 |
+| git-tracked-inplace-edit | 179 | 146 | 0.862 (0.813–0.882) | 3/3 |
+
+Incremental preparation fell from 5 to 1 ms (explicit) and from 15 to 1 ms
+(Git) in the same runs.
+
+Raw reports: [benchmarks/2026-09-26-git-status-linux.json](benchmarks/2026-09-26-git-status-linux.json).
+
 ## Tests
 
 `watch_git_status_test.go`:
