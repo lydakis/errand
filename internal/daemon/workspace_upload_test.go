@@ -246,3 +246,113 @@ func TestWorkspaceTransferGCReportsPartialFailure(t *testing.T) {
 		t.Fatalf("partial GC: %+v %v", result, err)
 	}
 }
+
+func TestWaitingWorkspacePushesHoldNoDataHandle(t *testing.T) {
+	d, ts := testDaemon(t)
+	root := workspaceWith(t, map[string]string{"value": "initial\n"})
+	ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: ts.URL, Root: root}, "queued")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := func() (*bytes.Buffer, string, int) {
+		var payload bytes.Buffer
+		mw := multipart.NewWriter(&payload)
+		part, err := mw.CreateFormField("metadata")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.NewEncoder(part).Encode(proto.PushRequest{ID: proto.NewULID(), ClientID: "0123456789abcdef0123456789abcdef", Manifest: ws.Manifest}); err != nil {
+			t.Fatal(err)
+		}
+		part, err = mw.CreateFormFile("workspace", "workspace.tar")
+		if err != nil {
+			t.Fatal(err)
+		}
+		split := payload.Len()
+		if err := snapshot.PackPartial(part, root, ws.Manifest, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := mw.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return &payload, mw.FormDataContentType(), split
+	}
+	push := func(r io.Reader, contentType string) (*httptest.ResponseRecorder, chan struct{}) {
+		req := httptest.NewRequest("POST", "/", r)
+		req.Header.Set("Content-Type", contentType)
+		req.SetPathValue("id", ws.ID)
+		response := httptest.NewRecorder()
+		done := make(chan struct{})
+		go func() { defer close(done); d.handleWorkspacePush(response, req, Identity{}) }()
+		return response, done
+	}
+	data := filepath.Join(d.workspaces.dir, ws.ID, "data")
+	handles := func() int {
+		want, err := os.Stat(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries, err := os.ReadDir("/dev/fd")
+		if err != nil {
+			t.Skipf("cannot list open descriptors: %v", err)
+		}
+		n := 0
+		for _, e := range entries {
+			if info, err := os.Stat(filepath.Join("/dev/fd", e.Name())); err == nil && os.SameFile(info, want) {
+				n++
+			}
+		}
+		return n
+	}
+
+	payload, contentType, split := body()
+	active := &pausedWorkspaceUpload{prefix: bytes.NewReader(payload.Bytes()[:split]), rest: bytes.NewReader(payload.Bytes()[split:]), stalled: make(chan struct{}), resume: make(chan struct{})}
+	var resume sync.Once
+	release := func() { resume.Do(func() { close(active.resume) }) }
+	defer release()
+	activeResponse, activeDone := push(active, contentType)
+	<-active.stalled
+	pinned := handles()
+	if pinned == 0 {
+		t.Skip("open descriptors do not report the directory they reference")
+	}
+
+	const queued = 4
+	waiting := make(chan string, queued)
+	d.workspaces.mu.Lock()
+	d.workspaces.testHookUploadWaiting = func(id string) {
+		select {
+		case waiting <- id:
+		default:
+		}
+	}
+	d.workspaces.mu.Unlock()
+	var responses []*httptest.ResponseRecorder
+	var dones []chan struct{}
+	for range queued {
+		payload, contentType, _ := body()
+		response, done := push(payload, contentType)
+		responses = append(responses, response)
+		dones = append(dones, done)
+	}
+	for range queued {
+		<-waiting
+	}
+	if got := handles(); got != pinned {
+		t.Fatalf("%d waiting pushes hold %d data directory handles", queued, got-pinned)
+	}
+
+	release()
+	<-activeDone
+	for _, done := range dones {
+		<-done
+	}
+	for i, response := range append([]*httptest.ResponseRecorder{activeResponse}, responses...) {
+		if response.Code != http.StatusCreated {
+			t.Fatalf("push %d: %d %s", i, response.Code, response.Body.String())
+		}
+	}
+	if got := handles(); got != 0 {
+		t.Fatalf("finished pushes left %d data directory handles open", got)
+	}
+}

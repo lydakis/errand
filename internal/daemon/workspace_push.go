@@ -26,16 +26,20 @@ func (d *Daemon) pushWorkspace(r *http.Request, id Identity) (workspaceRecord, e
 	return d.pushWorkspaceLocked(r, id)
 }
 
-// pinPushWorkspace also opens the data directory before removal can run.
-// Removal may unlink it mid-upload, but the open handle keeps its inode
-// allocated, so a workspace later published under the same ID cannot present
-// row.Identity to the upload's final revalidation.
-func (d *Daemon) pinPushWorkspace(r *http.Request, id Identity) (workspaceRecord, *os.File, error) {
+// pinPushWorkspace revalidates an admitted upload's workspace and opens its
+// data directory before removal can run. Removal may unlink it mid-upload, but
+// the open handle keeps its inode allocated, so a workspace later published
+// under the same ID cannot present row.Identity to the upload's final
+// revalidation. Pushes waiting for admission hold no handle.
+func (d *Daemon) pinPushWorkspace(r *http.Request, id Identity, admitted workspaceRecord) (workspaceRecord, *os.File, error) {
 	d.workspaces.mu.Lock()
 	defer d.workspaces.mu.Unlock()
 	row, err := d.pushWorkspaceLocked(r, id)
 	if err != nil {
 		return row, nil, err
+	}
+	if row.Identity != admitted.Identity {
+		return row, nil, os.ErrNotExist
 	}
 	pin, err := openWorkspaceData(filepath.Join(d.workspaces.dir, row.ID, "data"), row.Identity)
 	return row, pin, err
@@ -53,12 +57,11 @@ func (d *Daemon) pushWorkspaceLocked(r *http.Request, id Identity) (workspaceRec
 	return row, workspaceDataIdentity(filepath.Join(d.workspaces.dir, row.ID, "data"), row.Identity)
 }
 func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id Identity) {
-	row, pin, err := d.pinPushWorkspace(r, id)
+	row, err := d.pushWorkspace(r, id)
 	if err != nil {
 		workspaceHTTPError(w, err)
 		return
 	}
-	defer pin.Close()
 	upload, err := d.workspaces.beginUpload(r.Context(), row)
 	if err != nil {
 		httpError(w, 409, err.Error())
@@ -69,6 +72,12 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 			log.Printf("workspace %s upload cleanup: %v", row.ID, err)
 		}
 	}()
+	row, pin, err := d.pinPushWorkspace(r, id, row)
+	if err != nil {
+		workspaceHTTPError(w, err)
+		return
+	}
+	defer pin.Close()
 	source := upload.dir
 	r.Body = http.MaxBytesReader(w, r.Body, d.cfg.MaxUploadBytes)
 	mr, err := r.MultipartReader()

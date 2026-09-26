@@ -50,6 +50,9 @@ type workspaceStore struct {
 	// Records are only replaced by rename, so an unchanged file stamp proves
 	// the cached bytes are current.
 	recordCache workspaceRecordCache
+	// testHookUploadWaiting, when set, runs before an upload blocks behind
+	// the workspace's active upload. Protected by mu.
+	testHookUploadWaiting func(id string)
 }
 
 func openWorkspaces(dir string) (*workspaceStore, error) {
