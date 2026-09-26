@@ -53,7 +53,7 @@ type SelectionGuard struct {
 	root     string
 	opts     SelectOptions
 	paths    []string
-	gitInfo  GitInfo
+	gitInfo  *GitInfo // reported with the snapshot; nil when none is (watch)
 	policy   proto.SelectionPolicy
 	evidence *selectionEvidence // incremental watch selection proof
 	identity fs.FileInfo        // watch pins the originating checkout across preparation
@@ -120,7 +120,7 @@ func SelectFilesGuarded(root string, opts SelectOptions) ([]string, GitInfo, pro
 		return nil, GitInfo{}, proto.SelectionPolicy{}, nil, err
 	}
 	guard := &SelectionGuard{
-		root: root, opts: opts, paths: slices.Clone(paths), gitInfo: gitInfo,
+		root: root, opts: opts, paths: slices.Clone(paths), gitInfo: &gitInfo,
 		policy: proto.SelectionPolicy{
 			Prefix: policy.Prefix, Ignore: slices.Clone(policy.Ignore), CaseFold: policy.CaseFold,
 		},
@@ -156,7 +156,7 @@ func (g *SelectionGuard) Verify() (err error) {
 	if err != nil {
 		return fmt.Errorf("snapshot: revalidating selection policy: %w", err)
 	}
-	if gitInfo != g.gitInfo || !slices.Equal(paths, g.paths) || policy.Prefix != g.policy.Prefix ||
+	if g.gitInfo != nil && gitInfo != *g.gitInfo || !slices.Equal(paths, g.paths) || policy.Prefix != g.policy.Prefix ||
 		policy.CaseFold != g.policy.CaseFold ||
 		!slices.Equal(policy.Ignore, g.policy.Ignore) {
 		return sourceChangedf("snapshot: selection policy changed after manifest construction; retry")

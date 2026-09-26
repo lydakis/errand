@@ -27,7 +27,7 @@ func prepareWatchFixture(t *testing.T) (*Watch, *Builder) {
 
 func assertPreparedMatchesFull(t *testing.T, w *Watch, b *Builder) *SelectionGuard {
 	t.Helper()
-	got, _, _, guard, err := w.Prepare(b)
+	got, _, guard, err := w.Prepare(b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestWatchPrepareRejectsReplacedRoot(t *testing.T) {
 	if err := guard.Verify(); err == nil {
 		t.Fatal("guard accepted a replacement checkout")
 	}
-	if _, _, _, _, err := w.Prepare(b); err == nil {
+	if _, _, _, err := w.Prepare(b); err == nil {
 		t.Fatal("prepared a replacement checkout")
 	}
 }
@@ -166,7 +166,7 @@ func TestWatchPrepareRetainsDirtyWorkAfterReadFailure(t *testing.T) {
 	}
 	defer os.Chmod(name, 0600)
 	w.invalidatePath(name, dirtyContent)
-	if _, _, _, _, err := w.Prepare(b); err == nil {
+	if _, _, _, err := w.Prepare(b); err == nil {
 		t.Fatal("snapshot accepted unreadable changed content")
 	}
 	if err := os.Chmod(name, 0600); err != nil {
@@ -260,7 +260,7 @@ func TestWatchPrepareDeliversHintsBeforeExpiredReconciliation(t *testing.T) {
 	}
 	w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
 	<-w.Changed
-	got, _, _, _, err := w.PrepareSnapshot(b)
+	got, _, _, err := w.PrepareSnapshot(b)
 	if err != nil {
 		t.Fatal(err)
 	}
