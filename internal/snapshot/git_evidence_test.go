@@ -352,6 +352,30 @@ func TestGitWatchEvidenceFallsBackForBranchConditionalIncludes(t *testing.T) {
 	assertPreparedMatchesFull(t, w, b)
 }
 
+// Git reads .gitignore by name, and a case-insensitive filesystem opens
+// .GITIGNORE for it. Evidence records ignore files in any case, so an in-place
+// edit falls back to full selection even where Git would not read the file.
+func TestGitWatchEvidenceRecordsCaseVariantIgnoreFiles(t *testing.T) {
+	w, b, _ := prepareGitWatchFixture(t)
+	writeFile(t, w.root, "sub/.GITIGNORE", "")
+	writeFile(t, w.root, "sub/other", "other")
+	guard := assertPreparedMatchesFull(t, w, b)
+	if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
+		t.Fatal("Git selection captured no evidence")
+	}
+	name := filepath.Join(w.root, "sub", ".GITIGNORE")
+	if _, recorded := w.prepared.evidence.git.contents[name]; !recorded {
+		t.Fatalf("evidence does not record %s", name)
+	}
+	writeFile(t, w.root, "sub/.GITIGNORE", "other\n")
+	if err := guard.Verify(); err == nil {
+		t.Fatal("guard accepted an edited case-variant ignore file")
+	}
+	writeFile(t, w.root, "value", "edited")
+	w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+	assertPreparedMatchesFull(t, w, b)
+}
+
 // changeDuringGitCapture runs each non-nil change once: before capture's first
 // Git queries, and after them but before capture records the sources they read.
 func changeDuringGitCapture(t *testing.T, beforeQueries, afterQueries func()) {

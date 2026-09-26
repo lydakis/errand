@@ -209,7 +209,10 @@ func walkGitSelection(root string, opts SelectOptions, ignored map[string]bool, 
 			}
 			rel = filepath.ToSlash(rel)
 			if !d.IsDir() {
-				if d.Name() == ".gitignore" {
+				// A case-insensitive filesystem opens .GITIGNORE when Git
+				// reads .gitignore. Elsewhere Git does not read it, and
+				// recording it only makes an edit fall back to full selection.
+				if strings.EqualFold(d.Name(), ".gitignore") {
 					data, err := optionalContents(p)
 					if err != nil {
 						return err

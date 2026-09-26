@@ -17,8 +17,9 @@ the watch records:
   `git ls-files --stage` without object ids decides instead.
 - **Ignore and config sources, by contents:** `info/exclude`, the global
   excludes file, every config file `git config --show-origin` reports
-  (including includes), every `.gitignore` in unexcluded directories, and
-  `.gitignore` files above a subdirectory root.
+  (including includes), every `.gitignore` in unexcluded directories (in any
+  case, for case-insensitive filesystems), and `.gitignore` files above a
+  subdirectory root.
 - **Include targets:** all declared, even absent; `onbranch:` keeps full selection.
 - **Standard config files, even absent:** `~/.gitconfig` and the XDG config
   (or the `GIT_CONFIG_GLOBAL` file), `config.worktree`, and the system config
