@@ -84,6 +84,17 @@ func TestRunHeaderQuotesCheckoutNames(t *testing.T) {
 	}
 }
 
+func TestFooterDoesNotCallAnUnconfirmedExitZeroASuccess(t *testing.T) {
+	var screen bytes.Buffer
+	con := termui.New(io.Discard, &screen, termui.Options{OutTTY: true, ErrTTY: true, Width: 100})
+	v := newRunView(RunOptions{Display: RunDisplay{UI: con}})
+	v.finished(proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{ExitCode: new(int), ChangesOK: true, CleanupOK: true, LogsComplete: true}}, "cabal/job", "cabal", "job", footerChanges{})
+	got := termui.StripANSI(screen.String())
+	if !strings.HasPrefix(got, "✗ exited 0") || !strings.Contains(got, "couldn't confirm") {
+		t.Fatalf("ambiguous exit 0 footer = %q", got)
+	}
+}
+
 func TestRunViewTakesUpdatesFromTheRunsGoroutines(t *testing.T) {
 	con := termui.New(io.Discard, io.Discard, termui.Options{OutTTY: true, ErrTTY: true, Width: 80})
 	v := newRunView(RunOptions{Display: RunDisplay{UI: con}})

@@ -448,7 +448,9 @@ func (v *runView) finished(st proto.JobStatus, handle, peer, jobID string, chang
 		}
 	case res.ExitCode != nil:
 		line = fmt.Sprintf("exited %d in %s", *res.ExitCode, termui.Duration(ran))
-		failed = *res.ExitCode != 0
+		// An exit 0 whose job the runner couldn't confirm, or whose changes
+		// or cleanup failed, isn't a success: the glyph follows the exit code.
+		failed = resultCode(st) != 0
 	default:
 		line = "finished without a process outcome"
 	}

@@ -128,12 +128,20 @@ func statusLine(s *termui.Stream, peer string, d proto.JobDetails, now time.Time
 		return line
 	}
 	switch {
-	case d.State == proto.StateAmbiguous && (res == nil || res.ExitCode == nil && res.Signal == ""):
-		startErr := ""
-		if res != nil && res.StartError != "" {
-			startErr = "couldn't start: " + termui.SafeText(res.StartError)
+	case d.State == proto.StateAmbiguous:
+		// Whatever the runner observed stays secondary: it couldn't confirm
+		// the job's transaction, so the verdict is unknown.
+		observed := ""
+		switch {
+		case res == nil:
+		case res.StartError != "":
+			observed = "couldn't start: " + termui.SafeText(res.StartError)
+		case res.Signal != "":
+			observed = "last seen killed by " + client.SignalName(res.Signal, res.SignalNum)
+		case res.ExitCode != nil:
+			observed = fmt.Sprintf("last seen exiting %d", *res.ExitCode)
 		}
-		return join(termui.Warn, "state unknown", []termui.Attr{termui.Yellow}, "the runner couldn't confirm how this job ended", startErr, finished)
+		return join(termui.Warn, "state unknown", []termui.Attr{termui.Yellow}, "the runner couldn't confirm how this job ended", observed, finished)
 	case res == nil && d.State == proto.StateRunning && startedAt != nil:
 		return join(termui.Run, "running", []termui.Attr{termui.Green}, "for "+termui.Duration(ran), "started "+termui.Clock(*startedAt, now)+" on "+peer)
 	case res == nil && d.State == proto.StateQueued:

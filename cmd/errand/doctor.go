@@ -297,11 +297,32 @@ func finishDoctorReport(con *termui.Console, report doctorReport, asJSON bool, o
 		}
 	} else if !output.quiet {
 		writeDoctorReport(con.Out, report, output.verbose)
+	} else {
+		// Quiet keeps the errors; a failing doctor never exits silently.
+		for _, check := range safeDoctorChecks(report.Checks) {
+			if check.Status == "error" {
+				con.Err.Errorf("%s: %s", check.Name, check.Detail)
+				if check.Hint != "" {
+					con.Err.Hintf("%s", check.Hint)
+				}
+			}
+		}
 	}
 	if !report.OK {
 		return 1
 	}
 	return 0
+}
+
+// safeDoctorChecks quotes check text that came from runners or the system
+// (probe errors, response bodies) before it reaches a terminal.
+func safeDoctorChecks(checks []doctorCheck) []doctorCheck {
+	safe := make([]doctorCheck, len(checks))
+	for i, check := range checks {
+		check.Detail, check.Hint = termui.SafeText(check.Detail), termui.SafeText(check.Hint)
+		safe[i] = check
+	}
+	return safe
 }
 
 func doctorProbeFailure(target string, err error) doctorCheck {
@@ -325,6 +346,7 @@ func doctorProbeFailure(target string, err error) doctorCheck {
 // writeDoctorReport prints one line per check in plain words, the same way
 // whether things pass or fail, then a verdict.
 func writeDoctorReport(s *termui.Stream, report doctorReport, verbose bool) {
+	report.Checks = safeDoctorChecks(report.Checks)
 	var binary, path *doctorCheck
 	for i := range report.Checks {
 		switch report.Checks[i].Name {

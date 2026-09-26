@@ -113,6 +113,10 @@ type Daemon struct {
 	lockFile          *os.File
 	closeOnce         sync.Once
 	closeErr          error
+
+	// jobLog feeds Config.JobLog from its own goroutine; see logJob.
+	jobLog     chan JobLogEvent
+	jobLogDone chan struct{}
 }
 
 func New(cfg Config) (*Daemon, error) {
@@ -215,6 +219,10 @@ func New(cfg Config) (*Daemon, error) {
 		}
 		d.cache = cache
 	}
+	if cfg.JobLog != nil {
+		d.jobLog, d.jobLogDone = make(chan JobLogEvent, 256), make(chan struct{})
+		go d.deliverJobLog()
+	}
 	return d, nil
 }
 
@@ -238,6 +246,9 @@ func (d *Daemon) lockStateDir() error {
 // Close releases the process-wide ownership of the daemon state directory.
 func (d *Daemon) Close() error {
 	d.closeOnce.Do(func() {
+		if d.jobLogDone != nil {
+			close(d.jobLogDone)
+		}
 		if d.workspaces != nil {
 			_ = d.workspaces.root.Close()
 		}

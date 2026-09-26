@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
@@ -29,7 +30,7 @@ func (l serveLog) kv(level, msg string, fields ...string) {
 	fmt.Fprintf(&b, "time=%s level=%s msg=%q", time.Now().Format(time.RFC3339), level, msg)
 	for i := 0; i+1 < len(fields); i += 2 {
 		value := fields[i+1]
-		if strings.ContainsAny(value, " \"=") || value == "" {
+		if value == "" || strings.ContainsAny(value, " \"=") || strings.IndexFunc(value, unicode.IsControl) >= 0 {
 			value = fmt.Sprintf("%q", value)
 		}
 		fmt.Fprintf(&b, " %s=%s", fields[i], value)

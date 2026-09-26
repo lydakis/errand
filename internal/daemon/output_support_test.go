@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
@@ -103,6 +104,20 @@ func TestQueuedJobsReportPositionAndEveryLifecycleMomentIsLogged(t *testing.T) {
 	forceKill(t, ts.URL, blocker)
 	waitTerminal(t, ts.URL, first)
 	waitTerminal(t, ts.URL, second)
+	// Lines are delivered on the log goroutine; wait for the last ones.
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		mu.Lock()
+		finished := 0
+		for _, e := range events {
+			if e.Kind == JobLogFinished {
+				finished++
+			}
+		}
+		mu.Unlock()
+		if finished == 3 {
+			break
+		}
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	kinds := map[string][]JobLogKind{}
@@ -134,5 +149,26 @@ func TestWorkspaceRemovalReportsWhatItFreed(t *testing.T) {
 	}
 	if removed.ID != ws.ID || removed.Name != "freed" || removed.FreedBytes < int64(len(payload)) {
 		t.Fatalf("removal = %+v, want at least %d bytes freed", removed, len(payload))
+	}
+}
+
+func TestAStalledJobLogNeverHoldsUpAJob(t *testing.T) {
+	stall := make(chan struct{})
+	t.Cleanup(func() { close(stall) })
+	d, err := New(Config{
+		StateDir: t.TempDir(), InsecureNoAuth: true, Version: "test",
+		JobLog: func(JobLogEvent) { <-stall }, // a service whose stderr nobody reads
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	ts := httptest.NewServer(d.Handler())
+	t.Cleanup(ts.Close)
+	root := workspaceWith(t, nil)
+	for range 3 {
+		id := proto.NewULID()
+		rawSubmit(t, ts.URL, id, root, []string{"/bin/echo", "ok"}).Body.Close()
+		waitTerminal(t, ts.URL, id)
 	}
 }

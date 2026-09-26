@@ -166,6 +166,11 @@ func TestStatusQuotesRunnerTextAndKeepsAmbiguousStartErrors(t *testing.T) {
 	if line := statusLine(s, "mini", d, time.Now()); !strings.Contains(line, "state unknown") || !strings.Contains(line, "couldn't start: exec format error") {
 		t.Fatalf("ambiguous verdict lost the start error: %q", line)
 	}
+	zero := 0
+	d.Result = &proto.Result{ExitCode: &zero, ChangesOK: true, CleanupOK: true, LogsComplete: true}
+	if line := statusLine(s, "mini", d, time.Now()); !strings.Contains(line, "state unknown") || !strings.Contains(line, "last seen exiting 0") {
+		t.Fatalf("an unconfirmed exit 0 read as a success: %q", line)
+	}
 	issues := statusProblems(&proto.Result{TransactionError: "bad\x1b[2Jpath"})
 	if len(issues) == 0 || strings.ContainsRune(strings.Join(issues, ""), '\x1b') {
 		t.Fatalf("transaction error reached the terminal unquoted: %q", issues)
@@ -197,6 +202,14 @@ func TestRunnerErrorsReadAsSentencesAboutTheThingAskedFor(t *testing.T) {
 	if msg != "mini has no workspace named gone" {
 		t.Fatalf("missing workspace = %q", msg)
 	}
+	evil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":"gone\u001b[2J away"}`, http.StatusConflict)
+	}))
+	defer evil.Close()
+	_, err = client.GetJobDetails(evil.URL, "01M3BFYR7PQXA36M5Z5C4W47XZ")
+	if msg, _ := describeError(err, errorScope{peer: "mini"}); strings.ContainsRune(msg, '\x1b') || !strings.Contains(msg, "gone") {
+		t.Fatalf("runner error text reached the terminal unquoted: %q", msg)
+	}
 	var stderr bytes.Buffer
 	if code := failWith(termui.Plain(&stderr, &stderr).Err, 2, fmt.Errorf("wrapped: %w", &config.UnknownPeerError{Name: "nope"}), errorScope{}); code != 2 ||
 		!strings.HasPrefix(stderr.String(), "errand: error: no runner named nope\nerrand: hint: ") {
@@ -209,5 +222,23 @@ func TestServeLogSaysWhenAJobWasKilledBeforeItStarted(t *testing.T) {
 	_, ran := serveOutcome(daemon.JobLogEvent{Result: &proto.Result{Signal: "terminated", SignalNum: 15, Started: true, DurationMS: 1500}})
 	if queued != "killed by SIGTERM before the command started" || ran != "killed by SIGTERM after 1.5s" {
 		t.Fatalf("serve outcomes = %q / %q", queued, ran)
+	}
+}
+
+func TestPlacementNoteQuotesRunnerSuppliedReasons(t *testing.T) {
+	note := placementNote("os=darwin", []placementExclusion{
+		{Peer: "cabal", Reason: "unreachable: \x1b[2Jspoof"},
+		{Peer: "mini", Reason: "os=darwin", info: &proto.Info{Facts: proto.Facts{OS: "linux\x1b]0;x\x07"}}},
+	})
+	if strings.ContainsRune(note, '\x1b') || !strings.HasPrefix(note, "matched os=darwin (cabal skipped: ") {
+		t.Fatalf("placement note = %q", note)
+	}
+}
+
+func TestServeLogFieldsQuoteControlCharacters(t *testing.T) {
+	var buf bytes.Buffer
+	serveLog{e: termui.Plain(&buf, &buf).Err}.kv("info", "job started", "project", "evil\nforged")
+	if strings.Count(buf.String(), "\n") != 1 || !strings.Contains(buf.String(), `project="evil\nforged"`) {
+		t.Fatalf("a project name split the log line: %q", buf.String())
 	}
 }

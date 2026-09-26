@@ -206,3 +206,19 @@ func TestDoctorMentionsRunnersItCannotResolve(t *testing.T) {
 	}
 	t.Fatalf("an unresolvable runner produced no check: %+v", checks)
 }
+
+func TestDoctorQuietKeepsErrorsAndQuotesRunnerText(t *testing.T) {
+	writeClientConfig(t, "default_peer = 'test'\n[peers.test]\nurl = 'http://runner.invalid'\n")
+	t.Chdir(t.TempDir())
+	probe := func(context.Context, string) (proto.Info, error) {
+		return proto.Info{}, &client.ProbeError{Kind: client.ProbeNotErrand, Detail: "bad body \x1b[2J"}
+	}
+	for _, args := range [][]string{{"-q"}, nil} {
+		var out, errOut bytes.Buffer
+		code := cmdDoctorTo(args, &out, &errOut, probe)
+		text := out.String() + errOut.String()
+		if code != 1 || !strings.Contains(text, "bad body") || strings.ContainsRune(text, '\x1b') {
+			t.Fatalf("doctor %v = %d: %q", args, code, text)
+		}
+	}
+}

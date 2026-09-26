@@ -28,8 +28,12 @@ type JobLogEvent struct {
 	Result     *proto.Result
 }
 
+// logJob hands a lifecycle line to the log goroutine without waiting. A log
+// consumer that stalls (a backpressured stderr pipe) must never delay a
+// job's start, its runtime limit, or its result, so a full buffer drops the
+// line instead.
 func (d *Daemon) logJob(kind JobLogKind, j *Job, res *proto.Result) {
-	if d.cfg.JobLog == nil {
+	if d.jobLog == nil {
 		return
 	}
 	j.mu.Lock()
@@ -43,7 +47,22 @@ func (d *Daemon) logJob(kind JobLogKind, j *Job, res *proto.Result) {
 			event.QueueAhead = *ahead
 		}
 	}
-	d.cfg.JobLog(event)
+	select {
+	case d.jobLog <- event:
+	default:
+	}
+}
+
+// deliverJobLog calls Config.JobLog in lifecycle order until the daemon closes.
+func (d *Daemon) deliverJobLog() {
+	for {
+		select {
+		case event := <-d.jobLog:
+			d.cfg.JobLog(event)
+		case <-d.jobLogDone:
+			return
+		}
+	}
 }
 
 // queueAhead counts queue entries ahead of j while j is queued.

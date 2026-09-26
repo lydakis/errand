@@ -100,7 +100,10 @@ func cmdFetchTo(args []string, out, stderr io.Writer) int {
 	}
 	if errors.Is(err, client.ErrNoChanges) {
 		if *jsonOutput {
-			json.NewEncoder(out).Encode(fetchReport{transferReport: newTransferReport("unchanged", stats, nil), Path: staged})
+			if writeErr := json.NewEncoder(out).Encode(fetchReport{transferReport: newTransferReport("unchanged", stats, nil), Path: staged}); writeErr != nil {
+				e.Errorf("%v", writeErr)
+				return client.ExitTransaction
+			}
 			return 0
 		}
 		if !verbosity.quiet {

@@ -83,7 +83,15 @@ func runnerFlag(peer string) string {
 
 // describeError turns transport and runner errors into a sentence about the
 // thing the reader asked for, plus the next step when there is one.
+//
+// Runner error bodies and transport errors are quoted if they carry control
+// characters, since every caller prints the result to a terminal.
 func describeError(err error, scope errorScope) (string, string) {
+	msg, hint := describeErrorText(err, scope)
+	return termui.SafeText(msg), termui.SafeText(hint)
+}
+
+func describeErrorText(err error, scope errorScope) (string, string) {
 	var badHandle *badHandleError
 	if errors.As(err, &badHandle) {
 		return badHandle.Error(), "handles look like mini/01M3BFTQ6QD4; errand ps lists them"

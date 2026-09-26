@@ -129,6 +129,9 @@ func runWithDetachNotifications(
 		opts.Stderr = os.Stderr
 	}
 	view := newRunView(opts)
+	// Job output and errand's own lines share one console lock, so the queue
+	// watcher's line and forwarded output never write the same stream at once.
+	opts.Stdout, opts.Stderr = view.con.Out, view.con.Err
 	errf := view.errf
 	if opts.Detach && len(opts.Forwards) != 0 {
 		errf("--detach and --forward are mutually exclusive")
@@ -576,6 +579,8 @@ func attachWithDetachNotifications(
 	}
 	runOpts := RunOptions{PeerURL: opts.PeerURL, PeerName: opts.PeerName, Stdout: opts.Stdout, Stderr: opts.Stderr, Display: opts.Display}
 	view := newRunView(runOpts)
+	opts.Stdout, opts.Stderr = view.con.Out, view.con.Err
+	runOpts.Stdout, runOpts.Stderr = view.con.Out, view.con.Err
 	errf := view.errf
 	peer := peerLabel(opts.PeerName, opts.PeerURL)
 	handle := peer + "/" + opts.JobID

@@ -49,11 +49,13 @@ func placementNote(where string, excluded []placementExclusion) string {
 	}
 	var why []string
 	for _, x := range excluded {
+		// Reasons and facts come from runner responses; quote them before
+		// they reach the run header.
 		if x.info != nil && strings.Contains(x.Reason, "os=") && x.info.Facts.OS != "" {
-			why = append(why, x.Peer+" is "+x.info.Facts.OS)
+			why = append(why, terminalSafeField(x.Peer)+" is "+terminalSafeField(x.info.Facts.OS))
 			continue
 		}
-		why = append(why, x.Peer+" skipped: "+x.Reason)
+		why = append(why, terminalSafeField(x.Peer)+" skipped: "+terminalSafeField(x.Reason))
 	}
 	if len(why) > 0 {
 		note += " (" + strings.Join(why, "; ") + ")"
