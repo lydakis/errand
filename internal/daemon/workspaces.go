@@ -49,13 +49,7 @@ type workspaceStore struct {
 	// manifest, so decoding it dominated one-file pushes on large workspaces.
 	// Records are only replaced by rename, so an unchanged file stamp proves
 	// the cached bytes are current.
-	recordMu    sync.Mutex
-	recordCache map[string]cachedWorkspaceRecord
-}
-
-type cachedWorkspaceRecord struct {
-	stamp  snapshot.ObservationStamp
-	record workspaceRecord
+	recordCache workspaceRecordCache
 }
 
 func openWorkspaces(dir string) (*workspaceStore, error) {
@@ -73,7 +67,7 @@ func openWorkspaces(dir string) (*workspaceStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &workspaceStore{dir: dir, root: root, checkpointCache: changeops.NewCheckpointCache(32, 64<<20)}
+	s := &workspaceStore{dir: dir, root: root, checkpointCache: changeops.NewCheckpointCache(32, 64<<20), recordCache: workspaceRecordCache{maxBytes: workspaceRecordCacheBytes}}
 	// Unpublished uploads and removal tombstones never contain running workspaces.
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -115,21 +109,13 @@ func (s *workspaceStore) read(id string) (workspaceRecord, error) {
 		stamped = err == nil
 	}
 	if stamped {
-		s.recordMu.Lock()
-		cached, ok := s.recordCache[id]
-		s.recordMu.Unlock()
-		if ok && cached.stamp == stamp {
-			return cloneWorkspaceRecord(cached.record), nil
+		if cached, ok := s.recordCache.get(id, stamp); ok {
+			return cached, nil
 		}
 	}
 	r, err = s.decode(id, f)
 	if err == nil && stamped {
-		s.recordMu.Lock()
-		if s.recordCache == nil {
-			s.recordCache = make(map[string]cachedWorkspaceRecord)
-		}
-		s.recordCache[id] = cachedWorkspaceRecord{stamp: stamp, record: cloneWorkspaceRecord(r)}
-		s.recordMu.Unlock()
+		s.recordCache.put(id, stamp, cloneWorkspaceRecord(r))
 	}
 	return r, err
 }

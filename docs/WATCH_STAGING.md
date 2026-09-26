@@ -23,7 +23,9 @@ timestamps are unchanged. Records are only replaced by `replaceJSONDurable`
 (write and rename), so any replacement or in-place write misses the cache and
 is decoded and validated as before. Tests cover isolation of returned copies,
 immediate visibility of replacements, and rejection of an in-place corrupt
-write. Memory: one decoded manifest per workspace the daemon has read.
+write. Memory: records are evicted least recently used first once their
+estimated retained size passes 64 MiB, the checkpoint cache's budget, and a
+removed workspace's record is dropped at removal.
 
 ### Results
 
