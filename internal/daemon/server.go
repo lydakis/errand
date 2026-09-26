@@ -1167,11 +1167,10 @@ func (d *Daemon) queueStaged(j *Job) (cancelled bool, err error) {
 	j.event("queued", fmt.Sprintf("position=%d", position))
 	// Every admission passes through the queue; only a job that must wait
 	// for another is worth a log line.
-	waits := position > 1 || len(d.running) >= d.cfg.MaxJobs
-	d.mu.Unlock()
-	if waits {
-		d.logJob(JobLogQueued, j, nil)
+	if position > 1 || len(d.running) >= d.cfg.MaxJobs {
+		d.logQueuedLocked(j, position-1)
 	}
+	d.mu.Unlock()
 	d.drainQueue()
 	return false, nil
 }

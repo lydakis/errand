@@ -87,8 +87,16 @@ type Stream struct {
 func New(stdout, stderr io.Writer, opts Options) *Console {
 	c := &Console{}
 	colorFor := func(tty bool) bool { return opts.Color && (tty || opts.ForceColor) }
-	c.Out = &Stream{c: c, w: stdout, tty: opts.OutTTY, color: colorFor(opts.OutTTY), italic: opts.Italic, ascii: opts.ASCII, width: opts.Width}
-	c.Err = &Stream{c: c, w: stderr, tty: opts.ErrTTY, color: colorFor(opts.ErrTTY), italic: opts.Italic, ascii: opts.ASCII, width: opts.Width}
+	// Only a terminal has a width. A redirected stream never truncates to
+	// the width of the terminal its sibling happens to be on.
+	widthFor := func(tty bool) int {
+		if tty {
+			return opts.Width
+		}
+		return 0
+	}
+	c.Out = &Stream{c: c, w: stdout, tty: opts.OutTTY, color: colorFor(opts.OutTTY), italic: opts.Italic, ascii: opts.ASCII, width: widthFor(opts.OutTTY)}
+	c.Err = &Stream{c: c, w: stderr, tty: opts.ErrTTY, color: colorFor(opts.ErrTTY), italic: opts.Italic, ascii: opts.ASCII, width: widthFor(opts.ErrTTY)}
 	return c
 }
 

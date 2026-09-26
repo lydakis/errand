@@ -163,7 +163,7 @@ func cmdFetchTo(args []string, out, stderr io.Writer) int {
 	if action == "staged" {
 		next := "errand fetch --apply " + shown
 		if changePath != "" {
-			next += " " + changePath
+			next += " " + termui.ShellQuote([]string{changePath})
 		}
 		e.Next(next, "apply them here")
 	}

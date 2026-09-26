@@ -134,7 +134,7 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 		// Errors go to stderr even with --json, which carries them on stdout too.
 		var conflict *changes.MergeConflictError
 		if errors.As(err, &conflict) {
-			reportConflicts(e, conflict, "errand push --apply --conflicts "+strings.Join(withoutFlag(args, "apply", "conflicts"), " "))
+			reportConflicts(e, conflict, "errand push --apply --conflicts "+termui.ShellQuote(withoutFlag(args, "apply", "conflicts")))
 		} else {
 			failWith(e, client.ExitTransaction, err, errorScope{peer: label, workspace: workspace})
 		}
@@ -211,7 +211,7 @@ func (v pushView) report(result proto.PushResult, stats client.TransferStats, er
 			}
 			e.Print("    " + terminalSafeField(p))
 		}
-		e.Next("errand push --apply "+strings.Join(withoutFlag(v.args, "apply"), " "), "apply them")
+		e.Next("errand push --apply "+termui.ShellQuote(withoutFlag(v.args, "apply")), "apply them")
 	}
 	return nil
 }

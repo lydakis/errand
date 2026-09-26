@@ -263,3 +263,13 @@ func TestAccessEditsTakeEffectOnlyAfterRunnerReload(t *testing.T) {
 	check(denied, http.StatusForbidden)
 	check(start(true), http.StatusOK)
 }
+
+func TestAccessEditsAreSilentWithQuiet(t *testing.T) {
+	path := accessConfig(t)
+	for _, action := range []string{"add", "deny", "undeny", "remove"} {
+		var out, errOut bytes.Buffer
+		if code := cmdAccessTo([]string{action, "-q", "--config", path, "friend@example.com"}, &out, &errOut); code != 0 || out.Len() != 0 || errOut.Len() != 0 {
+			t.Fatalf("access %s -q = %d, stdout %q, stderr %q", action, code, &out, &errOut)
+		}
+	}
+}

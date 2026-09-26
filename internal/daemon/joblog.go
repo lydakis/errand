@@ -36,18 +36,27 @@ func (d *Daemon) logJob(kind JobLogKind, j *Job, res *proto.Result) {
 	if d.jobLog == nil {
 		return
 	}
+	d.jobLog.push(newJobLogEvent(kind, j, res))
+}
+
+// logQueuedLocked records that j must wait for a slot. It runs under d.mu,
+// so the event is queued before the drain worker can start j and log that.
+func (d *Daemon) logQueuedLocked(j *Job, ahead int) {
+	if d.jobLog == nil {
+		return
+	}
+	event := newJobLogEvent(JobLogQueued, j, nil)
+	event.QueueAhead = ahead
+	d.jobLog.push(event)
+}
+
+func newJobLogEvent(kind JobLogKind, j *Job, res *proto.Result) JobLogEvent {
 	j.mu.Lock()
-	event := JobLogEvent{
+	defer j.mu.Unlock()
+	return JobLogEvent{
 		Kind: kind, Time: time.Now(), ID: j.ID, Owner: admissionOwner(j.Admission),
 		Project: j.Admission.Project, Argv: append([]string(nil), j.Spec.Argv...), Result: res,
 	}
-	j.mu.Unlock()
-	if kind == JobLogQueued {
-		if ahead := d.queueAhead(j); ahead != nil {
-			event.QueueAhead = *ahead
-		}
-	}
-	d.jobLog.push(event)
 }
 
 // jobLogCloseWait bounds how long Close waits on a stalled JobLog.

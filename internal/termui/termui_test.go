@@ -221,3 +221,15 @@ func StripANSIExceptClear(s string) string {
 	s = StripANSI(s)
 	return strings.ReplaceAll(s, "\x00CLEAR\x00", "\x1b[2K")
 }
+
+func TestRedirectedStreamsNeverTruncateToTheTerminalWidth(t *testing.T) {
+	var out, errOut bytes.Buffer
+	c := New(&out, &errOut, Options{OutTTY: false, ErrTTY: true, Width: 20})
+	long := strings.Repeat("x", 60)
+	tbl := c.Out.Table("NAME", "DETAIL")
+	tbl.Row(C("a"), C(long))
+	tbl.Print()
+	if !strings.Contains(out.String(), long) {
+		t.Fatalf("piped table was cut to stderr's width:\n%s", &out)
+	}
+}

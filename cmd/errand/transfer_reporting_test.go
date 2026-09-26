@@ -295,3 +295,47 @@ func TestFetchReportingSelectionAndConflict(t *testing.T) {
 		})
 	}
 }
+
+func TestSuggestedApplyCommandsQuotePathsWithSpaces(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	server := httptest.NewServer(d.Handler())
+	t.Cleanup(server.Close)
+	writeClientConfig(t, fmt.Sprintf("default_peer='test'\n[peers.test]\nurl=%q\n", server.URL))
+	root := t.TempDir()
+	t.Chdir(root)
+	for path, body := range map[string]string{".errandignore": "", "my notes.txt": "one\n"} {
+		if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := client.CreateWorkspace(client.RunOptions{PeerURL: server.URL, Root: root}, "dev"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("my notes.txt", []byte("two\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	if code := cmdPushTo([]string{"--workspace", "dev", "my notes.txt"}, &out, &stderr); code != 0 ||
+		!strings.Contains(stderr.String(), "errand push --apply --workspace dev 'my notes.txt'") {
+		t.Fatalf("push hint: %d %s", code, &stderr)
+	}
+
+	if code := client.Run(client.RunOptions{PeerURL: server.URL, Root: root, Argv: []string{"sh", "-c", "echo x > 'out file'"}, Stdout: io.Discard, Stderr: io.Discard}); code != 0 {
+		t.Fatalf("run: %d", code)
+	}
+	jobs, err := client.List(server.URL)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs: %v %v", jobs, err)
+	}
+	stderr.Reset()
+	handle := "test/" + jobs[0].ID
+	if code := cmdFetchTo([]string{handle, "out file"}, &out, &stderr); code != 0 ||
+		!strings.Contains(stderr.String(), "errand fetch --apply "+handle+" 'out file'") {
+		t.Fatalf("fetch hint: %d %s", code, &stderr)
+	}
+}

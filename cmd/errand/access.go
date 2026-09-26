@@ -124,6 +124,9 @@ func cmdAccessTo(args []string, stdout, stderr io.Writer) int {
 			Activation string `json:"activation"`
 		}{action, login, dryRun, change, accessActivation})
 	}
+	if output.quiet && !dryRun {
+		return 0 // the edit is the result; errors already went to stderr
+	}
 	past := map[string]string{"add": "Allowed", "remove": "Removed", "deny": "Denied", "undeny": "Stopped denying"}[action]
 	where := homeRelative(terminalSafeField(change.Path))
 	switch {
