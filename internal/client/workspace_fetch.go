@@ -26,7 +26,7 @@ func applyWorkspaceJob(opts ChangeFetchOptions, details proto.JobDetails, origin
 	if err != nil {
 		return "", err
 	}
-	if !sameLocalRoot(state.Root, origin.Root) || state.RootID != origin.RootID || state.ManifestRoot != origin.Initial.RootHash() {
+	if !sameLocalRoot(state.Root, origin.Root) || state.RootID != origin.RootID || state.ManifestRoot != origin.InitialRoot {
 		return "", fmt.Errorf("job and workspace origin do not match")
 	}
 	if err := validateApplyCallerWorkspace(origin.Root, opts.CallerDir); err != nil {
@@ -39,7 +39,7 @@ func applyWorkspaceJob(opts ChangeFetchOptions, details proto.JobDetails, origin
 	}
 	defer unlock()
 	var downloaded string
-	b := proto.ChangeBundle{V: changeops.BundleVersion, BaselineRoot: origin.Initial.RootHash()}
+	b := proto.ChangeBundle{V: changeops.BundleVersion, BaselineRoot: origin.InitialRoot}
 	if details.Result.Changes != nil {
 		downloaded, b, err = downloadChangeBundleLocked(opts.PeerURL, opts.JobID, key, *details.Result.Changes, opts.meter)
 		if err != nil {
@@ -102,7 +102,11 @@ func applyWorkspaceJob(opts ChangeFetchOptions, details proto.JobDetails, origin
 			if err != nil {
 				return err
 			}
-			current, err := changeops.ObservedSource(origin.Initial, b, previous.Manifest, details.Spec.Selection)
+			initial, err := origin.initial(dir)
+			if err != nil {
+				return err
+			}
+			current, err := changeops.ObservedSource(initial, b, previous.Manifest, details.Spec.Selection)
 			if err != nil {
 				return err
 			}

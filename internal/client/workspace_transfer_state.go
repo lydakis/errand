@@ -15,12 +15,15 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+// Every push reads the origin of each relationship to find those bound to its
+// checkout, so the record stays small. The creation manifest it names lives in
+// initial.json, which only job application and GC read.
 type workspaceOrigin struct {
 	Root        string              `json:"root"`
 	RootID      fsidentity.Identity `json:"root_identity"`
 	WorkspaceID string              `json:"workspace_id"`
 	PeerURL     string              `json:"peer_url"`
-	Initial     proto.Manifest      `json:"initial"`
+	InitialRoot string              `json:"initial_root"`
 }
 
 func workspaceTransferDir(peer, id string) (string, error) {
@@ -32,23 +35,40 @@ func workspaceTransferDir(peer, id string) (string, error) {
 }
 func readWorkspaceOrigin(dir string) (workspaceOrigin, error) {
 	var o workspaceOrigin
-	f, err := os.Open(filepath.Join(dir, "origin.json"))
+	err := readWorkspaceTransferRecord(filepath.Join(dir, "origin.json"), "workspace origin", &o)
+	if err == nil && (!proto.ValidULID(o.WorkspaceID) || o.RootID.IsZero() || !filepath.IsAbs(o.Root) || o.PeerURL == "" || !validLocalManifestRoot(o.InitialRoot)) {
+		err = fmt.Errorf("invalid workspace origin")
+	}
+	return o, err
+}
+
+// initial reads the creation manifest. The root check binds it to this origin,
+// so a damaged or foreign file is rejected rather than used.
+func (o workspaceOrigin) initial(dir string) (proto.Manifest, error) {
+	var m proto.Manifest
+	if err := readWorkspaceTransferRecord(filepath.Join(dir, "initial.json"), "workspace creation manifest", &m); err != nil {
+		return proto.Manifest{}, err
+	}
+	if m.RootHash() != o.InitialRoot {
+		return proto.Manifest{}, fmt.Errorf("workspace creation manifest does not match its origin")
+	}
+	return m, nil
+}
+
+func readWorkspaceTransferRecord(path, what string, v any) error {
+	f, err := os.Open(path)
 	if err != nil {
-		return o, err
+		return err
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		return o, err
+		return err
 	}
 	if info.Size() > changeops.MaxBundleMetadataBytes {
-		return o, fmt.Errorf("workspace origin exceeds metadata limit")
+		return fmt.Errorf("%s exceeds metadata limit", what)
 	}
-	err = json.NewDecoder(f).Decode(&o)
-	if err == nil && (!proto.ValidULID(o.WorkspaceID) || o.RootID.IsZero() || !filepath.IsAbs(o.Root) || o.PeerURL == "") {
-		err = fmt.Errorf("invalid workspace origin")
-	}
-	return o, err
+	return json.NewDecoder(f).Decode(v)
 }
 
 // rootMoved reports whether the recorded workspace path no longer holds the
@@ -88,7 +108,7 @@ func recordWorkspaceOrigin(opts RunOptions, id string, m proto.Manifest) error {
 		if err := ensurePrivateLocalDirectory(dir); err != nil {
 			return err
 		}
-		o := workspaceOrigin{Root: opts.Root, RootID: rootID, WorkspaceID: id, PeerURL: opts.PeerURL, Initial: m}
+		o := workspaceOrigin{Root: opts.Root, RootID: rootID, WorkspaceID: id, PeerURL: opts.PeerURL, InitialRoot: m.RootHash()}
 		tmp, err := os.MkdirTemp(dir, ".initial-")
 		if err != nil {
 			return err
@@ -99,6 +119,14 @@ func recordWorkspaceOrigin(opts RunOptions, id string, m proto.Manifest) error {
 			return err
 		}
 		if err := o.session(dir).Initialize(context.Background(), source, m); err != nil {
+			return err
+		}
+		// The origin marks a complete relationship, so the manifest it names
+		// must be durable first. Without an origin, GC collects the directory.
+		if err := writeLocalJSON(filepath.Join(dir, "initial.json"), m); err != nil {
+			return err
+		}
+		if err := syncLocalDirectory(dir); err != nil {
 			return err
 		}
 		if err := writeLocalJSON(filepath.Join(dir, "origin.json"), o); err != nil {
