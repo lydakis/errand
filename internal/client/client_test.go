@@ -54,6 +54,27 @@ func footer(st proto.JobStatus) (int, string) {
 	return resultCode(st), stderr.String()
 }
 
+func TestFooterQuotesRunnerTextAndKeepsStartFailuresWhenQuiet(t *testing.T) {
+	st := proto.JobStatus{State: proto.StateExited, Result: &proto.Result{
+		ExitCode: new(int), ChangesOK: true, CleanupOK: true, LogsComplete: true,
+		TransactionError: "bad\x1b[2Jpath",
+		Changes:          &proto.ChangeSummary{Paths: []string{"evil\x1b]0;title\x07"}, PathCount: 1},
+	}}
+	var stderr bytes.Buffer
+	v := newRunView(RunOptions{Stdout: io.Discard, Stderr: &stderr})
+	v.finished(st, "cabal/job", "cabal", "job", footerChanges{summary: st.Result.Changes})
+	if strings.ContainsRune(stderr.String(), '\x1b') || !strings.Contains(stderr.String(), `\x1b[2J`) {
+		t.Fatalf("runner text reached the terminal unquoted: %q", stderr.String())
+	}
+
+	stderr.Reset()
+	quiet := newRunView(RunOptions{Stdout: io.Discard, Stderr: &stderr, Display: RunDisplay{Quiet: true}})
+	quiet.finished(proto.JobStatus{State: proto.StateExited, Result: &proto.Result{StartError: "exec format error", ChangesOK: true, CleanupOK: true, LogsComplete: true}}, "cabal/job", "cabal", "job", footerChanges{})
+	if !strings.Contains(stderr.String(), "couldn't start: exec format error") {
+		t.Fatalf("-q hid why the command never ran: %q", stderr.String())
+	}
+}
+
 func TestSignalExitUsesSignalNumber(t *testing.T) {
 	code := resultCode(proto.JobStatus{Result: &proto.Result{
 		Signal: "segmentation fault", ChangesOK: true, CleanupOK: true, LogsComplete: true,
@@ -1543,6 +1564,21 @@ func TestQueueLineShowsPositionOnlyWhileWaiting(t *testing.T) {
 	stop()
 	if screen.Len() != 0 {
 		t.Fatalf("a job that started at once printed %q", screen.String())
+	}
+
+	// Queued at admission but running by the end of the grace period: the
+	// watcher checks again rather than drawing a stale queue line.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(proto.JobDetails{JobStatus: proto.JobStatus{ID: "job", State: proto.StateRunning}})
+	}))
+	defer server.Close()
+	var piped bytes.Buffer
+	late := newRunView(RunOptions{Display: RunDisplay{UI: termui.Plain(&piped, &piped)}})
+	stop = watchQueue(RunOptions{PeerURL: server.URL, PeerName: "cabal"}, late, "job", proto.JobStatus{State: proto.StateQueued, QueueAhead: &two})
+	time.Sleep(600 * time.Millisecond)
+	stop()
+	if strings.Contains(piped.String(), "queued") {
+		t.Fatalf("a job that started during the grace period printed %q", piped.String())
 	}
 }
 

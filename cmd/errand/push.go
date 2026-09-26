@@ -174,7 +174,7 @@ func (v pushView) report(result proto.PushResult, stats client.TransferStats, er
 	if err != nil {
 		return nil
 	}
-	if !v.apply && !result.Recovered && (!v.con.Out.Interactive() || v.verbose) {
+	if !v.apply && !result.Recovered && (!v.con.Out.Interactive() || v.verbose || v.quiet) {
 		fmt.Fprintln(v.out, result.ID)
 	}
 	if v.quiet {

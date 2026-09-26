@@ -1,6 +1,7 @@
 package client
 
 import (
+	"archive/tar"
 	"fmt"
 	"io"
 	"os"
@@ -39,7 +40,8 @@ type runView struct {
 	placement  string
 	totalFiles int
 	shipFiles  int
-	shipBytes  int64
+	shipBytes  int64 // file contents, as people count them
+	streamSize int64 // the tar stream the upload counts, headers included
 	upStart    time.Time
 	upTime     time.Duration
 	partial    bool
@@ -146,8 +148,12 @@ func (v *runView) negotiationFailed(err error) {
 func (v *runView) planned(opts RunOptions, plan shipPlan, manifest proto.Manifest, files int) {
 	v.partial = plan.partial
 	v.shipFiles, v.shipBytes = 0, 0
+	var ships func(proto.ManifestEntry) bool
+	if plan.partial {
+		ships = plan.ships
+	}
 	for _, e := range manifest.Entries {
-		if e.Type == proto.EntryFile && (!plan.partial || plan.ships(e)) {
+		if e.Type == proto.EntryFile && (ships == nil || ships(e)) {
 			v.shipFiles++
 			v.shipBytes += e.Size
 		}
@@ -155,8 +161,9 @@ func (v *runView) planned(opts RunOptions, plan shipPlan, manifest proto.Manifes
 	if opts.Workspace != "" || opts.NoSnapshot {
 		return
 	}
+	v.streamSize = tarStreamSize(manifest, ships)
 	peer := v.ui.B(v.peer(opts))
-	if v.shipBytes == 0 {
+	if v.shipFiles == 0 {
 		v.spinner("Syncing with " + peer + " " + v.ui.D("· all "+termui.Count(files)+" files already there"))
 		return
 	}
@@ -165,8 +172,14 @@ func (v *runView) planned(opts RunOptions, plan shipPlan, manifest proto.Manifes
 }
 
 func (v *runView) progress(opts RunOptions, done int64) {
-	if v.quiet || v.shipBytes == 0 {
+	if v.quiet || v.shipFiles == 0 || v.streamSize <= 0 {
 		return
+	}
+	// The bar moves with the tar stream; its labels speak in file bytes
+	// unless every shipped file is empty.
+	done, total := min(done, v.streamSize), v.streamSize
+	if v.shipBytes > 0 {
+		done, total = int64(float64(done)/float64(v.streamSize)*float64(v.shipBytes)), v.shipBytes
 	}
 	cached := v.totalFiles - v.shipFiles
 	suffix := " · " + termui.Things(v.shipFiles, "file", "files")
@@ -176,7 +189,6 @@ func (v *runView) progress(opts RunOptions, done int64) {
 	if v.spin == nil || !v.spin.Active() {
 		v.spin = v.ui.Spin("")
 	}
-	total := v.shipBytes
 	v.spin.Progress("Uploading to "+v.ui.B(v.peer(opts)), done, total, func(done, total int64) string {
 		return termui.Bytes(done) + " of " + termui.Bytes(total) + v.ui.D(suffix)
 	})
@@ -204,7 +216,7 @@ func (v *runView) admitted(opts RunOptions, jobID string, gitInfo snapshot.GitIn
 	if v.verbose {
 		switch {
 		case opts.Workspace != "" || opts.NoSnapshot:
-		case v.shipBytes == 0:
+		case v.shipFiles == 0:
 			v.detail("sync", peer+" already had all "+termui.Things(files, "file", "files"))
 		default:
 			v.detail("sync", "uploaded "+termui.Count(v.shipFiles)+" of "+termui.Things(files, "file", "files")+" · "+termui.Bytes(v.shipBytes)+" · "+termui.Duration(v.upTime))
@@ -267,7 +279,7 @@ func (v *runView) admitted(opts RunOptions, jobID string, gitInfo snapshot.GitIn
 		return
 	}
 	line := peer + " · " + strings.Join(parts, " · ") + " " + handle
-	if v.shipBytes > 0 && opts.Workspace == "" && !opts.NoSnapshot {
+	if v.shipFiles > 0 && opts.Workspace == "" && !opts.NoSnapshot {
 		line += " · uploaded " + termui.Things(v.shipFiles, "file", "files") + " (" + termui.Bytes(v.shipBytes) + ")"
 	}
 	v.ui.Print("errand: " + line)
@@ -359,7 +371,7 @@ func (v *runView) finished(st proto.JobStatus, handle, peer, jobID string, chang
 	failed := true
 	switch {
 	case res.StartError != "":
-		line = "couldn't start: " + res.StartError
+		line = "couldn't start: " + termui.SafeText(res.StartError)
 	case res.Signal != "":
 		line = "killed by " + signalName(res.Signal, res.SignalNum)
 		if res.Started {
@@ -375,6 +387,10 @@ func (v *runView) finished(st proto.JobStatus, handle, peer, jobID string, chang
 	}
 	problems := resultProblems(st)
 	if v.quiet {
+		// Quiet drops the verdict, not the reason a command never ran.
+		if res.StartError != "" || res.ExitCode == nil && res.Signal == "" {
+			v.ui.Errorf("%s", line)
+		}
 		for _, p := range problems {
 			v.ui.Warnf("%s", p)
 		}
@@ -451,14 +467,14 @@ func changeList(s *termui.Stream, kinds []PathChange, sum *proto.ChangeSummary) 
 			if i == shown {
 				break
 			}
-			names = append(names, c.Letter(s)+" "+s.B(c.Path))
+			names = append(names, c.Letter(s)+" "+s.B(termui.SafeText(c.Path)))
 		}
 	} else {
 		for i, p := range sum.Paths {
 			if i == shown {
 				break
 			}
-			names = append(names, s.B(p))
+			names = append(names, s.B(termui.SafeText(p)))
 		}
 	}
 	text := strings.Join(names, ", ")
@@ -482,13 +498,13 @@ func resultProblems(st proto.JobStatus) []string {
 		problems = append(problems, "cleanup on the runner didn't finish")
 	}
 	if res.LimitExceeded != "" {
-		problems = append(problems, "hit the "+res.LimitExceeded+" limit")
+		problems = append(problems, "hit the "+termui.SafeText(res.LimitExceeded)+" limit")
 	}
 	if !res.LogsComplete {
 		problems = append(problems, "logs are incomplete")
 	}
 	if res.TransactionError != "" {
-		problems = append(problems, res.TransactionError)
+		problems = append(problems, termui.SafeText(res.TransactionError))
 	}
 	return problems
 }
@@ -530,6 +546,48 @@ func cmpOrString(a, b string) string {
 	return b
 }
 
+// tarStreamSize is the size of the tar stream an upload sends: the headers
+// snapshot.PackPartial writes for every entry, padded contents of the files
+// it ships, and the trailer.
+func tarStreamSize(m proto.Manifest, ships func(proto.ManifestEntry) bool) int64 {
+	var headers countingDiscard
+	tw := tar.NewWriter(&headers)
+	var contents int64
+	for _, e := range m.Entries {
+		hdr := &tar.Header{Name: e.Path, Mode: int64(e.Mode)}
+		switch e.Type {
+		case proto.EntryDir:
+			hdr.Typeflag, hdr.Name = tar.TypeDir, e.Path+"/"
+		case proto.EntrySymlink:
+			hdr.Typeflag, hdr.Linkname = tar.TypeSymlink, e.Target
+		case proto.EntryFile:
+			if ships != nil && !ships(e) {
+				continue
+			}
+			// Written with no size so the next header needs no contents;
+			// the padded contents are added separately.
+			hdr.Typeflag = tar.TypeReg
+			contents += (e.Size + 511) &^ 511
+		default:
+			continue
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return 0
+		}
+	}
+	if err := tw.Close(); err != nil {
+		return 0
+	}
+	return int64(headers) + contents
+}
+
+type countingDiscard int64
+
+func (c *countingDiscard) Write(p []byte) (int, error) {
+	*c += countingDiscard(len(p))
+	return len(p), nil
+}
+
 // countingWriter reports bytes as they pass through, for upload progress.
 type countingWriter struct {
 	w     io.Writer
@@ -567,7 +625,11 @@ func watchQueue(opts RunOptions, v *runView, jobID string, initial proto.JobStat
 			return
 		case <-timer.C:
 		}
+		// The job may have started, and printed, during the grace period.
 		status := initial
+		if latest, err := getStatus(opts.PeerURL, jobID); err == nil {
+			status = latest
+		}
 		for {
 			if status.State != proto.StateQueued {
 				v.started()

@@ -226,6 +226,26 @@ func TestCmdKillSendsTheSignalAndWaitsForTheJobToEnd(t *testing.T) {
 	}
 }
 
+func TestCmdKillDoesNotCallAnUnreachableJobRunning(t *testing.T) {
+	id := proto.NewULID()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.Error(w, `{"error":"restarting"}`, http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	saved := killWait
+	killWait = 200 * time.Millisecond
+	defer func() { killWait = saved }()
+	var stdout, stderr bytes.Buffer
+	if code := cmdKillTo([]string{"--url", server.URL, id}, &stdout, &stderr); code != 1 ||
+		!strings.Contains(stderr.String(), "couldn't confirm") || strings.Contains(stderr.String(), "still running") {
+		t.Fatalf("kill with failing status polls = %d: %q", code, stderr.String())
+	}
+}
+
 func TestCmdKillReportsJobsThatAlreadyFinished(t *testing.T) {
 	id := proto.NewULID()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -801,6 +821,30 @@ url = %q
 	for _, want := range []string{"WHERE", "SNAPSHOT CACHE", "JOBS", "CHANGES", "TOTAL", "cabal", "mac-mini", "local", "6 MiB of 5 GiB", "1 GiB", "56 MiB", "84 MiB"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("df output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestCmdDfScriptOutputKeepsRunnerOrderWhateverAnswersFirst(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	serve := func(delay time.Duration) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(delay)
+			json.NewEncoder(w).Encode(proto.StorageStats{Changes: &proto.ChangeStorageStats{}, Jobs: proto.StorageCategory{Items: 1, Bytes: 1}})
+		}))
+	}
+	slow, fast := serve(200*time.Millisecond), serve(0)
+	defer slow.Close()
+	defer fast.Close()
+	writeClientConfig(t, fmt.Sprintf("[peers.cabal]\nurl = %q\n[peers.mac-mini]\nurl = %q\n", slow.URL, fast.URL))
+	for _, args := range [][]string{nil, {"--json"}} {
+		var stdout, stderr bytes.Buffer
+		if code := cmdDfTo(args, &stdout, &stderr); code != 0 {
+			t.Fatalf("df %v exit = %d: %s", args, code, &stderr)
+		}
+		out := stdout.String()
+		if c, m := strings.Index(out, "cabal"), strings.Index(out, "mac-mini"); c < 0 || m < 0 || c > m {
+			t.Fatalf("df %v put the faster runner first:\n%s", args, out)
 		}
 	}
 }

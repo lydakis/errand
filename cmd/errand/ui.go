@@ -72,6 +72,15 @@ func usageError(s *termui.Stream, format string, args ...any) int {
 	return 2
 }
 
+// runnerFlag names a runner the way it was chosen: --url for a raw address,
+// --on for a configured name.
+func runnerFlag(peer string) string {
+	if strings.Contains(peer, "://") {
+		return "--url " + peer
+	}
+	return "--on " + peer
+}
+
 // describeError turns transport and runner errors into a sentence about the
 // thing the reader asked for, plus the next step when there is one.
 func describeError(err error, scope errorScope) (string, string) {
@@ -88,7 +97,7 @@ func describeError(err error, scope errorScope) (string, string) {
 		where := cmpOr(scope.peer, "the runner")
 		if len(prefix.Matches) == 0 {
 			return fmt.Sprintf("%s has no job starting with %s", where, prefix.Prefix),
-				"errand ps -a --on " + cmpOr(scope.peer, "PEER") + " lists what's there"
+				"errand ps -a " + runnerFlag(cmpOr(scope.peer, "PEER")) + " lists what's there"
 		}
 		return fmt.Sprintf("%s matches %d jobs on %s", prefix.Prefix, len(prefix.Matches), where), "use more characters of the job id"
 	}
@@ -96,7 +105,7 @@ func describeError(err error, scope errorScope) (string, string) {
 		switch {
 		case status == http.StatusNotFound && scope.job != "":
 			return fmt.Sprintf("%s has no job %s", cmpOr(scope.peer, "the runner"), scope.job),
-				"it may have been removed by gc · errand ps -a --on " + cmpOr(scope.peer, "PEER") + " lists what's there"
+				"it may have been removed by gc · errand ps -a " + runnerFlag(cmpOr(scope.peer, "PEER")) + " lists what's there"
 		case status == http.StatusNotFound && scope.workspace != "":
 			return fmt.Sprintf("%s has no workspace named %s", cmpOr(scope.peer, "the runner"), scope.workspace),
 				"errand workspaces lists them on every runner"

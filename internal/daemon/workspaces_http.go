@@ -218,13 +218,6 @@ func (d *Daemon) handleWorkspaceRemove(w http.ResponseWriter, r *http.Request, i
 		httpError(w, 409, err.Error())
 		return
 	}
-	// Measured before removal so the caller can say what it freed; a failed
-	// measurement doesn't block removal.
-	usage, measureErr := workspaceStorageBytes(r.Context(), filepath.Join(s.dir, row.ID), row)
-	freed := usage.Bytes
-	if measureErr != nil {
-		freed = -1
-	}
 	tombstone := ".removed-" + row.ID
 	if err := s.root.Rename(row.ID, tombstone); err != nil {
 		httpError(w, 500, err.Error())
@@ -238,6 +231,12 @@ func (d *Daemon) handleWorkspaceRemove(w http.ResponseWriter, r *http.Request, i
 	}
 	s.mu.Unlock()
 	locked = false
+	// The tombstone is measured outside the store lock so a large removal
+	// doesn't stall other workspaces; a failed measurement doesn't block it.
+	freed := int64(-1)
+	if usage, err := workspaceStorageBytes(r.Context(), filepath.Join(s.dir, tombstone), row); err == nil {
+		freed = usage.Bytes
+	}
 	if err := removeOwnedTree(filepath.Join(s.dir, tombstone)); err != nil {
 		httpError(w, 500, fmt.Sprintf("workspace removed; storage cleanup pending: %v", err))
 		return

@@ -6,10 +6,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
@@ -141,6 +143,10 @@ func TestShortJobIDsResolveToTheOneMatchingJob(t *testing.T) {
 	if msg != "01M3BFTQ matches 2 jobs on mini" || hint == "" {
 		t.Fatalf("ambiguous message = %q / %q", msg, hint)
 	}
+	_, hint = describeError(&client.JobPrefixError{Prefix: "01M3ZZZZ"}, errorScope{peer: server.URL})
+	if !strings.Contains(hint, "--url "+server.URL) || strings.Contains(hint, "--on") {
+		t.Fatalf("a job found by --url got a --on hint: %q", hint)
+	}
 	if _, _, _, err := resolveHandle("mini/ab", "", ""); err == nil {
 		t.Fatal("a two-character id must not be accepted")
 	} else if msg, _ := describeError(err, errorScope{}); msg != `"mini/ab" isn't a job handle` {
@@ -150,6 +156,18 @@ func TestShortJobIDsResolveToTheOneMatchingJob(t *testing.T) {
 	before := len(prefixes)
 	if _, _, id, err := resolveHandle(full, server.URL, ""); err != nil || id != full || len(prefixes) != before {
 		t.Fatalf("a full id must not need a lookup: %q %v", id, err)
+	}
+}
+
+func TestStatusQuotesRunnerTextAndKeepsAmbiguousStartErrors(t *testing.T) {
+	s := termui.Plain(io.Discard, io.Discard).Out
+	d := proto.JobDetails{JobStatus: proto.JobStatus{State: proto.StateAmbiguous, Result: &proto.Result{StartError: "exec format error"}}}
+	if line := statusLine(s, "mini", d, time.Now()); !strings.Contains(line, "state unknown") || !strings.Contains(line, "couldn't start: exec format error") {
+		t.Fatalf("ambiguous verdict lost the start error: %q", line)
+	}
+	issues := statusProblems(&proto.Result{TransactionError: "bad\x1b[2Jpath"})
+	if len(issues) == 0 || strings.ContainsRune(strings.Join(issues, ""), '\x1b') {
+		t.Fatalf("transaction error reached the terminal unquoted: %q", issues)
 	}
 }
 

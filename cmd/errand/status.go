@@ -129,7 +129,11 @@ func statusLine(s *termui.Stream, peer string, d proto.JobDetails, now time.Time
 	}
 	switch {
 	case d.State == proto.StateAmbiguous && (res == nil || res.ExitCode == nil && res.Signal == ""):
-		return join(termui.Warn, "state unknown", []termui.Attr{termui.Yellow}, "the runner couldn't confirm how this job ended", finished)
+		startErr := ""
+		if res != nil && res.StartError != "" {
+			startErr = "couldn't start: " + termui.SafeText(res.StartError)
+		}
+		return join(termui.Warn, "state unknown", []termui.Attr{termui.Yellow}, "the runner couldn't confirm how this job ended", startErr, finished)
 	case res == nil && d.State == proto.StateRunning && startedAt != nil:
 		return join(termui.Run, "running", []termui.Attr{termui.Green}, "for "+termui.Duration(ran), "started "+termui.Clock(*startedAt, now)+" on "+peer)
 	case res == nil && d.State == proto.StateQueued:
@@ -141,7 +145,7 @@ func statusLine(s *termui.Stream, peer string, d proto.JobDetails, now time.Time
 	case res == nil:
 		return join(termui.Wait, d.State, []termui.Attr{termui.Yellow}, "on "+peer, "admitted "+termui.Ago(d.AdmittedAt, now))
 	case res.StartError != "":
-		return join(termui.Fail, "couldn't start: "+res.StartError, []termui.Attr{termui.Red}, finished)
+		return join(termui.Fail, "couldn't start: "+termui.SafeText(res.StartError), []termui.Attr{termui.Red}, finished)
 	case res.Signal != "":
 		head := "killed by " + client.SignalName(res.Signal, res.SignalNum)
 		if !res.Started {
@@ -320,18 +324,19 @@ func statusProblems(result *proto.Result) []string {
 		issues = append(issues, "cleanup on the runner didn't finish")
 	}
 	if result.LimitExceeded != "" {
-		issues = append(issues, "hit the "+result.LimitExceeded+" limit")
+		issues = append(issues, "hit the "+termui.SafeText(result.LimitExceeded)+" limit")
 	}
 	if !result.LogsComplete {
 		issues = append(issues, "logs are incomplete")
 	}
 	if result.TransactionError != "" {
-		issues = append(issues, result.TransactionError)
+		issues = append(issues, termui.SafeText(result.TransactionError))
 	}
 	return issues
 }
 
 func formatAutomaticApply(status client.AutomaticApplyStatus) string {
+	status.Error = termui.SafeText(status.Error)
 	switch status.State {
 	case client.AutomaticApplyNeedsRecovery:
 		if status.Error != "" {

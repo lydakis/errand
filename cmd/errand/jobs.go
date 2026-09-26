@@ -177,9 +177,14 @@ func cmdKillTo(args []string, stdout, stderr io.Writer) int {
 		}
 		return failWith(e, 1, err, scope)
 	}
-	_, ended := waitForEnd(peerURL, jobID, killWait)
+	_, ended, pollErr := waitForEnd(peerURL, jobID, killWait)
 	if spin != nil {
 		spin.Stop()
+	}
+	if !ended && pollErr != nil {
+		msg, _ := describeError(pollErr, errorScope{peer: label, job: jobID})
+		e.Errorf("couldn't confirm %s stopped: %s", shown, msg)
+		return 1
 	}
 	if !ended {
 		e.Say(termui.Warn, e.ID(shown)+" is still running after "+termui.Duration(killWait))
@@ -195,17 +200,19 @@ func cmdKillTo(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// waitForEnd polls a job until it has a result or the wait runs out.
-func waitForEnd(peerURL, jobID string, wait time.Duration) (proto.JobStatus, bool) {
+// waitForEnd polls a job until it has a result or the wait runs out. When it
+// runs out, the error is the last poll's, so an unreachable runner isn't
+// mistaken for a job that's still running.
+func waitForEnd(peerURL, jobID string, wait time.Duration) (proto.JobStatus, bool, error) {
 	deadline := time.Now().Add(wait)
 	delay := 100 * time.Millisecond
 	for {
 		details, err := client.GetJobDetails(peerURL, jobID)
 		if err == nil && details.Result != nil {
-			return details.JobStatus, true
+			return details.JobStatus, true, nil
 		}
 		if time.Now().After(deadline) {
-			return details.JobStatus, false
+			return details.JobStatus, false, err
 		}
 		time.Sleep(delay)
 		delay = min(delay*2, time.Second)

@@ -174,7 +174,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 		}
 		return 0
 	}
-	if !con.Out.Interactive() {
+	if !con.Out.Interactive() || quiet {
 		fmt.Fprintln(out, w.Name)
 	}
 	if quiet {
@@ -193,7 +193,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 	}
 	e.Say(termui.OK, "Created "+e.B(w.Name)+" on "+label+" "+e.D(from))
 	e.Next("errand --workspace "+w.Name+" -- make test", "run in it")
-	e.Next("errand push --watch --apply --on "+label+" --workspace "+w.Name, "keep it in sync")
+	e.Next("errand push --watch --apply "+runnerFlag(label)+" --workspace "+w.Name, "keep it in sync")
 	return 0
 }
 

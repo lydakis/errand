@@ -141,7 +141,7 @@ func cmdFetchTo(args []string, out, stderr io.Writer) int {
 		return 0
 	}
 	// Scripts capture the staged or exported directory; people read the list.
-	if !*apply && (!con.Out.Interactive() || verbosity.verbose) {
+	if !*apply && (!con.Out.Interactive() || verbosity.verbose || verbosity.quiet) {
 		fmt.Fprintln(out, staged)
 	}
 	if verbosity.quiet {

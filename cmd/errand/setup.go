@@ -243,10 +243,15 @@ func printSetupReport(s *termui.Stream, r *setup.Report, dryRun, verbose bool) {
 	if _, ok := setupPeerURL(r.Config.Listen, r.Self.DNSName); ok {
 		s.Print("  " + s.Hint("errand peers add "+short+" "+r.Self.DNSName))
 	} else {
-		cmd := "errand peers add --ssh " + short + " " + sshHost
+		// Options go before NAME HOST: peers add stops reading them there.
+		cmd := "errand peers add --ssh"
 		if r.RemoteCommand != "" {
-			cmd += " --remote-command " + r.RemoteCommand
+			cmd += " --remote-command " + termui.ShellQuote([]string{r.RemoteCommand})
 		}
+		if r.SocketPath != "" {
+			cmd += " --remote-socket " + termui.ShellQuote([]string{r.SocketPath})
+		}
+		cmd += " " + short + " " + sshHost
 		s.Print("  " + s.Hint(cmd))
 	}
 	if !verbose {

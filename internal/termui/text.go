@@ -12,6 +12,15 @@ import (
 // practice and still resolve as a prefix.
 const ShortIDLength = 12
 
+// SafeText quotes text that carries control characters, so a runner- or
+// checkout-supplied string can't move the cursor or rewrite the screen.
+func SafeText(s string) string {
+	if strings.IndexFunc(s, unicode.IsControl) >= 0 {
+		return strconv.QuoteToGraphic(s)
+	}
+	return s
+}
+
 // ShortID shortens a job ULID for display.
 func ShortID(id string) string {
 	if len(id) > ShortIDLength {

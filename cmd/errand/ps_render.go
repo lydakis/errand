@@ -3,13 +3,11 @@ package main
 import (
 	"fmt"
 	"io"
-	"strconv"
-	"strings"
 	"text/tabwriter"
 	"time"
-	"unicode"
 
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 func psApplyText(row psRow) string {
@@ -112,12 +110,7 @@ func formatLocalTime(value time.Time) string {
 	return value.Local().Format("2006-01-02 15:04:05")
 }
 
-func terminalSafeField(value string) string {
-	if strings.IndexFunc(value, unicode.IsControl) >= 0 {
-		return strconv.QuoteToGraphic(value)
-	}
-	return value
-}
+func terminalSafeField(value string) string { return termui.SafeText(value) }
 
 func jobSource(entry proto.JobListEntry) string {
 	if entry.GitCommit != "" {

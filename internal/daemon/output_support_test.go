@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -116,5 +117,22 @@ func TestQueuedJobsReportPositionAndEveryLifecycleMomentIsLogged(t *testing.T) {
 	}
 	if got := kinds[blocker]; len(got) != 2 || got[0] != JobLogStarted || got[1] != JobLogFinished {
 		t.Fatalf("blocker lifecycle = %v", got)
+	}
+}
+
+func TestWorkspaceRemovalReportsWhatItFreed(t *testing.T) {
+	_, ts := testDaemon(t)
+	payload := strings.Repeat("x", 4096)
+	root := workspaceWith(t, map[string]string{"a": payload})
+	ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: ts.URL, Root: root}, "freed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	removed, err := client.RemoveWorkspace(ts.URL, ws.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed.ID != ws.ID || removed.Name != "freed" || removed.FreedBytes < int64(len(payload)) {
+		t.Fatalf("removal = %+v, want at least %d bytes freed", removed, len(payload))
 	}
 }

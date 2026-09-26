@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -83,6 +84,9 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 	}
 
 	view := newDfView(con, targets, measureLocal, *jsonOutput || output.quiet)
+	// A terminal gets each row as its runner answers; scripts and --json get
+	// the configured order every time.
+	streaming := con.Out.Interactive()
 	var remote, localRunner []peerQueryResult[proto.StorageStats]
 	for range targets {
 		result := <-arrivals
@@ -98,7 +102,20 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 			continue
 		}
 		remote = append(remote, result)
-		for _, row := range storageRows([]peerQueryResult[proto.StorageStats]{result}, nil) {
+		if streaming {
+			for _, row := range storageRows([]peerQueryResult[proto.StorageStats]{result}, nil) {
+				view.row(row)
+			}
+		}
+	}
+	order := map[peerTarget]int{}
+	for i, target := range targets {
+		order[target] = i
+	}
+	sort.SliceStable(remote, func(i, j int) bool { return order[remote[i].target] < order[remote[j].target] })
+	sort.SliceStable(localRunner, func(i, j int) bool { return order[localRunner[i].target] < order[localRunner[j].target] })
+	if !streaming {
+		for _, row := range storageRows(remote, nil) {
 			view.row(row)
 		}
 	}
@@ -285,7 +302,7 @@ func (v *dfView) footer(rows []dfRow) {
 			best = candidate{row.Changes.Bytes, "errand gc changes --older-than 30d", "fetched changes here hold " + termui.Bytes(row.Changes.Bytes)}
 		}
 		if row.hasRunner && row.Location != "local" && row.Jobs.Bytes > best.bytes {
-			best = candidate{row.Jobs.Bytes, "errand gc jobs --on " + row.Location + " --older-than 7d", "jobs on " + row.Location + " hold " + termui.Bytes(row.Jobs.Bytes)}
+			best = candidate{row.Jobs.Bytes, "errand gc jobs " + runnerFlag(row.Location) + " --older-than 7d", "jobs on " + row.Location + " hold " + termui.Bytes(row.Jobs.Bytes)}
 		}
 	}
 	const worthIt = 1 << 30

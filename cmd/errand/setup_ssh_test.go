@@ -61,6 +61,21 @@ func TestSetupSSHReportWithoutTailnetIdentity(t *testing.T) {
 	if strings.Contains(output.String(), "ignored@example.com") || strings.Contains(output.String(), "url =") {
 		t.Fatal(output.String())
 	}
+	// The suggested command must work when pasted.
+	var suggested []string
+	for _, line := range strings.Split(output.String(), "\n") {
+		if argv := strings.Fields(line); len(argv) > 3 && argv[1] == "peers" && argv[2] == "add" {
+			suggested = argv[3:]
+		}
+	}
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	var out, stderr bytes.Buffer
+	if code := cmdPeersTo(append([]string{"add", "--no-verify"}, suggested...), &out, &stderr, testDeps(t, cfgPath, stubProvider{})); code != 0 {
+		t.Fatalf("suggested peers add %q: %d %s%s", suggested, code, &out, &stderr)
+	}
+	if raw, err := os.ReadFile(cfgPath); err != nil || !strings.Contains(string(raw), `remote_socket = "/srv/errand.sock"`) {
+		t.Fatalf("suggested peers add wrote %q, %v", raw, err)
+	}
 }
 
 func TestSetupTransportFlagConflicts(t *testing.T) {
