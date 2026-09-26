@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -40,6 +41,8 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		paths, origins        []byte
 		global                string
 		globalSet             bool
+		standard              []string
+		standardOK            bool
 		excluded              map[string]bool
 		e                     = &gitSelectionEvidence{contents: map[string][]byte{}}
 		pathsErr, digestErr   error
@@ -70,9 +73,10 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		// Every configuration file Git consulted, including included files.
 		origins, originsErr = exec.Command("git", "-C", root, "config", "--list", "--show-origin", "-z").Output()
 	})
+	reads.Go(func() { standard, standardOK = standardGitConfigPaths(root) })
 	reads.Go(func() { excluded, excludedErr = excludedDirectories(root) })
 	reads.Wait()
-	if errors.Join(pathsErr, digestErr, globalErr, originsErr, excludedErr) != nil {
+	if errors.Join(pathsErr, digestErr, globalErr, originsErr, excludedErr) != nil || !standardOK {
 		return nil, nil, nil
 	}
 	lines := strings.Split(strings.TrimSuffix(string(paths), "\n"), "\n")
@@ -101,10 +105,6 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		global = filepath.Join(worktree, global)
 	}
 	sources = append(sources, global)
-	standard, ok := standardGitConfigPaths()
-	if !ok {
-		return nil, nil, nil
-	}
 	sources = append(sources, standard...)
 	// Records alternate between an origin and a "key\nvalue" entry. Git runs
 	// from the top of the worktree, so relative origins are relative to it.
@@ -188,14 +188,31 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 	return e, directories, nil
 }
 
-// standardGitConfigPaths returns the global config files Git reads, and a
-// system config file named by GIT_CONFIG_SYSTEM. Git reads them only if they
-// exist, and --show-origin lists only files with entries, so they are recorded
-// either way. It reports false when a path cannot be resolved.
-func standardGitConfigPaths() ([]string, bool) {
+// standardGitConfigPaths returns the config files Git reads by location: the
+// system file, unless GIT_CONFIG_NOSYSTEM disables it, and the global files.
+// Git reads them only if they exist, and --show-origin lists only files with
+// entries, so they are recorded either way. It reports false when a path
+// cannot be resolved.
+func standardGitConfigPaths(root string) ([]string, bool) {
+	return resolveGitConfigPaths(func() ([]byte, error) {
+		// The default system path depends on how Git was built; Git 2.42
+		// and later report it.
+		return exec.Command("git", "-C", root, "var", "GIT_CONFIG_SYSTEM").Output()
+	})
+}
+
+// resolveGitConfigPaths is standardGitConfigPaths with the system path query
+// injected.
+func resolveGitConfigPaths(systemConfig func() ([]byte, error)) ([]string, bool) {
 	var names []string
-	// Recorded even under GIT_CONFIG_NOSYSTEM; the default system file is not.
-	if system := os.Getenv("GIT_CONFIG_SYSTEM"); system != "" {
+	if !gitEnvTrue("GIT_CONFIG_NOSYSTEM") {
+		// Older Git fails, and Git exits 1 for a GIT_CONFIG_NOSYSTEM value
+		// it reads as true and gitEnvTrue does not; both keep full selection.
+		out, err := systemConfig()
+		system, ok := strings.CutSuffix(string(out), "\n")
+		if err != nil || !ok {
+			return nil, false
+		}
 		names = append(names, system)
 	}
 	if global, ok := os.LookupEnv("GIT_CONFIG_GLOBAL"); ok {
@@ -217,6 +234,18 @@ func standardGitConfigPaths() ([]string, bool) {
 		names[i] = filepath.Clean(name)
 	}
 	return names, true
+}
+
+// gitEnvTrue reports whether Git certainly reads the environment variable as
+// true. Git also accepts forms this does not, so false is not conclusive.
+func gitEnvTrue(key string) bool {
+	value := os.Getenv(key)
+	switch strings.ToLower(value) {
+	case "true", "yes", "on":
+		return true
+	}
+	n, err := strconv.ParseInt(value, 10, 64)
+	return err == nil && n != 0
 }
 
 // includeTarget resolves a declared include path as Git does: "~" is HOME, and

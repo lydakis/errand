@@ -21,8 +21,10 @@ the watch records:
   `.gitignore` files above a subdirectory root.
 - **Include targets:** all declared, even absent; `onbranch:` keeps full selection.
 - **Standard config files, even absent:** `~/.gitconfig` and the XDG config
-  (or the `GIT_CONFIG_GLOBAL` file), `config.worktree`, and a
-  `GIT_CONFIG_SYSTEM` file.
+  (or the `GIT_CONFIG_GLOBAL` file), `config.worktree`, and the system config
+  that `git var GIT_CONFIG_SYSTEM` reports, unless `GIT_CONFIG_NOSYSTEM` is
+  set. Git before 2.42 cannot report that path, so with the system config
+  enabled it keeps full selection.
 - **Directory stamps:** every directory not excluded by a directory pattern,
   plus ancestors of every selected file. Directories that Git collapses only
   because their files are individually ignored (`logs/` under `*.log`) stay
@@ -31,15 +33,17 @@ the watch records:
 
 Content-only edits then refresh the hinted files, as on the explicit fast path.
 Any change to the proof falls back to full selection. Structural events,
-overflow and 30 s expiry behave as before. The five capture queries run
+overflow and 30 s expiry behave as before. The capture queries run
 concurrently.
 
 Tests (`git_evidence_test.go`) cover detecting each of these without event hints:
 in-place `.gitignore` edits, a nested `.gitignore` reopening an ignored file,
 `info/exclude`, `git add -f` of an ignored file, created and removed files,
-configuring `core.excludesFile`, and ancestor `.gitignore` above a subdirectory
-root. They also check that an index stat refresh and churn inside an excluded
-`build/` do not invalidate the proof.
+configuring `core.excludesFile`, ancestor `.gitignore` above a subdirectory
+root, and creating an absent include target or standard config file. They
+also check that the system config path comes from Git and that
+`GIT_CONFIG_NOSYSTEM` leaves it out, and that an index stat refresh and churn
+inside an excluded `build/` do not invalidate the proof.
 
 ## Results
 
@@ -84,8 +88,6 @@ Raw reports: [benchmarks/2026-09-25-p2d-git-evidence-linux.json](benchmarks/2026
 - APFS/Btrfs native runs. The Mac and Cabal effects are expected to be larger
   because their Git selection is slower, but that has not been measured.
 - Repositories with submodules (unsupported for Git selection anyway), sparse
-  checkouts, `GIT_DIR`-based layouts, and system-level `/etc/gitconfig`
-  edits made without Git reporting that file as an origin (unless
-  `GIT_CONFIG_SYSTEM` names it).
+  checkouts, and `GIT_DIR`-based layouts.
 - Very large ignored-but-not-excluded trees, where the directory walk at
   capture could grow. The walk runs on full cycles only.

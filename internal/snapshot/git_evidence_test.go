@@ -1,9 +1,11 @@
 package snapshot
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -348,4 +350,150 @@ func TestGitWatchEvidenceFallsBackForBranchConditionalIncludes(t *testing.T) {
 	writeFile(t, w.root, "untracked", "edited")
 	w.invalidatePath(filepath.Join(w.root, "untracked"), dirtyContent)
 	assertPreparedMatchesFull(t, w, b)
+}
+
+// Git reads its default system config, whose location depends on how Git was
+// built, unless GIT_CONFIG_NOSYSTEM is set. The default file is only looked
+// up here, never created.
+func TestGitWatchEvidenceRecordsSystemConfigUnlessDisabled(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		unsetenv(t, "GIT_CONFIG_SYSTEM")
+		unsetenv(t, "GIT_CONFIG_NOSYSTEM")
+		out, err := exec.Command("git", "var", "GIT_CONFIG_SYSTEM").Output()
+		if err != nil {
+			t.Skipf("git var GIT_CONFIG_SYSTEM (Git 2.42 and later): %v", err)
+		}
+		system := strings.TrimSuffix(string(out), "\n")
+		w, b, _ := prepareGitWatchFixture(t)
+		assertPreparedMatchesFull(t, w, b)
+		if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
+			t.Fatal("Git selection captured no evidence")
+		}
+		if _, recorded := w.prepared.evidence.git.contents[system]; !recorded {
+			t.Fatalf("evidence does not record the system config %s", system)
+		}
+	})
+	t.Run("nosystem", func(t *testing.T) {
+		target := filepath.Join(t.TempDir(), "system.gitconfig")
+		t.Setenv("GIT_CONFIG_SYSTEM", target)
+		t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+		w, b, _ := prepareGitWatchFixture(t)
+		writeFile(t, w.root, "dirty", "dirty")
+		guard := assertPreparedMatchesFull(t, w, b)
+		if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
+			t.Fatal("Git selection captured no evidence")
+		}
+		if _, recorded := w.prepared.evidence.git.contents[target]; recorded {
+			t.Fatalf("evidence records %s, which Git does not read", target)
+		}
+		// Git ignores the file, so creating it leaves selection unchanged.
+		dir := t.TempDir()
+		writeFile(t, dir, "excludes", "untracked\n")
+		writeFile(t, filepath.Dir(target), filepath.Base(target), "[core]\n\texcludesFile = "+filepath.Join(dir, "excludes")+"\n")
+		if err := guard.Verify(); err != nil {
+			t.Fatalf("an ignored system config rejected selection: %v", err)
+		}
+		writeFile(t, w.root, "untracked", "edited")
+		assertIncremental(t, w, b, "untracked")
+	})
+}
+
+// The system path comes from Git. Failing to learn it keeps full selection,
+// and a GIT_CONFIG_NOSYSTEM that Git reads as true skips it.
+func TestResolveGitConfigPathsQueriesSystemPathUnlessDisabled(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	unsetenv(t, "XDG_CONFIG_HOME")
+	unsetenv(t, "GIT_CONFIG_GLOBAL")
+	system := filepath.Join(t.TempDir(), "gitconfig")
+	global := []string{filepath.Join(home, ".gitconfig"), filepath.Join(home, ".config", "git", "config")}
+	withSystem := append([]string{system}, global...)
+	const unset = "\x00"
+	for _, tc := range []struct {
+		name     string
+		nosystem string
+		output   string
+		err      error
+		query    bool
+		want     []string // nil: no evidence
+	}{
+		{"default", unset, system + "\n", nil, true, withSystem},
+		{"nosystem-empty", "", system + "\n", nil, true, withSystem},
+		{"nosystem-false", "False", system + "\n", nil, true, withSystem},
+		{"nosystem-zero", "0", system + "\n", nil, true, withSystem},
+		{"nosystem", "1", "", nil, false, global},
+		{"nosystem-on", "On", "", nil, false, global},
+		{"nosystem-integer", "2", "", nil, false, global},
+		// Git reads " 1" as true and prints nothing, exiting 1.
+		{"nosystem-only-git-reads-as-true", " 1", "", errors.New("exit status 1"), true, nil},
+		{"older-git", unset, "", errors.New("exit status 129"), true, nil},
+		{"no-output", unset, "", nil, true, nil},
+		{"empty-path", unset, "\n", nil, true, nil},
+		{"relative-path", unset, "etc/gitconfig\n", nil, true, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.nosystem == unset {
+				unsetenv(t, "GIT_CONFIG_NOSYSTEM")
+			} else {
+				t.Setenv("GIT_CONFIG_NOSYSTEM", tc.nosystem)
+			}
+			queried := false
+			got, ok := resolveGitConfigPaths(func() ([]byte, error) {
+				queried = true
+				return []byte(tc.output), tc.err
+			})
+			if queried != tc.query {
+				t.Fatalf("queried system path = %t, want %t", queried, tc.query)
+			}
+			if ok != (tc.want != nil) || !slices.Equal(got, tc.want) {
+				t.Fatalf("paths = %q, %t; want %q", got, ok, tc.want)
+			}
+		})
+	}
+}
+
+// Git also reports the global paths, but one git var reports one variable.
+// The evidence resolves them itself; check that it agrees with Git.
+func TestStandardGitConfigPathsMatchGit(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(t *testing.T)
+	}{
+		{"default", func(t *testing.T) {
+			unsetenv(t, "XDG_CONFIG_HOME")
+			unsetenv(t, "GIT_CONFIG_GLOBAL")
+		}},
+		{"xdg-config-home", func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			unsetenv(t, "GIT_CONFIG_GLOBAL")
+		}},
+		{"git-config-global", func(t *testing.T) {
+			t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "global.gitconfig"))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			t.Setenv("GIT_CONFIG_SYSTEM", filepath.Join(t.TempDir(), "system.gitconfig"))
+			unsetenv(t, "GIT_CONFIG_NOSYSTEM")
+			tc.setup(t)
+			root := t.TempDir()
+			var want []string
+			for _, variable := range []string{"GIT_CONFIG_SYSTEM", "GIT_CONFIG_GLOBAL"} {
+				out, err := exec.Command("git", "-C", root, "var", variable).Output()
+				if err != nil {
+					t.Skipf("git var %s (Git 2.42 and later): %v", variable, err)
+				}
+				want = append(want, strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")...)
+			}
+			got, ok := standardGitConfigPaths(root)
+			if !ok {
+				t.Fatal("config paths were not resolved")
+			}
+			slices.Sort(got)
+			slices.Sort(want)
+			if !slices.Equal(got, want) {
+				t.Fatalf("paths = %q, Git reads %q", got, want)
+			}
+		})
+	}
 }
