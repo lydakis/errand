@@ -35,6 +35,10 @@ type workspaceRecord struct {
 	CacheRestorePending bool                `json:"cache_restore_pending,omitempty"`
 	Owner               string              `json:"owner"`
 	Identity            fsidentity.Identity `json:"identity"`
+	// creation is Manifest as a transfer base, copied by decode from the same
+	// bytes. The record cache retains it with the record, so pushes validate
+	// and hash the creation snapshot once per workspace.json stamp.
+	creation *changeops.SourceBase
 }
 
 type workspaceStore struct {
@@ -173,6 +177,7 @@ func (s *workspaceStore) decode(id string, f io.Reader) (workspaceRecord, error)
 	if err := archive.Validate(r.Manifest); err != nil {
 		return r, err
 	}
+	r.creation = changeops.NewSourceBase(r.Manifest)
 	return r, nil
 }
 

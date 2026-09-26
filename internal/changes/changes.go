@@ -515,6 +515,20 @@ func workspaceDelta(ctx context.Context, baseline, current proto.Manifest, maxBy
 }
 
 func workspaceSnapshotDelta(ctx context.Context, before, after *manifest.Snapshot, maxBytes int64) (proto.ChangeBundle, error) {
+	bundle, err := selectSnapshotDelta(ctx, before, after, maxBytes)
+	if err != nil {
+		return proto.ChangeBundle{}, err
+	}
+	bundle.BaselineRoot, err = before.RootHash(ctx)
+	if err != nil {
+		return proto.ChangeBundle{}, err
+	}
+	return bundle, nil
+}
+
+// selectSnapshotDelta leaves BaselineRoot unset for a caller that already holds
+// the identity of before's exact entries.
+func selectSnapshotDelta(ctx context.Context, before, after *manifest.Snapshot, maxBytes int64) (proto.ChangeBundle, error) {
 	edits, err := before.Diff(ctx, after)
 	if err != nil {
 		return proto.ChangeBundle{}, err
@@ -560,11 +574,7 @@ func workspaceSnapshotDelta(ctx context.Context, before, after *manifest.Snapsho
 		return proto.ChangeBundle{}, fmt.Errorf("%w: changes exceed %d paths", ErrEntryLimitExceeded, MaxChangeEntries)
 	}
 
-	rootHash, err := before.RootHash(ctx)
-	if err != nil {
-		return proto.ChangeBundle{}, err
-	}
-	bundle := proto.ChangeBundle{V: BundleVersion, BaselineRoot: rootHash, Paths: roots}
+	bundle := proto.ChangeBundle{V: BundleVersion, Paths: roots}
 	baseSelected := make(map[string]proto.ManifestEntry)
 	remoteSelected := make(map[string]proto.ManifestEntry)
 	for _, root := range roots {

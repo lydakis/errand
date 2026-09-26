@@ -105,6 +105,16 @@ func (c *TransferCheckpoint) Read() (CheckpointVersion, error) {
 	}
 	return state.export(), nil
 }
+
+// Base reads like Read and returns the accepted source for expanding a delta.
+// It shares the record's identity, so a stage of the same bytes reuses it.
+func (c *TransferCheckpoint) Base() (*SourceBase, error) {
+	record, err := c.readVersion()
+	if err != nil {
+		return nil, err
+	}
+	return record.sourceBase(), nil
+}
 func (s checkpointState) export() CheckpointVersion {
 	return CheckpointVersion{Revision: s.Revision, Manifest: cloneSourceManifest(s.Manifest)}
 }

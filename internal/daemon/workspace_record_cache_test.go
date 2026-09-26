@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
@@ -217,4 +219,47 @@ func syntheticWorkspaceRecord(id string, files int) workspaceRecord {
 		r.Manifest.Entries = append(r.Manifest.Entries, proto.ManifestEntry{Path: fmt.Sprintf("dir/file-%06d.go", i), Type: "file", Mode: 0o644, SHA256: fmt.Sprintf("%064x", i)})
 	}
 	return r
+}
+
+// The creation base is retained with its record: hits share it, and a replaced
+// workspace.json gets a base copied from its own manifest.
+func TestWorkspaceRecordCacheRetainsCreationBaseWithRecord(t *testing.T) {
+	d, ts := testDaemon(t)
+	root := workspaceWith(t, map[string]string{"a": "one\n", "b": "two\n"})
+	ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: ts.URL, Root: root}, "creation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := d.workspaces
+	first, err := store.read(ws.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.read(ws.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.creation == nil || second.creation != first.creation || !reflect.DeepEqual(first.creation.Manifest(), first.Manifest) {
+		t.Fatal("cache hit did not share the creation base of its record")
+	}
+	second.Manifest.Entries[len(second.Manifest.Entries)-1].SHA256 = strings.Repeat("0", 64)
+	if err := store.write(second); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		next, err := store.read(ws.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if next.creation == first.creation || !reflect.DeepEqual(next.creation.Manifest(), second.Manifest) {
+			t.Fatal("replaced record kept the previous creation base")
+		}
+	}
+	record := syntheticWorkspaceRecord("sized", 100)
+	withBase := record
+	withBase.creation = changes.NewSourceBase(record.Manifest)
+	if withBase.retainedBytes() <= record.retainedBytes() {
+		t.Fatal("retained size does not count the creation base's entries")
+	}
+	checkWorkspaceRecordCacheAccounting(t, &store.recordCache)
 }

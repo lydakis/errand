@@ -105,7 +105,7 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		// Expansion uses immutable checkpoint metadata. Keep full-tree work
 		// outside the apply gate; StagePrepared rechecks the baseline under it.
 		if err == nil {
-			prepared, err = changeops.ExpandTransferSource(r.Context(), base, *request.Delta, request.SourceRoot, d.cfg.MaxLimits.MaxChangeBytes)
+			prepared, err = changeops.ExpandTransferSourceBase(r.Context(), base, *request.Delta, request.SourceRoot, d.cfg.MaxLimits.MaxChangeBytes)
 			if err == nil {
 				request.Manifest = prepared.Manifest()
 			}
@@ -189,7 +189,7 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	session := d.pushSession(row, request.ClientID)
-	if err := session.Initialize(r.Context(), filepath.Join(d.workspaces.dir, row.ID, "change-base"), row.Manifest); err != nil {
+	if err := session.InitializeBase(r.Context(), filepath.Join(d.workspaces.dir, row.ID, "change-base"), row.creation); err != nil {
 		httpError(w, 500, err.Error())
 		return
 	}
