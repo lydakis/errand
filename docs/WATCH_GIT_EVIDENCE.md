@@ -19,6 +19,7 @@ the watch records:
   excludes file, every config file `git config --show-origin` reports
   (including includes), every `.gitignore` in unexcluded directories, and
   `.gitignore` files above a subdirectory root.
+- **Include targets:** all declared, even absent; `onbranch:` keeps full selection.
 - **Directory stamps:** every directory not excluded by a directory pattern,
   plus ancestors of every selected file. Directories that Git collapses only
   because their files are individually ignored (`logs/` under `*.log`) stay

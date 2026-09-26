@@ -99,10 +99,35 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		global = filepath.Join(worktree, global)
 	}
 	sources = append(sources, global)
-	for _, record := range strings.Split(string(origins), "\x00") {
-		if name, ok := strings.CutPrefix(record, "file:"); ok && name != "" {
-			sources = append(sources, resolve(name))
+	// Records alternate between an origin and a "key\nvalue" entry. Git runs
+	// from the top of the worktree, so relative origins are relative to it.
+	records := strings.Split(string(origins), "\x00")
+	for i := 0; i+1 < len(records); i += 2 {
+		origin, ok := strings.CutPrefix(records[i], "file:")
+		if ok && origin != "" {
+			if !filepath.IsAbs(origin) {
+				origin = filepath.Join(worktree, origin)
+			}
+			origin = filepath.Clean(origin)
+			sources = append(sources, origin)
+		} else {
+			origin = ""
 		}
+		// Git reports an included file only once it exists, so record every
+		// declared target, whether or not its condition holds now.
+		key, value, _ := strings.Cut(records[i+1], "\n")
+		condition, conditional := strings.CutPrefix(key, "includeif.")
+		if key != "include.path" && !(conditional && strings.HasSuffix(condition, ".path")) {
+			continue
+		}
+		if strings.HasPrefix(condition, "onbranch:") {
+			return nil, nil, nil // depends on HEAD, which is not recorded
+		}
+		target, ok := includeTarget(value, origin)
+		if !ok {
+			return nil, nil, nil
+		}
+		sources = append(sources, target)
 	}
 	// Ignore files above the snapshot root still apply inside it.
 	for dir := filepath.Dir(root); strings.HasPrefix(root, worktree) && len(dir) >= len(worktree); dir = filepath.Dir(dir) {
@@ -154,6 +179,29 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		return nil, nil, nil
 	}
 	return e, directories, nil
+}
+
+// includeTarget resolves a declared include path as Git does: "~" is HOME, and
+// a relative path is relative to the directory of the file declaring it. It
+// reports false for forms it does not resolve.
+func includeTarget(value, origin string) (string, bool) {
+	if rest, ok := strings.CutPrefix(value, "~"); ok {
+		home := os.Getenv("HOME")
+		if home == "" || (rest != "" && rest[0] != '/') { // ~user
+			return "", false
+		}
+		value = home + rest
+	}
+	if value == "" || strings.HasPrefix(value, "%(prefix)/") {
+		return "", false
+	}
+	if !filepath.IsAbs(value) {
+		if origin == "" {
+			return "", false
+		}
+		value = filepath.Join(filepath.Dir(origin), value)
+	}
+	return filepath.Clean(value), true
 }
 
 // excludedDirectories returns directories that an ignore pattern excludes as

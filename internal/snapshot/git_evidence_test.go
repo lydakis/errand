@@ -174,3 +174,118 @@ func TestGitWatchEvidenceCoversIgnoreFilesAboveSubdirectoryRoot(t *testing.T) {
 	w.invalidatePath(filepath.Join(root, "other"), dirtyContent)
 	assertPreparedMatchesFull(t, w, b)
 }
+
+// Git reports the repository config relative to the worktree, not to a
+// subdirectory root.
+func TestGitWatchEvidenceCoversRepositoryConfigFromSubdirectoryRoot(t *testing.T) {
+	parent, b, git := prepareGitWatchFixture(t)
+	root := filepath.Join(parent.root, "sub")
+	info, err := os.Lstat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, root, "other", "other")
+	writeFile(t, root, "dirty", "dirty")
+	w := &Watch{root: root, identity: info, Changed: make(chan struct{}, 1)}
+	guard := assertPreparedMatchesFull(t, w, b)
+	dir := t.TempDir()
+	writeFile(t, dir, "excludes", "other\n")
+	git("config", "core.excludesFile", filepath.Join(dir, "excludes"))
+	if err := guard.Verify(); err == nil {
+		t.Fatal("guard accepted a repository config change")
+	}
+	w.invalidatePath(filepath.Join(root, "other"), dirtyContent)
+	assertPreparedMatchesFull(t, w, b)
+}
+
+// Git reports an include only once its target exists. A declared target
+// created later can change selection while the including file, and the status
+// of an already dirty repository, stay the same.
+func TestGitWatchEvidenceCoversDeclaredIncludeTargets(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sub  bool // watch a subdirectory of the worktree
+		// declare adds an include to the repository and returns its absent target.
+		declare func(t *testing.T, root string, git func(...string)) string
+	}{
+		{"include-path", false, func(t *testing.T, _ string, git func(...string)) string {
+			target := filepath.Join(t.TempDir(), "absent.gitconfig")
+			git("config", "include.path", target)
+			return target
+		}},
+		{"includeif-gitdir", false, func(t *testing.T, root string, git func(...string)) string {
+			target := filepath.Join(t.TempDir(), "absent.gitconfig")
+			git("config", "includeIf.gitdir:"+root+"/.path", target) // matches this repository
+			return target
+		}},
+		{"relative", false, func(t *testing.T, root string, git func(...string)) string {
+			git("config", "include.path", "absent.gitconfig")
+			return filepath.Join(root, ".git", "absent.gitconfig")
+		}},
+		{"relative-from-subdirectory-root", true, func(t *testing.T, root string, git func(...string)) string {
+			git("config", "include.path", "absent.gitconfig")
+			return filepath.Join(root, ".git", "absent.gitconfig")
+		}},
+		{"home", false, func(t *testing.T, _ string, git func(...string)) string {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			git("config", "include.path", "~/absent.gitconfig")
+			return filepath.Join(home, "absent.gitconfig")
+		}},
+		{"nested", false, func(t *testing.T, _ string, git func(...string)) string {
+			dir := t.TempDir()
+			writeFile(t, dir, "outer.gitconfig", "[include]\n\tpath = absent.gitconfig\n")
+			git("config", "include.path", filepath.Join(dir, "outer.gitconfig"))
+			return filepath.Join(dir, "absent.gitconfig")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, b, git := prepareGitWatchFixture(t)
+			target := tc.declare(t, w.root, git)
+			if tc.sub {
+				writeFile(t, w.root, "sub/untracked", "untracked")
+				root := filepath.Join(w.root, "sub")
+				info, err := os.Lstat(root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				w = &Watch{root: root, identity: info, Changed: make(chan struct{}, 1)}
+			}
+			// Another untracked file keeps the status dirty after the change.
+			writeFile(t, w.root, "dirty", "dirty")
+			guard := assertPreparedMatchesFull(t, w, b)
+			if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
+				t.Fatal("Git selection captured no evidence")
+			}
+			// An unchanged absent target keeps the fast path.
+			writeFile(t, w.root, "untracked", "edited")
+			assertIncremental(t, w, b, "untracked")
+
+			dir := t.TempDir()
+			writeFile(t, dir, "excludes", "untracked\n")
+			writeFile(t, filepath.Dir(target), filepath.Base(target), "[core]\n\texcludesFile = "+filepath.Join(dir, "excludes")+"\n")
+			if err := guard.Verify(); err == nil {
+				t.Fatal("guard accepted a created include target")
+			}
+			writeFile(t, w.root, "untracked", "edited again")
+			w.invalidatePath(filepath.Join(w.root, "untracked"), dirtyContent)
+			assertPreparedMatchesFull(t, w, b)
+		})
+	}
+}
+
+// Whether an onbranch include applies depends on HEAD, which the evidence
+// does not record, so such a configuration keeps full selection.
+func TestGitWatchEvidenceFallsBackForBranchConditionalIncludes(t *testing.T) {
+	w, b, git := prepareGitWatchFixture(t)
+	dir := t.TempDir()
+	writeFile(t, dir, "excludes", "untracked\n")
+	writeFile(t, dir, "feature.gitconfig", "[core]\n\texcludesFile = "+filepath.Join(dir, "excludes")+"\n")
+	git("config", "includeIf.onbranch:feature.path", filepath.Join(dir, "feature.gitconfig"))
+	writeFile(t, w.root, "dirty", "dirty")
+	assertPreparedMatchesFull(t, w, b)
+	git("checkout", "--quiet", "-b", "feature")
+	writeFile(t, w.root, "untracked", "edited")
+	w.invalidatePath(filepath.Join(w.root, "untracked"), dirtyContent)
+	assertPreparedMatchesFull(t, w, b)
+}
