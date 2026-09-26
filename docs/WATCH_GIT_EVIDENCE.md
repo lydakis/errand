@@ -17,8 +17,9 @@ the watch records:
   refreshing stat data), a digest of `git ls-files --stage` without object ids
   decides instead.
 - **Ignore and config sources, by contents:** `info/exclude`, the global
-  excludes file, every config file `git config --show-origin` reports
-  (including includes), every `.gitignore` in unexcluded directories (in any
+  excludes file, the repository config (even with no entries, which
+  `--show-origin` leaves out), every config file `git config --show-origin`
+  reports (including includes), every `.gitignore` in unexcluded directories (in any
   case, for case-insensitive filesystems), and `.gitignore` files above a
   subdirectory root.
 - **Include targets:** all declared, even absent; `onbranch:` keeps full selection.
@@ -37,7 +38,8 @@ the watch records:
   directory the walk entered must be one the walk stamped or excluded: a
   directory created between the walk and its parent's stamp leaves the
   checkout without evidence until the next full cycle, since Git does not list
-  it while empty.
+  it while empty. The same holds for a `.gitignore` listed there whose
+  contents the walk did not record.
 
 Content-only edits then refresh the hinted files, as on the explicit fast path.
 Any change to the proof falls back to full selection. Structural events,
@@ -56,8 +58,10 @@ also check that the system config path comes from Git and that
 `GIT_CONFIG_NOSYSTEM` leaves it out, and that an index stat refresh and churn
 inside an excluded `build/` do not invalidate the proof, and that ignore rules,
 config or a linked worktree's `.git` file changed during capture are not
-trusted. `watch_relist_test.go` creates an empty directory during capture and
-files in it without events.
+trusted. They also configure excludes in a repository config that was empty
+or absent at capture, and create an ignored `.gitignore` during capture and
+add rules to it later. `watch_relist_test.go` creates an empty directory
+during capture and files in it without events.
 
 ## Results
 

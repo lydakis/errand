@@ -721,3 +721,56 @@ func TestStandardGitConfigPathsMatchGit(t *testing.T) {
 		})
 	}
 }
+
+// Git's origin listing omits a repository config with no entries, so capture
+// records its path directly. Adding an excludes file there later must reach
+// the evidence even while the repository stays dirty.
+func TestGitWatchEvidenceRecordsRepositoryConfigWithoutEntries(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(config string) error
+	}{
+		{"empty", func(config string) error { return os.WriteFile(config, nil, 0o644) }},
+		{"absent", os.Remove},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, b, _ := prepareGitWatchFixture(t)
+			config := filepath.Join(w.root, ".git", "config")
+			if err := tc.setup(config); err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, w.root, "value", "dirty")
+			assertPreparedMatchesFull(t, w, b)
+			excludes := filepath.Join(t.TempDir(), "excludes")
+			writeFile(t, filepath.Dir(excludes), "excludes", "untracked\n")
+			writeFile(t, w.root, ".git/config", "[core]\n\texcludesFile = "+excludes+"\n")
+			writeFile(t, w.root, "value", "edited")
+			w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+			assertPreparedMatchesFull(t, w, b)
+		})
+	}
+}
+
+// An ignored .gitignore created after the walk passed its directory is in
+// the directory's listing without recorded contents, and selection does not
+// show it while it adds no rules. Rules later written into it in place must
+// not let a hinted edit reuse the selection.
+func TestGitWatchEvidenceRejectsIgnoreFileCreatedDuringCapture(t *testing.T) {
+	w, b, _ := prepareGitWatchFixture(t)
+	writeFile(t, w.root, ".git/info/exclude", "sub/.gitignore\n")
+	writeFile(t, w.root, "sub/extra", "extra")
+	writeFile(t, w.root, "value", "dirty")
+	t.Cleanup(func() { testHookBeforeDirectoryStamps = nil })
+	testHookBeforeDirectoryStamps = func() {
+		testHookBeforeDirectoryStamps = nil
+		writeFile(t, w.root, "sub/.gitignore", "")
+	}
+	assertPreparedMatchesFull(t, w, b)
+	if testHookBeforeDirectoryStamps != nil {
+		t.Fatal("preparation did not capture evidence")
+	}
+	writeFile(t, w.root, "sub/.gitignore", "extra\n")
+	writeFile(t, w.root, "value", "edited")
+	w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+	assertPreparedMatchesFull(t, w, b)
+}

@@ -356,9 +356,16 @@ func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest,
 		// selection does not show it while it is empty. Names the walk did
 		// not enter are below an excluded directory. Explicit selection
 		// lists directories, so its reselection rejects such a directory.
+		// Likewise an ignore file created then has no recorded contents, and
+		// selection does not show it while it is ignored and adds no rules.
 		if walked[name] {
 			for _, entry := range listing {
 				if !entry.typ.IsDir() {
+					if strings.EqualFold(entry.name, ".gitignore") {
+						if _, recorded := git.contents[filepath.Join(root, filepath.FromSlash(name), entry.name)]; !recorded {
+							return nil, nil
+						}
+					}
 					continue
 				}
 				if _, seen := walked[path.Join(name, entry.name)]; !seen {

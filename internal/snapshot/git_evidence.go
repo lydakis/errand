@@ -100,7 +100,7 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		return nil, nil, nil
 	}
 	lines := strings.Split(strings.TrimSuffix(string(paths), "\n"), "\n")
-	if len(lines) != 5 || e.index == "" {
+	if len(lines) != 6 || e.index == "" {
 		return nil, nil, nil
 	}
 	resolve := func(name string) string {
@@ -116,8 +116,9 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 	// Git reads config.worktree only with extensions.worktreeConfig, which is
 	// itself recorded in the repository config; recording it always is simpler.
 	// The .git file of a linked worktree names the directory holding its
-	// index, and that directory's commondir file names the shared one.
-	sources := []string{resolve(lines[2]), resolve(lines[3]), resolve(lines[4])}
+	// index, and that directory's commondir file names the shared one. The
+	// origin listing below omits a repository config with no entries.
+	sources := []string{resolve(lines[2]), resolve(lines[3]), resolve(lines[4]), resolve(lines[5])}
 	if gitfile := filepath.Join(worktree, ".git"); regularFile(gitfile) {
 		sources = append(sources, gitfile)
 	}
@@ -355,10 +356,12 @@ func includeTarget(value, origin string) (string, bool) {
 }
 
 // gitLocations reports the top of the worktree, then the index, info/exclude,
-// config.worktree and commondir paths, as Git resolves them through .git.
+// config.worktree, commondir and repository config paths, as Git resolves
+// them through .git.
 func gitLocations(root string) ([]byte, error) {
 	return exec.Command("git", "-C", root, "rev-parse", "--show-toplevel", "--git-path", "index",
-		"--git-path", "info/exclude", "--git-path", "config.worktree", "--git-path", "commondir").Output()
+		"--git-path", "info/exclude", "--git-path", "config.worktree", "--git-path", "commondir",
+		"--git-path", "config").Output()
 }
 
 // regularFile reports whether name, following symbolic links, is a regular file.
