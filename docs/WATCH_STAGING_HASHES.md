@@ -82,6 +82,22 @@ the checkpoint once instead of twice.
   bytes per entry (0.8 MB at 10K files); the strings are shared. The record
   cache counts it against its 64 MiB budget.
 
+## Results, 10K files, Linux
+
+Watch matrix at 10K, three rounds of seven saves, paired against main
+(`c2dbf0e`) with the order alternating per case ([run order](WATCH_NATIVE.md#run-order)).
+Visible delivery, median ms:
+
+| Case | Baseline | Candidate | Paired ratio (range) | Candidate faster |
+|---|---:|---:|---:|---:|
+| explicit-inplace-edit | 153 | 144 | 0.938 (0.832–1.023) | 2/3 |
+| git-tracked-inplace-edit | 182 | 164 | 0.923 (0.865–0.936) | 3/3 |
+
+In one round the explicit case was 2% slower, within this host's ~5% noise
+floor; the Git case won every round.
+
+Raw reports: [benchmarks/2026-09-26-staging-hashes-linux.json](benchmarks/2026-09-26-staging-hashes-linux.json).
+
 ## Tests
 
 `internal/changes/source_base_test.go` checks that neither the caller's input
