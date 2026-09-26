@@ -67,7 +67,8 @@ during capture and files in it without events.
 
 Same host and harness as the baseline. Baseline binary `4ed6aa4`, candidate
 `0f3f167` (run 1) and `09e3675` (run 2, with concurrent capture). Three rounds
-per case, with baseline and candidate back to back and alternating order.
+per case, with baseline and candidate back to back in an order fixed per case
+([run order](WATCH_NATIVE.md#run-order)).
 Seven samples per variant per round. The table shows median visible delivery
 in milliseconds, then the median paired ratio across rounds (candidate ÷
 baseline), with the number of rounds the candidate won.

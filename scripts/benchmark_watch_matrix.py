@@ -5,7 +5,7 @@ Each round runs every size x case once, alternating forward and reverse order.
 Competitors (rsync, optional Mutagen) run in the first round only. Summaries
 report medians across rounds plus watch preparation modes and fallback reasons.
 With --baseline, every size x case runs both binaries back to back, alternating
-which goes first by round and position, and the summary adds paired ratios.
+which goes first from round to round, and the summary adds paired ratios.
 """
 
 import argparse

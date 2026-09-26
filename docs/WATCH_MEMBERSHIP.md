@@ -80,7 +80,7 @@ relisting stale directories, Git exclusions) fails at least one test.
 This used the same host and harness as the baseline. The baseline binary was
 `df66ec5` (every earlier change on this branch) and the candidate was
 `07095fb`. There were three rounds, with baseline and candidate back to back
-in alternating order, and seven samples per variant per round. The table
+in an order fixed per case ([run order](WATCH_NATIVE.md#run-order)), and seven samples per variant per round. The table
 shows median visible delivery in ms and the median paired ratio across rounds
 (candidate ÷ baseline).
 

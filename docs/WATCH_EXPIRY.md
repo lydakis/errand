@@ -30,7 +30,7 @@ all, neither version scans (no idle timer).
 ## Results
 
 Watch matrix at 10K files, with a 31 s pause before each of five measured
-saves. Three rounds, back-to-back pairs with alternating order, against
+saves. Three rounds, back-to-back pairs in an order fixed per case ([run order](WATCH_NATIVE.md#run-order)), against
 `193b592`. Median visible delivery in ms:
 
 | Case | Baseline | Candidate | Paired ratio (range) | Candidate faster |

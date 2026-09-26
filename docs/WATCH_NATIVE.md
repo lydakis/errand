@@ -5,8 +5,9 @@ everything up to [atomic saves, creates and deletes](WATCH_MEMBERSHIP.md)) on
 George's hosts. The Linux numbers in the earlier write-ups chain separate
 campaigns; these are one paired run per host. The harness is the realistic
 watch matrix from the [baseline](WATCH_REALISTIC_BASELINE.md): three rounds,
-with baseline and candidate back to back in alternating order and seven samples
-per variant per round.
+with baseline and candidate back to back and seven samples per variant per
+round. Each case ran its two binaries in the same order every round (see
+[Run order](#run-order)).
 
 | Host | Hardware | Filesystem | Conditions |
 |---|---|---|---|
@@ -59,6 +60,35 @@ Median visible delivery in ms, v0.5.0 → branch, with the median paired ratio
   matrix. Samples carry no timestamps, so that window can't be separated out.
   Every MacBook case except the 1K explicit edit control was faster in all
   three rounds.
+
+## Run order
+
+The matrix was meant to alternate which binary runs first each round. With an
+even number of cells, reversing the traversal on odd rounds cancelled that
+out, so each case ran in one order in all three rounds, the same at both sizes:
+
+- Baseline first: explicit in-place edit, explicit create, Git untracked and
+  mixed in-place edits, Git create.
+- Candidate first: explicit rename-over save, explicit delete, Git tracked
+  in-place edit, Git rename-over save, Git delete.
+
+Every paired campaign on this branch had an even matrix, so the same applies
+to the Linux write-ups. Two checks say the effect is small next to the gains:
+
+- **Comparable cases that ran in opposite orders agree.** At 10K on both
+  Macs, explicit create against delete, Git untracked against tracked edit, and
+  Git create against delete differ by 0.03 or less in paired ratio, in both
+  directions. At 1K they differ by up to 0.11, not consistently in one
+  direction. Cabal's contention swamps the comparison.
+- **A same-binary run measures it directly.** On Linux, with the fixed
+  script, four 10K cases over four rounds each, the binary that ran second was
+  2% slower at the median (0.97–1.08 across 16 rounds, second faster in 6).
+  That is within this host's 5% noise floor
+  ([raw](benchmarks/2026-09-26-run-order-linux.json)).
+
+A fixed order can therefore move one case's ratio by a few percent. That matters
+only for ratios near 1, such as the Mini's 1K explicit cases. The script now
+alternates each cell's order from round to round.
 
 ## Mini's Git cases
 

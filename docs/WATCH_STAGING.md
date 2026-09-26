@@ -32,7 +32,8 @@ removed workspace's record is dropped at removal.
 Phase benchmark, three alternating base/candidate pairs, 15 iterations each:
 10K `WatchPhases` 220–223 → 168–173 ms per operation, and 1K `small` 82–88 → 75–78 ms.
 
-Watch matrix, three rounds, back-to-back pairs with alternating order, against
+Watch matrix, three rounds, back-to-back pairs in an order fixed per case
+([run order](WATCH_NATIVE.md#run-order)), against
 the Git-evidence build (`09e3675`). Median visible delivery in ms:
 
 | Files | Case | Baseline | Candidate | Paired ratio (range) | Candidate faster |
