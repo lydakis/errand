@@ -352,6 +352,93 @@ func TestGitWatchEvidenceFallsBackForBranchConditionalIncludes(t *testing.T) {
 	assertPreparedMatchesFull(t, w, b)
 }
 
+// changeDuringGitCapture runs each non-nil change once: before capture's first
+// Git queries, and after them but before capture records the sources they read.
+func changeDuringGitCapture(t *testing.T, beforeQueries, afterQueries func()) {
+	t.Helper()
+	once := func(hook *func(), change func()) {
+		if change == nil {
+			return
+		}
+		t.Cleanup(func() { *hook = nil })
+		*hook = func() {
+			*hook = nil
+			change()
+		}
+	}
+	once(&testHookBeforeGitQueries, beforeQueries)
+	once(&testHookBeforeRecordingGitSources, afterQueries)
+}
+
+func assertGitCaptureHooksRan(t *testing.T) {
+	t.Helper()
+	if testHookBeforeGitQueries != nil || testHookBeforeRecordingGitSources != nil {
+		t.Fatal("preparation did not capture Git evidence")
+	}
+}
+
+// Full selection's guard compares every ignore rule, so a rule must come and
+// go during capture to leave selection unchanged: added after selection, when
+// Git lists the directories it excludes, and removed before capture records
+// the rules. The evidence records the rules without it, so it must stamp the
+// directory it excluded: a file created there later is selected with no event.
+func TestGitWatchEvidenceCoversDirectoryUnexcludedDuringCapture(t *testing.T) {
+	for _, tc := range []struct{ name, source, kept, dir string }{
+		{"gitignore", ".gitignore", "secret\nbuild/\n*.log\n", "empty"},
+		{"nested-gitignore", "sub/.gitignore", "", "sub/empty"},
+		{"info-exclude", ".git/info/exclude", "", "empty"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, b, _ := prepareGitWatchFixture(t)
+			writeFile(t, w.root, tc.source, tc.kept)
+			if err := os.Mkdir(filepath.Join(w.root, filepath.FromSlash(tc.dir)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			changeDuringGitCapture(t,
+				func() { writeFile(t, w.root, tc.source, tc.kept+"empty/\n") },
+				func() { writeFile(t, w.root, tc.source, tc.kept) })
+			assertPreparedMatchesFull(t, w, b)
+			assertGitCaptureHooksRan(t)
+			writeFile(t, w.root, tc.dir+"/new", "new")
+			writeFile(t, w.root, "value", "edited")
+			w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+			assertPreparedMatchesFull(t, w, b)
+		})
+	}
+}
+
+// Configuration changed during capture is recorded without the files it
+// newly makes Git read. Creating them later changes selection with no event.
+func TestGitWatchEvidenceCoversConfigChangedDuringCapture(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		declare func(git func(...string), dir string)
+		write   func(t *testing.T, dir string)
+	}{
+		{"include-path", func(git func(...string), dir string) {
+			git("config", "include.path", filepath.Join(dir, "included"))
+		}, func(t *testing.T, dir string) {
+			writeFile(t, dir, "included", "[core]\n\texcludesFile = "+filepath.Join(dir, "excludes")+"\n")
+		}},
+		{"excludes-file", func(git func(...string), dir string) {
+			git("config", "core.excludesFile", filepath.Join(dir, "excludes"))
+		}, func(*testing.T, string) {}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, b, git := prepareGitWatchFixture(t)
+			dir := t.TempDir()
+			changeDuringGitCapture(t, nil, func() { tc.declare(git, dir) })
+			assertPreparedMatchesFull(t, w, b)
+			assertGitCaptureHooksRan(t)
+			writeFile(t, dir, "excludes", "untracked\n")
+			tc.write(t, dir)
+			writeFile(t, w.root, "value", "edited")
+			w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+			assertPreparedMatchesFull(t, w, b)
+		})
+	}
+}
+
 // Git reads its default system config, whose location depends on how Git was
 // built, unless GIT_CONFIG_NOSYSTEM is set. The default file is only looked
 // up here, never created.

@@ -30,12 +30,25 @@ type gitSelectionEvidence struct {
 	contents map[string][]byte
 }
 
+// Test hooks around capture's first Git queries: before they run, and after
+// them but before capture records the sources they read.
+var testHookBeforeGitQueries, testHookBeforeRecordingGitSources func()
+
 // captureGitSelection records Git's selection inputs and returns the
 // directories its walk reached (slash-separated, relative to root): true for
 // unignored directories to stamp, false for excluded ones it did not enter.
 // It returns nil evidence, not an error, when the repository layout is outside
 // what the proof covers; the caller then keeps using full selection.
+//
+// Like directory stamps, sources are recorded before the work they justify.
+// The first queries only name the sources and list candidate excluded
+// directories. Once the sources are recorded, Git confirms the candidates and
+// the config listing is repeated, so a change before a source's record shows
+// in those results, and a change after it fails verification.
 func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence, map[string]bool, error) {
+	if testHookBeforeGitQueries != nil {
+		testHookBeforeGitQueries()
+	}
 	// The Git queries are independent; run them together so full cycles pay
 	// roughly one process round trip for capture.
 	var (
@@ -44,11 +57,11 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		globalSet             bool
 		standard              []string
 		standardOK            bool
-		excluded              map[string]bool
+		ignored               map[string]bool
 		e                     = &gitSelectionEvidence{contents: map[string][]byte{}}
 		pathsErr, digestErr   error
 		globalErr, originsErr error
-		excludedErr           error
+		ignoredErr            error
 		reads                 sync.WaitGroup
 	)
 	reads.Go(func() {
@@ -69,15 +82,20 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		}
 		e.indexDigest, digestErr = trackedDigest(root)
 	})
-	reads.Go(func() { global, globalSet, globalErr = gitConfigPath(root, "core.excludesFile") })
 	reads.Go(func() {
-		// Every configuration file Git consulted, including included files.
-		origins, originsErr = exec.Command("git", "-C", root, "config", "--list", "--show-origin", "-z").Output()
+		// Look up the excludes file after the listing, so the listing
+		// repeated below also covers it.
+		if origins, originsErr = gitConfigOrigins(root); originsErr == nil {
+			global, globalSet, globalErr = gitConfigPath(root, "core.excludesFile")
+		}
 	})
 	reads.Go(func() { standard, standardOK = standardGitConfigPaths(root) })
-	reads.Go(func() { excluded, excludedErr = excludedDirectories(root) })
+	reads.Go(func() { ignored, ignoredErr = ignoredDirectories(root) })
 	reads.Wait()
-	if errors.Join(pathsErr, digestErr, globalErr, originsErr, excludedErr) != nil || !standardOK {
+	if testHookBeforeRecordingGitSources != nil {
+		testHookBeforeRecordingGitSources()
+	}
+	if errors.Join(pathsErr, digestErr, globalErr, originsErr, ignoredErr) != nil || !standardOK {
 		return nil, nil, nil
 	}
 	lines := strings.Split(strings.TrimSuffix(string(paths), "\n"), "\n")
@@ -155,39 +173,80 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		e.contents[name] = data
 	}
 
-	directories := map[string]bool{}
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(root, p)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		if !d.IsDir() {
-			if d.Name() == ".gitignore" {
-				data, err := optionalContents(p)
-				if err != nil {
-					return err
-				}
-				e.contents[p] = data
-			}
-			return nil
-		}
-		if rel != "." && (excluded[rel] || pathContainsGitMetadata(rel) || isLocalChangeTransactionPath(rel) ||
-			pathpolicy.InCache(rel, opts.Caches)) {
-			directories[rel] = false
-			return filepath.SkipDir
-		}
-		directories[rel] = true
-		return nil
-	})
-	if err != nil {
+	// Repeat the config listing during the walk; it differs if the config
+	// changed between the first listing and the record above.
+	var (
+		relisted  []byte
+		relistErr error
+		relist    sync.WaitGroup
+	)
+	relist.Go(func() { relisted, relistErr = gitConfigOrigins(root) })
+	directories, err := walkGitSelection(root, opts, ignored, e.contents)
+	relist.Wait()
+	if err != nil || relistErr != nil || !bytes.Equal(relisted, origins) {
 		// A concurrent change; the next preparation proves selection again.
 		return nil, nil, nil
 	}
 	return e, directories, nil
+}
+
+// walkGitSelection walks the directories whose .gitignore files Git reads,
+// recording each in contents, and returns the directories it reached as
+// captureGitSelection does. It stops at the directories Git listed as ignored.
+// Whether one is excluded depends only on rules outside it, all recorded once
+// the walk ends, so Git decides then; the rest are walked afterwards.
+func walkGitSelection(root string, opts SelectOptions, ignored map[string]bool, contents map[string][]byte) (map[string]bool, error) {
+	directories := map[string]bool{}
+	var paused []string
+	walk := func(start string, pause map[string]bool) error {
+		return filepath.WalkDir(filepath.Join(root, filepath.FromSlash(start)), func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, err := filepath.Rel(root, p)
+			if err != nil {
+				return err
+			}
+			rel = filepath.ToSlash(rel)
+			if !d.IsDir() {
+				if d.Name() == ".gitignore" {
+					data, err := optionalContents(p)
+					if err != nil {
+						return err
+					}
+					contents[p] = data
+				}
+				return nil
+			}
+			if rel != "." && (pathContainsGitMetadata(rel) || isLocalChangeTransactionPath(rel) ||
+				pathpolicy.InCache(rel, opts.Caches)) {
+				directories[rel] = false
+				return filepath.SkipDir
+			}
+			if rel != "." && pause[rel] {
+				directories[rel] = false
+				paused = append(paused, rel)
+				return filepath.SkipDir
+			}
+			directories[rel] = true
+			return nil
+		})
+	}
+	if err := walk(".", ignored); err != nil {
+		return nil, err
+	}
+	excluded, err := excludedDirectories(root, paused)
+	if err != nil {
+		return nil, err
+	}
+	for _, rel := range paused {
+		if !excluded[rel] {
+			if err := walk(rel, nil); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return directories, nil
 }
 
 // standardGitConfigPaths returns the config files Git reads by location: the
@@ -273,33 +332,44 @@ func includeTarget(value, origin string) (string, bool) {
 	return filepath.Clean(value), true
 }
 
-// excludedDirectories returns directories that an ignore pattern excludes as
-// directories. Git does not descend into them, so nested rules cannot reopen
-// their contents and they need no stamps. Tracked files inside them are covered
-// by the index digest; the caller stamps their ancestors from the manifest.
-//
-// Git's --directory listing alone is not enough: it also collapses directories
-// whose files happen to be ignored individually (logs/ under *.log), where a
-// new nested .gitignore can reopen a file.
-func excludedDirectories(root string) (map[string]bool, error) {
+// gitConfigOrigins lists every configuration entry with the file it came
+// from, including included files.
+func gitConfigOrigins(root string) ([]byte, error) {
+	return exec.Command("git", "-C", root, "config", "--list", "--show-origin", "-z").Output()
+}
+
+// ignoredDirectories returns the untracked directories Git collapses as
+// ignored. Git's --directory listing alone is not enough to skip them: it
+// also collapses directories whose files happen to be ignored individually
+// (logs/ under *.log), where a new nested .gitignore can reopen a file.
+// excludedDirectories tells the two apart.
+func ignoredDirectories(root string) (map[string]bool, error) {
 	out, err := exec.Command("git", "-C", root, "ls-files", "-z", "--others", "--ignored",
 		"--exclude-standard", "--directory").Output()
 	if err != nil {
 		return nil, err
 	}
-	var candidates []string
+	ignored := map[string]bool{}
 	for _, name := range strings.Split(string(out), "\x00") {
-		if strings.HasSuffix(name, "/") {
-			candidates = append(candidates, name)
+		if dir, ok := strings.CutSuffix(name, "/"); ok {
+			ignored[dir] = true
 		}
 	}
+	return ignored, nil
+}
+
+// excludedDirectories returns which of dirs an ignore pattern excludes as
+// directories. Git does not descend into them, so nested rules cannot reopen
+// their contents and they need no stamps. Tracked files inside them are covered
+// by the index digest; the caller stamps their ancestors from the manifest.
+func excludedDirectories(root string, dirs []string) (map[string]bool, error) {
 	excluded := map[string]bool{}
-	if len(candidates) == 0 {
+	if len(dirs) == 0 {
 		return excluded, nil
 	}
 	check := exec.Command("git", "-C", root, "check-ignore", "-z", "--stdin", "--no-index")
-	check.Stdin = strings.NewReader(strings.Join(candidates, "\x00") + "\x00")
-	out, err = check.Output()
+	check.Stdin = strings.NewReader(strings.Join(dirs, "/\x00") + "/\x00")
+	out, err := check.Output()
 	var exitErr *exec.ExitError
 	if err != nil && !(errors.As(err, &exitErr) && exitErr.ExitCode() == 1) { // 1: none ignored
 		return nil, err
