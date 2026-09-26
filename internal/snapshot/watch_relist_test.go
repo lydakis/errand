@@ -316,3 +316,55 @@ func TestWatchFilesRelistsNativeAtomicSaves(t *testing.T) {
 		assertPreparedMode(t, w, b, false)
 	}
 }
+
+// createDuringCapture creates the directory dir after selection has
+// enumerated the tree and before capture stamps directories.
+func createDuringCapture(t *testing.T, w *Watch, dir string) {
+	t.Helper()
+	t.Cleanup(func() { testHookBeforeDirectoryStamps = nil })
+	testHookBeforeDirectoryStamps = func() {
+		testHookBeforeDirectoryStamps = nil
+		if err := os.Mkdir(filepath.Join(w.root, filepath.FromSlash(dir)), 0o755); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+// A directory created during capture is in its parent's listing without a
+// stamp of its own. Files later created in it change only its stamp, so a
+// hinted edit elsewhere must not reuse the selection.
+func TestWatchPrepareRejectsDirectoryCreatedDuringCapture(t *testing.T) {
+	for _, fixture := range relistFixtures {
+		for _, dir := range []string{"fresh", "sub/fresh"} {
+			t.Run(fixture.name+"/"+dir, func(t *testing.T) {
+				w, b := fixture.prepare(t)
+				createDuringCapture(t, w, dir)
+				// Explicit selection lists directories, so its reselection
+				// rejects the preparation. Git does not list empty directories.
+				if _, _, _, _, err := w.Prepare(b); err != nil && !IsSourceChanged(err) {
+					t.Fatal(err)
+				}
+				if testHookBeforeDirectoryStamps != nil {
+					t.Fatal("preparation did not capture evidence")
+				}
+				writeFile(t, w.root, dir+"/new", "new")
+				writeFile(t, w.root, "value", "edited")
+				w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+				assertPreparedMatchesFull(t, w, b)
+			})
+		}
+	}
+}
+
+// Directories inside an excluded directory need no stamps, so one created
+// there during capture keeps the evidence.
+func TestGitWatchEvidenceKeepsDirectoryCreatedDuringCaptureInExcludedDirectory(t *testing.T) {
+	w, b, _ := prepareGitWatchFixture(t)
+	createDuringCapture(t, w, "build/fresh")
+	assertPreparedMatchesFull(t, w, b)
+	if testHookBeforeDirectoryStamps != nil {
+		t.Fatal("preparation did not capture evidence")
+	}
+	writeFile(t, w.root, "value", "edited")
+	assertIncremental(t, w, b, "value")
+}

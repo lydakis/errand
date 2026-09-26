@@ -29,7 +29,11 @@ the watch records:
   plus ancestors of every selected file. Directories that Git collapses only
   because their files are individually ignored (`logs/` under `*.log`) stay
   stamped, because a new nested `.gitignore` can reopen a file there.
-  `git check-ignore` separates the two cases.
+  `git check-ignore` separates the two cases. Each subdirectory listed in a
+  directory the walk entered must be one the walk stamped or excluded: a
+  directory created between the walk and its parent's stamp leaves the
+  checkout without evidence until the next full cycle, since Git does not list
+  it while empty.
 
 Content-only edits then refresh the hinted files, as on the explicit fast path.
 Any change to the proof falls back to full selection. Structural events,
@@ -43,7 +47,8 @@ configuring `core.excludesFile`, ancestor `.gitignore` above a subdirectory
 root, and creating an absent include target or standard config file. They
 also check that the system config path comes from Git and that
 `GIT_CONFIG_NOSYSTEM` leaves it out, and that an index stat refresh and churn
-inside an excluded `build/` do not invalidate the proof.
+inside an excluded `build/` do not invalidate the proof. `watch_relist_test.go`
+creates an empty directory during capture and files in it without events.
 
 ## Results
 

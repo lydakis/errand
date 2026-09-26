@@ -290,27 +290,35 @@ func (s *Watch) prepareFull(builder *Builder) (*manifeststate.Snapshot, GitInfo,
 	return state, gi, clonePolicy(policy), guard, nil
 }
 
+// testHookBeforeDirectoryStamps runs after selection has enumerated the tree
+// and before capture stamps directories.
+var testHookBeforeDirectoryStamps func()
+
 func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest, gi GitInfo, policy proto.SelectionPolicy) (*selectionEvidence, error) {
 	data, err := os.ReadFile(filepath.Join(root, ".errandignore"))
 	var git *gitSelectionEvidence
-	var names map[string]bool
+	var walked map[string]bool // Git only
+	names := map[string]bool{}
 	if os.IsNotExist(err) {
 		if !gi.Repository {
 			return nil, nil
 		}
 		// Unignored directories come from the walk; ancestors of tracked files
 		// inside ignored directories are added below from the manifest.
-		git, names, err = captureGitSelection(root, opts)
+		git, walked, err = captureGitSelection(root, opts)
 		if err != nil || git == nil {
 			return nil, err
+		}
+		for name, unexcluded := range walked {
+			if unexcluded {
+				names[name] = true
+			}
 		}
 		data = nil
 	} else if err != nil {
 		return nil, err
 	} else if !slices.Equal(policyLines(data), policy.Ignore) {
 		return nil, sourceChangedf("snapshot: explicit policy changed during preparation; retry")
-	} else {
-		names = map[string]bool{}
 	}
 	directories := map[string]fs.FileInfo{}
 	listings := map[string][]listingEntry{}
@@ -322,6 +330,9 @@ func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest,
 		for p := path.Dir(e.Path); p != "."; p = path.Dir(p) {
 			names[p] = true
 		}
+	}
+	if testHookBeforeDirectoryStamps != nil {
+		testHookBeforeDirectoryStamps()
 	}
 	for name := range names {
 		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(name)))
@@ -339,6 +350,21 @@ func captureSelectionEvidence(root string, opts SelectOptions, m proto.Manifest,
 		listing, err := listDirectory(filepath.Join(root, filepath.FromSlash(name)))
 		if err != nil {
 			return nil, sourceReadError(err)
+		}
+		// A directory created after the Git walk but before its parent was
+		// stamped is listed here without a stamp of its own, and Git
+		// selection does not show it while it is empty. Names the walk did
+		// not enter are below an excluded directory. Explicit selection
+		// lists directories, so its reselection rejects such a directory.
+		if walked[name] {
+			for _, entry := range listing {
+				if !entry.typ.IsDir() {
+					continue
+				}
+				if _, seen := walked[path.Join(name, entry.name)]; !seen {
+					return nil, nil
+				}
+			}
 		}
 		directories[name], listings[name] = info, listing
 	}

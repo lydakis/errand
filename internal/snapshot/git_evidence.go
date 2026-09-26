@@ -31,8 +31,9 @@ type gitSelectionEvidence struct {
 }
 
 // captureGitSelection records Git's selection inputs and returns the
-// unignored directories to stamp (slash-separated, relative to root). It
-// returns nil evidence, not an error, when the repository layout is outside
+// directories its walk reached (slash-separated, relative to root): true for
+// unignored directories to stamp, false for excluded ones it did not enter.
+// It returns nil evidence, not an error, when the repository layout is outside
 // what the proof covers; the caller then keeps using full selection.
 func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence, map[string]bool, error) {
 	// The Git queries are independent; run them together so full cycles pay
@@ -176,6 +177,7 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		}
 		if rel != "." && (excluded[rel] || pathContainsGitMetadata(rel) || isLocalChangeTransactionPath(rel) ||
 			pathpolicy.InCache(rel, opts.Caches)) {
+			directories[rel] = false
 			return filepath.SkipDir
 		}
 		directories[rel] = true
