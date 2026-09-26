@@ -501,6 +501,11 @@ func (b *Builder) update(root string, prior *manifeststate.Snapshot, paths, dele
 	for name, hash := range b.next {
 		b.hashes[name] = hash
 	}
+	// A removal found by relisting a changed directory has no dirty hint, so
+	// the cleanup before preparation did not drop its observation.
+	for _, name := range deleted {
+		delete(b.hashes, filepath.Join(root, filepath.FromSlash(name)))
+	}
 	b.next = nil
 	return next, nil
 }

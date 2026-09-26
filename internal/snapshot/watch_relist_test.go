@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"os"
 	"path"
@@ -166,6 +167,42 @@ func TestWatchPrepareNarrowsFileCreationsAndRemovals(t *testing.T) {
 				assertPreparedMode(t, w, b, false)
 			})
 		}
+	}
+}
+
+// TestWatchPrepareDropsHashesOfRelistedRemovals removes distinct files without
+// events, so only their directory's changed stamp reports each removal. The
+// builder must not keep observations of files no longer selected.
+func TestWatchPrepareDropsHashesOfRelistedRemovals(t *testing.T) {
+	for _, fixture := range relistFixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			w, b := fixture.prepare(t)
+			assertPreparedMatchesFull(t, w, b)
+			baseline := len(b.hashes)
+			for i := range 5 {
+				rel := fmt.Sprintf("sub/transient-%d", i)
+				abs := filepath.Join(w.root, filepath.FromSlash(rel))
+				writeFile(t, w.root, rel, "transient")
+				w.invalidatePath(abs, dirtyEntry)
+				assertPreparedMode(t, w, b, false)
+				if _, ok := b.hashes[abs]; !ok {
+					t.Fatalf("created %s was not observed", rel)
+				}
+				removeFile(t, w, rel, false)
+				assertPreparedMode(t, w, b, false)
+				if _, ok := b.hashes[abs]; ok {
+					t.Fatalf("builder kept the hash of removed %s", rel)
+				}
+			}
+			if len(b.hashes) != baseline {
+				t.Fatalf("builder holds %d hashes after relisted removals, want %d", len(b.hashes), baseline)
+			}
+			w.InvalidatePreparation()
+			assertPreparedMode(t, w, b, true)
+			if len(b.hashes) != baseline {
+				t.Fatalf("full preparation holds %d hashes, want %d", len(b.hashes), baseline)
+			}
+		})
 	}
 }
 
