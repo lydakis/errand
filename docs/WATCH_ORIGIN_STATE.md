@@ -98,6 +98,22 @@ transaction with no matching local state. Let the earlier errand finish any
 interrupted application (its next push or `fetch --apply` there does) before
 upgrading.
 
+## Results, 10K files, Linux
+
+Watch matrix at 10K, three rounds of seven saves, paired against main
+(`c2dbf0e`) with the order alternating per case ([run order](WATCH_NATIVE.md#run-order)).
+Visible delivery, median ms:
+
+| Case | Baseline | Candidate | Paired ratio (range) | Candidate faster |
+|---|---:|---:|---:|---:|
+| explicit-inplace-edit | 166 | 146 | 0.948 (0.857–0.953) | 3/3 |
+| git-tracked-inplace-edit | 180 | 160 | 0.889 (0.859–0.982) | 3/3 |
+
+The saving grows with the number of relationships in the state directory;
+these runs have one.
+
+Raw reports: [benchmarks/2026-09-26-origin-state-linux.json](benchmarks/2026-09-26-origin-state-linux.json).
+
 ## Tests
 
 - `TestWorkspaceOriginOmitsCreationManifest` checks the origin's exact fields
