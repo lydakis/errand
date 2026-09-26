@@ -40,6 +40,24 @@ def write_edit(args, path, body):
         path.write_text(body)
 
 
+def victim_body(prefix, sample):
+    return f"victim {prefix} {sample}\n"
+
+
+def require_victim(path, expected):
+    """Fail unless a deletion's destination victim is present before the unlink.
+
+    An already absent victim would make the deletion wait succeed at once and
+    report a missed delivery as a near-zero deletion time.
+    """
+    try:
+        found = path.read_text()
+    except OSError as error:
+        raise RuntimeError(f"deletion victim absent from destination before unlink: {path.name}") from error
+    if found != expected:
+        raise RuntimeError(f"deletion victim differs at destination before unlink: {path.name}")
+
+
 def wait_absent(path, timeout=60):
     deadline = time.monotonic()+timeout
     while time.monotonic() < deadline:
@@ -58,6 +76,7 @@ def apply_change(args, root, remote_root, sample, prefix):
         return started, lambda: wait_contents(remote_root / name, body), name
     if args.change == "delete":
         name = f"victim-{prefix}-{sample}.txt"
+        require_victim(remote_root / name, victim_body(prefix, sample))
         started = time.monotonic()
         (root / name).unlink()
         return started, lambda: wait_absent(remote_root / name), name
@@ -158,7 +177,7 @@ def measure(args, storage, socket_dir, report):
             if args.change == "delete":
                 for prefix in ("rsync", "mutagen", "once", "watch"):
                     for sample in range(args.samples):
-                        (root / f"victim-{prefix}-{sample}.txt").write_text(f"victim {prefix} {sample}\n")
+                        (root / f"victim-{prefix}-{sample}.txt").write_text(victim_body(prefix, sample))
             if args.selection == "git":
                 (root / ".errandignore").unlink()
                 (root / ".gitignore").write_text("ignored/\n")
