@@ -1,6 +1,7 @@
 package client
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -34,12 +35,47 @@ func workspaceTransferDir(peer, id string) (string, error) {
 	return filepath.Join(root, "workspace-transfers", localChangeKey(peer, id)), nil
 }
 func readWorkspaceOrigin(dir string) (workspaceOrigin, error) {
-	var o workspaceOrigin
-	err := readWorkspaceTransferRecord(filepath.Join(dir, "origin.json"), "workspace origin", &o)
-	if err == nil && (!proto.ValidULID(o.WorkspaceID) || o.RootID.IsZero() || !filepath.IsAbs(o.Root) || o.PeerURL == "" || !validLocalManifestRoot(o.InitialRoot)) {
+	var record struct {
+		workspaceOrigin
+		Embedded *struct{} `json:"initial"` // earlier clients embedded the creation manifest
+	}
+	err := readWorkspaceTransferRecord(filepath.Join(dir, "origin.json"), "workspace origin", &record)
+	o := record.workspaceOrigin
+	switch {
+	case err != nil:
+	case !proto.ValidULID(o.WorkspaceID) || o.RootID.IsZero() || !filepath.IsAbs(o.Root) || o.PeerURL == "":
+		err = fmt.Errorf("invalid workspace origin")
+	case o.InitialRoot == "" && record.Embedded != nil:
+		err = &EarlierTransferStateError{Dir: dir, WorkspaceID: o.WorkspaceID}
+	case !validLocalManifestRoot(o.InitialRoot):
 		err = fmt.Errorf("invalid workspace origin")
 	}
 	return o, err
+}
+
+// EarlierTransferStateError reports a relationship recorded by an earlier
+// errand, whose origin embedded the creation manifest. It is never migrated:
+// the workspace is recreated instead. Callers that resolved the workspace
+// name, peer or profile fill them in so the printed command runs as shown.
+type EarlierTransferStateError struct {
+	Dir, WorkspaceID, Workspace string
+	Peer, URL, Profile          string
+}
+
+func (e *EarlierTransferStateError) Error() string {
+	peer := "--on PEER"
+	if e.URL != "" {
+		peer = "--url " + shellQuote(e.URL)
+	} else if e.Peer != "" {
+		peer = "--on " + e.Peer
+	}
+	create := peer
+	if e.Profile != "" {
+		create += " --profile " + shellQuote(e.Profile)
+	}
+	return fmt.Sprintf("workspace %s was created by an earlier errand, and this version cannot read its local transfer state; "+
+		"recreate it from its checkout with: errand workspaces rm %s %s && errand workspaces create %s %s && rm -r %s",
+		cmp.Or(e.Workspace, e.WorkspaceID), peer, e.WorkspaceID, create, cmp.Or(e.Workspace, "NAME"), shellQuote(e.Dir))
 }
 
 // initial reads the creation manifest. The root check binds it to this origin,

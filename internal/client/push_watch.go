@@ -56,6 +56,10 @@ func WatchPush(ctx context.Context, opts PushOptions, report func(PushWatchEvent
 		return err
 	}
 	origin, err := readWorkspaceOrigin(dir)
+	var earlier *EarlierTransferStateError
+	if errors.As(err, &earlier) {
+		earlier.Workspace = ws.Name
+	}
 	if err != nil {
 		return err
 	}

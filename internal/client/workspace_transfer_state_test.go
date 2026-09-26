@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -153,43 +154,70 @@ func TestWorkspaceOriginRejectsUnboundCreationManifest(t *testing.T) {
 	}
 }
 
-func TestWorkspaceOriginRejectsEmbeddedManifestFormat(t *testing.T) {
+func TestWorkspaceOriginRecognizesEmbeddedManifestFormat(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	root, dir, initial := recordTestWorkspaceOrigin(t, "01M2280R0T4152A3BSV4C2976R", map[string]string{"a": "a"})
+	const id = "01M2280R0T4152A3BSV4C2976R"
+	root, dir, initial := recordTestWorkspaceOrigin(t, id, map[string]string{"a": "a"})
 	o, err := readWorkspaceOrigin(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	writeOrigin := func(v any) {
+		t.Helper()
+		raw, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "origin.json"), raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	// Earlier clients embedded the creation manifest and wrote no initial.json.
-	embedded := struct {
+	writeOrigin(struct {
 		Root        string              `json:"root"`
 		RootID      fsidentity.Identity `json:"root_identity"`
 		WorkspaceID string              `json:"workspace_id"`
 		PeerURL     string              `json:"peer_url"`
 		Initial     proto.Manifest      `json:"initial"`
-	}{o.Root, o.RootID, o.WorkspaceID, o.PeerURL, initial}
-	raw, err := json.Marshal(embedded)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "origin.json"), raw, 0600); err != nil {
-		t.Fatal(err)
-	}
+	}{o.Root, o.RootID, o.WorkspaceID, o.PeerURL, initial})
 	if err := os.Remove(filepath.Join(dir, "initial.json")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readWorkspaceOrigin(dir); err == nil || os.IsNotExist(err) || !strings.Contains(err.Error(), "invalid workspace origin") {
+	_, err = readWorkspaceOrigin(dir)
+	var earlier *EarlierTransferStateError
+	if !errors.As(err, &earlier) || earlier.Dir != dir || earlier.WorkspaceID != id {
 		t.Fatalf("embedded-manifest origin: %v", err)
+	}
+	recovery := "errand workspaces rm --on PEER " + id + " && errand workspaces create --on PEER NAME && rm -r " + shellQuote(dir)
+	if !strings.Contains(err.Error(), "created by an earlier errand") || !strings.Contains(err.Error(), recovery) {
+		t.Fatalf("recovery not named: %v", err)
+	}
+	// Push knows the workspace name and reaches the origin without the runner.
+	ws := proto.Workspace{ID: id, Name: "api"}
+	_, err = PushChanges(PushOptions{PeerURL: "http://runner", Workspace: ws.Name, Root: root, workspace: &ws})
+	if !errors.As(err, &earlier) || !strings.Contains(err.Error(), "workspace api was created by an earlier errand") ||
+		!strings.Contains(err.Error(), "errand workspaces create --on PEER api") {
+		t.Fatalf("push: %v", err)
 	}
 	if err := recoverWorkspaceApplications(root); err != nil {
 		t.Fatalf("an unreadable origin blocked recovery: %v", err)
 	}
 	result, err := workspaceTransferGC(time.Now().Add(time.Hour), false)
-	if err == nil || result.Failed != 1 || result.Removed != 0 {
+	if err == nil || result.Failed != 1 || result.Removed != 0 || !strings.Contains(err.Error(), "created by an earlier errand") {
 		t.Fatalf("GC with embedded-manifest origin: %+v %v", result, err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "origin.json")); err != nil {
 		t.Fatalf("unreadable state must remain: %v", err)
+	}
+	// Without the embedded manifest, a missing root is damage, not the earlier format.
+	writeOrigin(struct {
+		Root        string              `json:"root"`
+		RootID      fsidentity.Identity `json:"root_identity"`
+		WorkspaceID string              `json:"workspace_id"`
+		PeerURL     string              `json:"peer_url"`
+	}{o.Root, o.RootID, o.WorkspaceID, o.PeerURL})
+	if _, err := readWorkspaceOrigin(dir); errors.As(err, &earlier) || err == nil || !strings.Contains(err.Error(), "invalid workspace origin") {
+		t.Fatalf("damaged origin: %v", err)
 	}
 }
 
