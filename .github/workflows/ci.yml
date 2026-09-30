@@ -119,7 +119,8 @@ jobs:
           go test -count=1 -timeout=5m
           ./internal/durable ./internal/filelock ./internal/fsidentity ./internal/fsowner
           ./internal/logio ./internal/manifest ./internal/pathpolicy ./internal/placement
-          ./internal/proctree ./internal/proto ./internal/unixpeer
+          ./internal/proctree ./internal/proto ./internal/serviceruntime ./internal/setup
+          ./internal/unixpeer
       # Windows-only tests in packages whose other tests still assume Unix.
       - name: Test Windows-specific behavior
         run: go test -count=1 -timeout=5m -run 'OnWindows$' ./...

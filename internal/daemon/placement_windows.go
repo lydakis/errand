@@ -8,6 +8,10 @@ import (
 	"github.com/lydakis/errand/internal/proctree"
 )
 
+// Windows grants execute through ACLs that the file's owner already holds;
+// whether a file runs is decided by its extension (see findExecutable).
+func canExecute(string) bool { return true }
+
 // probeProcess is a runtime probe running in its own Job Object.
 type probeProcess struct{ job *proctree.Job }
 
