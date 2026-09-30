@@ -560,43 +560,14 @@ func RemoveTree(rootPath string) error {
 			identityErr, access.restore(),
 		)
 	}
-	// Empty the tree through the verified root, then release it before
-	// removing the root itself: Windows cannot delete a directory while a
-	// handle to it is open.
-	if removeErr := removeRootChildren(access.root); removeErr != nil {
+	if err := releaseTreeForRemoval(access, rootPath); err != nil {
+		return errors.Join(err, access.restore())
+	}
+	removeErr := os.RemoveAll(rootPath)
+	if removeErr != nil {
 		return errors.Join(removeErr, access.restore())
 	}
-	if err := access.closeWithoutRestore(); err != nil {
-		return err
-	}
-	identity, info, identityErr = fsidentity.Lstat(rootPath)
-	if os.IsNotExist(identityErr) {
-		return nil
-	}
-	if identityErr != nil || !info.IsDir() || identity != access.rootIdentity {
-		return errors.Join(fmt.Errorf("retained tree root changed during removal"), identityErr)
-	}
-	return os.Remove(rootPath)
-}
-
-func removeRootChildren(root *os.Root) error {
-	dir, err := root.Open(".")
-	if err != nil {
-		return err
-	}
-	names, err := dir.Readdirnames(-1)
-	if closeErr := dir.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return err
-	}
-	for _, name := range names {
-		if err := root.RemoveAll(name); err != nil {
-			return err
-		}
-	}
-	return nil
+	return access.closeWithoutRestore()
 }
 
 func removeTreeAtRoot(root *os.Root, rel string) error {
