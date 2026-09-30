@@ -160,6 +160,11 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 
 	// 1. Resolve transport availability and plan the configuration before
 	// acquiring a restart lease, writing files, or changing the service.
+	if sys.GOOS() == "windows" && opts.Transport == "" && saved.daemon == nil {
+		// Windows runners don't serve SSH callers yet, so a new one is
+		// reachable over the tailnet only.
+		opts.Transport = config.TransportTailscale
+	}
 	transport, err := resolveTransport(ctx, opts, sys, saved, r)
 	if err != nil {
 		return r, err
@@ -184,7 +189,7 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 
 	var leaseToken string
 	previousPID := 0
-	if !opts.DryRun && (sys.GOOS() == "linux" || sys.GOOS() == "darwin") {
+	if !opts.DryRun && managedServiceOS(sys.GOOS()) {
 		pidCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		previousPID, err = sys.SocketPID(pidCtx, restartSocketPath)
 		cancel()
@@ -259,6 +264,8 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 		installSystemd(ctx, opts, sys, r, home, exe, configPath, runnerPath)
 	case "darwin":
 		installLaunchAgent(ctx, opts, sys, r, home, exe, configPath, runnerPath)
+	case "windows":
+		installScheduledTask(ctx, opts, sys, r, home, exe, configPath, effective.StateDir)
 	default:
 		r.step("service", "no service manager integration for "+sys.GOOS()+"; run `"+exe+" serve` yourself", false)
 	}
@@ -312,9 +319,20 @@ func serviceActive(ctx context.Context, sys serviceSystem) (bool, error) {
 			return false, nil
 		}
 		return false, err
+	case "windows":
+		task, err := queryScheduledTask(ctx, sys)
+		if err != nil {
+			return false, err
+		}
+		return task.State == "Running", nil
 	default:
 		return false, nil
 	}
+}
+
+// managedServiceOS reports whether setup installs and restarts a service here.
+func managedServiceOS(goos string) bool {
+	return goos == "linux" || goos == "darwin" || goos == "windows"
 }
 
 func installSystemd(ctx context.Context, opts Options, sys System, r *Report, home, exe, configPath, runnerPath string) bool {
@@ -455,6 +473,10 @@ func writeDefinition(sys System, r *Report, name, path, desired string, opts Opt
 // whose PATH is typically /usr/local/bin:/usr/bin:/bin. Without this, SSH
 // peers need remote_command set to the binary's absolute path.
 func ensureOnPath(sys System, r *Report, exe string, force, dryRun bool) {
+	if sys.GOOS() == "windows" {
+		r.step("path", "SSH callers are not supported on Windows runners yet; reach this runner over the tailnet", false)
+		return
+	}
 	link := filepath.Join(pathSymlinkDir, "errand")
 	if filepath.Dir(exe) == pathSymlinkDir {
 		r.RemoteCommand = ""
@@ -509,7 +531,7 @@ func probe(ctx context.Context, sys System, r *Report, previousPID int, expected
 	for time.Now().Before(deadline) {
 		probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		info, err := sys.Probe(probeCtx, r.SocketPath)
-		if err == nil && (sys.GOOS() == "linux" || sys.GOOS() == "darwin") {
+		if err == nil && managedServiceOS(sys.GOOS()) {
 			var pid int
 			pid, err = sys.SocketPID(probeCtx, r.SocketPath)
 			if err == nil && pid == previousPID {

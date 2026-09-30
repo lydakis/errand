@@ -632,10 +632,20 @@ func cmdServe(args []string) int {
 	listen := fs.String("listen", "", `listen address ("tailnet:7443" resolves the tailnet IP; "none" disables TCP)`)
 	stateDir := fs.String("state-dir", "", "receipt and job state directory")
 	insecure := fs.Bool("insecure-no-auth", false, "DANGEROUS: skip all authorization (tests only)")
+	logFile := fs.String("log-file", "", "append the runner log to this file instead of stderr")
 	var allowUsers stringList
 	fs.Var(&allowUsers, "allow-user", "tailnet login allowed to use this runner (repeatable)")
 	setFlagUsage(fs, "errand serve [options]")
 	fs.Parse(args)
+	if *logFile != "" {
+		f, err := os.OpenFile(*logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+		if err != nil {
+			log.Fatalf("errand serve: %v", err)
+		}
+		os.Stdout, os.Stderr = f, f
+		log.SetOutput(f)
+		detachServiceConsole()
+	}
 
 	fileCfg, err := config.LoadDaemon(*cfgPath)
 	if err != nil {

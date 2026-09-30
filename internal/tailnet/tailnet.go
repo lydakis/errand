@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -152,6 +153,19 @@ func defaultSocketCandidates() []string {
 	}
 }
 
+// A service started at logon can miss the installer's PATH change, so look
+// where the Windows installer puts the CLI too.
+func defaultCLICandidates() []string {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+	programFiles := os.Getenv("ProgramFiles")
+	if programFiles == "" {
+		programFiles = `C:\Program Files`
+	}
+	return []string{filepath.Join(programFiles, "Tailscale", "tailscale.exe")}
+}
+
 func Discover(socket, cli string) (Provider, error) {
 	if socket != "" {
 		if err := socketUsable(socket); err != nil {
@@ -181,6 +195,12 @@ func discoverDefault(candidates []string) (Provider, error) {
 		return NewCLI(path), nil
 	}
 	tried = append(tried, "tailscale CLI on PATH")
+	for _, candidate := range defaultCLICandidates() {
+		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+			return NewCLI(candidate), nil
+		}
+		tried = append(tried, candidate)
+	}
 	return nil, fmt.Errorf("no way to reach tailscaled (tried: %s); set tailscaled_socket or tailscale_cli in errandd.toml",
 		strings.Join(tried, ", "))
 }

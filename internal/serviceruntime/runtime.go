@@ -43,8 +43,31 @@ func Prepare(executable, stateDir string) (string, error) {
 	return prepare(source, stateDir)
 }
 
+// Path reports where Prepare would publish an executable, without writing.
+func Path(executable, stateDir string) (string, error) {
+	source, err := os.Open(executable)
+	if err != nil {
+		return "", err
+	}
+	defer source.Close()
+	dir, err := Directory(stateDir)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.New()
+	if _, err := io.Copy(hash, source); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, fmt.Sprintf("%x", hash.Sum(nil)), runtimeName), nil
+}
+
+// Directory is where runtime generations for stateDir live.
+func Directory(stateDir string) (string, error) {
+	return filepath.Abs(filepath.Join(stateDir, "runtime"))
+}
+
 func prepare(source *os.File, stateDir string) (string, error) {
-	dir, err := filepath.Abs(filepath.Join(stateDir, "runtime"))
+	dir, err := Directory(stateDir)
 	if err != nil {
 		return "", err
 	}
