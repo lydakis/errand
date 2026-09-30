@@ -165,11 +165,11 @@ func checkRelPath(p string) error {
 		p == ".." || strings.HasPrefix(p, "../") || strings.Contains(p, "\x00") {
 		return fmt.Errorf("archive: unsafe path %q", p)
 	}
-	return nil
+	return checkPlatformPath(p)
 }
 
 func checkSymlinkTarget(link, target string) error {
-	if target == "" || strings.HasPrefix(target, "/") {
+	if target == "" || strings.HasPrefix(target, "/") || !platformSymlinkTarget(target) {
 		return fmt.Errorf("archive: symlink %q has unsafe target %q", link, target)
 	}
 	resolved := path.Clean(path.Join(path.Dir(link), target))

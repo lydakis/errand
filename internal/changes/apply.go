@@ -16,6 +16,7 @@ import (
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/durable"
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/fsmode"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
 )
@@ -627,7 +628,7 @@ func captureMetadataBaselineAtRoot(
 	if err != nil {
 		return Baseline{}, fsidentity.Identity{}, 0, err
 	}
-	mode := uint32(info.Mode().Perm())
+	mode := fsmode.Perm(info)
 	return metadataBaseline(logicalPath, mode), identity, mode, nil
 }
 

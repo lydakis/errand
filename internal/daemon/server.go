@@ -18,6 +18,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -135,6 +136,11 @@ func New(cfg Config) (*Daemon, error) {
 	}
 	if cfg.MaxUploadBytes <= cfg.MaxLimits.MaxWorkspaceBytes {
 		return nil, fmt.Errorf("max upload bytes must exceed the workspace byte ceiling")
+	}
+	if runtime.GOOS == "windows" {
+		// Named cache trees rely on hard links and POSIX modes that NTFS
+		// doesn't give them yet.
+		cfg.NamedCacheDisabled = true
 	}
 	if cfg.NamedCacheMaxBytes == 0 {
 		cfg.NamedCacheMaxBytes = defaultCacheMaxBytes

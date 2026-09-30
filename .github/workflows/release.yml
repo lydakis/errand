@@ -186,6 +186,9 @@ jobs:
           tar -xzf "errand_${version}_darwin_${architecture}.tar.gz" -C smoke
           codesign --verify --strict smoke/errand
           test "$(smoke/errand version)" = "errand ${version}"
+          for architecture in amd64 arm64; do
+            unzip -l "errand_${version}_windows_${architecture}.zip" | grep -q ' errand\.exe$'
+          done
       - name: Verify release tag before publishing
         env:
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
@@ -209,7 +212,7 @@ jobs:
           if [[ "$RELEASE_TAG" == *-* ]]; then
             options+=(--prerelease)
           fi
-          gh release create "$RELEASE_TAG" dist/*.tar.gz dist/checksums.txt dist/errand.rb \
+          gh release create "$RELEASE_TAG" dist/*.tar.gz dist/*.zip dist/checksums.txt dist/errand.rb \
             --verify-tag --draft --title "$RELEASE_TAG" --generate-notes "${options[@]}"
       - name: Remove temporary signing credentials
         if: always()

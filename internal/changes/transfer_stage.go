@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/lydakis/errand/internal/fsmode"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -117,7 +118,7 @@ func materializeSourceAtRoot(ctx context.Context, source, tree *os.Root, m proto
 			return nil, err
 		}
 		opened, err := f.Stat()
-		if err != nil || !opened.Mode().IsRegular() || (info != nil && !os.SameFile(info, opened)) || opened.Size() != e.Size || uint32(opened.Mode().Perm()) != mode(e) {
+		if err != nil || !opened.Mode().IsRegular() || (info != nil && !os.SameFile(info, opened)) || opened.Size() != e.Size || !fsmode.Matches(opened, mode(e)) {
 			return nil, errors.Join(fmt.Errorf("transfer source %q changed while opening", e.Path), f.Close())
 		}
 		return &transferSourceReader{File: f, entry: e, mode: mode(e)}, nil
@@ -132,7 +133,7 @@ type transferSourceReader struct {
 
 func (r *transferSourceReader) Close() error {
 	info, err := r.Stat()
-	if err == nil && (!info.Mode().IsRegular() || info.Size() != r.entry.Size || uint32(info.Mode().Perm()) != r.mode) {
+	if err == nil && (!info.Mode().IsRegular() || info.Size() != r.entry.Size || !fsmode.Matches(info, r.mode)) {
 		err = fmt.Errorf("transfer source %q changed while copying", r.entry.Path)
 	}
 	return errors.Join(err, r.File.Close())
@@ -155,7 +156,7 @@ func checkMaterializationSource(paths *materializationPaths, e proto.ManifestEnt
 	if err != nil {
 		return err
 	}
-	if uint32(info.Mode().Perm()) != mode {
+	if !fsmode.Matches(info, mode) {
 		return fmt.Errorf("transfer source %q changed mode", e.Path)
 	}
 	switch e.Type {

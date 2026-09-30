@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/fsmode"
 	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
@@ -249,7 +250,7 @@ func captureManifestAtRootBoundedContext(
 		if err != nil {
 			return proto.Manifest{}, false, 0, 0, err
 		}
-		entry := proto.ManifestEntry{Path: current, Mode: uint32(info.Mode().Perm())}
+		entry := proto.ManifestEntry{Path: current, Mode: fsmode.Perm(info)}
 		switch {
 		case info.Mode().IsRegular():
 			entry.Type = proto.EntryFile
@@ -397,6 +398,7 @@ func collectAccessibleWorkspaceChangesContext(
 		return proto.ChangeBundle{}, false, err
 	}
 	access.logicalize(&current)
+	inheritBaselineModes(baseline, &current)
 	bundle, err := workspaceDelta(ctx, baseline, current, maxBytes)
 	if err != nil || len(bundle.Paths) == 0 {
 		return bundle, false, err

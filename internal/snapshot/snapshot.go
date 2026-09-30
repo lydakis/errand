@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lydakis/errand/internal/fsmode"
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -750,7 +751,7 @@ func buildSelectedContext(ctx context.Context, root string, paths []string, maxB
 		if err != nil {
 			return m, err
 		}
-		e := proto.ManifestEntry{Path: rel, Mode: uint32(fi.Mode().Perm())}
+		e := proto.ManifestEntry{Path: rel, Mode: fsmode.Perm(fi)}
 		switch {
 		case fi.Mode().IsDir():
 			e.Type = proto.EntryDir
@@ -851,7 +852,7 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if err != nil {
 				return sourceReadError(err)
 			}
-			if !fi.IsDir() || uint32(fi.Mode().Perm()) != expectedMode {
+			if !fi.IsDir() || !fsmode.Matches(fi, expectedMode) {
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			hdr.Typeflag = tar.TypeDir
@@ -864,7 +865,7 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if err != nil {
 				return sourceReadError(err)
 			}
-			if fi.Mode()&fs.ModeSymlink == 0 || uint32(fi.Mode().Perm()) != expectedMode {
+			if fi.Mode()&fs.ModeSymlink == 0 || !fsmode.Matches(fi, expectedMode) {
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			target, err := rootFS.Readlink(e.Path)
@@ -884,7 +885,7 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if err != nil {
 				return fmt.Errorf("snapshot: %s vanished during pack: %w", e.Path, sourceReadError(err))
 			}
-			if !fi.Mode().IsRegular() || fi.Size() != e.Size || uint32(fi.Mode().Perm()) != expectedMode {
+			if !fi.Mode().IsRegular() || fi.Size() != e.Size || !fsmode.Matches(fi, expectedMode) {
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			f, err := rootFS.Open(e.Path)
@@ -895,7 +896,7 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if err != nil {
 				return errors.Join(err, f.Close())
 			}
-			if !opened.Mode().IsRegular() || opened.Size() != e.Size || uint32(opened.Mode().Perm()) != expectedMode {
+			if !opened.Mode().IsRegular() || opened.Size() != e.Size || !fsmode.Matches(opened, expectedMode) {
 				f.Close()
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
@@ -930,7 +931,7 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			}
 			if n != e.Size || hex.EncodeToString(h.Sum(nil)) != e.SHA256 ||
 				extraN != 0 || extraErr != io.EOF || !closed.Mode().IsRegular() ||
-				closed.Size() != e.Size || uint32(closed.Mode().Perm()) != expectedMode {
+				closed.Size() != e.Size || !fsmode.Matches(closed, expectedMode) {
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 		}
