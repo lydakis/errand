@@ -27,6 +27,8 @@ import (
 
 	"github.com/lydakis/errand/internal/archive"
 	changeops "github.com/lydakis/errand/internal/changes"
+	"github.com/lydakis/errand/internal/durable"
+	"github.com/lydakis/errand/internal/filelock"
 	"github.com/lydakis/errand/internal/logio"
 	"github.com/lydakis/errand/internal/namedcache"
 	"github.com/lydakis/errand/internal/pathpolicy"
@@ -225,7 +227,7 @@ func (d *Daemon) lockStateDir() error {
 	if err != nil {
 		return err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := filelock.TryLock(f); err != nil {
 		_ = f.Close()
 		return fmt.Errorf("state directory %q is already in use: %w", d.cfg.StateDir, err)
 	}
@@ -245,7 +247,7 @@ func (d *Daemon) Close() error {
 		if d.lockFile == nil {
 			return
 		}
-		if err := syscall.Flock(int(d.lockFile.Fd()), syscall.LOCK_UN); err != nil {
+		if err := filelock.Unlock(d.lockFile); err != nil {
 			d.closeErr = err
 		}
 		if err := d.lockFile.Close(); err != nil && d.closeErr == nil {
@@ -284,7 +286,7 @@ func syncDirectory(path string) error {
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return durable.Sync(dir)
 }
 
 func ensureChildDirectoryDurable(path string, mode os.FileMode) error {

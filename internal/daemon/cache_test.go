@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -49,7 +48,7 @@ func TestCacheInsertMaterializeRoundTrip(t *testing.T) {
 		}
 		return
 	}
-	defer syscall.Umask(syscall.Umask(0o077))
+	defer setUmask(t, 0o077)()
 	c := testCache(t, 1<<20, time.Hour)
 	sha, size := insertContent(t, c, "hello cache")
 	dest := filepath.Join(t.TempDir(), "out.txt")

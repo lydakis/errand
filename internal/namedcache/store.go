@@ -14,10 +14,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
+	"github.com/lydakis/errand/internal/durable"
+	"github.com/lydakis/errand/internal/filelock"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -129,7 +130,7 @@ func Open(dir string, maxBytes int64, ttl time.Duration) (*Store, error) {
 		root.Close()
 		return nil, fmt.Errorf("named cache root changed while opening")
 	}
-	file, err := root.OpenFile(".lock", os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0o600)
+	file, err := root.OpenFile(".lock", os.O_CREATE|os.O_RDWR|openNoFollow|openNonblock, 0o600)
 	if err != nil {
 		root.Close()
 		return nil, err
@@ -140,7 +141,7 @@ func Open(dir string, maxBytes int64, ttl time.Duration) (*Store, error) {
 		root.Close()
 		return nil, fmt.Errorf("named cache lock must be a regular file")
 	}
-	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := filelock.TryLock(file); err != nil {
 		file.Close()
 		root.Close()
 		return nil, fmt.Errorf("named cache store is already open: %w", err)
@@ -372,7 +373,7 @@ func (s *Store) readRecord(name string) (record, error) {
 	if !info.IsDir() {
 		return r, fmt.Errorf("named cache entry is not a directory: %s", name)
 	}
-	f, err := s.root.OpenFile(name+"/record.json", os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	f, err := s.root.OpenFile(name+"/record.json", os.O_RDONLY|openNoFollow|openNonblock, 0)
 	if err != nil {
 		return r, err
 	}
@@ -470,5 +471,5 @@ func (s *Store) sync(name string) error {
 	if err != nil {
 		return err
 	}
-	return errors.Join(dir.Sync(), dir.Close())
+	return errors.Join(durable.Sync(dir), dir.Close())
 }

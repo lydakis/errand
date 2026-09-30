@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/lydakis/errand/internal/archive"
+	"github.com/lydakis/errand/internal/durable"
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
@@ -666,7 +667,7 @@ func installMetadataChange(root *os.Root, item applyJournalItem) error {
 	if err != nil {
 		return err
 	}
-	return errors.Join(dir.Sync(), dir.Close())
+	return errors.Join(durable.Sync(dir), dir.Close())
 }
 
 func materializeApplySnapshot(sourceRoot, destinationRoot, tempRoot string, manifest proto.Manifest) (*treeAccess, error) {

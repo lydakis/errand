@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lydakis/errand/internal/durable"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -79,7 +80,7 @@ func ExportRemote(stagedRoot, destination, requested string, bundle proto.Change
 	if err := renameNoReplace(from, "tree", to, name); err != nil {
 		return fmt.Errorf("publishing export (destination must not exist): %w", err)
 	}
-	return errors.Join(to.Sync(), guard.verifyPath())
+	return errors.Join(durable.Sync(to), guard.verifyPath())
 }
 
 func exportManifest(bundle proto.ChangeBundle, requested string) (proto.Manifest, error) {

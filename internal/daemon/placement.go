@@ -7,18 +7,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/lydakis/errand/internal/placement"
 	"github.com/lydakis/errand/internal/proto"
-	"golang.org/x/sys/unix"
 )
-
-func executableFile(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular() && unix.Faccessat(unix.AT_FDCWD, path, unix.X_OK, unix.AT_EACCESS) == nil
-}
 
 // Relative entries depend on the future workspace, so cannot be attested.
 func placementTool(tool string, env []string) string {
@@ -91,15 +84,14 @@ func (d *Daemon) probeRuntime(ctx context.Context, path string, env []string) er
 	cmd := exec.CommandContext(ctx, path, "info")
 	cmd.Env = env
 	cmd.Dir = "/"
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 100 * time.Millisecond
-	if err := cmd.Start(); err != nil {
+	probe, err := startProbe(cmd)
+	if err != nil {
 		return fmt.Errorf("runtime probe could not start")
 	}
-	err := cmd.Wait()
+	err = cmd.Wait()
 	// Remove any children retained by a runtime connection helper.
-	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	probe.kill()
 	if ctx.Err() != nil {
 		return fmt.Errorf("runtime probe deadline exceeded")
 	}

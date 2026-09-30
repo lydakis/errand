@@ -16,6 +16,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+
+	"github.com/lydakis/errand/internal/fsidentity"
 )
 
 // A linked tree compares directory entries and inode identities. Shared inode
@@ -109,12 +111,12 @@ func hashTreeEntry(h hash.Hash, name string, info fs.FileInfo, target string, li
 		io.WriteString(h, target)
 	case info.Mode().IsRegular():
 		if linked {
-			stat, ok := info.Sys().(*syscall.Stat_t)
-			if !ok {
+			identity, err := fsidentity.FromInfo(info)
+			if err != nil {
 				return fmt.Errorf("file identity unavailable: %s", name)
 			}
-			binary.LittleEndian.PutUint64(numbers[:8], uint64(stat.Dev))
-			binary.LittleEndian.PutUint64(numbers[8:16], uint64(stat.Ino))
+			binary.LittleEndian.PutUint64(numbers[:8], identity.Device)
+			binary.LittleEndian.PutUint64(numbers[8:16], identity.Inode)
 		} else {
 			binary.LittleEndian.PutUint64(numbers[:8], uint64(info.Size()))
 			binary.LittleEndian.PutUint64(numbers[8:16], uint64(info.ModTime().UnixNano()))
@@ -287,7 +289,7 @@ func copyTreeFile(ctx context.Context, file treeFile, linked bool, cloneUnavaila
 		_ = os.Remove(dest)
 	}
 
-	f, err := os.OpenFile(full, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	f, err := os.OpenFile(full, os.O_RDONLY|openNoFollow|openNonblock, 0)
 	if err != nil {
 		return err
 	}
