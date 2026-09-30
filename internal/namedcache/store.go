@@ -118,8 +118,8 @@ func Open(dir string, maxBytes int64, ttl time.Duration) (*Store, error) {
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return nil, fmt.Errorf("named cache root must be a directory")
 	}
-	if info.Mode().Perm()&0o077 != 0 {
-		return nil, fmt.Errorf("named cache root must be private (mode 0700)")
+	if err := checkPrivateRoot(dir, info); err != nil {
+		return nil, err
 	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {

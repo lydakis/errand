@@ -126,4 +126,7 @@ jobs:
       # Temporary while the Windows runner is built: shows which packages still
       # fail on Windows without failing the check.
       - name: Survey packages without Windows support yet
-        run: go test -count=1 -timeout=10m ./... 2>&1 | grep -E '^(ok|FAIL|---|panic)' || true
+        run: >-
+          go test -count=1 -timeout=4m ./... 2>&1
+          | awk '/^panic/ { stack = 30 } stack > 0 { stack--; print; next }
+          /^(ok|FAIL|--- FAIL)|^ +[A-Za-z0-9_]+\.go:[0-9]+: / { print substr($0, 1, 300) }' || true
