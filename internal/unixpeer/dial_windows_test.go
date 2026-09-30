@@ -58,3 +58,25 @@ func TestCredentialsIdentifySameUserOnWindows(t *testing.T) {
 		t.Fatal("Dial accepted a server for the wrong user")
 	}
 }
+
+func TestStaleSocketIsConnectionRefusedOnWindows(t *testing.T) {
+	socket := filepath.Join(t.TempDir(), "s")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Leave the socket file behind, as a crashed daemon would.
+	listener.(*net.UnixListener).SetUnlinkOnClose(false)
+	listener.Close()
+	info, err := os.Lstat(socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		t.Fatalf("stale socket mode %v is not a socket", info.Mode())
+	}
+	_, err = net.Dial("unix", socket)
+	if !ConnectionRefused(err) {
+		t.Fatalf("dial stale socket: %v, want connection refused", err)
+	}
+}

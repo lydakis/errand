@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/lydakis/errand/internal/client"
@@ -29,6 +28,7 @@ import (
 	"github.com/lydakis/errand/internal/serviceruntime"
 	"github.com/lydakis/errand/internal/setup"
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/unixpeer"
 	"github.com/lydakis/errand/internal/workspace"
 )
 
@@ -791,7 +791,7 @@ func listenUnixSocket(path string) (net.Listener, error) {
 			conn.Close()
 			return nil, fmt.Errorf("local socket %q already has a live listener", path)
 		}
-		if !errors.Is(dialErr, syscall.ECONNREFUSED) {
+		if !unixpeer.ConnectionRefused(dialErr) {
 			return nil, fmt.Errorf("checking existing local socket %q: %w", path, dialErr)
 		}
 		if err := os.Remove(path); err != nil {

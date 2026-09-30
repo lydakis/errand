@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 // Reexec moves the current process to a retained runtime before it opens any
@@ -30,23 +29,6 @@ func Reexec(stateDir string) error {
 		return err
 	}
 	return execPrepared(source, target)
-}
-
-func execPrepared(source *os.File, target string) error {
-	// Keep the opened installation's identity: package cleanup may have
-	// removed its pathname since we opened it, even after publication.
-	original, err := source.Stat()
-	if err != nil {
-		return err
-	}
-	runtime, err := os.Stat(target)
-	if err != nil {
-		return err
-	}
-	if os.SameFile(original, runtime) {
-		return nil
-	}
-	return syscall.Exec(target, append([]string{target}, os.Args[1:]...), os.Environ())
 }
 
 // Prepare publishes an executable by content hash without replacing any existing
@@ -74,7 +56,7 @@ func prepare(source *os.File, stateDir string) (string, error) {
 		return "", err
 	}
 	want := hash.Sum(nil)
-	target := filepath.Join(dir, fmt.Sprintf("%x", want), "errand")
+	target := filepath.Join(dir, fmt.Sprintf("%x", want), runtimeName)
 	if err := privateDirectory(filepath.Dir(target)); err != nil {
 		return "", err
 	}
@@ -121,26 +103,12 @@ func prepare(source *os.File, stateDir string) (string, error) {
 	return filepath.EvalSymlinks(target)
 }
 
-func privateDirectory(dir string) error {
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-	info, err := os.Lstat(dir)
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
-		return fmt.Errorf("runtime directory must be private and not a symlink: %s", dir)
-	}
-	return nil
-}
-
 func validateExecutable(target string, want []byte) error {
 	info, err := os.Lstat(target)
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm() != 0500 {
+	if !info.Mode().IsRegular() || !runtimeModeOK(info) {
 		return fmt.Errorf("invalid runtime executable: %s", target)
 	}
 	existing, err := os.Open(target)

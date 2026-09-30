@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -16,6 +15,7 @@ import (
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/unixpeer"
 )
 
 const (
@@ -188,7 +188,7 @@ func Run(ctx context.Context, opts Options, sys System) (*Report, error) {
 		pidCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		previousPID, err = sys.SocketPID(pidCtx, restartSocketPath)
 		cancel()
-		if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, syscall.ECONNREFUSED) {
+		if err != nil && !errors.Is(err, os.ErrNotExist) && !unixpeer.ConnectionRefused(err) {
 			r.fail("service", fmt.Errorf("cannot inspect runner process at %s: %w", restartSocketPath, err))
 			return r, nil
 		}
@@ -412,7 +412,7 @@ func acquireRestartLease(ctx context.Context, sys System, r *Report, socketPath 
 	if err == nil {
 		return token, true
 	}
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED) {
+	if errors.Is(err, os.ErrNotExist) || unixpeer.ConnectionRefused(err) {
 		return "", true
 	}
 	var quiesceErr *QuiesceError
