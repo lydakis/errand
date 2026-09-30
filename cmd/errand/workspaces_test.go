@@ -199,6 +199,10 @@ func TestWorkspaceListQueriesEveryConfiguredPeer(t *testing.T) {
 		!strings.HasPrefix(strings.Join(strings.Fields(lines[2]), " "), "mini experiment idle") {
 		t.Fatalf("list table:\n%s", &out)
 	}
+	out.Reset()
+	if code := cmdWorkspacesTo([]string{"-q"}, &out, &stderr); code != 0 || out.String() != "cabal/scratch\nmini/experiment\n" {
+		t.Fatalf("list -q = %d %q", code, &out)
+	}
 
 	out.Reset()
 	if code := cmdWorkspacesTo([]string{"--json"}, &out, &stderr); code != 0 {

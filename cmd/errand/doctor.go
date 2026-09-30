@@ -80,7 +80,10 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 		return usageError(e, "unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	var spin *termui.Spinner
+	// finish always adds the local automatic-apply checks: they don't depend
+	// on reaching a runner, so an early runner failure mustn't hide them.
 	finish := func(report doctorReport) int {
+		report.Checks = append(report.Checks, doctorApplyChecks()...)
 		if spin != nil {
 			spin.Stop()
 		}
@@ -225,7 +228,6 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 	if report.Effective != nil && report.Effective.Where == "" && overrides.URL == "" {
 		report.Checks = append(report.Checks, otherRunnerChecks(report.Effective.Peer, services.probe)...)
 	}
-	report.Checks = append(report.Checks, doctorApplyChecks()...)
 	return finish(report)
 }
 

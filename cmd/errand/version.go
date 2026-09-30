@@ -56,7 +56,7 @@ func cmdVersionTo(args []string, stdout, stderr io.Writer) int {
 			case rv.version != version:
 				mark = o.G(termui.Warn)
 			}
-			parts = append(parts, rv.name+" "+rv.version+" "+mark)
+			parts = append(parts, terminalSafeField(rv.name)+" "+terminalSafeField(rv.version)+" "+mark)
 		}
 		fmt.Fprintln(stdout, o.D("runners:")+" "+strings.Join(parts, "  "))
 	}

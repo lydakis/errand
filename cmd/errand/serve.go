@@ -14,6 +14,7 @@ import (
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/daemon"
+	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/serviceruntime"
 	"github.com/lydakis/errand/internal/tailnet"
 	"github.com/lydakis/errand/internal/termui"
@@ -120,6 +121,14 @@ func serveOutcome(event daemon.JobLogEvent) (termui.Glyph, string) {
 		return termui.Fail, "killed by " + client.SignalName(res.Signal, res.SignalNum) + " before the command started"
 	case res.Signal != "":
 		return termui.Fail, "killed by " + client.SignalName(res.Signal, res.SignalNum) + " after " + ran
+	case res.State == proto.StateAmbiguous:
+		observed := ""
+		if res.ExitCode != nil {
+			observed = fmt.Sprintf(" (last seen exiting %d)", *res.ExitCode)
+		}
+		return termui.Warn, "state unknown: the runner couldn't confirm how it ended" + observed
+	case res.ExitCode != nil && *res.ExitCode == 0 && res.TransactionError != "":
+		return termui.Fail, "exited 0 in " + ran + ", but " + terminalSafeField(res.TransactionError)
 	case res.ExitCode != nil && *res.ExitCode == 0:
 		return termui.OK, "exited 0 in " + ran
 	case res.ExitCode != nil:

@@ -85,7 +85,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 	quiet := output.quiet || *jsonOutput
 	switch verb {
 	case "list":
-		return listWorkspaces(con, settings.url, settings.on, *jsonOutput, output.verbose)
+		return listWorkspaces(con, settings.url, settings.on, *jsonOutput, output.quiet, output.verbose)
 	case "rm":
 		url, label, err := resolvePeerTarget(settings.url, settings.on)
 		if err != nil {
@@ -204,7 +204,7 @@ type workspaceRow struct {
 
 // listWorkspaces follows the discovery contract: every configured peer unless
 // --on or --url narrows it. Names are scoped per runner, so rows carry theirs.
-func listWorkspaces(con *termui.Console, rawURL, on string, jsonOutput, verbose bool) int {
+func listWorkspaces(con *termui.Console, rawURL, on string, jsonOutput, quiet, verbose bool) int {
 	e, o := con.Err, con.Out
 	read, err := readFleet(rawURL, on, e, client.ListWorkspaces)
 	if err != nil {
@@ -230,6 +230,13 @@ func listWorkspaces(con *termui.Console, rawURL, on string, jsonOutput, verbose 
 		if err := json.NewEncoder(o.Writer()).Encode(rows); err != nil {
 			e.Errorf("%v", err)
 			return 1
+		}
+		return read.exitCode()
+	}
+	if quiet {
+		// One peer/name per line, like ps -q's handles.
+		for _, row := range rows {
+			fmt.Fprintln(o.Writer(), terminalSafeField(row.Peer)+"/"+terminalSafeField(row.Name))
 		}
 		return read.exitCode()
 	}

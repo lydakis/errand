@@ -223,6 +223,15 @@ func TestServeLogSaysWhenAJobWasKilledBeforeItStarted(t *testing.T) {
 	if queued != "killed by SIGTERM before the command started" || ran != "killed by SIGTERM after 1.5s" {
 		t.Fatalf("serve outcomes = %q / %q", queued, ran)
 	}
+	zero := 0
+	glyph, unconfirmed := serveOutcome(daemon.JobLogEvent{Result: &proto.Result{State: proto.StateAmbiguous, ExitCode: &zero, Started: true}})
+	if glyph == termui.OK || !strings.Contains(unconfirmed, "state unknown") {
+		t.Fatalf("an unconfirmed exit 0 was logged as success: %q", unconfirmed)
+	}
+	glyph, failed := serveOutcome(daemon.JobLogEvent{Result: &proto.Result{ExitCode: &zero, Started: true, TransactionError: "persisting result: disk full"}})
+	if glyph != termui.Fail || !strings.Contains(failed, "disk full") {
+		t.Fatalf("a failed transaction after exit 0 = %q", failed)
+	}
 }
 
 func TestPlacementNoteQuotesRunnerSuppliedReasons(t *testing.T) {
@@ -240,5 +249,17 @@ func TestServeLogFieldsQuoteControlCharacters(t *testing.T) {
 	serveLog{e: termui.Plain(&buf, &buf).Err}.kv("info", "job started", "project", "evil\nforged")
 	if strings.Count(buf.String(), "\n") != 1 || !strings.Contains(buf.String(), `project="evil\nforged"`) {
 		t.Fatalf("a project name split the log line: %q", buf.String())
+	}
+}
+
+func TestVersionQuotesRunnerSuppliedVersions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: "9.9\x1b[2J"})
+	}))
+	defer server.Close()
+	writeClientConfig(t, fmt.Sprintf("default_peer='mini'\n[peers.mini]\nurl=%q\n", server.URL))
+	var out, errOut bytes.Buffer
+	if code := cmdVersionTo([]string{"-v"}, &out, &errOut); code != 0 || strings.ContainsRune(out.String(), '\x1b') || !strings.Contains(out.String(), "mini") {
+		t.Fatalf("version -v = %d %q", code, &out)
 	}
 }

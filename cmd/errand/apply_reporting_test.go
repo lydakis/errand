@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -254,5 +255,19 @@ func TestDoctorRecoveryUsesConfiguredSSHHandle(t *testing.T) {
 	checks := doctorApplyChecks()
 	if len(checks) != 1 || !strings.Contains(checks[0].Hint, "fetch --apply builder/"+id) || strings.Contains(checks[0].Hint, "ssh://peer-") {
 		t.Fatalf("checks = %+v", checks)
+	}
+}
+
+func TestDoctorKeepsLocalApplyChecksWhenNoRunnerMatches(t *testing.T) {
+	id := proto.NewULID()
+	savedInterruptedApply(t, "http://runner.invalid", id, "")
+	writeClientConfig(t, "default_peer = 'test'\n[peers.test]\nurl = 'http://runner.invalid'\n")
+	t.Chdir(t.TempDir())
+	var out, errOut bytes.Buffer
+	code := cmdDoctorTo([]string{"--json", "--where", "os=plan9"}, &out, &errOut, func(context.Context, string) (proto.Info, error) {
+		return proto.Info{Proto: proto.ProtoVersion, Version: version, Facts: proto.Facts{OS: "linux"}}, nil
+	})
+	if code != 1 || !strings.Contains(out.String(), `"automatic_apply"`) || !strings.Contains(out.String(), id) {
+		t.Fatalf("doctor dropped the apply check after placement failed: %d %s %s", code, &out, &errOut)
 	}
 }
