@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -64,6 +65,9 @@ func TestMatcherAgreesWithGitCheckIgnore(t *testing.T) {
 				t.Fatalf("Compile(%q): %v", tt.pattern, err)
 			}
 			for _, name := range tt.paths {
+				if !gitOracleCanCreate(name) {
+					continue
+				}
 				directory := tt.directory[name]
 				want := gitCheckIgnored(t, tt.pattern, name, directory)
 				if got := matcher.Ignored(name, directory); got != want {
@@ -72,6 +76,17 @@ func TestMatcherAgreesWithGitCheckIgnore(t *testing.T) {
 			}
 		})
 	}
+}
+
+// gitOracleCanCreate reports whether the oracle can create name as a file.
+// Windows file names can't hold these characters or end in a space or dot,
+// and Git for Windows reads a backslash as a separator. The matcher itself
+// works on slash-separated manifest paths and is tested on every platform.
+func gitOracleCanCreate(name string) bool {
+	if runtime.GOOS != "windows" {
+		return true
+	}
+	return !strings.ContainsAny(name, `\*?"<>|:`) && !strings.HasSuffix(name, " ") && !strings.HasSuffix(name, ".")
 }
 
 func gitCheckIgnored(t *testing.T, pattern, name string, directory bool) bool {

@@ -3,36 +3,10 @@
 package daemon
 
 import (
-	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 
 	"github.com/lydakis/errand/internal/proctree"
 )
-
-// executableFile reports whether path names a regular file Windows would run:
-// one whose extension is listed in PATHEXT.
-func executableFile(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return false
-	}
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == "" {
-		return false
-	}
-	pathext := os.Getenv("PATHEXT")
-	if pathext == "" {
-		pathext = ".COM;.EXE;.BAT;.CMD"
-	}
-	for _, candidate := range filepath.SplitList(pathext) {
-		if strings.ToLower(candidate) == ext {
-			return true
-		}
-	}
-	return false
-}
 
 // probeProcess is a runtime probe running in its own Job Object.
 type probeProcess struct{ job *proctree.Job }

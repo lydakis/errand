@@ -105,12 +105,24 @@ func (s *processScope) cleanup(timeout time.Duration) ([]int, error) {
 	if s.job == nil {
 		return nil, nil
 	}
-	pids, err := s.job.PIDs()
-	if err != nil {
-		return nil, err
-	}
-	if len(pids) == 0 {
-		return nil, s.closeLocked()
+	// The console host Windows attaches to the job leader exits on its own
+	// shortly after the last console client. Give it a moment so the receipt
+	// lists only processes the job really left behind.
+	var pids []int
+	settle := time.Now().Add(250 * time.Millisecond)
+	for {
+		var err error
+		pids, err = s.job.PIDs()
+		if err != nil {
+			return nil, err
+		}
+		if len(pids) == 0 {
+			return nil, s.closeLocked()
+		}
+		if time.Now().After(settle) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	if err := s.job.Terminate(terminatedExitCode); err != nil {
 		return pids, err

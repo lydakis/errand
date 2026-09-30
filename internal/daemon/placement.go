@@ -19,8 +19,7 @@ func placementTool(tool string, env []string) string {
 		if !filepath.IsAbs(dir) {
 			continue
 		}
-		path := filepath.Join(dir, tool)
-		if executableFile(path) {
+		if path, ok := findExecutable(filepath.Join(dir, tool)); ok {
 			return path
 		}
 	}

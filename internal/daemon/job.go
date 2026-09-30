@@ -478,6 +478,9 @@ func (j *Job) launch(d *Daemon) error {
 	}
 	jobEnv = append(jobEnv, scope.env())
 	executable, err := resolveExecutable(j.Spec.Argv[0], envValue(jobEnv, "PATH"), workdir)
+	if err == nil {
+		err = checkCommandLine(executable, j.Spec.Argv[1:])
+	}
 	if err != nil {
 		logw.Close()
 		return err
@@ -813,20 +816,18 @@ func waitForPipeCopies(readers []*os.File, errs <-chan error, timeout time.Durat
 }
 
 func envValue(env []string, key string) string {
-	prefix := key + "="
 	for i := len(env) - 1; i >= 0; i-- {
-		if strings.HasPrefix(env[i], prefix) {
-			return strings.TrimPrefix(env[i], prefix)
+		name, value, ok := strings.Cut(env[i], "=")
+		if ok && envNameEqual(name, key) {
+			return value
 		}
 	}
 	return ""
 }
 
 func resolveExecutable(name, pathEnv, workdir string) (string, error) {
-	check := func(candidate string) (string, bool) {
-		return candidate, executableFile(candidate)
-	}
-	if strings.ContainsRune(name, filepath.Separator) {
+	check := findExecutable
+	if hasPathSeparator(name) {
 		candidate := name
 		if !filepath.IsAbs(candidate) {
 			candidate = filepath.Join(workdir, candidate)
@@ -866,7 +867,7 @@ func (j *Job) cancelledBeforeStart() *proto.Result {
 // variables. Nothing ambient is forwarded from the caller.
 func (j *Job) buildEnv() []string {
 	var env []string
-	for _, key := range []string{"PATH", "HOME", "USER", "LOGNAME", "LANG", "TMPDIR"} {
+	for _, key := range baseEnvNames {
 		if v, ok := os.LookupEnv(key); ok {
 			env = append(env, key+"="+v)
 		}

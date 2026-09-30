@@ -120,6 +120,9 @@ jobs:
           ./internal/durable ./internal/filelock ./internal/fsidentity ./internal/fsowner
           ./internal/logio ./internal/manifest ./internal/pathpolicy ./internal/placement
           ./internal/proctree ./internal/proto
+      # Windows-only tests in packages whose other tests still assume Unix.
+      - name: Test Windows-specific behavior
+        run: go test -count=1 -timeout=5m -run 'OnWindows$' ./...
       # Temporary while the Windows runner is built: shows which packages still
       # fail on Windows without failing the check.
       - name: Survey packages without Windows support yet

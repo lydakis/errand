@@ -74,7 +74,8 @@ func TestTerminateKillsDescendants(t *testing.T) {
 	if _, err := stdout.Read(line); err != nil {
 		t.Fatal(err)
 	}
-	pids := waitForPIDs(t, job, 2)
+	// The parent, its child, and any console host Windows attaches.
+	pids := waitForPIDs(t, job, func(n int) bool { return n >= 2 })
 	if !slices.Contains(pids, cmd.Process.Pid) {
 		t.Fatalf("job pids %v do not include parent %d", pids, cmd.Process.Pid)
 	}
@@ -85,10 +86,10 @@ func TestTerminateKillsDescendants(t *testing.T) {
 	if code := cmd.ProcessState.ExitCode(); code != 9 {
 		t.Fatalf("exit code %d, want 9", code)
 	}
-	waitForPIDs(t, job, 0)
+	waitForPIDs(t, job, func(n int) bool { return n == 0 })
 }
 
-func waitForPIDs(t *testing.T, job *Job, want int) []int {
+func waitForPIDs(t *testing.T, job *Job, done func(int) bool) []int {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
@@ -96,11 +97,11 @@ func waitForPIDs(t *testing.T, job *Job, want int) []int {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(pids) == want {
+		if done(len(pids)) {
 			return pids
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("job has pids %v, want %d", pids, want)
+			t.Fatalf("job still has pids %v", pids)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
