@@ -1,3 +1,6 @@
+// The fake system models Unix paths; Windows setup decisions run here too.
+//go:build unix
+
 package setup
 
 import (
