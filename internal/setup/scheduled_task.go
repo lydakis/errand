@@ -21,7 +21,9 @@ const scheduledTaskName = DefaultServiceName
 
 // The task queries go through PowerShell because its state names are not
 // localized, unlike schtasks output.
-const scheduledTaskQuery = `$t = Get-ScheduledTask -TaskPath '\' -TaskName '` + scheduledTaskName + `' -ErrorAction SilentlyContinue; if ($t) { "$($t.State)"; $t.Actions[0].Execute } else { 'Missing' }`
+const scheduledTaskQuery = `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $t = Get-ScheduledTask -TaskPath '\' -TaskName '` + scheduledTaskName + `' -ErrorAction SilentlyContinue; if ($t) { "$($t.State)"; $t.Actions[0].Execute } else { 'Missing' }`
+
+const scheduledTaskDefinitionQuery = scheduledTaskQuery + `; if ($t) { Export-ScheduledTask -InputObject $t -ErrorAction Stop }`
 
 func windowsServiceDir(home string) string {
 	return filepath.Join(home, "AppData", "Local", "errand")
@@ -32,19 +34,27 @@ func scheduledTaskPath(home string) string {
 }
 
 type scheduledTaskState struct {
-	State   string
-	Command string
+	State      string
+	Command    string
+	Definition string
 }
 
 func queryScheduledTask(ctx context.Context, sys serviceSystem) (scheduledTaskState, error) {
-	out, err := sys.Run(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", scheduledTaskQuery)
+	return readScheduledTask(ctx, sys, scheduledTaskQuery)
+}
+
+func readScheduledTask(ctx context.Context, sys serviceSystem, query string) (scheduledTaskState, error) {
+	out, err := sys.Run(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", query)
 	if err != nil {
 		return scheduledTaskState{}, err
 	}
-	lines := strings.Split(strings.ReplaceAll(strings.TrimSpace(out), "\r\n", "\n"), "\n")
+	lines := strings.SplitN(strings.ReplaceAll(strings.TrimSpace(out), "\r\n", "\n"), "\n", 3)
 	state := scheduledTaskState{State: strings.TrimSpace(lines[0])}
 	if len(lines) > 1 {
 		state.Command = strings.TrimSpace(lines[1])
+	}
+	if len(lines) > 2 {
+		state.Definition = lines[2]
 	}
 	if state.State == "" {
 		return scheduledTaskState{}, fmt.Errorf("Task Scheduler returned no state for %s", scheduledTaskName)
@@ -71,17 +81,23 @@ func installScheduledTask(ctx context.Context, opts Options, sys System, r *Repo
 		return false
 	}
 	desired := renderScheduledTask(user, runtimeExe, configPath, logPath)
+	// Inspect the registered task, not just our saved XML. Export its
+	// definition in the same query so this does not start another PowerShell.
+	current, err := readScheduledTask(ctx, sys, scheduledTaskDefinitionQuery)
+	if err != nil {
+		r.fail("service", fmt.Errorf("cannot query Task Scheduler: %w", err))
+		return false
+	}
+	if current.State != "Missing" && !opts.Force && !setupRegisteredTask(current.Definition, current.Command, user, configPath, logPath, stateDir) {
+		r.fail("service", fmt.Errorf("registered task %s differs from what setup would write; inspect it in Task Scheduler and rerun setup --force to replace it", scheduledTaskName))
+		return false
+	}
 	changed, ok := writeTaskDefinition(sys, r, taskPath, desired, user, configPath, logPath, stateDir, opts)
 	if !ok {
 		return false
 	}
 	if opts.DryRun {
 		r.step("service", "would run: schtasks /Create /TN "+scheduledTaskName+" /XML "+taskPath+" /F && schtasks /Run /TN "+scheduledTaskName, true)
-		return false
-	}
-	current, err := queryScheduledTask(ctx, sys)
-	if err != nil {
-		r.fail("service", fmt.Errorf("cannot query Task Scheduler: %w", err))
 		return false
 	}
 	if current.State == "Running" {
@@ -145,6 +161,10 @@ func setupRenderedTask(existing, user, configPath, logPath, stateDir string) boo
 	if err != nil {
 		return false
 	}
+	return retainedTaskCommand(command, stateDir) && existing == renderScheduledTask(user, command, configPath, logPath)
+}
+
+func retainedTaskCommand(command, stateDir string) bool {
 	runtimeDir, err := serviceruntime.Directory(stateDir)
 	if err != nil {
 		return false
@@ -153,7 +173,7 @@ func setupRenderedTask(existing, user, configPath, logPath, stateDir string) boo
 	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
 		return false
 	}
-	return existing == renderScheduledTask(user, command, configPath, logPath)
+	return true
 }
 
 func taskCommand(definition string) (string, error) {
@@ -178,6 +198,10 @@ func taskCommand(definition string) (string, error) {
 // renderScheduledTask is the task definition in the UTF-16 encoding schtasks
 // requires for /XML.
 func renderScheduledTask(user, executable, configPath, logPath string) string {
+	return encodeUTF16(renderScheduledTaskText(user, executable, configPath, logPath))
+}
+
+func renderScheduledTaskText(user, executable, configPath, logPath string) string {
 	arguments := strings.Join([]string{"serve", "--config", windowsArg(configPath), "--log-file", windowsArg(logPath)}, " ")
 	// Priority 7 is Task Scheduler's default and runs the daemon, and every
 	// job it starts, below normal priority. 4 is normal.
@@ -230,7 +254,7 @@ func renderScheduledTask(user, executable, configPath, logPath string) string {
   </Actions>
 </Task>
 `, xmlText(scheduledTaskName), xmlText(user), xmlText(user), xmlText(executable), xmlText(arguments))
-	return encodeUTF16(strings.ReplaceAll(text, "\n", "\r\n"))
+	return strings.ReplaceAll(text, "\n", "\r\n")
 }
 
 func encodeUTF16(text string) string {

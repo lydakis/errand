@@ -48,6 +48,7 @@ type fakeSystem struct {
 	discoverCLI    string
 	taskState      string
 	taskCommand    string
+	taskDefinition string
 	processImage   string
 }
 
@@ -127,7 +128,16 @@ func (f *fakeSystem) Run(_ context.Context, name string, args ...string) (string
 		if f.taskState == "" {
 			return "Missing", nil
 		}
-		return f.taskState + "\r\n" + f.taskCommand, nil
+		out := f.taskState + "\r\n" + f.taskCommand
+		if args[len(args)-1] == scheduledTaskDefinitionQuery {
+			definition := f.taskDefinition
+			if definition == "" {
+				definition, _ = decodeUTF16(renderScheduledTask("S-1-5-21-1-2-3-1001", f.taskCommand,
+					f.home+"/.config/errand/errandd.toml", f.home+"/AppData/Local/errand/errand.log"))
+			}
+			out += "\r\n" + definition
+		}
+		return out, nil
 	}
 	switch {
 	case strings.HasPrefix(line, "schtasks /Create "):
@@ -136,6 +146,7 @@ func (f *fakeSystem) Run(_ context.Context, name string, args ...string) (string
 			return "", err
 		}
 		f.taskCommand = command
+		f.taskDefinition, _ = decodeUTF16(f.files[args[4]])
 		if f.taskState == "" {
 			f.taskState = "Ready"
 		}

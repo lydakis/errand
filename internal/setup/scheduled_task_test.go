@@ -5,6 +5,7 @@ package setup
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -110,6 +111,51 @@ func TestWindowsSetupLeavesAnOperatorTaskAlone(t *testing.T) {
 	}
 	if !ran(f, "schtasks /Create") {
 		t.Fatalf("--force did not replace the task: %v", f.commands)
+	}
+}
+
+func TestWindowsSetupProtectsRegisteredTaskEdits(t *testing.T) {
+	for _, savedXML := range []bool{false, true} {
+		for _, edit := range []string{"command", "arguments", "settings", "extra-action"} {
+			for _, force := range []bool{false, true} {
+				t.Run(fmt.Sprintf("saved=%v/%s/force=%v", savedXML, edit, force), func(t *testing.T) {
+					f := newWindowsFake(t)
+					original := renderScheduledTask("S-1-5-21-1-2-3-1001", "/home/george/.errand/runtime/0123abcd/errand.exe",
+						"/home/george/.config/errand/errandd.toml", "/home/george/AppData/Local/errand/errand.log")
+					if savedXML {
+						f.files[testTaskPath] = original
+					}
+					f.taskState, f.taskCommand = "Ready", "/home/george/.errand/runtime/0123abcd/errand.exe"
+					definition, err := decodeUTF16(original)
+					if err != nil {
+						t.Fatal(err)
+					}
+					switch edit {
+					case "command":
+						f.taskCommand = `C:\tools\wrapper.exe`
+						definition = strings.ReplaceAll(definition, "/home/george/.errand/runtime/0123abcd/errand.exe", f.taskCommand)
+					case "arguments":
+						definition = strings.ReplaceAll(definition, "serve --config", "serve --custom --config")
+					case "settings":
+						definition = strings.ReplaceAll(definition, "<Priority>4</Priority>", "<Priority>7</Priority>")
+					case "extra-action":
+						definition = strings.ReplaceAll(definition, "</Actions>", `<Exec><Command>C:\tools\wrapper.exe</Command></Exec></Actions>`)
+					}
+					f.taskDefinition = definition
+					r, err := Run(context.Background(), Options{Transport: "tailscale", Force: force}, f)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if force {
+						if r.Failed() || !ran(f, "schtasks /Create") {
+							t.Fatalf("forced setup failed: %+v", r.Steps)
+						}
+					} else if !r.Failed() || !strings.Contains(stepErrorDetail(r, "service"), "--force") || ran(f, "schtasks") {
+						t.Fatalf("operator task was not protected: %+v / %v", r.Steps, f.commands)
+					}
+				})
+			}
+		}
 	}
 }
 

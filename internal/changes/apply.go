@@ -252,6 +252,10 @@ func ApplyToWorkspace(
 		return ApplyResult{}, fmt.Errorf("materializing local merge input: %w", err)
 	}
 	defer oursAccess.closeWithoutRestore()
+	// Capture and pack physical modes first: the original journal digest must
+	// still detect real filesystem changes. Only the merge uses submitted bits
+	// that Windows cannot store.
+	inheritBaselineModes(bundle.BaseManifest, &oursManifest)
 	conflicts, err := mergeChangeRoots(
 		context.Background(),
 		filepath.Join(trustedRoot, "base"),
