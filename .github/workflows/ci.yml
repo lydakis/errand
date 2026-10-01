@@ -117,17 +117,10 @@ jobs:
       - name: Test Windows-supported packages
         run: >-
           go test -count=1 -timeout=5m
-          ./internal/durable ./internal/filelock ./internal/fsidentity ./internal/fsowner
+          ./internal/archive ./internal/durable ./internal/filelock ./internal/fsidentity ./internal/fsowner
           ./internal/logio ./internal/manifest ./internal/pathpolicy ./internal/placement
           ./internal/proctree ./internal/proto ./internal/serviceruntime ./internal/setup
           ./internal/unixpeer
       # Windows-only tests in packages whose other tests still assume Unix.
       - name: Test Windows-specific behavior
         run: go test -count=1 -timeout=5m -run 'OnWindows$' ./...
-      # Temporary while the Windows runner is built: shows which packages still
-      # fail on Windows without failing the check.
-      - name: Survey packages without Windows support yet
-        run: >-
-          go test -count=1 -timeout=4m ./... 2>&1
-          | awk '/^panic/ { stack = 30 } stack > 0 { stack--; print; next }
-          /^(ok|FAIL|--- FAIL)|^ +[A-Za-z0-9_]+\.go:[0-9]+: / { print substr($0, 1, 300) }' || true
