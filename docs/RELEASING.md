@@ -3,8 +3,8 @@
 The release pipeline builds macOS, Linux and Windows binaries for amd64 and arm64,
 a source archive, SHA-256 checksums, and a Homebrew formula. It creates a
 **draft** GitHub release after the same macOS/Linux checks used for pull
-requests pass. Publishing a stable release then triggers a validated Homebrew
-tap update automatically.
+requests pass. Publishing a stable release then triggers validated Homebrew
+tap and [Scoop bucket](#scoop-bucket) updates automatically.
 
 ## Local rehearsal
 

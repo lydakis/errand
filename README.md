@@ -20,8 +20,7 @@ errand -- make test
 
 ## Install
 
-Install Errand on both machines. It supports macOS and Linux. A Windows PC can
-be a runner too, reached over Tailscale; see [Windows runner (experimental)](docs/WINDOWS.md).
+Install Errand on both machines. It supports macOS and Linux.
 
 With [Homebrew](https://brew.sh):
 
@@ -30,11 +29,25 @@ brew install lydakis/errand/errand
 ```
 
 Or download a binary from [GitHub Releases](https://github.com/lydakis/errand/releases).
+
 To build from source, use the Go version in [go.mod](go.mod):
 
 ```sh
 go build -trimpath -o errand ./cmd/errand
 ```
+
+**Windows (experimental, runner only).** A Windows PC can run jobs sent from
+a Mac or Linux machine over Tailscale. It can't send jobs yet. With
+[Scoop](https://scoop.sh):
+
+```powershell
+scoop bucket add errand https://github.com/lydakis/scoop-errand
+scoop install errand
+errand setup
+```
+
+See [Windows runner (experimental)](docs/WINDOWS.md) for what works and what
+doesn't yet.
 
 ## Quickstart
 
