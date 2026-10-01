@@ -643,15 +643,7 @@ func cmdServe(args []string) int {
 		if err != nil {
 			log.Fatalf("errand serve: %v", err)
 		}
-		os.Stdout, os.Stderr = f, f
-		log.SetOutput(f)
-		// The runtime writes fatal errors to the process's own stderr, which
-		// a service may not have; keep them in the log too.
-		if err := debug.SetCrashOutput(f, debug.CrashOptions{}); err != nil {
-			log.Printf("errand serve: crash output stays on stderr: %v", err)
-		}
-		logServiceStop()
-		detachServiceConsole()
+		useServiceLog(f)
 	}
 
 	fileCfg, err := config.LoadDaemon(*cfgPath)
@@ -759,6 +751,26 @@ func cmdServe(args []string) int {
 		log.Fatalf("errand serve: %v", err)
 	}
 	return 0
+}
+
+// retiredStdio keeps replaced standard files reachable. A collected *os.File
+// closes its handle, and once a Windows runner detaches its console, that
+// handle value can belong to an unrelated object.
+var retiredStdio []*os.File
+
+// useServiceLog sends everything the runner writes to f, the log a service
+// manager gives it.
+func useServiceLog(f *os.File) {
+	retiredStdio = append(retiredStdio, os.Stdout, os.Stderr)
+	os.Stdout, os.Stderr = f, f
+	log.SetOutput(f)
+	// The runtime writes fatal errors to the process's own stderr, which
+	// a service may not have; keep them in the log too.
+	if err := debug.SetCrashOutput(f, debug.CrashOptions{}); err != nil {
+		log.Printf("errand serve: crash output stays on stderr: %v", err)
+	}
+	logServiceStop()
+	detachServiceConsole(f)
 }
 
 type tailnetDiscoverFunc func(string, string) (tailnet.Provider, error)
