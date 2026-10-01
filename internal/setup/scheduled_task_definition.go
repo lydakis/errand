@@ -56,6 +56,8 @@ var taskSchemaDefaults = map[string]string{
 	"Task/Settings/IdleSettings/WaitTimeout":        "PT1H",
 	"Task/Triggers/LogonTrigger/Delay":              "PT0S",
 	"Task/Actions/Exec/WorkingDirectory":            "",
+	"Task/Actions/@Context":                         "Author",
+	"Task/RegistrationInfo/SecurityDescriptor":      "",
 }
 
 func taskDefinitionFields(text string) ([]string, error) {
@@ -78,13 +80,21 @@ func taskDefinitionFields(text string) ([]string, error) {
 			return
 		}
 		for _, attr := range node.Attributes {
-			if attr.Name.Local != "xmlns" && attr.Name.Space != "xmlns" {
-				fields = append(fields, path+"/@"+attr.Name.Local+"="+attr.Value)
+			if attr.Name.Local == "xmlns" || attr.Name.Space == "xmlns" || (path == "Task" && attr.Name.Local == "version") {
+				continue // the scheduler updates the XML schema version
+			}
+			key := path + "/@" + attr.Name.Local
+			if value, ok := taskSchemaDefaults[key]; !ok || attr.Value != value {
+				fields = append(fields, key+"="+attr.Value)
 			}
 		}
 		if len(node.Children) == 0 {
 			if value, ok := taskSchemaDefaults[path]; !ok || node.Text != value {
-				fields = append(fields, path+"="+node.Text)
+				text := node.Text
+				if path == "Task/Principals/Principal/UserId" || path == "Task/Triggers/LogonTrigger/UserId" {
+					text = taskUserID(text)
+				}
+				fields = append(fields, path+"="+text)
 			}
 			return
 		}

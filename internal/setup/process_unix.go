@@ -7,6 +7,8 @@ import (
 	"runtime"
 )
 
+func taskUserID(name string) string { return name }
+
 func currentUserSID() (string, error) {
 	return "", errors.New("user SIDs exist only on Windows, not " + runtime.GOOS)
 }

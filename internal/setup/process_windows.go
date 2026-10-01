@@ -4,7 +4,21 @@ package setup
 
 import (
 	"golang.org/x/sys/windows"
+	"strings"
 )
+
+// Task Scheduler exports user IDs as either SIDs or account names. Compare
+// identities through the native account lookup without another subprocess.
+func taskUserID(name string) string {
+	if strings.HasPrefix(name, "S-1-") {
+		return name
+	}
+	sid, _, _, err := windows.LookupSID("", name)
+	if err != nil {
+		return name
+	}
+	return sid.String()
+}
 
 func currentUserSID() (string, error) {
 	user, err := windows.GetCurrentProcessToken().GetTokenUser()
