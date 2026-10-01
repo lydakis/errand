@@ -84,6 +84,11 @@ func PushChanges(opts PushOptions) (proto.PushResult, error) {
 	} else {
 		origin, err = readWorkspaceOrigin(dir)
 	}
+	var earlier *EarlierTransferStateError
+	if errors.As(err, &earlier) {
+		earlier.Workspace = ws.Name
+		return result, err
+	}
 	if err != nil {
 		return result, fmt.Errorf("push requires this workspace's originating checkout: %w", err)
 	}
