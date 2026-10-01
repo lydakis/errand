@@ -81,12 +81,14 @@ func TestApplyKeepsSubmittedModesOnWindows(t *testing.T) {
 		delete       bool
 		localContent string
 		localMode    os.FileMode
+		baseMode     uint32
 		conflict     bool
 	}{
 		{name: "delete-unchanged-executable", delete: true, localContent: "\x00base", localMode: 0o644},
 		{name: "update-unchanged-binary", localContent: "\x00base", localMode: 0o644},
 		{name: "preserve-local-content", localContent: "\x00local", localMode: 0o644, conflict: true},
 		{name: "preserve-local-readonly", delete: true, localContent: "\x00base", localMode: 0o444, conflict: true},
+		{name: "delete-unchanged-readonly", delete: true, localContent: "\x00base", localMode: 0o444, baseMode: 0o444},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -99,6 +101,12 @@ func TestApplyKeepsSubmittedModesOnWindows(t *testing.T) {
 				t.Fatal(err)
 			}
 			baseline.Entries[0].Mode = 0o755
+			if tc.baseMode != 0 {
+				baseline.Entries[0].Mode = tc.baseMode
+				if err := os.Chmod(filepath.Join(source, "tool"), os.FileMode(tc.baseMode)); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if err := CaptureWorkspaceBaseContext(ctx, source, job, baseline); err != nil {
 				t.Fatal(err)
 			}
@@ -115,6 +123,13 @@ func TestApplyKeepsSubmittedModesOnWindows(t *testing.T) {
 				t.Fatalf("collect = %v, %v", collected, err)
 			}
 			staged := extractTestBundle(t, job, bundle)
+			// Push staging restores and syncs modes before applying the bundle.
+			if err := SyncTransferSource(filepath.Join(staged, "base"), bundle.BaseManifest); err != nil {
+				t.Fatal(err)
+			}
+			if err := SyncTransferSource(filepath.Join(staged, "remote"), bundle.RemoteManifest); err != nil {
+				t.Fatal(err)
+			}
 			file := filepath.Join(destination, "tool")
 			if err := os.WriteFile(file, []byte(tc.localContent), tc.localMode); err != nil {
 				t.Fatal(err)

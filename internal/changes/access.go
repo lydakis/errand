@@ -434,7 +434,7 @@ func (a *treeAccess) restoreWithSync(syncData func(*os.File) error) error {
 			}
 			return nil
 		}
-		file, err := a.root.Open(rel)
+		file, err := openRetainedSyncFile(a.root, rel, info)
 		if err != nil {
 			return err
 		}
