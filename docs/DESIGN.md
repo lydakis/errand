@@ -1116,8 +1116,14 @@ caller supplies all checkpoint, staged, and in-flight manifests whose bodies mus
 stay, under the same serialization as retention and reconstruction. Malformed
 manifests, missing bodies, and size mismatches stop pruning before any deletion.
 Pruning does not hash pinned content; retention and reconstruction verify hashes
-when reusing bodies. Accounting includes abandoned insertion bytes, which count
-against capacity until explicitly pruned, but excludes them from blob counts.
+when reusing bodies. Accounting includes abandoned insertion bytes but excludes
+them from blob counts; retention never budgets them. Retention budgets from a
+usage record of published bytes and looks up only the bodies it needs. The
+record is removed before the store changes and written again only after the
+change is durable, so it is exact whenever it exists. Without one (a new store,
+an interrupted retention, or a prune), retention scans the store, reclaims
+insertion files and records the total
+([blob retention](WATCH_BLOB_RETAIN.md)).
 Unreferenced bodies and interrupted insertion files can be reclaimed; referenced
 bodies have no TTL or
 automatic size eviction. Retain bodies before publishing the checkpoint that
