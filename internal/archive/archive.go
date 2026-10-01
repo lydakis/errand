@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -180,7 +181,9 @@ func checkSymlinkTarget(link, target string) error {
 }
 
 type ExtractOptions struct {
-	ResolveMissing func(dest string, entry proto.ManifestEntry) (bool, error)
+	// Complete source metadata identifies directory links in partial uploads.
+	SymlinkManifest *proto.Manifest
+	ResolveMissing  func(dest string, entry proto.ManifestEntry) (bool, error)
 }
 
 var ErrCacheMiss = errors.New("snapshot cache miss")
@@ -300,6 +303,8 @@ func ExtractWith(r io.Reader, dest string, m proto.Manifest, maxBytes int64, opt
 			ErrCacheMiss, len(cacheMisses), cacheMisses[0])
 	}
 	// Symlinks last: no file write can ever traverse one of our links.
+	var linkLookup fslink.Lookup
+	var linkRoot *os.Root
 	for _, e := range m.Entries {
 		if e.Type != proto.EntrySymlink {
 			continue
@@ -308,7 +313,28 @@ func ExtractWith(r io.Reader, dest string, m proto.Manifest, maxBytes int64, opt
 		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 			return err
 		}
-		if err := os.Symlink(e.Target, abs); err != nil {
+		directory := false
+		if fslink.NativeTypes {
+			if linkLookup == nil {
+				metadata := m
+				if opts.SymlinkManifest != nil {
+					metadata = *opts.SymlinkManifest
+				}
+				linkLookup = fslink.ManifestLookup(metadata)
+				var err error
+				linkRoot, err = os.OpenRoot(dest)
+				if err != nil {
+					return err
+				}
+				defer linkRoot.Close()
+			}
+			directory = fslink.IsDirectory(e, linkLookup)
+		}
+		if fslink.NativeTypes {
+			if err := fslink.Create(linkRoot, e.Target, filepath.FromSlash(e.Path), directory); err != nil {
+				return err
+			}
+		} else if err := os.Symlink(e.Target, abs); err != nil {
 			return err
 		}
 	}

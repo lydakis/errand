@@ -44,14 +44,14 @@ func TestResolveExecutableSearchesPATHWithExtensionsOnWindows(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "npm.cmd"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := resolveExecutable("npm", dir, t.TempDir())
+	got, err := resolveExecutable("npm", dir, t.TempDir(), os.Getenv("PATHEXT"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.EqualFold(got, filepath.Join(dir, "npm.cmd")) {
 		t.Fatalf("resolved %s", got)
 	}
-	if _, err := resolveExecutable("./npm", dir, dir); err != nil {
+	if _, err := resolveExecutable("./npm", dir, dir, os.Getenv("PATHEXT")); err != nil {
 		t.Fatalf("relative path with forward slash: %v", err)
 	}
 }
@@ -63,6 +63,35 @@ func TestEnvValueIgnoresNameCaseOnWindows(t *testing.T) {
 	}
 	if got := envValue(env, "SystemRoot"); got != `C:\Windows` {
 		t.Fatalf("SystemRoot = %q", got)
+	}
+}
+
+func TestExecutableLookupUsesJobPATHEXTOnWindows(t *testing.T) {
+	t.Setenv("PATHEXT", ".EXE")
+	dir := t.TempDir()
+	for _, name := range []string{"tool.exe", "tool.cmd"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ extensions, want string }{
+		{extensions: ".CMD", want: "tool.cmd"},
+		{extensions: ".CMD;.EXE", want: "tool.cmd"},
+		{extensions: ".EXE;.CMD", want: "tool.exe"},
+	} {
+		t.Run(tc.extensions, func(t *testing.T) {
+			j := &Job{}
+			j.Spec.Env = map[string]string{"Path": dir, "PathExt": tc.extensions}
+			env := j.buildEnv()
+			got, err := resolveExecutable("tool", envValue(env, "PATH"), dir, envValue(env, "PATHEXT"))
+			want := filepath.Join(dir, tc.want)
+			if err != nil || !strings.EqualFold(got, want) {
+				t.Fatalf("resolve = %q, %v; want %q", got, err, want)
+			}
+			if got := placementTool("tool", env); !strings.EqualFold(got, want) {
+				t.Fatalf("placement = %q; want %q", got, want)
+			}
+		})
 	}
 }
 

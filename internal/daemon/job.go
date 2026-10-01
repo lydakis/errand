@@ -477,7 +477,7 @@ func (j *Job) launch(d *Daemon) error {
 		return fmt.Errorf("consuming queued marker: %w", err)
 	}
 	jobEnv = append(jobEnv, scope.env())
-	executable, err := resolveExecutable(j.Spec.Argv[0], envValue(jobEnv, "PATH"), workdir)
+	executable, err := resolveExecutable(j.Spec.Argv[0], envValue(jobEnv, "PATH"), workdir, envValue(jobEnv, "PATHEXT"))
 	if err == nil {
 		err = checkCommandLine(executable, j.Spec.Argv[1:])
 	}
@@ -825,8 +825,8 @@ func envValue(env []string, key string) string {
 	return ""
 }
 
-func resolveExecutable(name, pathEnv, workdir string) (string, error) {
-	check := findExecutable
+func resolveExecutable(name, pathEnv, workdir, pathext string) (string, error) {
+	check := executableFinder(pathext)
 	if hasPathSeparator(name) {
 		candidate := name
 		if !filepath.IsAbs(candidate) {

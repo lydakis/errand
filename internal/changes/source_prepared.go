@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -117,7 +118,19 @@ func (s *TransferSession) StagePreparedFromBlobs(ctx context.Context, id string,
 	if !p.valid {
 		return "", proto.ChangeBundle{}, fmt.Errorf("transfer source was not prepared")
 	}
-	return s.stage(ctx, id, s.retainedSource(), proto.Manifest{}, &p)
+	var lookup fslink.Lookup
+	if fslink.NativeTypes {
+		lookup = func(name string) (proto.ManifestEntry, bool) {
+			if entry, ok := p.snapshot.Lookup(name); ok {
+				return entry, true
+			}
+			// Inspect only the first indexed descendant for implicit directories.
+			found := false
+			_ = p.snapshot.Subtree(ctx, name, func(proto.ManifestEntry) bool { found = true; return false })
+			return proto.ManifestEntry{Path: name, Type: proto.EntryDir}, found
+		}
+	}
+	return s.stage(ctx, id, s.retainedSource(lookup), proto.Manifest{}, &p)
 }
 
 func (p PreparedTransferSource) validateStageLimits(ctx context.Context, s *TransferSession) error {

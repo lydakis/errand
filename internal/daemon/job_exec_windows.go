@@ -27,8 +27,7 @@ func envNameEqual(a, b string) bool { return strings.EqualFold(a, b) }
 
 func hasPathSeparator(name string) bool { return strings.ContainsAny(name, `/\`) }
 
-func executableExtensions() []string {
-	pathext := os.Getenv("PATHEXT")
+func executableExtensions(pathext string) []string {
 	if pathext == "" {
 		pathext = ".COM;.EXE;.BAT;.CMD"
 	}
@@ -50,19 +49,26 @@ func regularFile(path string) bool {
 // extension is in PATHEXT, otherwise the first path+extension that exists.
 // So "cargo" finds cargo.exe and "npm" finds npm.cmd.
 func findExecutable(path string) (string, bool) {
-	exts := executableExtensions()
-	ext := strings.ToLower(filepath.Ext(path))
-	for _, candidate := range exts {
-		if ext == candidate {
-			return path, regularFile(path)
+	return executableFinder(os.Getenv("PATHEXT"))(path)
+}
+
+// Parse PATHEXT once for the entire PATH search, using the job's environment.
+func executableFinder(pathext string) func(string) (string, bool) {
+	exts := executableExtensions(pathext)
+	return func(path string) (string, bool) {
+		ext := strings.ToLower(filepath.Ext(path))
+		for _, candidate := range exts {
+			if ext == candidate {
+				return path, regularFile(path)
+			}
 		}
-	}
-	for _, candidate := range exts {
-		if regularFile(path + candidate) {
-			return path + candidate, true
+		for _, candidate := range exts {
+			if regularFile(path + candidate) {
+				return path + candidate, true
+			}
 		}
+		return "", false
 	}
-	return "", false
 }
 
 // cmd.exe runs .bat and .cmd files and reparses their command line with its

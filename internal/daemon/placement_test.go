@@ -117,7 +117,7 @@ func TestWhereChecksEffectiveExecutePermission(t *testing.T) {
 	if f.Tools["go"] != "" {
 		t.Fatal("accepted tool without effective execute permission")
 	}
-	if _, err := resolveExecutable("go", dir, dir); err == nil {
+	if _, err := resolveExecutable("go", dir, dir, ""); err == nil {
 		t.Fatal("job resolver accepted same unexecutable tool")
 	}
 }

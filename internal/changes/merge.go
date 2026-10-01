@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/nowindow"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -272,7 +273,21 @@ func mergeTreePath(
 		if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 			return err
 		}
-		return os.Symlink(target, dest)
+		directory := false
+		if fslink.NativeTypes {
+			// The merged target came from one of these verified inputs.
+			for _, tree := range []mergeTree{remote, ours, base} {
+				if tree.entries[name].Target == target {
+					info, err := os.Lstat(filepath.Join(tree.root, filepath.FromSlash(name)))
+					if err != nil {
+						return err
+					}
+					directory = fslink.Directory(info)
+					break
+				}
+			}
+		}
+		return fslink.CreatePath(target, dest, directory)
 	}
 	conflicts[name] = true
 	if materializeConflicts {

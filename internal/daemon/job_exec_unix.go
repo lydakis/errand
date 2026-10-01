@@ -15,3 +15,6 @@ func hasPathSeparator(name string) bool { return strings.ContainsRune(name, '/')
 
 // checkCommandLine accepts every argument: exec passes argv unchanged.
 func checkCommandLine(string, []string) error { return nil }
+
+// Unix executable lookup does not depend on PATHEXT.
+func executableFinder(string) func(string) (string, bool) { return findExecutable }

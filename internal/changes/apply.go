@@ -16,6 +16,7 @@ import (
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/durable"
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/fsmode"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
@@ -676,6 +677,9 @@ func installMetadataChange(root *os.Root, item applyJournalItem) error {
 }
 
 func materializeApplySnapshot(sourceRoot, destinationRoot, tempRoot string, manifest proto.Manifest) (*treeAccess, error) {
+	if fslink.NativeTypes {
+		return materializeTypedApplySnapshot(sourceRoot, destinationRoot, manifest, false)
+	}
 	archiveFile, err := os.CreateTemp(tempRoot, "ours-*.tar")
 	if err != nil {
 		return nil, err
@@ -711,6 +715,9 @@ func materializeApplySnapshot(sourceRoot, destinationRoot, tempRoot string, mani
 }
 
 func materializeApplySnapshotStrict(sourceRoot, destinationRoot, tempRoot string, manifest proto.Manifest) (*treeAccess, error) {
+	if fslink.NativeTypes {
+		return materializeTypedApplySnapshot(sourceRoot, destinationRoot, manifest, true)
+	}
 	archiveFile, err := os.CreateTemp(tempRoot, "ours-*.tar")
 	if err != nil {
 		return nil, err
@@ -1268,7 +1275,7 @@ func copyMergeScratch(src, dest string) error {
 		if err != nil {
 			return err
 		}
-		return os.Symlink(target, dest)
+		return fslink.CreatePath(target, dest, fslink.Directory(info))
 	default:
 		return fmt.Errorf("unsupported change type %v at %s", info.Mode(), src)
 	}
@@ -1330,7 +1337,7 @@ func copyPathToRootWithSync(sourceRoot, sourceRel string, root *os.Root, dest st
 		if err != nil {
 			return err
 		}
-		if err := root.Symlink(target, dest); err != nil {
+		if err := fslink.Create(root, target, dest, fslink.Directory(info)); err != nil {
 			return err
 		}
 		return syncApplyRootDirectoryWith(root, path.Dir(dest), synchronize)
