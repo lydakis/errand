@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 	"unsafe"
 
+	"github.com/lydakis/errand/internal/nowindow"
 	"golang.org/x/sys/windows"
 )
 
@@ -43,10 +43,8 @@ func New() (*Job, error) {
 // Prepare makes cmd start suspended so Adopt can assign it before it runs
 // any code or starts a child. Console programs get no console window.
 func Prepare(cmd *exec.Cmd) {
-	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
-	}
-	cmd.SysProcAttr.CreationFlags |= windows.CREATE_SUSPENDED | windows.CREATE_NO_WINDOW
+	nowindow.Hide(cmd)
+	cmd.SysProcAttr.CreationFlags |= windows.CREATE_SUSPENDED
 }
 
 // Adopt assigns a process started after Prepare to the job, then resumes it.

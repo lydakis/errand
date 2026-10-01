@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lydakis/errand/internal/nowindow"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -404,6 +405,7 @@ func mergeRegularFile(
 		"-L", "local", "-L", "base", "-L", "remote",
 		ours, base, remote,
 	)
+	nowindow.Hide(cmd)
 	cmd.Stdout = out
 	stderr := truncatingBuffer{remaining: 32 << 10}
 	cmd.Stderr = &stderr

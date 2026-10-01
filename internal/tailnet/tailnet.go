@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lydakis/errand/internal/nowindow"
 )
 
 // WhoIs is the subset of a Tailscale WhoIs answer errand relies on.
@@ -358,6 +360,7 @@ func (p *cli) run(ctx context.Context, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, p.path, args...)
+	nowindow.Hide(cmd)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
