@@ -47,8 +47,8 @@ func regularFile(path string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
-// findExecutable finds what Windows would run for path: path itself when its
-// extension is in PATHEXT, otherwise the first path+extension that exists.
+// findExecutable finds what Windows would run for path: an existing path with
+// an explicit extension, otherwise the first path+extension from PATHEXT.
 // So "cargo" finds cargo.exe and "npm" finds npm.cmd.
 func findExecutable(path string) (string, bool) {
 	return executableFinder(os.Getenv("PATHEXT"))(path)
@@ -58,11 +58,8 @@ func findExecutable(path string) (string, bool) {
 func executableFinder(pathext string) func(string) (string, bool) {
 	exts := executableExtensions(pathext)
 	return func(path string) (string, bool) {
-		ext := strings.ToLower(filepath.Ext(path))
-		for _, candidate := range exts {
-			if ext == candidate {
-				return path, regularFile(path)
-			}
+		if filepath.Ext(path) != "" && regularFile(path) {
+			return path, true
 		}
 		for _, candidate := range exts {
 			if regularFile(path + candidate) {

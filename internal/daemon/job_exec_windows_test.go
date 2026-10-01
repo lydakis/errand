@@ -21,7 +21,7 @@ func TestFindExecutableAppliesPATHEXTOnWindows(t *testing.T) {
 		"tool":      "tool.exe",
 		"tool.exe":  "tool.exe",
 		"shim":      "shim.cmd",
-		"notes.txt": "",
+		"notes.txt": "notes.txt",
 		"notes":     "",
 		"missing":   "",
 	} {
@@ -35,6 +35,50 @@ func TestFindExecutableAppliesPATHEXTOnWindows(t *testing.T) {
 		if !ok || !strings.EqualFold(got, filepath.Join(dir, want)) {
 			t.Errorf("findExecutable(%s) = %s, %v, want %s", name, got, ok, want)
 		}
+	}
+}
+
+func TestExplicitExecutableIgnoresPATHEXTOnWindows(t *testing.T) {
+	dir := t.TempDir()
+	// The competing script must never shadow an explicitly named executable.
+	for _, name := range []string{"tool.exe", "tool.exe.cmd", "fallback.exe.cmd"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "directory.exe"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const pathext = ".CMD"
+	for _, tc := range []struct{ name, want string }{
+		{name: "tool.exe", want: "tool.exe"},
+		{name: "TOOL.EXE", want: "tool.exe"},
+		{name: "fallback.exe", want: "fallback.exe.cmd"},
+		{name: "directory.exe"},
+		{name: "missing.exe"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, name := range []string{tc.name, "./" + tc.name, filepath.Join(dir, tc.name)} {
+				got, err := resolveExecutable(name, dir, dir, pathext)
+				if tc.want == "" {
+					if err == nil {
+						t.Fatalf("resolve(%q) = %q; want not found", name, got)
+					}
+					continue
+				}
+				if err != nil || !strings.EqualFold(got, filepath.Join(dir, tc.want)) {
+					t.Fatalf("resolve(%q) = %q, %v; want %q", name, got, err, tc.want)
+				}
+			}
+			got := placementTool(tc.name, []string{"PATH=" + dir, "PATHEXT=" + pathext})
+			want := ""
+			if tc.want != "" {
+				want = filepath.Join(dir, tc.want)
+			}
+			if !strings.EqualFold(got, want) {
+				t.Fatalf("placement(%q) = %q; want %q", tc.name, got, want)
+			}
+		})
 	}
 }
 
