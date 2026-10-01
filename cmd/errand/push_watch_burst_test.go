@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -68,6 +67,7 @@ func TestPushWatchConvergesAfterActiveWriter(t *testing.T) {
 }
 
 func TestPushWatchReportsInvalidSourceDuringEdits(t *testing.T) {
+	requireFIFOs(t)
 	root, _, peer, ws := watchFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -76,7 +76,7 @@ func TestPushWatchReportsInvalidSourceDuringEdits(t *testing.T) {
 	err := client.WatchPush(ctx, client.PushOptions{PeerURL: peer, Workspace: ws.Name, Root: root, Apply: true}, func(event client.PushWatchEvent) error {
 		if event.State == "watching" && !created {
 			created = true
-			return syscall.Mkfifo(filepath.Join(root, "unsupported"), 0600)
+			return mkfifo(filepath.Join(root, "unsupported"))
 		}
 		if event.State == "resampling" {
 			retries++

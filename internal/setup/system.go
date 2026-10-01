@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/serviceruntime"
 	"github.com/lydakis/errand/internal/tailnet"
 	"github.com/lydakis/errand/internal/unixpeer"
 )
@@ -51,6 +52,11 @@ type System interface {
 	SocketPID(ctx context.Context, socket string) (int, error)
 	Quiesce(ctx context.Context, socket string) (string, error)
 	ReleaseQuiesce(ctx context.Context, socket, token string) error
+	// RuntimePath returns the daemon's retained copy of exe, publishing it
+	// when create is set.
+	RuntimePath(exe, stateDir string, create bool) (string, error)
+	UserSID() (string, error)
+	ProcessImage(pid int) (string, error)
 }
 
 type QuiesceError struct {
@@ -73,6 +79,16 @@ func (RealSystem) SocketPID(ctx context.Context, socket string) (int, error) {
 }
 
 func (RealSystem) GOOS() string { return runtime.GOOS }
+
+func (RealSystem) RuntimePath(exe, stateDir string, create bool) (string, error) {
+	if create {
+		return serviceruntime.Prepare(exe, stateDir)
+	}
+	return serviceruntime.Path(exe, stateDir)
+}
+
+func (RealSystem) UserSID() (string, error)             { return currentUserSID() }
+func (RealSystem) ProcessImage(pid int) (string, error) { return processImage(pid) }
 
 func (RealSystem) Home() (string, error) {
 	home, err := os.UserHomeDir()

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -98,6 +99,9 @@ func TestPrepareConcurrentAndRefusesDamagedRuntime(t *testing.T) {
 func TestPrepareRefusesSharedOrRedirectedRuntimeDirectory(t *testing.T) {
 	for _, symlink := range []bool{false, true} {
 		t.Run(map[bool]string{false: "shared", true: "symlink"}[symlink], func(t *testing.T) {
+			if !symlink && runtime.GOOS == "windows" {
+				t.Skip("Windows directories have no group or other permission bits")
+			}
 			root := t.TempDir()
 			source := filepath.Join(root, "installed")
 			if err := os.WriteFile(source, []byte("executable"), 0700); err != nil {
@@ -152,6 +156,9 @@ func TestPrepareRelativeStateAndReuseWithoutWrites(t *testing.T) {
 }
 
 func TestReexecAfterInstallationRemoval(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows can't replace a running process image; the service runs the runtime copy directly")
+	}
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)

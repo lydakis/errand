@@ -20,7 +20,8 @@ errand -- make test
 
 ## Install
 
-Install Errand on both machines. It supports macOS and Linux.
+Install Errand on both machines. It supports macOS and Linux. A Windows PC can
+be a runner too, reached over Tailscale; see [Windows runner (experimental)](docs/WINDOWS.md).
 
 With [Homebrew](https://brew.sh):
 

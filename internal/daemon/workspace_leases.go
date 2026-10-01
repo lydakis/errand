@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	changeops "github.com/lydakis/errand/internal/changes"
+	"github.com/lydakis/errand/internal/durable"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -258,7 +259,7 @@ func settlePersistentCachePaths(j *Job, workspace string, caches []proto.CacheBi
 			if err != nil {
 				return err
 			}
-			err = f.Sync()
+			err = durable.Sync(f)
 			closeErr := f.Close()
 			if err != nil {
 				return err

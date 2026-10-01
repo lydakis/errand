@@ -1,6 +1,6 @@
 # Releases and Homebrew
 
-The release pipeline builds macOS and Linux binaries for amd64 and arm64,
+The release pipeline builds macOS, Linux and Windows binaries for amd64 and arm64,
 a source archive, SHA-256 checksums, and a Homebrew formula. It creates a
 **draft** GitHub release after the same macOS/Linux checks used for pull
 requests pass. Publishing a stable release then triggers a validated Homebrew
@@ -35,11 +35,13 @@ The generated `dist/` directory is disposable and ignored by Git.
 2. Choose a version and push its tag, for example `v0.1.0`. Stable tags use
    `vMAJOR.MINOR.PATCH`; prereleases can use `v0.1.0-rc.1`. Do not move an
    existing release tag. The workflow runs only for pushed `v*` tags.
-3. Review the resulting draft on GitHub. It contains four binary archives,
+3. Review the resulting draft on GitHub. It contains four macOS/Linux
+   `.tar.gz` archives, two Windows `.zip` archives,
    `errand_VERSION_source.tar.gz`, `checksums.txt`, and `errand.rb`. All archives
    and the formula are covered by `checksums.txt`. Binary archives contain
-   `errand`, `LICENSE`, and `README.md`; `errand version` reports the tag version
-   without the leading `v`.
+   `errand` (`errand.exe` on Windows), `LICENSE`, and `README.md`; `errand
+   version` reports the tag version without the leading `v`. The Windows
+   binaries are unsigned, so a browser download shows a SmartScreen warning.
 4. Download the draft assets and verify checksums and native binaries. Review
    the generated release notes, then publish the draft. Prerelease tags are
    marked as prereleases automatically.

@@ -9,10 +9,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
+	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -49,7 +49,7 @@ func TestCacheInsertMaterializeRoundTrip(t *testing.T) {
 		}
 		return
 	}
-	defer syscall.Umask(syscall.Umask(0o077))
+	defer setUmask(t, 0o077)()
 	c := testCache(t, 1<<20, time.Hour)
 	sha, size := insertContent(t, c, "hello cache")
 	dest := filepath.Join(t.TempDir(), "out.txt")
@@ -373,7 +373,7 @@ func TestCacheCorruptionRemovalCanBeCanceledWhileWaiting(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := c.removeIfCurrent(ctx, sha, nil); !errors.Is(err, context.Canceled) {
+	if err := c.removeIfCurrent(ctx, sha, fsidentity.Identity{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled corruption removal error = %v, want context.Canceled", err)
 	}
 	if _, err := os.Lstat(c.path(sha)); err != nil {
@@ -385,7 +385,7 @@ func TestCacheCorruptionRemovalPreservesReplacement(t *testing.T) {
 	c := testCache(t, 1<<20, time.Hour)
 	sha, _ := insertContent(t, c, "replacement content")
 	p := c.path(sha)
-	original, err := os.Lstat(p)
+	original, _, err := fsidentity.Lstat(p)
 	if err != nil {
 		t.Fatal(err)
 	}
