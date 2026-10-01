@@ -49,6 +49,7 @@ func TestJobExplicitExecutableWithRestrictedPATHEXTOnWindows(t *testing.T) {
 	response := rawSubmitSpec(t, ts.URL, id, root, proto.Spec{
 		Argv:         []string{executable, "/d", "/c", "exit /b 7"},
 		Env:          map[string]string{"PATHEXT": ".CMD"},
+		EnvSources:   map[string]string{"PATHEXT": "literal"},
 		ManifestRoot: manifest.RootHash(), Limits: proto.DefaultLimits(),
 	}, manifest)
 	if response.StatusCode != http.StatusCreated {
