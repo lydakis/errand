@@ -3,6 +3,10 @@
 package main
 
 import (
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -23,4 +27,16 @@ func detachServiceConsole() {
 	if n == 1 {
 		procFreeConsole.Call()
 	}
+}
+
+// logServiceStop records why the runner stops on a console event (closing
+// its window, signing out, shutting down). Unhandled, Go exits with status 2
+// and leaves nothing in the log.
+func logServiceStop() {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		log.Printf("errand serve: stopping on %v", <-stop)
+		os.Exit(1)
+	}()
 }

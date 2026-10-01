@@ -233,13 +233,28 @@ func (d *Daemon) lockStateDir() error {
 	if err != nil {
 		return err
 	}
-	if err := filelock.TryLock(f); err != nil {
+	err = filelock.TryLock(f)
+	// Windows releases a stopped process's locks only after it has fully
+	// exited. A service manager restarting the runner, as setup does on an
+	// upgrade, can start the new one first, so it waits briefly.
+	for deadline := time.Now().Add(stateLockWait); errors.Is(err, filelock.ErrLocked) && time.Now().Before(deadline); {
+		time.Sleep(100 * time.Millisecond)
+		err = filelock.TryLock(f)
+	}
+	if err != nil {
 		_ = f.Close()
 		return fmt.Errorf("state directory %q is already in use: %w", d.cfg.StateDir, err)
 	}
 	d.lockFile = f
 	return nil
 }
+
+var stateLockWait = func() time.Duration {
+	if runtime.GOOS == "windows" {
+		return 10 * time.Second
+	}
+	return 0
+}()
 
 // Close releases the process-wide ownership of the daemon state directory.
 func (d *Daemon) Close() error {

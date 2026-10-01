@@ -72,7 +72,7 @@ func Diagnose(ctx context.Context, configPath string, sys DiagnosticSystem) Diag
 	r := Diagnosis{}
 	diagnoseBinary(sys, &r)
 	d, configErr := sys.LoadDaemon(configPath)
-	serviceCtx, stopService := context.WithTimeout(ctx, 4*time.Second)
+	serviceCtx, stopService := context.WithTimeout(ctx, 10*time.Second)
 	active, serviceErr := serviceActive(serviceCtx, sys)
 	stopService()
 	definition, definitionErr := diagnosticServiceDefinition(sys)

@@ -24,6 +24,7 @@ const (
 	LaunchAgentLabel    = "dev.lydakis.errand"
 	pathSymlinkDir      = "/usr/local/bin"
 	probeTimeout        = 8 * time.Second
+	serviceQueryTimeout = 30 * time.Second
 	probeInterval       = 250 * time.Millisecond
 	linuxUnitSubdir     = ".config/systemd/user"
 	darwinAgentSubdir   = "Library/LaunchAgents"
@@ -531,17 +532,21 @@ func probe(ctx context.Context, sys System, r *Report, previousPID int, expected
 	for time.Now().Before(deadline) {
 		probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		info, err := sys.Probe(probeCtx, r.SocketPath)
+		var pid int
 		if err == nil && managedServiceOS(sys.GOOS()) {
-			var pid int
 			pid, err = sys.SocketPID(probeCtx, r.SocketPath)
 			if err == nil && pid == previousPID {
 				err = fmt.Errorf("old runner PID %d is still answering after service restart", pid)
 			}
-			if err == nil {
-				err = verifyServiceOwner(probeCtx, sys, r.SocketPath, pid)
-			}
 		}
 		cancel()
+		if err == nil && managedServiceOS(sys.GOOS()) {
+			// Verification asks the service manager, which can be slow to
+			// start (PowerShell takes seconds), so it gets its own budget.
+			verifyCtx, cancelVerify := context.WithTimeout(ctx, serviceQueryTimeout)
+			err = verifyServiceOwner(verifyCtx, sys, r.SocketPath, pid)
+			cancelVerify()
+		}
 		if err == nil {
 			r.Info = &info
 			if expectedVersion != "" && info.Version != expectedVersion {

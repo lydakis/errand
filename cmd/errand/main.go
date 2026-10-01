@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -644,6 +645,12 @@ func cmdServe(args []string) int {
 		}
 		os.Stdout, os.Stderr = f, f
 		log.SetOutput(f)
+		// The runtime writes fatal errors to the process's own stderr, which
+		// a service may not have; keep them in the log too.
+		if err := debug.SetCrashOutput(f, debug.CrashOptions{}); err != nil {
+			log.Printf("errand serve: crash output stays on stderr: %v", err)
+		}
+		logServiceStop()
 		detachServiceConsole()
 	}
 

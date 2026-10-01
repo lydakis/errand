@@ -80,3 +80,16 @@ func TestStaleSocketIsConnectionRefusedOnWindows(t *testing.T) {
 		t.Fatalf("dial stale socket: %v, want connection refused", err)
 	}
 }
+
+func TestMissingSocketsReportNoListenerOnWindows(t *testing.T) {
+	dir := t.TempDir()
+	for _, socket := range []string{
+		filepath.Join(dir, "s"),
+		filepath.Join(dir, "absent", "s"),
+	} {
+		_, err := net.Dial("unix", socket)
+		if err == nil || !ConnectionRefused(err) {
+			t.Fatalf("dial %s: %v, want no listener", socket, err)
+		}
+	}
+}
