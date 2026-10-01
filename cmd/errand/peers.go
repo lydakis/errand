@@ -74,7 +74,7 @@ func cmdPeersTo(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 		return cmdPeersList(args, stdout, stderr, deps)
 	}
 	e := newConsole(stdout, stderr).Err
-	e.Errorf("unknown peers command '%s'", args[0])
+	e.Errorf("unknown peers command '%s'", termui.SafeText(args[0]))
 	if guess := termui.Suggest(args[0], []string{"add", "remove", "discover"}); guess != "" {
 		e.Hintf("did you mean errand peers %s?", guess)
 	} else {
@@ -178,7 +178,26 @@ func cmdPeersAdd(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 	if err != nil {
 		e.Errorf("%v", err)
 		if strings.Contains(err.Error(), "already") {
-			e.Hintf("replace it with errand peers add --force %s %s", name, host)
+			// Build this only on a collision, retaining the selected transport
+			// and preview/offline behavior when the command is copied.
+			replacement := []string{"--force"}
+			if *sshMode {
+				replacement = append(replacement, "--ssh")
+			}
+			if *remoteCommand != "" {
+				replacement = append(replacement, "--remote-command", *remoteCommand)
+			}
+			if *remoteSocket != "" {
+				replacement = append(replacement, "--remote-socket", *remoteSocket)
+			}
+			if *dryRun {
+				replacement = append(replacement, "--dry-run")
+			}
+			if *noVerify {
+				replacement = append(replacement, "--no-verify")
+			}
+			replacement = append(replacement, "--", name, host)
+			e.Hintf("replace it with errand peers add %s", termui.ShellQuote(replacement))
 		}
 		return 1
 	}

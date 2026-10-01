@@ -552,7 +552,7 @@ func printRootHelpAll(w io.Writer, all bool) {
 
 // unknownCommand handles arguments that are neither a subcommand nor a run
 // with "--": a typo, or a command that forgot the separator.
-func unknownCommand(e *termui.Stream, args []string) int {
+func unknownCommand(e *termui.Stream, fs *flag.FlagSet, args []string) int {
 	if len(args) == 0 {
 		printRootHelp(os.Stderr)
 		return 2
@@ -560,34 +560,60 @@ func unknownCommand(e *termui.Stream, args []string) int {
 	first := args[0]
 	if strings.HasPrefix(first, "-") {
 		e.Errorf(`missing "--" before the command`)
-		example := "errand " + strings.Join(runExample(args), " ")
-		e.Hintf("put the command after --, e.g. %s", example)
+		if example := runExample(fs, args); example != nil {
+			e.Hintf("put the command after --, e.g. errand %s", termui.ShellQuote(example))
+		} else {
+			e.Hintf("put the command after --; see errand --help for run options")
+		}
 		return 2
 	}
-	e.Errorf("unknown command '%s'", first)
+	e.Errorf("unknown command '%s'", termui.SafeText(first))
 	if guess := termui.Suggest(first, commands); guess != "" {
-		e.Hintf("did you mean errand %s? To run a program on a runner, put it after --: errand -- %s", guess, strings.Join(args, " "))
+		e.Hintf("did you mean errand %s? To run a program on a runner, put it after --: errand -- %s", guess, termui.ShellQuote(args))
 	} else {
-		e.Hintf("to run it on a runner, put it after --: errand -- %s", strings.Join(args, " "))
+		e.Hintf("to run it on a runner, put it after --: errand -- %s", termui.ShellQuote(args))
 	}
 	return 2
 }
 
 // runExample inserts "--" after the leading options: [--on mini make test]
-// becomes [--on mini -- make test].
-func runExample(args []string) []string {
-	valued := map[string]bool{"--on": true, "--url": true, "--where": true, "--profile": true, "-w": true, "--workdir": true, "-e": true, "--env": true, "--passenv": true, "-L": true, "--forward": true, "--artifact": true, "--cache": true, "--workspace": true, "--workspace-root": true, "--env-file": true}
+// becomes [--on mini -- make test]. Environment values are redacted before
+// rendering. Invalid options get no example, so their values stay private too.
+func runExample(fs *flag.FlagSet, args []string) []string {
+	out := make([]string, 0, len(args)+2)
 	i := 0
-	for i < len(args) && strings.HasPrefix(args[i], "-") {
-		if valued[args[i]] && !strings.Contains(args[i], "=") {
-			i++
+	for i < len(args) && len(args[i]) > 1 && strings.HasPrefix(args[i], "-") {
+		name, value, inline := strings.Cut(strings.TrimPrefix(strings.TrimPrefix(args[i], "-"), "-"), "=")
+		f := fs.Lookup(name)
+		if f == nil {
+			return nil
 		}
+		option := args[i]
 		i++
+		boolean, ok := f.Value.(interface{ IsBoolFlag() bool })
+		if !inline && (!ok || !boolean.IsBoolFlag()) {
+			if i == len(args) {
+				return nil
+			}
+			value = args[i]
+			i++
+		} else if !inline {
+			out = append(out, option)
+			continue
+		}
+		if name == "env" || name == "e" {
+			if key, _, assigned := strings.Cut(value, "="); assigned {
+				value = key + "=<redacted>"
+			} else {
+				value = "<redacted>"
+			}
+		}
+		if inline {
+			out = append(out, option[:strings.IndexByte(option, '=')+1]+value)
+		} else {
+			out = append(out, option, value)
+		}
 	}
-	if i > len(args) {
-		i = len(args)
-	}
-	out := append([]string{}, args[:i]...)
 	out = append(out, "--")
 	if i == len(args) {
 		return append(out, "COMMAND")

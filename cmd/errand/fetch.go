@@ -126,7 +126,7 @@ func cmdFetchTo(args []string, out, stderr io.Writer) int {
 		// Errors go to stderr even with --json, which carries them on stdout too.
 		var conflict *changes.MergeConflictError
 		if errors.As(err, &conflict) {
-			retry := "errand fetch --apply --conflicts " + shown
+			retry := "errand fetch --apply --conflicts " + termui.ShellQuote([]string{shown})
 			if changePath != "" {
 				retry += " " + termui.ShellQuote([]string{changePath})
 			}
@@ -161,7 +161,7 @@ func cmdFetchTo(args []string, out, stderr io.Writer) int {
 	}
 	writeChangeList(e, kinds, action == "applied")
 	if action == "staged" {
-		next := "errand fetch --apply " + shown
+		next := "errand fetch --apply " + termui.ShellQuote([]string{shown})
 		if changePath != "" {
 			next += " " + termui.ShellQuote([]string{changePath})
 		}

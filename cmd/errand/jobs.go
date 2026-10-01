@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"io"
@@ -189,7 +190,7 @@ func cmdKillTo(args []string, stdout, stderr io.Writer) int {
 	if !ended {
 		e.Say(termui.Warn, e.ID(shown)+" is still running after "+termui.Duration(killWait))
 		if !*force {
-			e.Next("errand kill -f "+shown, "sends SIGKILL")
+			e.Next("errand kill -f "+termui.ShellQuote([]string{shown}), "sends SIGKILL")
 		}
 		return 1
 	}
@@ -204,17 +205,28 @@ func cmdKillTo(args []string, stdout, stderr io.Writer) int {
 // runs out, the error is the last poll's, so an unreachable runner isn't
 // mistaken for a job that's still running.
 func waitForEnd(peerURL, jobID string, wait time.Duration) (proto.JobStatus, bool, error) {
-	deadline := time.Now().Add(wait)
+	ctx, cancel := context.WithTimeout(context.Background(), wait)
+	defer cancel()
+	timer := time.NewTimer(0)
+	defer timer.Stop()
 	delay := 100 * time.Millisecond
+	var status proto.JobStatus
+	var pollErr error
 	for {
-		details, err := client.GetJobDetails(peerURL, jobID)
+		select {
+		case <-ctx.Done():
+			if status.State == "" && pollErr == nil {
+				pollErr = ctx.Err()
+			}
+			return status, false, pollErr
+		case <-timer.C:
+		}
+		details, err := client.GetJobDetailsContext(ctx, peerURL, jobID)
+		status, pollErr = details.JobStatus, err
 		if err == nil && details.Result != nil {
-			return details.JobStatus, true, nil
+			return status, true, nil
 		}
-		if time.Now().After(deadline) {
-			return details.JobStatus, false, err
-		}
-		time.Sleep(delay)
+		timer.Reset(delay)
 		delay = min(delay*2, time.Second)
 	}
 }

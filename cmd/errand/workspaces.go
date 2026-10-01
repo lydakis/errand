@@ -32,7 +32,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 		verb = "rm"
 	}
 	if verb != "list" && verb != "create" && verb != "rm" {
-		e.Errorf("unknown workspaces command '%s'", verb)
+		e.Errorf("unknown workspaces command '%s'", termui.SafeText(verb))
 		if guess := termui.Suggest(verb, []string{"list", "create", "rm", "remove"}); guess != "" {
 			e.Hintf("did you mean errand workspaces %s?", guess)
 		} else {
@@ -139,12 +139,12 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 	if err != nil {
 		return failWith(e, runConfigErrorCode(err), err, errorScope{peer: settings.on})
 	}
-	choices, err := runChoices(effective, settings.url != "", e, output.verbose)
+	choices, err := runChoices(effective, settings.url != "", e, quiet, output.verbose)
 	if err != nil {
 		return failWith(e, 1, err, errorScope{})
 	}
 	opts := client.RunOptions{Where: effective.Where, Root: effective.Root, Project: effective.Project, Caches: effective.Caches, Artifacts: effective.Artifacts, NoSnapshot: effective.NoSnapshot, IncludeAll: includeAll, Stderr: stderr,
-		Display: client.RunDisplay{UI: con, Quiet: quiet, Verbose: output.verbose}}
+		Display: client.RunDisplay{UI: con, Quiet: quiet, Verbose: output.verbose && !quiet}}
 	var chosen placementChoice
 	configurePlacement(&opts, choices, e, func(c placementChoice) { chosen = c })
 	var spin *termui.Spinner
@@ -192,7 +192,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 		from = "from " + displayDir(effective.Root) + " · " + termui.Things(files, "file", "files") + " · " + termui.Bytes(bytes)
 	}
 	e.Say(termui.OK, "Created "+e.B(w.Name)+" on "+label+" "+e.D(from))
-	e.Next("errand --workspace "+w.Name+" -- make test", "run in it")
+	e.Next("errand "+runnerFlag(label)+" --workspace "+w.Name+" -- make test", "run in it")
 	e.Next("errand push --watch --apply "+runnerFlag(label)+" --workspace "+w.Name, "keep it in sync")
 	return 0
 }

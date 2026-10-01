@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/lydakis/errand/internal/termui"
 	"io"
 	"net"
 	"net/http"
 	"strconv"
 	"sync"
 	"syscall"
+
+	"github.com/lydakis/errand/internal/termui"
 )
 
 // PortForward maps one local loopback TCP port to a port reachable from the
@@ -41,6 +42,7 @@ type forwardSession struct {
 	forwards  []PortForward
 	listeners []forwardListener
 	stderr    io.Writer
+	quiet     bool
 
 	mu          sync.Mutex
 	outputMu    sync.Mutex
@@ -50,14 +52,14 @@ type forwardSession struct {
 	wg          sync.WaitGroup
 }
 
-func bindPortForwards(forwards []PortForward, stderr io.Writer) (*forwardSession, error) {
+func bindPortForwards(forwards []PortForward, stderr io.Writer, quiet bool) (*forwardSession, error) {
 	if len(forwards) == 0 {
 		return nil, nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	session := &forwardSession{
 		ctx: ctx, cancel: cancel, forwards: append([]PortForward(nil), forwards...),
-		stderr: stderr, connections: map[net.Conn]struct{}{},
+		stderr: stderr, quiet: quiet, connections: map[net.Conn]struct{}{},
 	}
 	for _, mapping := range forwards {
 		if mapping.Local == 0 || mapping.Remote == 0 {
@@ -105,7 +107,10 @@ func (s *forwardSession) Start(peerURL, jobID string) {
 		return
 	}
 	s.started = true
-	forwards := append([]PortForward(nil), s.forwards...)
+	var forwards []PortForward
+	if !s.quiet {
+		forwards = append(forwards, s.forwards...)
+	}
 	listeners := append([]forwardListener(nil), s.listeners...)
 	s.mu.Unlock()
 	for _, mapping := range forwards {

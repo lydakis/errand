@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,8 +64,9 @@ type Options struct {
 	Width          int  // terminal columns; 0 when unknown
 }
 
-// Console owns stdout and stderr for one invocation. Both streams share one
-// lock and at most one transient line, because on a terminal they share rows.
+// Console owns stdout and stderr for one invocation. Terminal streams share
+// a drawing lock and at most one transient line. Independent redirected
+// streams serialize their own writes without blocking one another.
 type Console struct {
 	mu   sync.Mutex
 	live *liveLine
@@ -74,13 +76,15 @@ type Console struct {
 
 // Stream is one side of a console.
 type Stream struct {
-	c      *Console
-	w      io.Writer
-	tty    bool
-	color  bool
-	italic bool
-	ascii  bool
-	width  int
+	writeMu  sync.Mutex
+	outputMu *sync.Mutex
+	c        *Console
+	w        io.Writer
+	tty      bool
+	color    bool
+	italic   bool
+	ascii    bool
+	width    int
 }
 
 // New builds a console with explicit options. Tests use it with buffers.
@@ -97,6 +101,18 @@ func New(stdout, stderr io.Writer, opts Options) *Console {
 	}
 	c.Out = &Stream{c: c, w: stdout, tty: opts.OutTTY, color: colorFor(opts.OutTTY), italic: opts.Italic, ascii: opts.ASCII, width: widthFor(opts.OutTTY)}
 	c.Err = &Stream{c: c, w: stderr, tty: opts.ErrTTY, color: colorFor(opts.ErrTTY), italic: opts.Italic, ascii: opts.ASCII, width: widthFor(opts.ErrTTY)}
+	// Preserve serialization when both streams have the same writer (including
+	// test buffers). A writer's concrete value need not be comparable.
+	shared := false
+	if value := reflect.ValueOf(stdout); value.IsValid() && value.Comparable() {
+		shared = stdout == stderr
+	}
+	for _, s := range []*Stream{c.Out, c.Err} {
+		s.outputMu = &s.writeMu
+		if s.tty || shared {
+			s.outputMu = &c.mu
+		}
+	}
 	return c
 }
 
@@ -195,13 +211,18 @@ func (s *Stream) G(g Glyph) string {
 }
 
 // Print writes raw text followed by a newline, keeping any transient line
-// below it.
-func (s *Stream) Print(line string) {
-	s.c.mu.Lock()
-	defer s.c.mu.Unlock()
-	s.c.clearLocked()
-	fmt.Fprintln(s.w, line)
-	s.c.redrawLocked()
+// below it. It returns the persistent line's write error.
+func (s *Stream) Print(line string) error {
+	s.outputMu.Lock()
+	defer s.outputMu.Unlock()
+	if s.outputMu == &s.c.mu {
+		s.c.clearLocked()
+	}
+	_, err := fmt.Fprintln(s.w, line)
+	if s.outputMu == &s.c.mu {
+		s.c.redrawLocked()
+	}
+	return err
 }
 
 // Printf is Print with formatting.
@@ -287,8 +308,8 @@ func (s *Stream) Next(command, why string) {
 // Write passes command output through. A transient line is removed for good
 // before the first byte, because job output owns the terminal from then on.
 func (s *Stream) Write(p []byte) (int, error) {
-	s.c.mu.Lock()
-	defer s.c.mu.Unlock()
+	s.outputMu.Lock()
+	defer s.outputMu.Unlock()
 	if s.tty && s.c.live != nil {
 		s.c.stopLocked()
 	}

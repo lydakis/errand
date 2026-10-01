@@ -2,6 +2,7 @@ package client
 
 import (
 	"archive/tar"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -42,17 +43,21 @@ type runView struct {
 	spin    *termui.Spinner
 	began   time.Time
 
-	placement  string
-	totalFiles int
-	shipFiles  int
-	shipBytes  int64 // file contents, as people count them
-	streamSize int64 // the tar stream the upload counts, headers included
-	upStart    time.Time
-	upTime     time.Duration
-	partial    bool
-	queued     time.Time
-	startedAt  time.Time
+	placement         string
+	totalFiles        int
+	shipFiles         int
+	shipBytes         int64 // file contents, as people count them
+	streamSize        int64 // the tar stream the upload counts, headers included
+	upStart           time.Time
+	upTime            time.Duration
+	lastProgress      time.Time
+	lastProgressBytes int64
+	partial           bool
+	queued            time.Time
+	startedAt         time.Time
 }
+
+const uploadProgressInterval = 80 * time.Millisecond
 
 func newRunView(opts RunOptions) *runView {
 	con := opts.Display.UI
@@ -174,17 +179,14 @@ func (v *runView) selected(opts RunOptions) {
 	}
 }
 
-func (v *runView) negotiationFailed(err error) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	v.warnLocked("couldn't check what the runner already has (%v); uploading everything", err)
-}
-
 func (v *runView) planned(opts RunOptions, plan shipPlan, manifest proto.Manifest, files int) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	v.partial = plan.partial
 	v.shipFiles, v.shipBytes = 0, 0
+	v.streamSize = 0
+	v.lastProgress = time.Time{}
+	v.lastProgressBytes = 0
 	var ships func(proto.ManifestEntry) bool
 	if plan.partial {
 		ships = plan.ships
@@ -198,29 +200,57 @@ func (v *runView) planned(opts RunOptions, plan shipPlan, manifest proto.Manifes
 	if opts.Workspace != "" || opts.NoSnapshot {
 		return
 	}
-	v.streamSize = tarStreamSize(manifest, ships)
-	peer := v.ui.B(v.peer(opts))
 	if v.shipFiles == 0 {
-		v.spinner("Syncing with " + peer + " " + v.ui.D("· all "+termui.Count(files)+" files already there"))
+		if !v.quiet && v.ui.Interactive() {
+			v.spinner("Syncing with " + v.ui.B(v.peer(opts)) + " " + v.ui.D("· all "+termui.Count(files)+" files already there"))
+		}
 		return
 	}
-	v.upStart = time.Now()
+	// Sizing the archive encodes every tar header. Only a visible progress
+	// bar needs that work; logs still retain file counts and upload timing.
+	if !v.quiet && v.ui.Interactive() {
+		v.streamSize = tarStreamSize(manifest, ships)
+	}
+	// Retain elapsed time across a rejected partial upload and its full retry.
+	if v.upStart.IsZero() {
+		v.upStart = time.Now()
+	}
 	v.progressLocked(opts, 0)
 }
 
+// uploadProgress leaves the upload writer unwrapped when no bar can render.
+func (v *runView) uploadProgress(opts RunOptions) func(int64) {
+	if v.quiet || !v.ui.Interactive() || v.streamSize <= 0 {
+		return nil
+	}
+	return func(done int64) { v.progress(opts, done) }
+}
+
 func (v *runView) progress(opts RunOptions, done int64) {
+	if v.quiet || !v.ui.Interactive() {
+		return
+	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	v.progressLocked(opts, done)
 }
 
 func (v *runView) progressLocked(opts RunOptions, done int64) {
-	if v.quiet || v.shipFiles == 0 || v.streamSize <= 0 {
+	if v.quiet || !v.ui.Interactive() || v.shipFiles == 0 || v.streamSize <= 0 {
 		return
 	}
+	done = min(done, v.streamSize)
+	now := time.Now()
+	// Archive writes include small headers, padding, and zero-byte writes.
+	// Skip their formatting and terminal I/O until the next display interval,
+	// but show completion immediately and only once.
+	if !v.lastProgress.IsZero() && (done == v.lastProgressBytes || done < v.streamSize && now.Sub(v.lastProgress) < uploadProgressInterval) {
+		return
+	}
+	v.lastProgress, v.lastProgressBytes = now, done
 	// The bar moves with the tar stream; its labels speak in file bytes
 	// unless every shipped file is empty.
-	done, total := min(done, v.streamSize), v.streamSize
+	total := v.streamSize
 	if v.shipBytes > 0 {
 		done, total = int64(float64(done)/float64(v.streamSize)*float64(v.shipBytes)), v.shipBytes
 	}
@@ -394,7 +424,7 @@ func (v *runView) detachedBackground(handle, jobID, peer string) {
 	if v.ui.Interactive() {
 		short := peer + "/" + termui.ShortID(jobID)
 		v.ui.Say(termui.OK, "Started "+v.ui.ID(short)+" in the background")
-		v.ui.Next("errand attach "+short, "follow the logs")
+		v.ui.Next("errand attach "+termui.ShellQuote([]string{short}), "follow the logs")
 		return
 	}
 	v.ui.Print("errand: started " + handle + " in the background")
@@ -408,10 +438,10 @@ func (v *runView) detachedLive(handle, jobID, peer string) {
 	if v.ui.Interactive() {
 		short := peer + "/" + termui.ShortID(jobID)
 		v.ui.Say(termui.OK, "Detached; "+v.ui.ID(short)+" keeps running")
-		v.ui.Next("errand attach "+short, "follow it again")
+		v.ui.Next("errand attach "+termui.ShellQuote([]string{short}), "follow it again")
 		return
 	}
-	v.ui.Print("errand: detached; reattach with: errand attach " + handle)
+	v.ui.Print("errand: detached; reattach with: errand attach " + termui.ShellQuote([]string{handle}))
 }
 
 // outcome is what the footer reports about workspace changes.
@@ -482,7 +512,7 @@ func (v *runView) finished(st proto.JobStatus, handle, peer, jobID string, chang
 			changeText = "applying " + termui.Things(sum.PathCount, "changed file", "changed files") + " in the background"
 		default:
 			changeText = termui.Things(sum.PathCount, "file", "files") + " changed on " + peer + ": " + changeList(v.ui, nil, sum)
-			next = "errand fetch --apply " + displayJob(v.ui, peer, jobID)
+			next = "errand fetch --apply " + termui.ShellQuote([]string{displayJob(v.ui, peer, jobID)})
 		}
 	} else if v.verbose && res.ChangesOK {
 		changeText = "no files changed"
@@ -681,25 +711,32 @@ func watchQueue(opts RunOptions, v *runView, jobID string, initial proto.JobStat
 		v.started()
 		return func() {}
 	}
-	done := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
+		defer cancel()
 		// Most admissions pass through the queue for a moment; only a job
 		// that is still waiting after a beat gets a queue line.
 		timer := time.NewTimer(400 * time.Millisecond)
 		defer timer.Stop()
 		select {
-		case <-done:
+		case <-ctx.Done():
 			return
 		case <-timer.C:
 		}
-		// The job may have started, and printed, during the grace period.
 		status := initial
-		if latest, err := getStatus(opts.PeerURL, jobID); err == nil {
-			status = latest
-		}
 		for {
+			// The job may have started, and printed, during the grace period.
+			probeCtx, cancelProbe := context.WithTimeout(ctx, controlRequestTimeout)
+			latest, err := getStatusContext(probeCtx, opts.PeerURL, jobID)
+			cancelProbe()
+			if ctx.Err() != nil {
+				return
+			}
+			if err == nil {
+				status = latest
+			}
 			if status.State != proto.StateQueued {
 				v.started()
 				return
@@ -707,18 +744,16 @@ func watchQueue(opts RunOptions, v *runView, jobID string, initial proto.JobStat
 			if !v.showQueue(opts, status) {
 				return
 			}
+			timer.Reset(time.Second)
 			select {
-			case <-done:
+			case <-ctx.Done():
 				return
-			case <-time.After(time.Second):
-			}
-			if latest, err := getStatus(opts.PeerURL, jobID); err == nil {
-				status = latest
+			case <-timer.C:
 			}
 		}
 	}()
 	return func() {
-		close(done)
+		cancel()
 		<-finished
 		v.started()
 	}

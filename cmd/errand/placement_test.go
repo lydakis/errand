@@ -4,15 +4,51 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/lydakis/errand/internal/config"
+	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/termui"
 )
+
+func TestRunnerSelectionHonorsQuietMode(t *testing.T) {
+	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	server := httptest.NewServer(d.Handler())
+	defer server.Close()
+	effective := config.EffectiveRun{Where: "*", Candidates: []config.RunCandidate{{Name: "mini", URL: server.URL}}}
+	for _, tc := range []struct {
+		name                     string
+		quiet, verbose, terminal bool
+	}{
+		{"terminal", false, false, true},
+		{"quiet terminal", true, false, true},
+		{"quiet verbose terminal", true, true, true},
+		{"pipe", false, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			con := termui.New(io.Discard, &stderr, termui.Options{ErrTTY: tc.terminal})
+			choices, err := runChoices(effective, false, con.Err, tc.quiet, tc.verbose)
+			if err != nil || len(choices) != 1 {
+				t.Fatalf("selection = %v, %v", choices, err)
+			}
+			visible := tc.terminal && !tc.quiet
+			if (stderr.Len() != 0) != visible {
+				t.Fatalf("visible=%v stderr=%q", visible, stderr.String())
+			}
+		})
+	}
+}
 
 func TestWhereSelectionFiltersAndBalances(t *testing.T) {
 	e := config.EffectiveRun{Where: "os=linux,go"}

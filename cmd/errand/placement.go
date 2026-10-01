@@ -136,12 +136,17 @@ func announcePlacement(e *termui.Stream, c placementChoice) {
 	e.Detail("selected", fmt.Sprintf("%s · %d of %d slots busy · %d staging · %d queued", terminalSafeField(c.Name), i.StartingJobs+i.RunningJobs, i.MaxJobs, i.StagingJobs, i.QueuedJobs))
 }
 
-func runChoices(e config.EffectiveRun, rawURL bool, stderr *termui.Stream, verbose bool) ([]placementChoice, error) {
+func runChoices(e config.EffectiveRun, rawURL bool, stderr *termui.Stream, quiet, verbose bool) ([]placementChoice, error) {
 	if e.Where != "" {
-		spin := stderr.Spin("Choosing a runner for " + stderr.B(e.Where) + "…")
+		var spin *termui.Spinner
+		if !quiet && stderr.Interactive() {
+			spin = stderr.Spin("Choosing a runner for " + stderr.B(e.Where) + "…")
+		}
 		selection, err := chooseRunners(context.Background(), e, client.ProbeWhereInfo)
-		spin.Stop()
-		if err == nil && verbose {
+		if spin != nil {
+			spin.Stop()
+		}
+		if err == nil && verbose && !quiet {
 			selection.printExcluded(stderr)
 		}
 		note := placementNote(e.Where, selection.Excluded)

@@ -103,6 +103,8 @@ func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 		for _, row := range rows {
 			if row.Info != nil {
 				fmt.Fprintln(stdout, row.Name)
+			} else {
+				e.Errorf("%s: %s", terminalSafeField(row.Name), terminalSafeField(row.Detail))
 			}
 		}
 	default:

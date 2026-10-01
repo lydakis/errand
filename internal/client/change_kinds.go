@@ -49,12 +49,13 @@ func pathChanges(bundle proto.ChangeBundle, selected map[string]bool) []PathChan
 	return out
 }
 
-// StagedChanges reads a downloaded change set and classifies its paths.
+// StagedChanges classifies downloaded paths from validated metadata alone.
+// It is for display; it does not verify the staged file contents for applying.
 func StagedChanges(dir string) ([]PathChange, error) {
 	if dir == "" {
 		return nil, nil
 	}
-	bundle, err := loadStagedBundle(dir)
+	bundle, err := loadStagedBundleMetadata(dir)
 	if err != nil {
 		return nil, err
 	}

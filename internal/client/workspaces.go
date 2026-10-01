@@ -72,7 +72,7 @@ func ListWorkspaces(peerURL string) ([]proto.WorkspaceSummary, error) {
 
 func RemoveWorkspace(peerURL, name string) (proto.WorkspaceRemoval, error) {
 	var removal proto.WorkspaceRemoval
-	workspace, err := GetWorkspace(peerURL, name)
+	workspace, err := getWorkspaceDescriptor(peerURL, name)
 	if err != nil {
 		return removal, err
 	}

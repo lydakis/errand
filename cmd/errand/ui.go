@@ -76,9 +76,9 @@ func usageError(s *termui.Stream, format string, args ...any) int {
 // --on for a configured name.
 func runnerFlag(peer string) string {
 	if strings.Contains(peer, "://") {
-		return "--url " + peer
+		return "--url " + termui.ShellQuote([]string{peer})
 	}
-	return "--on " + peer
+	return "--on " + termui.ShellQuote([]string{peer})
 }
 
 // describeError turns transport and runner errors into a sentence about the

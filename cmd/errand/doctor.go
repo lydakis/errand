@@ -162,7 +162,7 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 				probe := services.where
 				selection, selectionErr := chooseRunners(context.Background(), effective, probe)
 				report.PlacementSkipped = selection.Excluded
-				if !*asJSON && selectionErr == nil && output.verbose {
+				if !*asJSON && selectionErr == nil && output.verbose && !output.quiet {
 					selection.printExcluded(e)
 				}
 				if selectionErr != nil {

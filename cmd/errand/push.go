@@ -84,7 +84,11 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 	// controls successful jobs, not remote workspace mutation.
 	opts := client.PushOptions{PeerURL: peer, Workspace: workspace, Root: effective.Root, Path: fs.Arg(0), Apply: *apply, MaterializeConflicts: *conflicts, IncludeAll: *includeAll}
 	label := cmpOr(effective.Peer, peer)
-	view := pushView{con: con, workspace: workspace, peer: label, apply: *apply, quiet: output.quiet || *jsonOutput, verbose: output.verbose, json: *jsonOutput, out: out, args: args}
+	hintArgs := args
+	if !*apply && !*watch && !output.quiet && !*jsonOutput {
+		hintArgs = withoutFlag(fs, args, "apply")
+	}
+	view := pushView{con: con, workspace: workspace, peer: label, apply: *apply, quiet: output.quiet || *jsonOutput, verbose: output.verbose, json: *jsonOutput, out: out, args: hintArgs}
 	if *watch {
 		ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -134,7 +138,7 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 		// Errors go to stderr even with --json, which carries them on stdout too.
 		var conflict *changes.MergeConflictError
 		if errors.As(err, &conflict) {
-			reportConflicts(e, conflict, "errand push --apply --conflicts "+termui.ShellQuote(withoutFlag(args, "apply", "conflicts")))
+			reportConflicts(e, conflict, "errand push --apply --conflicts "+termui.ShellQuote(withoutFlag(fs, args, "apply", "conflicts")))
 		} else {
 			failWith(e, client.ExitTransaction, err, errorScope{peer: label, workspace: workspace})
 		}
@@ -211,7 +215,7 @@ func (v pushView) report(result proto.PushResult, stats client.TransferStats, er
 			}
 			e.Print("    " + terminalSafeField(p))
 		}
-		e.Next("errand push --apply "+termui.ShellQuote(withoutFlag(v.args, "apply")), "apply them")
+		e.Next("errand push --apply "+termui.ShellQuote(v.args), "apply them")
 	}
 	return nil
 }
@@ -233,16 +237,31 @@ func inlinePaths(e *termui.Stream, paths []string) string {
 	return text
 }
 
-// withoutFlag drops boolean flags from args, to rebuild a suggested command.
-func withoutFlag(args []string, names ...string) []string {
+// withoutFlag drops boolean options, respecting flag values and positionals.
+// fs describes the options accepted by the original command.
+func withoutFlag(fs *flag.FlagSet, args []string, names ...string) []string {
 	drop := map[string]bool{}
 	for _, n := range names {
-		drop["-"+n], drop["--"+n] = true, true
+		drop[n] = true
 	}
-	var out []string
-	for _, a := range args {
-		if !drop[a] {
-			out = append(out, a)
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" || a == "-" || !strings.HasPrefix(a, "-") {
+			out = append(out, args[i:]...)
+			break
+		}
+		name, _, hasValue := strings.Cut(strings.TrimPrefix(strings.TrimPrefix(a, "-"), "-"), "=")
+		if drop[name] {
+			continue
+		}
+		out = append(out, a)
+		if f := fs.Lookup(name); f != nil && !hasValue {
+			boolean, ok := f.Value.(interface{ IsBoolFlag() bool })
+			if (!ok || !boolean.IsBoolFlag()) && i+1 < len(args) {
+				i++
+				out = append(out, args[i])
+			}
 		}
 	}
 	return out

@@ -130,7 +130,9 @@ func TruncateANSI(s string, width int) string {
 // Truncate cuts plain text to width cells with a trailing "…".
 func Truncate(s string, width int) string { return TruncateANSI(s, width) }
 
-// ShellQuote renders argv the way a person would type it in a shell.
+// ShellQuote renders argv the way a person would type it in a shell. Control
+// characters use ANSI-C quoting, supported by Bash and Zsh, to keep hints on
+// one line without changing their arguments or allowing shell expansion.
 func ShellQuote(argv []string) string {
 	parts := make([]string, len(argv))
 	for i, arg := range argv {
@@ -154,7 +156,32 @@ func shellWord(arg string) string {
 		return arg
 	}
 	if strings.IndexFunc(arg, func(r rune) bool { return unicode.IsControl(r) }) >= 0 {
-		return strconv.Quote(arg)
+		var b strings.Builder
+		b.Grow(len(arg) + 3)
+		b.WriteString("$'")
+		for i := 0; i < len(arg); {
+			r, size := utf8.DecodeRuneInString(arg[i:])
+			switch {
+			case unicode.IsControl(r):
+				// Three octal digits encode each UTF-8 byte without consuming
+				// following digits or relying on shell Unicode escape support.
+				for j := i; j < i+size; j++ {
+					c := arg[j]
+					b.WriteByte('\\')
+					b.WriteByte('0' + (c >> 6))
+					b.WriteByte('0' + (c>>3)&7)
+					b.WriteByte('0' + c&7)
+				}
+			case r == '\'' || r == '\\':
+				b.WriteByte('\\')
+				b.WriteRune(r)
+			default:
+				b.WriteString(arg[i : i+size])
+			}
+			i += size
+		}
+		b.WriteByte('\'')
+		return b.String()
 	}
 	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
 }

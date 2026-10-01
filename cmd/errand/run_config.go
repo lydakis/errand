@@ -219,7 +219,10 @@ func cmdConfigTo(args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
-	writeConfig(con.Out, effective, output.verbose)
+	if err := writeConfig(con.Out, effective, output.verbose); err != nil {
+		e.Errorf("writing config: %v", err)
+		return client.ExitTransaction
+	}
 	return 0
 }
 
@@ -231,7 +234,7 @@ type configRow struct {
 
 // writeConfig groups settings by what they control, dims defaults, and
 // highlights what this invocation's flags changed.
-func writeConfig(s *termui.Stream, effective config.EffectiveRun, verbose bool) {
+func writeConfig(s *termui.Stream, effective config.EffectiveRun, verbose bool) error {
 	src := func(key string) (string, bool, bool) {
 		raw, ok := effective.Sources[key]
 		if !ok {
@@ -346,8 +349,11 @@ func writeConfig(s *termui.Stream, effective config.EffectiveRun, verbose bool) 
 		if strings.HasPrefix(r.value, "missing") {
 			line = label + "   " + s.Paint(value, termui.Red) + pad + s.D(r.source)
 		}
-		s.Print(strings.TrimRight(line, " "))
+		if err := s.Print(strings.TrimRight(line, " ")); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // configSource shortens where a setting came from.

@@ -22,6 +22,7 @@ import (
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 // ExitTransaction is the errand-level failure exit code: the transaction
@@ -91,6 +92,7 @@ type RunOptions struct {
 	selectionGuard *snapshot.SelectionGuard
 	placement      string // why the current candidate was chosen, for the header
 	uploaded       func(bytes int64)
+	planUpload     func(shipPlan) func(int64)
 	reshipping     func()
 	Display        RunDisplay
 	Stdout         io.Writer
@@ -168,7 +170,7 @@ func runWithDetachNotifications(
 	if len(env) == 0 {
 		env, envSources = nil, nil
 	}
-	forwarding, err := bindPortForwards(opts.Forwards, view.ui)
+	forwarding, err := bindPortForwards(opts.Forwards, view.ui, view.quiet)
 	if err != nil {
 		errf("%v", err)
 		return ExitTransaction
@@ -320,11 +322,13 @@ func runPrepared(opts RunOptions, view *runView, prep snapshotPreparation, env, 
 	}
 	plan, negErr := negotiation.plan, negotiation.err
 	if negErr != nil {
-		view.negotiationFailed(negErr)
+		view.warnf("couldn't check what the runner already has (%v); uploading everything", negErr)
 		plan = shipPlan{}
 	}
-	view.planned(opts, plan, manifest, files)
-	opts.uploaded = func(done int64) { view.progress(opts, done) }
+	opts.planUpload = func(plan shipPlan) func(int64) {
+		view.planned(opts, plan, manifest, files)
+		return view.uploadProgress(opts)
+	}
 	opts.reshipping = view.reshipping
 
 	if changeStateInitialized {
@@ -374,7 +378,7 @@ func runPrepared(opts RunOptions, view *runView, prep snapshotPreparation, env, 
 	if opts.ApplyOnSuccess {
 		if err := confirmAutomaticApplyAdmission(opts.PeerURL, jobID); err != nil {
 			errf("recording automatic apply admission: %v", err)
-			errf("automatic apply is still pending; recover with: errand fetch --apply %s", handle)
+			errf("automatic apply is still pending; recover with: errand fetch --apply %s", termui.ShellQuote([]string{handle}))
 		}
 	}
 	automaticWorkerStarted, _ := ensureAutomaticApplyWorker(opts, jobID, false)
@@ -444,7 +448,7 @@ func completeRunDetach(
 	if workerErr != nil {
 		ui := newRunView(opts).ui
 		ui.Errorf("couldn't hand changed files to the background apply: %v", workerErr)
-		ui.Hintf("apply them yourself with errand fetch --apply %s", handle)
+		ui.Hintf("apply them yourself with errand fetch --apply %s", termui.ShellQuote([]string{handle}))
 		return ExitTransaction
 	}
 	return 0
@@ -584,7 +588,7 @@ func attachWithDetachNotifications(
 	errf := view.errf
 	peer := peerLabel(opts.PeerName, opts.PeerURL)
 	handle := peer + "/" + opts.JobID
-	forwarding, err := bindPortForwards(opts.Forwards, view.ui)
+	forwarding, err := bindPortForwards(opts.Forwards, view.ui, view.quiet)
 	if err != nil {
 		errf("%v", err)
 		return ExitTransaction
@@ -659,7 +663,9 @@ func finishTerminalChanges(opts RunOptions, view *runView, jobID, handle string,
 		switch automatic.state {
 		case automaticApplyApplied:
 			footer.applied = true
-			footer.appliedList, _ = StagedChanges(automatic.staged)
+			if !view.quiet && footer.summary != nil && footer.summary.PathCount > 0 {
+				footer.appliedList, _ = StagedChanges(automatic.staged)
+			}
 		case automaticApplyFailed:
 			applyProblem = automatic.err
 		case automaticApplyPending, automaticApplyRunning:
@@ -680,9 +686,9 @@ func finishTerminalChanges(opts RunOptions, view *runView, jobID, handle string,
 		}
 		view.errf("couldn't apply the changed files here: %s", applyProblem)
 		if automatic.staged != "" {
-			view.ui.Hintf("they're downloaded at %s; retry with errand fetch --apply %s", automatic.staged, displayJob(view.ui, peer, jobID))
+			view.ui.Hintf("they're downloaded at %s; retry with errand fetch --apply %s", automatic.staged, termui.ShellQuote([]string{displayJob(view.ui, peer, jobID)}))
 		} else {
-			view.ui.Hintf("retry with errand fetch --apply %s", displayJob(view.ui, peer, jobID))
+			view.ui.Hintf("retry with errand fetch --apply %s", termui.ShellQuote([]string{displayJob(view.ui, peer, jobID)}))
 		}
 		if code == 0 {
 			code = ExitTransaction
@@ -704,7 +710,13 @@ func getStatusContext(ctx context.Context, peerURL, jobID string) (proto.JobStat
 
 // GetJobDetails returns the owner-visible, non-secret description of one job.
 func GetJobDetails(peerURL, jobID string) (proto.JobDetails, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
+	return GetJobDetailsContext(context.Background(), peerURL, jobID)
+}
+
+// GetJobDetailsContext is GetJobDetails with caller cancellation. The control
+// request timeout still applies when the caller's deadline is longer.
+func GetJobDetailsContext(ctx context.Context, peerURL, jobID string) (proto.JobDetails, error) {
+	ctx, cancel := context.WithTimeout(ctx, controlRequestTimeout)
 	defer cancel()
 	return getJobDetailsContext(ctx, peerURL, jobID)
 }
@@ -854,6 +866,11 @@ func submit(opts RunOptions, jobID string, spec proto.Spec, manifest proto.Manif
 	var status proto.JobStatus
 	var admissionUncertain bool
 	err := uploadWithSnapshotFallback(plan, func(attempt shipPlan) error {
+		// Replan at the upload boundary so a cache-miss fallback refreshes
+		// counts and can enable progress after a cached-only first attempt.
+		if opts.planUpload != nil {
+			opts.uploaded = opts.planUpload(attempt)
+		}
 		var uncertain bool
 		var err error
 		status, uncertain, err = submitAttempts(opts, jobID, spec, manifest, attempt)

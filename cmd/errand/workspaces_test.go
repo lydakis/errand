@@ -17,6 +17,37 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+func TestWorkspaceRunHintKeepsSelectedRunner(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	server := httptest.NewServer(d.Handler())
+	defer server.Close()
+	writeClientConfig(t, fmt.Sprintf("default_peer='other'\n[peers.other]\nurl='http://127.0.0.1:1'\n[peers.mini]\nurl=%q\n", server.URL))
+	for _, test := range []struct {
+		name, flag, target string
+	}{
+		{"named", "--on", "mini"},
+		{"raw", "--url", server.URL},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := cmdWorkspacesTo([]string{"create", test.flag, test.target, "--no-snapshot", test.name}, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("workspace creation: %d %s", code, &stderr)
+			}
+			want := "errand " + test.flag + " " + test.target + " --workspace " + test.name + " -- make test"
+			if !strings.Contains(stderr.String(), want) {
+				t.Fatalf("run hint lost selected runner: %q, want %q", stderr.String(), want)
+			}
+		})
+	}
+}
+
 func TestWorkspaceCommandsCreateReuseAndRemove(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true})

@@ -17,6 +17,43 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+func TestQuietGCReportsPartialFailures(t *testing.T) {
+	for _, test := range []struct {
+		name, want                  string
+		failedJobs, cleanupFailures int
+	}{
+		{"success", "", 0, 0},
+		{"job removal", "1 job couldn't be removed", 1, 0},
+		{"cleanup", "2 cleanups failed", 0, 2},
+		{"both", "1 job couldn't be removed, 2 cleanups failed", 1, 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				json.NewEncoder(w).Encode(proto.JobGCResult{
+					DryRun: true, SelectedJobs: 3, FreedBytes: 1024,
+					FailedJobs: test.failedJobs, CleanupFailures: test.cleanupFailures,
+				})
+			}))
+			defer server.Close()
+			var stdout, stderr bytes.Buffer
+			code := cmdGCTo([]string{"jobs", "--url", server.URL, "--older-than", "7d", "--dry-run", "-q"}, &stdout, &stderr)
+			wantCode := 0
+			if test.want != "" {
+				wantCode = 1
+			}
+			if code != wantCode || stdout.String() != "1 KiB\n" {
+				t.Fatalf("quiet gc: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+			}
+			if test.want == "" && stderr.Len() != 0 {
+				t.Fatalf("successful quiet gc stderr=%q", stderr.String())
+			}
+			if test.want != "" && (!strings.Contains(stderr.String(), server.URL+" jobs:") || !strings.Contains(stderr.String(), test.want)) {
+				t.Fatalf("quiet gc stderr=%q, want runner and %q", stderr.String(), test.want)
+			}
+		})
+	}
+}
+
 func TestGCMultiplePeersRequiresSelectionBeforeAnyWork(t *testing.T) {
 	for _, test := range []struct{ name, personal, daemon string }{
 		{"two remote runners", "default_peer='cabal'\n[peers.cabal]\nurl=%[1]q\n[peers.mini]\nurl=%[1]q\n", ""},

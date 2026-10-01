@@ -35,7 +35,7 @@ func cmdRun(args []string) int {
 		}
 	}
 	if split < 0 {
-		return unknownCommand(e, args)
+		return unknownCommand(e, fs, args)
 	}
 	if err := fs.Parse(args[:split]); err != nil {
 		if err == flag.ErrHelp {
@@ -89,7 +89,7 @@ func cmdRun(args []string) int {
 		return client.ExitTransaction
 	}
 	display := runDisplay(con, effective, output)
-	choices, err := runChoices(effective, overrides.URL != "", e, display.Verbose)
+	choices, err := runChoices(effective, overrides.URL != "", e, display.Quiet, display.Verbose)
 	if err != nil {
 		return failWith(e, client.ExitTransaction, err, errorScope{})
 	}

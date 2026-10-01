@@ -114,28 +114,59 @@ func serveOutcome(event daemon.JobLogEvent) (termui.Glyph, string) {
 		return termui.Warn, "finished without a result"
 	}
 	ran := termui.Duration(time.Duration(res.DurationMS) * time.Millisecond)
+	glyph, text := termui.Fail, ""
 	switch {
+	case res.State == proto.StateAmbiguous:
+		// A retained process observation doesn't confirm the transaction.
+		observed := ""
+		switch {
+		case res.StartError != "":
+			observed = "couldn't start: " + terminalSafeField(res.StartError)
+		case res.Signal != "":
+			observed = "last seen killed by " + client.SignalName(res.Signal, res.SignalNum)
+		case res.ExitCode != nil:
+			observed = fmt.Sprintf("last seen exiting %d", *res.ExitCode)
+		}
+		if observed != "" {
+			observed = " (" + observed + ")"
+		}
+		return termui.Warn, "state unknown: the runner couldn't confirm how it ended" + observed
 	case res.StartError != "":
 		return termui.Fail, "couldn't start: " + terminalSafeField(res.StartError)
 	case res.Signal != "" && !res.Started:
-		return termui.Fail, "killed by " + client.SignalName(res.Signal, res.SignalNum) + " before the command started"
+		text = "killed by " + client.SignalName(res.Signal, res.SignalNum) + " before the command started"
 	case res.Signal != "":
-		return termui.Fail, "killed by " + client.SignalName(res.Signal, res.SignalNum) + " after " + ran
-	case res.State == proto.StateAmbiguous:
-		observed := ""
-		if res.ExitCode != nil {
-			observed = fmt.Sprintf(" (last seen exiting %d)", *res.ExitCode)
-		}
-		return termui.Warn, "state unknown: the runner couldn't confirm how it ended" + observed
-	case res.ExitCode != nil && *res.ExitCode == 0 && res.TransactionError != "":
-		return termui.Fail, "exited 0 in " + ran + ", but " + terminalSafeField(res.TransactionError)
+		text = "killed by " + client.SignalName(res.Signal, res.SignalNum) + " after " + ran
 	case res.ExitCode != nil && *res.ExitCode == 0:
-		return termui.OK, "exited 0 in " + ran
+		glyph, text = termui.OK, "exited 0 in "+ran
 	case res.ExitCode != nil:
-		return termui.Fail, fmt.Sprintf("exited %d in %s", *res.ExitCode, ran)
+		text = fmt.Sprintf("exited %d in %s", *res.ExitCode, ran)
 	default:
 		return termui.Warn, "finished without a process outcome"
 	}
+	var problems []string
+	if res.LimitExceeded != "" {
+		problems = append(problems, "hit the "+terminalSafeField(res.LimitExceeded)+" limit")
+	}
+	if res.Started {
+		if !res.LogsComplete {
+			problems = append(problems, "logs are incomplete")
+		}
+		if !res.ChangesOK {
+			problems = append(problems, "changed files weren't kept")
+		}
+		if !res.CleanupOK {
+			problems = append(problems, "cleanup on the runner didn't finish")
+		}
+	}
+	if res.TransactionError != "" {
+		problems = append(problems, terminalSafeField(res.TransactionError))
+	}
+	if len(problems) > 0 {
+		glyph = termui.Fail
+		text += "; " + strings.Join(problems, "; ")
+	}
+	return glyph, text
 }
 
 func serveOutcomeFields(event daemon.JobLogEvent) []string {
@@ -144,6 +175,9 @@ func serveOutcomeFields(event daemon.JobLogEvent) []string {
 		return []string{"outcome", "unknown"}
 	}
 	fields := []string{"duration", termui.Duration(time.Duration(res.DurationMS) * time.Millisecond)}
+	if res.State != "" {
+		fields = append(fields, "state", res.State)
+	}
 	switch {
 	case res.StartError != "":
 		fields = append(fields, "start_error", res.StartError)
@@ -158,6 +192,11 @@ func serveOutcomeFields(event daemon.JobLogEvent) []string {
 	if res.TransactionError != "" {
 		fields = append(fields, "transaction_error", res.TransactionError)
 	}
+	if res.LimitExceeded != "" {
+		fields = append(fields, "limit_exceeded", res.LimitExceeded)
+	}
+	fields = append(fields, "logs_complete", fmt.Sprint(res.LogsComplete),
+		"changes_ok", fmt.Sprint(res.ChangesOK), "cleanup_ok", fmt.Sprint(res.CleanupOK))
 	return fields
 }
 

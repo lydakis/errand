@@ -14,6 +14,35 @@ import (
 	"github.com/lydakis/errand/internal/termui"
 )
 
+func TestStatusReportsRemoteFailureWithLocalApplyState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "runner temporarily unavailable", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	id := proto.NewULID()
+	savedInterruptedApply(t, server.URL, id, "")
+	for _, flags := range [][]string{{"-q"}, {"--json"}, {}} {
+		var stdout, stderr bytes.Buffer
+		args := append([]string{"--url", server.URL}, flags...)
+		code := cmdStatusTo(append(args, id), &stdout, &stderr)
+		if code != 1 || !strings.Contains(stderr.String(), "runner temporarily unavailable") {
+			t.Fatalf("status %v: code=%d stdout=%q stderr=%q", flags, code, stdout.String(), stderr.String())
+		}
+		if len(flags) != 0 && flags[0] == "-q" {
+			if stdout.Len() != 0 {
+				t.Fatalf("quiet status stdout=%q", stdout.String())
+			}
+		} else if len(flags) != 0 && flags[0] == "--json" {
+			var report statusJSON
+			if err := json.Unmarshal(stdout.Bytes(), &report); err != nil || report.AutomaticApply == nil || report.AutomaticApply.State != client.AutomaticApplyNeedsRecovery || report.JobDetails != nil {
+				t.Fatalf("JSON lost local apply state or invented remote details: %q, %v", stdout.String(), err)
+			}
+		} else if !strings.Contains(stdout.String(), "needs recovery") {
+			t.Fatalf("status lost local apply state: %q", stdout.String())
+		}
+	}
+}
+
 func TestCmdStatusShowsOneJobsExecutionAndArtifacts(t *testing.T) {
 	id := proto.NewULID()
 	admitted := time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)

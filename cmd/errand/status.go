@@ -52,8 +52,11 @@ func cmdStatusTo(args []string, stdout, stderr io.Writer) int {
 		e.Warnf("couldn't read the local apply state: %v", applyErr)
 	}
 	details, detailErr := client.GetJobDetails(peerURL, jobID)
-	if detailErr != nil && automaticApply == nil {
-		return failWith(e, 1, detailErr, errorScope{peer: label, job: jobID})
+	if detailErr != nil {
+		failWith(e, 1, detailErr, errorScope{peer: label, job: jobID})
+		if automaticApply == nil {
+			return 1
+		}
 	}
 	if *jsonOutput {
 		var remote *proto.JobDetails
@@ -295,6 +298,7 @@ func writeStatus(
 	if !s.Interactive() {
 		shortHandle = handle
 	}
+	shortHandle = termui.ShellQuote([]string{shortHandle})
 	var next [][2]string
 	if details.Result != nil && details.Result.Changes != nil && (automaticApply == nil || automaticApply.State != "applied") {
 		next = append(next, [2]string{"errand fetch --apply " + shortHandle, "bring the " + termui.Things(details.Result.Changes.PathCount, "file", "files") + " here"})

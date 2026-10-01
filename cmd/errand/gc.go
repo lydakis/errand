@@ -72,7 +72,7 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 	}
 	target := args[0]
 	if target != "cache" && target != "jobs" && target != "changes" && target != "all" {
-		e.Errorf("unknown gc target '%s'", target)
+		e.Errorf("unknown gc target '%s'", termui.SafeText(target))
 		if guess := termui.Suggest(target, gcTargets); guess != "" {
 			e.Hintf("did you mean errand gc %s?", guess)
 		} else {
@@ -327,6 +327,9 @@ func cmdGCTo(args []string, stdout, stderr io.Writer) int {
 		var total int64
 		for _, l := range lines {
 			total += l.freed
+			if l.failed != "" {
+				e.Errorf("%s %s: %s", terminalSafeField(l.where), l.what, l.failed)
+			}
 		}
 		fmt.Fprintln(stdout, termui.Bytes(total))
 	} else {

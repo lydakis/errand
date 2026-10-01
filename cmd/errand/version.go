@@ -42,16 +42,21 @@ func cmdVersionTo(args []string, stdout, stderr io.Writer) int {
 	}
 	o := con.Out
 	fmt.Fprintln(stdout, "errand "+version+" "+o.D("· "+strings.Join(buildFacts(), " · ")))
-	spin := con.Err.Spin("Asking runners…")
+	var spin *termui.Spinner
+	if !output.quiet && con.Err.Interactive() {
+		spin = con.Err.Spin("Asking runners…")
+	}
 	versions := runnerVersions()
-	spin.Stop()
+	if spin != nil {
+		spin.Stop()
+	}
 	if len(versions) > 0 {
 		var parts []string
 		for _, rv := range versions {
 			mark := o.G(termui.OK)
 			switch {
 			case rv.err != nil:
-				parts = append(parts, rv.name+" "+o.D("unreachable"))
+				parts = append(parts, terminalSafeField(rv.name)+" "+o.D("unreachable"))
 				continue
 			case rv.version != version:
 				mark = o.G(termui.Warn)

@@ -26,7 +26,7 @@ func cmdAccessTo(args []string, stdout, stderr io.Writer) int {
 	}
 	actions := []string{"list", "add", "remove", "deny", "undeny"}
 	if !slices.Contains(actions, action) {
-		e.Errorf("unknown access command '%s'", action)
+		e.Errorf("unknown access command '%s'", termui.SafeText(action))
 		if guess := termui.Suggest(action, actions); guess != "" {
 			e.Hintf("did you mean errand access %s?", guess)
 		} else {

@@ -38,7 +38,7 @@ func applyRecoveryHint(handle string, status *client.AutomaticApplyStatus) strin
 	if status.State == "failed" {
 		prefix = "Address the reported apply error first. "
 	}
-	return prefix + "Once the job has finished, recover from its originating workspace: errand fetch --apply " + handle
+	return prefix + "Once the job has finished, recover from its originating workspace: errand fetch --apply " + termui.ShellQuote([]string{handle})
 }
 
 func writeApplyRecoveryHint(s *termui.Stream, handle string, status *client.AutomaticApplyStatus) {
