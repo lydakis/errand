@@ -477,7 +477,7 @@ func (j *Job) launch(d *Daemon) error {
 		return fmt.Errorf("consuming queued marker: %w", err)
 	}
 	jobEnv = append(jobEnv, scope.env())
-	executable, err := resolveExecutable(j.Spec.Argv[0], envValue(jobEnv, "PATH"), workdir, envValue(jobEnv, "PATHEXT"))
+	executable, err := resolveExecutable(j.Spec.Argv[0], envValue(jobEnv, "PATH"), workdir, jobPATHEXT(jobEnv))
 	if err == nil {
 		err = checkCommandLine(executable, j.Spec.Argv[1:])
 	}

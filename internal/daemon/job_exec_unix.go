@@ -13,6 +13,8 @@ func envNameEqual(a, b string) bool { return a == b }
 
 func hasPathSeparator(name string) bool { return strings.ContainsRune(name, '/') }
 
+func jobPATHEXT([]string) string { return "" }
+
 // checkCommandLine accepts every argument: exec passes argv unchanged.
 func checkCommandLine(string, []string) error { return nil }
 

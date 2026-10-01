@@ -1,6 +1,7 @@
 package changes
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,8 +11,12 @@ import (
 )
 
 func TestTransferDirectorySymlinksOnWindows(t *testing.T) {
-	for _, link := range []string{"alias", "nested/alias"} {
-		t.Run(link, func(t *testing.T) {
+	for _, tc := range []struct {
+		link  string
+		blobs bool
+	}{{"alias", false}, {"nested/alias", false}, {"alias", true}, {"nested/alias", true}} {
+		link := tc.link
+		t.Run(fmt.Sprintf("%s/blobs=%v", link, tc.blobs), func(t *testing.T) {
 			source, destination := t.TempDir(), t.TempDir()
 			for _, root := range []string{source, destination} {
 				if err := os.Mkdir(filepath.Join(root, "target"), 0o755); err != nil {
@@ -57,12 +62,24 @@ func TestTransferDirectorySymlinksOnWindows(t *testing.T) {
 					t.Fatal(err)
 				}
 				id := proto.NewULID()
-				if _, _, err := session.Stage(t.Context(), id, source, current); err != nil {
+				if tc.blobs {
+					if err := session.Blobs().Retain(t.Context(), source, current); err != nil {
+						t.Fatal(err)
+					}
+					prepared, err := PrepareTransferSource(t.Context(), baseline, current, 1<<20)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, _, err := session.StagePreparedFromBlobs(t.Context(), id, prepared); err != nil {
+						t.Fatal(err)
+					}
+				} else if _, _, err := session.Stage(t.Context(), id, source, current); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := session.Apply(id, nil, false); err != nil {
 					t.Fatal(err)
 				}
+				baseline = current
 				read, want := link, "file"
 				if i != 1 {
 					read += "/value"

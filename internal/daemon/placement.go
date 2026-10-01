@@ -20,7 +20,7 @@ func executableFile(path string) bool {
 
 // Relative entries depend on the future workspace, so cannot be attested.
 func placementTool(tool string, env []string) string {
-	check := executableFinder(envValue(env, "PATHEXT"))
+	check := executableFinder(jobPATHEXT(env))
 	for _, dir := range filepath.SplitList(envValue(env, "PATH")) {
 		if !filepath.IsAbs(dir) {
 			continue

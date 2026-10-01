@@ -27,6 +27,8 @@ func envNameEqual(a, b string) bool { return strings.EqualFold(a, b) }
 
 func hasPathSeparator(name string) bool { return strings.ContainsAny(name, `/\`) }
 
+func jobPATHEXT(env []string) string { return envValue(env, "PATHEXT") }
+
 func executableExtensions(pathext string) []string {
 	if pathext == "" {
 		pathext = ".COM;.EXE;.BAT;.CMD"
