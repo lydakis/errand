@@ -313,7 +313,6 @@ func ExtractWith(r io.Reader, dest string, m proto.Manifest, maxBytes int64, opt
 		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 			return err
 		}
-		directory := false
 		if fslink.NativeTypes {
 			if linkLookup == nil {
 				metadata := m
@@ -328,13 +327,13 @@ func ExtractWith(r io.Reader, dest string, m proto.Manifest, maxBytes int64, opt
 				}
 				defer linkRoot.Close()
 			}
-			directory = fslink.IsDirectory(e, linkLookup)
-		}
-		if fslink.NativeTypes {
+			directory := fslink.IsDirectory(e, linkLookup)
 			if err := fslink.Create(linkRoot, e.Target, filepath.FromSlash(e.Path), directory); err != nil {
 				return err
 			}
-		} else if err := os.Symlink(e.Target, abs); err != nil {
+			continue
+		}
+		if err := os.Symlink(e.Target, abs); err != nil {
 			return err
 		}
 	}
