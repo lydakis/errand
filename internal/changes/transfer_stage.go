@@ -172,7 +172,7 @@ func checkMaterializationSource(paths *materializationPaths, e proto.ManifestEnt
 		if err != nil {
 			return err
 		}
-		if target != e.Target {
+		if filepath.ToSlash(target) != e.Target {
 			return fmt.Errorf("transfer source %q changed target", e.Path)
 		}
 	}

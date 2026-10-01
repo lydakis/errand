@@ -26,7 +26,7 @@ func platformSymlinkTarget(target string) bool {
 // escape other paths. Device names open devices in any directory. GIT~1 is
 // the short name of .git.
 func checkWindowsPath(p string) error {
-	for _, component := range strings.Split(p, "/") {
+	for component := range strings.SplitSeq(p, "/") {
 		if problem := windowsNameProblem(component); problem != "" {
 			return fmt.Errorf("archive: %q can't be stored on Windows: %s", p, problem)
 		}
@@ -43,16 +43,22 @@ func windowsNameProblem(name string) string {
 	if strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
 		return "names can't end with a dot or space"
 	}
-	base, _, _ := strings.Cut(name, ".")
-	base = strings.ToUpper(strings.TrimRight(base, " "))
+	upper := strings.ToUpper(name)
+	base, _, _ := strings.Cut(upper, ".")
+	base = strings.TrimRight(base, " ")
 	switch base {
 	case "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$":
 		return base + " is a device name"
 	}
-	if len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '0' && base[3] <= '9' {
-		return base + " is a device name"
+	if len(base) >= 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) {
+		// Windows also treats superscript ¹, ² and ³ as device numbers.
+		number := base[3:]
+		if (len(number) == 1 && number[0] >= '0' && number[0] <= '9') ||
+			number == "¹" || number == "²" || number == "³" {
+			return base + " is a device name"
+		}
 	}
-	if upper := strings.ToUpper(name); strings.HasPrefix(upper, "GIT~") && strings.Trim(upper[4:], "0123456789") == "" && len(upper) > 4 {
+	if strings.HasPrefix(upper, "GIT~") && strings.Trim(upper[4:], "0123456789") == "" && len(upper) > 4 {
 		return "GIT~N is the short name of .git"
 	}
 	return ""

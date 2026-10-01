@@ -261,6 +261,7 @@ func captureManifestAtRootBoundedContext(
 		case info.Mode()&fs.ModeSymlink != 0:
 			entry.Type = proto.EntrySymlink
 			entry.Target, err = root.Readlink(current)
+			entry.Target = filepath.ToSlash(entry.Target)
 		default:
 			err = fmt.Errorf("unsupported change type %v at %s", info.Mode(), current)
 		}

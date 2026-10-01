@@ -793,7 +793,10 @@ func readSymlinkTarget(abs string, prior *Observation) (string, error) {
 	if prior != nil {
 		return prior.Entry.Target, nil
 	}
-	return os.Readlink(abs)
+	target, err := os.Readlink(abs)
+	// Windows stores backslashes in links; manifests use slash-separated
+	// targets. ToSlash preserves literal backslashes on Unix.
+	return filepath.ToSlash(target), err
 }
 
 // Pack writes the manifest's entries as a tar stream, verifying each file
@@ -872,7 +875,7 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if err != nil {
 				return sourceReadError(err)
 			}
-			if target != e.Target {
+			if filepath.ToSlash(target) != e.Target {
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
 			}
 			hdr.Typeflag = tar.TypeSymlink
