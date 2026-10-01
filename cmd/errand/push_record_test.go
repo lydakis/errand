@@ -24,6 +24,7 @@ func TestPushDeltaRecordOmitsInventoryAndResumes(t *testing.T) {
 		t.Fatal(err)
 	}
 	var record struct{ Request proto.PushRequest }
+	var fields struct{ Request map[string]json.RawMessage }
 	found := false
 	err = filepath.WalkDir(os.Getenv("XDG_STATE_HOME"), func(name string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.Name() != "push.json" {
@@ -34,13 +35,16 @@ func TestPushDeltaRecordOmitsInventoryAndResumes(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return err
+		}
 		return json.Unmarshal(raw, &record)
 	})
 	if err != nil || !found || record.Request.Delta == nil || record.Request.SourceRoot == "" {
 		t.Fatalf("missing recoverable delta record: found=%v err=%v", found, err)
 	}
-	if len(record.Request.Manifest.Entries) != 0 {
-		t.Fatalf("delta recovery record redundantly contains %d full-inventory entries", len(record.Request.Manifest.Entries))
+	if _, exists := fields.Request["manifest"]; exists {
+		t.Fatal("delta recovery record redundantly contains the full inventory")
 	}
 	opts.Apply = true
 	applied, err := client.PushChanges(opts)

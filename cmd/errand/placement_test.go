@@ -15,18 +15,16 @@ import (
 
 func TestWhereSelectionFiltersAndBalances(t *testing.T) {
 	e := config.EffectiveRun{Where: "os=linux,go"}
-	for _, name := range []string{"offline", "wrong-os", "unsupported", "busy", "loaded", "available"} {
+	for _, name := range []string{"offline", "wrong-os", "busy", "loaded", "available"} {
 		e.Candidates = append(e.Candidates, config.RunCandidate{Name: name, URL: name})
 	}
 	selection, err := chooseRunners(context.Background(), e, func(_ context.Context, url, where string, _ time.Duration) (proto.Info, error) {
-		i := proto.Info{Placement: true, MaxJobs: 4, Facts: proto.Facts{OS: "linux", Tools: map[string]string{"go": "/bin/go"}}}
+		i := proto.Info{MaxJobs: 4, Facts: proto.Facts{OS: "linux", Tools: map[string]string{"go": "/bin/go"}}}
 		switch url {
 		case "offline":
 			return i, fmt.Errorf("unreachable")
 		case "wrong-os":
 			i.Facts.OS = "darwin"
-		case "unsupported":
-			i.Placement = false
 		case "busy":
 			i.Busy = true
 		case "loaded":
@@ -43,7 +41,7 @@ func TestWhereSelectionFiltersAndBalances(t *testing.T) {
 	}
 	var errOut bytes.Buffer
 	selection.printExcluded(&errOut)
-	for _, s := range []string{"offline", "wrong-os", "unsupported", "busy"} {
+	for _, s := range []string{"offline", "wrong-os", "busy"} {
 		if !strings.Contains(errOut.String(), s) {
 			t.Fatalf("missing exclusion %s: %s", s, &errOut)
 		}
@@ -112,7 +110,7 @@ func TestDoctorWhereReportsChoiceWithoutSubmitting(t *testing.T) {
 		if target != "http://runner.invalid" || where != "go" {
 			t.Errorf("probe %s %s", target, where)
 		}
-		return proto.Info{Placement: true, Version: version, MaxJobs: 1, Facts: proto.Facts{Tools: map[string]string{"go": "/bin/go"}}}, nil
+		return proto.Info{Version: version, MaxJobs: 1, Facts: proto.Facts{Tools: map[string]string{"go": "/bin/go"}}}, nil
 	}, probe: func(context.Context, string) (proto.Info, error) {
 		t.Fatal("redundant probe")
 		return proto.Info{}, nil
@@ -130,7 +128,7 @@ func TestDoctorWhereKeepsSSHDisplayURL(t *testing.T) {
 		if target == "ssh://host" {
 			t.Error("custom SSH transport was not registered")
 		}
-		return proto.Info{Placement: true, Version: version, MaxJobs: 1}, nil
+		return proto.Info{Version: version, MaxJobs: 1}, nil
 	}, ssh: func(context.Context, string) error {
 		t.Fatal("repeated SSH inspection after successful info probe")
 		return nil

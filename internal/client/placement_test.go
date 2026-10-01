@@ -108,6 +108,10 @@ func TestWhereFallbackReusesSnapshotAndEnvironment(t *testing.T) {
 			envs := make(chan string, 2)
 			server := func(status int) *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasSuffix(r.URL.Path, "/diff") {
+						replyMissingSnapshotBlobs(t, w, r)
+						return
+					}
 					if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 						http.NotFound(w, r)
 						return

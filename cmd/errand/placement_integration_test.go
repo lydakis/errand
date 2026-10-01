@@ -31,7 +31,7 @@ func TestCLIWhereFallsBackAfterCapacityRace(t *testing.T) {
 	var rejections, admissions atomic.Int32
 	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v0/info" {
-			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, Placement: true, MaxJobs: 2})
+			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, MaxJobs: 2})
 			return
 		}
 		if r.Method == http.MethodPut {
@@ -39,12 +39,12 @@ func TestCLIWhereFallsBackAfterCapacityRace(t *testing.T) {
 			http.Error(w, "runner filled after probe", 429)
 			return
 		}
-		http.NotFound(w, r)
+		d.Handler().ServeHTTP(w, r)
 	}))
 	defer first.Close()
 	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v0/info" {
-			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, Placement: true, MaxJobs: 2, RunningJobs: 1})
+			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, MaxJobs: 2, RunningJobs: 1})
 			return
 		}
 		if r.Method == http.MethodPut {
@@ -87,7 +87,7 @@ func TestWorkspaceWhereCreationReportsSelectedPeer(t *testing.T) {
 	defer d.Close()
 	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v0/info" {
-			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, Placement: true, MaxJobs: 2})
+			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, MaxJobs: 2})
 			return
 		}
 		http.Error(w, "requirements changed", 412)
@@ -95,7 +95,7 @@ func TestWorkspaceWhereCreationReportsSelectedPeer(t *testing.T) {
 	defer first.Close()
 	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v0/info" {
-			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, Placement: true, MaxJobs: 2, RunningJobs: 1})
+			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, MaxJobs: 2, RunningJobs: 1})
 			return
 		}
 		d.Handler().ServeHTTP(w, r)
@@ -128,7 +128,7 @@ func TestWorkspaceWhereCreationReportsSelectedPeer(t *testing.T) {
 func TestWorkspaceWhereFinalRejectionPrintedOnce(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v0/info" {
-			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, Placement: true, MaxJobs: 2})
+			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, MaxJobs: 2})
 			return
 		}
 		http.Error(w, "requirements changed", 412)

@@ -67,7 +67,7 @@ func TestPushAllowsStagingBeyondControlDeadline(t *testing.T) {
 		json.NewEncoder(w).Encode(proto.PushResult{ID: "transfer", WorkspaceID: "workspace"})
 	}))
 	defer server.Close()
-	if _, err := uploadPushOnce(server.URL, "workspace", t.TempDir(), proto.PushRequest{ID: "transfer"}, nil, shipPlan{}); err != nil {
+	if _, err := uploadPushOnce(server.URL, "workspace", t.TempDir(), proto.PushRequest{ID: "transfer", Delta: &proto.ChangeBundle{}}, nil, shipPlan{}); err != nil {
 		t.Fatalf("valid slow staging was cut off by the control timeout: %v", err)
 	}
 }
@@ -108,7 +108,7 @@ func TestPushFallbackRequiresExplicitCacheMissAndStopsAfterFullUpload(t *testing
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
-			if err := os.WriteFile(filepath.Join(root, "file"), []byte("frozen content"), 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(root, "file"), []byte(strings.Repeat("x", 128<<10)), 0600); err != nil {
 				t.Fatal(err)
 			}
 			manifest, err := snapshot.Build(root, []string{"file"})
@@ -127,12 +127,59 @@ func TestPushFallbackRequiresExplicitCacheMissAndStopsAfterFullUpload(t *testing
 				json.NewEncoder(w).Encode(proto.APIError{Code: tc.code, Error: "rejected"})
 			}))
 			defer server.Close()
-			if _, err := uploadPush(server.URL, "workspace", root, proto.PushRequest{ID: "transfer", Manifest: manifest}, nil); err == nil {
+			if _, err := uploadPush(server.URL, "workspace", root, proto.PushRequest{ID: "transfer", Delta: &proto.ChangeBundle{RemoteManifest: manifest}, SourceRoot: manifest.RootHash()}, nil); err == nil {
 				t.Fatal("rejected push succeeded")
 			}
 			if uploads != tc.uploads {
 				t.Fatalf("uploads=%d, want %d", uploads, tc.uploads)
 			}
 		})
+	}
+}
+
+func replyMissingSnapshotBlobs(t *testing.T, w http.ResponseWriter, r *http.Request) {
+	t.Helper()
+	var req proto.SnapshotDiffRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		t.Error(err)
+		http.Error(w, "invalid diff", 400)
+		return
+	}
+	missing := make([]string, 0, len(req.Blobs))
+	for _, blob := range req.Blobs {
+		missing = append(missing, blob.SHA256)
+	}
+	json.NewEncoder(w).Encode(proto.SnapshotDiffResponse{Missing: missing})
+}
+
+func TestRequiredSnapshotEndpointDoesNotPermitUploadFallback(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "input"), []byte("data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	uploads := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
+			uploads++
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+	opts := RunOptions{PeerURL: server.URL, Root: root, Argv: []string{"true"}, Stdout: io.Discard, Stderr: io.Discard}
+	if code := Run(opts); code != ExitTransaction {
+		t.Fatalf("missing snapshot endpoint: exit=%d", code)
+	}
+	if _, err := CreateWorkspace(opts, "dev"); !IsNotFound(err) {
+		t.Fatalf("missing creation negotiation endpoint: %v", err)
+	}
+	if _, err := pushBase(server.URL, proto.NewULID(), "0123456789abcdef0123456789abcdef"); !IsNotFound(err) {
+		t.Fatalf("missing push checkpoint endpoint: %v", err)
+	}
+	if uploads != 0 {
+		t.Fatalf("sent %d uploads after required endpoints were missing", uploads)
 	}
 }

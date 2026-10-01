@@ -279,8 +279,8 @@ the requested `--older-than` boundary. Unresolved submitted jobs remain
 protected for 30 days, after which an explicit local GC may retire abandoned
 state.
 Cache previews report the selected runner and separate snapshot/named-cache
-expiry and byte budgets supplied by that runner. Older runners without policy
-reporting are labeled explicitly; the client does not guess their settings.
+expiry and byte budgets supplied by that runner. Policy reporting is required;
+the client rejects incomplete responses.
 Cache collection can remove idle caches across owners; leased named caches
 remain protected.
 
