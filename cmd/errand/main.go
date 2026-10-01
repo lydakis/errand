@@ -97,6 +97,10 @@ func runCLI(args []string) int {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
 	}
+	if unsupportedOnThisPlatform(args[0]) {
+		fmt.Fprintln(os.Stderr, windowsClientUnsupported)
+		return 2
+	}
 	switch args[0] {
 	case "serve":
 		return cmdServe(args[1:])
