@@ -4,6 +4,12 @@ A Windows PC can be an Errand runner: send jobs to it from a Mac or Linux
 machine over Tailscale. Running the Errand client on Windows is not supported
 yet.
 
+> [!WARNING]
+> Windows support is experimental. It is tested in CI on Windows Server 2025
+> (amd64) and by hand on Windows 11 (arm64), but expect rough edges, and
+> expect behavior to change between releases. Please report problems in
+> [GitHub Issues](https://github.com/lydakis/errand/issues).
+
 ## Requirements
 
 - Windows 10 version 1803 or later, or Windows 11, on amd64 or arm64.
@@ -94,3 +100,9 @@ again. Programs are found the way Windows finds them, with
 - Graceful Ctrl-C (a console break before the hard stop).
 - Recovering jobs that were running when the runner stopped.
 - Running while nobody is signed in.
+
+## Known issues
+
+- If the runner stops in the middle of a job, the client keeps waiting instead
+  of reporting the failure. Press Ctrl-C, then check the runner with
+  `errand peers`.
