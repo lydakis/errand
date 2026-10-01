@@ -8,6 +8,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/windows"
 )
 
 // TestMain lets the test binary act as the contained program.
@@ -87,6 +89,53 @@ func TestTerminateKillsDescendants(t *testing.T) {
 		t.Fatalf("exit code %d, want 9", code)
 	}
 	waitForPIDs(t, job, func(n int) bool { return n == 0 })
+}
+
+func TestCloseKillsDescendants(t *testing.T) {
+	job, cmd := startInJob(t, "parent")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		job.Close()
+		cmd.Wait()
+	})
+	if err := job.Adopt(cmd.Process); err != nil {
+		t.Fatal(err)
+	}
+	line := make([]byte, len("started\n"))
+	if _, err := stdout.Read(line); err != nil {
+		t.Fatal(err)
+	}
+	pids := waitForPIDs(t, job, func(n int) bool { return n >= 2 })
+	// Pin process handles before closing the job: its PID query is no longer
+	// available afterward, and a disappeared PID could be reused.
+	var processes []windows.Handle
+	for _, pid := range pids {
+		process, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { windows.CloseHandle(process) })
+		processes = append(processes, process)
+	}
+	if err := job.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for i, process := range processes {
+		status, err := windows.WaitForSingleObject(process, 10_000)
+		if err != nil || status != windows.WAIT_OBJECT_0 {
+			t.Fatalf("process %d survived job close: wait = %v, %v", pids[i], status, err)
+		}
+	}
+	_ = cmd.Wait()
+	if err := job.Close(); err != nil {
+		t.Fatalf("repeated close: %v", err)
+	}
 }
 
 func waitForPIDs(t *testing.T, job *Job, done func(int) bool) []int {

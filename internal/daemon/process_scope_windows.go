@@ -3,6 +3,7 @@
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"sync"
@@ -105,36 +106,60 @@ func (s *processScope) cleanup(timeout time.Duration) ([]int, error) {
 	if s.job == nil {
 		return nil, nil
 	}
+	pids, err := cleanupWindowsJob(s.job, timeout)
+	s.job = nil
+	return pids, err
+}
+
+// Keep the native job concrete outside cleanup. This small seam lets tests
+// exercise API failures without process-wide hooks or extra system calls.
+type scopeCleanupJob interface {
+	PIDs() ([]int, error)
+	Terminate(uint32) error
+	Close() error
+}
+
+func cleanupWindowsJob(job scopeCleanupJob, timeout time.Duration) (pids []int, err error) {
+	// Releasing the last handle also invokes KILL_ON_JOB_CLOSE. A failed
+	// query, termination or wait must not strand it on a terminal job.
+	defer func() {
+		if closeErr := job.Close(); closeErr != nil {
+			if err == nil {
+				err = closeErr
+			} else {
+				err = errors.Join(err, closeErr)
+			}
+		}
+	}()
 	// The console host Windows attaches to the job leader exits on its own
 	// shortly after the last console client. Give it a moment so the receipt
 	// lists only processes the job really left behind.
-	var pids []int
 	settle := time.Now().Add(250 * time.Millisecond)
 	for {
 		var err error
-		pids, err = s.job.PIDs()
+		pids, err = job.PIDs()
 		if err != nil {
 			return nil, err
 		}
 		if len(pids) == 0 {
-			return nil, s.closeLocked()
+			return nil, nil
 		}
 		if time.Now().After(settle) {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if err := s.job.Terminate(terminatedExitCode); err != nil {
+	if err := job.Terminate(terminatedExitCode); err != nil {
 		return pids, err
 	}
 	deadline := time.Now().Add(timeout)
 	for {
-		remaining, err := s.job.PIDs()
+		remaining, err := job.PIDs()
 		if err != nil {
 			return pids, err
 		}
 		if len(remaining) == 0 {
-			return pids, s.closeLocked()
+			return pids, nil
 		}
 		if time.Now().After(deadline) {
 			return pids, fmt.Errorf("process scope still contains pids %v", remaining)
