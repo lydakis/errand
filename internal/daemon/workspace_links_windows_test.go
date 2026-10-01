@@ -6,37 +6,27 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/lydakis/errand/internal/client"
 )
 
-func TestWorkspaceDirectorySymlinkPushOnWindows(t *testing.T) {
+// Directory links reach a Windows job as directory links, including a link
+// through another link that is created after it, and one in a subdirectory.
+// The Windows client isn't supported yet, so this goes through a job rather
+// than a workspace, whose client keeps POSIX-checked local state.
+func TestJobDirectoryLinksOnWindows(t *testing.T) {
 	d, ts := testDaemon(t)
 	root := workspaceWith(t, map[string]string{"target/value": "body"})
-	// The lexical first link points through a link created later on extraction.
-	for _, link := range []struct{ name, target string }{{"z", "target"}, {"a", "z"}} {
-		if err := os.Symlink(link.target, filepath.Join(root, link.name)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: ts.URL, Root: root}, "links")
-	if err != nil {
-		t.Fatal(err)
-	}
-	remote := filepath.Join(d.workspaces.dir, ws.ID, "data")
-	if body, err := os.ReadFile(filepath.Join(remote, "a", "value")); err != nil || string(body) != "body" {
-		t.Fatalf("initial directory chain = %q, %v", body, err)
-	}
 	if err := os.Mkdir(filepath.Join(root, "nested"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink("../target", filepath.Join(root, "nested", "alias")); err != nil {
-		t.Fatal(err)
+	for _, link := range []struct{ name, target string }{{"z", "target"}, {"a", "z"}, {"nested/alias", "../target"}} {
+		if err := os.Symlink(link.target, filepath.Join(root, filepath.FromSlash(link.name))); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err := client.PushChanges(client.PushOptions{PeerURL: ts.URL, Workspace: ws.Name, Root: root, Apply: true}); err != nil {
-		t.Fatal(err)
-	}
-	if body, err := os.ReadFile(filepath.Join(remote, "nested", "alias", "value")); err != nil || string(body) != "body" {
-		t.Fatalf("pushed directory link = %q, %v", body, err)
+	_, status := submitChangeJob(t, d, ts.URL, root,
+		[]string{"cmd", "/d", "/c", `type a\value >nul && type nested\alias\value >nul && exit /b 7`})
+	result := status.Result
+	if result == nil || result.StartError != "" || result.ExitCode == nil || *result.ExitCode != 7 {
+		t.Fatalf("result = %+v", result)
 	}
 }
