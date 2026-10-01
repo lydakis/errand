@@ -11,8 +11,7 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
-// This endpoint also establishes that the runner can reconstruct partial push
-// archives. Older runners return 404 and clients keep using complete uploads.
+// Push uploads negotiate verified content against the runner's snapshot cache.
 func (d *Daemon) handleWorkspacePushDiff(w http.ResponseWriter, r *http.Request, id Identity) {
 	if _, err := d.pushWorkspace(r, id); err != nil {
 		workspaceHTTPError(w, err)
@@ -21,8 +20,7 @@ func (d *Daemon) handleWorkspacePushDiff(w http.ResponseWriter, r *http.Request,
 	d.handleSnapshotDiff(w, r, id)
 }
 
-// Creation has a separate capability and upload endpoint: an older receiver
-// that supports job caching must never be sent a partial creation body.
+// Creation negotiates content against the same snapshot cache before upload.
 func (d *Daemon) handleWorkspaceCreateDiff(w http.ResponseWriter, r *http.Request, id Identity) {
 	if !proto.ValidULID(r.PathValue("id")) {
 		httpError(w, 400, "invalid workspace id")

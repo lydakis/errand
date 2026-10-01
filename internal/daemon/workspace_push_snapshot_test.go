@@ -18,7 +18,8 @@ import (
 
 func TestPushReusesSnapshotBodies(t *testing.T) {
 	d, ts := testDaemon(t)
-	root := workspaceWith(t, map[string]string{"edit": "before\n", "unchanged": strings.Repeat("x", 1<<20)})
+	updated := strings.Repeat("u", 128<<10)
+	root := workspaceWith(t, map[string]string{"edit": "before\n", "cached": updated, "unchanged": strings.Repeat("x", 1<<20)})
 	ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: ts.URL, Root: root}, "small-push")
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +29,7 @@ func TestPushReusesSnapshotBodies(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(remote, "unchanged"), []byte("runner edit\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "edit"), []byte("after!\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "edit"), []byte(updated), 0600); err != nil {
 		t.Fatal(err)
 	}
 	var stats client.TransferStats
@@ -39,7 +40,7 @@ func TestPushReusesSnapshotBodies(t *testing.T) {
 	if stats.ChangedPaths != 1 || stats.TransferredBytes > 16<<10 {
 		t.Fatalf("one-line push retransmitted unchanged content: %+v", stats)
 	}
-	if body, err := os.ReadFile(filepath.Join(remote, "edit")); err != nil || string(body) != "after!\n" {
+	if body, err := os.ReadFile(filepath.Join(remote, "edit")); err != nil || string(body) != updated {
 		t.Fatalf("edit not applied: %q %v", body, err)
 	}
 	opts.Path = ""
@@ -75,7 +76,7 @@ func TestSnapshotIngestionContinuesAfterSourceFailure(t *testing.T) {
 }
 
 func TestPushSnapshotFallback(t *testing.T) {
-	for _, failure := range []string{"old-runner", "disabled", "cold", "evicted", "corrupt", "corrupt-unremovable"} {
+	for _, failure := range []string{"disabled", "cold", "evicted", "corrupt", "corrupt-unremovable"} {
 		t.Run(failure, func(t *testing.T) {
 			if failure == "corrupt-unremovable" && os.Geteuid() == 0 {
 				t.Skip("root bypasses directory permissions")
@@ -88,15 +89,6 @@ func TestPushSnapshotFallback(t *testing.T) {
 			var bodies []int
 			var invalidate func()
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Keep coverage for full-snapshot cache fallback against legacy peers.
-				if strings.HasSuffix(r.URL.Path, "/push/base") {
-					http.NotFound(w, r)
-					return
-				}
-				if strings.HasSuffix(r.URL.Path, "/push/diff") && failure == "old-runner" {
-					http.NotFound(w, r)
-					return
-				}
 				if strings.HasSuffix(r.URL.Path, "/push") {
 					body, err := io.ReadAll(r.Body)
 					if err != nil {
@@ -114,13 +106,14 @@ func TestPushSnapshotFallback(t *testing.T) {
 				d.Handler().ServeHTTP(w, r)
 			}))
 			defer server.Close()
-			root := workspaceWith(t, map[string]string{"edit": "before\n", "unchanged": strings.Repeat("x", 1<<20)})
+			updated := strings.Repeat("u", 128<<10)
+			root := workspaceWith(t, map[string]string{"edit": "before\n", "cached": updated, "unchanged": strings.Repeat("x", 1<<20)})
 			ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: server.URL, Root: root}, "fallback")
 			if err != nil {
 				t.Fatal(err)
 			}
 			for _, e := range ws.Manifest.Entries {
-				if e.Path != "unchanged" || d.cache == nil {
+				if e.Path != "cached" || d.cache == nil {
 					continue
 				}
 				invalidate = func() {
@@ -146,7 +139,7 @@ func TestPushSnapshotFallback(t *testing.T) {
 			} else if failure != "evicted" && !strings.HasPrefix(failure, "corrupt") {
 				invalidate = nil
 			}
-			if err := os.WriteFile(filepath.Join(root, "edit"), []byte("after!\n"), 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(root, "edit"), []byte(updated), 0600); err != nil {
 				t.Fatal(err)
 			}
 			var stats client.TransferStats
@@ -164,10 +157,10 @@ func TestPushSnapshotFallback(t *testing.T) {
 			for _, size := range bodies {
 				total += int64(size)
 			}
-			if len(bodies) != wantUploads || total != stats.TransferredBytes || total < 1<<20 {
+			if len(bodies) != wantUploads || total != stats.TransferredBytes || total < 128<<10 || total > 256<<10 {
 				t.Fatalf("fallback uploads=%v stats=%+v", bodies, stats)
 			}
-			if body, err := os.ReadFile(filepath.Join(d.workspaces.dir, ws.ID, "data", "edit")); err != nil || string(body) != "after!\n" {
+			if body, err := os.ReadFile(filepath.Join(d.workspaces.dir, ws.ID, "data", "edit")); err != nil || string(body) != updated {
 				t.Fatalf("fallback did not apply: %q %v", body, err)
 			}
 		})

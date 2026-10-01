@@ -35,13 +35,15 @@ func TestPushDeltaValidatesRetainedBaseAndFullSourceLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range []string{"stale", "forged", "quota", "valid"} {
+	for _, scenario := range []string{"stale", "forged", "quota", "missing-delta", "valid"} {
 		t.Run(scenario, func(t *testing.T) {
 			bundle := delta
 			req := proto.PushRequest{ID: proto.NewULID(), ClientID: "0123456789abcdef0123456789abcdef", Delta: &bundle, SourceRoot: current.RootHash()}
 			limit := d.cfg.MaxLimits.MaxWorkspaceBytes
 			defer func() { d.cfg.MaxLimits.MaxWorkspaceBytes = limit }()
 			switch scenario {
+			case "missing-delta":
+				req.Delta = nil
 			case "stale":
 				bundle.BaselineRoot = strings.Repeat("0", 64)
 			case "forged":
@@ -74,7 +76,7 @@ func TestPushDeltaValidatesRetainedBaseAndFullSourceLimit(t *testing.T) {
 			w := httptest.NewRecorder()
 			d.handleWorkspacePush(w, r, Identity{})
 			want := 409
-			if scenario == "quota" {
+			if scenario == "quota" || scenario == "missing-delta" {
 				want = 400
 			} else if scenario == "valid" {
 				want = 201

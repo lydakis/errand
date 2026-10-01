@@ -66,7 +66,8 @@ Run, attach, and fetch emit one advisory warning to stderr when a bounded info
 probe reports a different daemon version. Run and attach perform their local
 environment/forwarding checks first. The probe adds a round trip, bounded to
 two seconds; failed probes do not gate the requested operation. There is no
-version ordering or compatibility negotiation.
+version ordering or compatibility negotiation. The CLI and daemon must run the
+same version; the diagnostic warning does not provide mixed-version support.
 
 The warning identifies the invoking CLI and running daemon separately. It asks
 the operator to check `errand version` on the runner before choosing setup.

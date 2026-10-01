@@ -68,8 +68,6 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 				return
 			}
 			switch {
-			case !info.Placement:
-				reasons[i] = "runner does not support requirement validation; upgrade it"
 			case info.Busy:
 				reasons[i] = "runner is full or unavailable"
 			case info.MaxJobs <= 0 || info.MaxQueued < 0 || info.RunningJobs < 0 || info.StartingJobs < 0 || info.StagingJobs < 0 || info.QueuedJobs < 0:

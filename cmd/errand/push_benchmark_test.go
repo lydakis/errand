@@ -108,7 +108,7 @@ func benchmarkPushWorkload(b *testing.B, watch bool, workload watchWorkload) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/push/diff"):
 			negotiation.Add(int64(time.Since(started)))
-		case (strings.HasSuffix(r.URL.Path, "/push") || strings.HasSuffix(r.URL.Path, "/push/delta-v1")):
+		case strings.HasSuffix(r.URL.Path, "/push"):
 			stage.Add(int64(time.Since(started)))
 		case strings.HasSuffix(r.URL.Path, "/apply"):
 			apply.Add(int64(time.Since(started)))

@@ -436,8 +436,8 @@ func TestCacheDisabledUsesFullSnapshotFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("diff with disabled cache = %s, want 404", resp.Status)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("diff with disabled cache = %s, want 200", resp.Status)
 	}
 
 	root := workspaceWith(t, map[string]string{"f.txt": "x"})

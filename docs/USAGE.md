@@ -287,10 +287,9 @@ workspace name cannot redirect an existing watch. Concurrent commands remain
 caller-managed writers; watch does not fetch remote edits or resolve application
 build dependencies automatically.
 
-On a runner supporting incremental push, watch sends changed source entries and
-compact metadata against the retained source checkpoint. Unchanged running files
-are never used to reconstruct source. Older runners use normal full-snapshot
-staging and can be slower. Local native notifications use kqueue on macOS and
+Watch sends changed source entries and compact metadata against the retained
+source checkpoint. Unchanged running files are never used to reconstruct source.
+The CLI and daemon must run the same version. Local native notifications use kqueue on macOS and
 inotify on Linux. Watch setup reports exhausted OS watch/file-descriptor limits
 as errors; it does not silently fall back to continuous full-tree polling.
 
@@ -322,8 +321,7 @@ Push supports `--on`, `--url`, `--profile`, `--workspace-root`, `--include-all`,
 `--json`, and an optional complete changed `PATH` to limit application. Staging
 describes the complete selected snapshot, but reuses verified file contents in
 the runner's snapshot cache and uploads only missing bodies. Workspace creation
-and successful uploads populate that cache. A cold or disabled cache, or an
-older runner, can require a full upload; eviction or corrupt cached content
+and successful uploads populate that cache. A cold or disabled cache requires all changed bodies; eviction or corrupt cached content
 during transfer safely retries the same frozen snapshot. Cache cleanup failures
 do not prevent that retry. The optional `PATH` limits application, not snapshot
 selection. Fetch downloads the retained change bundle. Push uses the normal snapshot
