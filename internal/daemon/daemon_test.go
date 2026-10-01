@@ -304,7 +304,7 @@ func TestRunWithoutSnapshotUsesEmptyRemoteWorkspace(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("no-snapshot exit = %d; stderr: %s", code, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "empty remote workspace") {
+	if !strings.Contains(stderr.String(), "empty workspace") {
 		t.Fatalf("no-snapshot diagnostic = %q", stderr.String())
 	}
 }

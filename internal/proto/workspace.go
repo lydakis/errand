@@ -39,3 +39,11 @@ type WorkspaceSummary struct {
 	Project   string    `json:"project,omitempty"`
 	JobIDs    []string  `json:"job_ids,omitempty"`
 }
+
+// WorkspaceRemoval reports a removed workspace. FreedBytes is -1 when the
+// runner couldn't measure it first.
+type WorkspaceRemoval struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	FreedBytes int64  `json:"freed_bytes"`
+}

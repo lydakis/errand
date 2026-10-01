@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 func TestDoctorUsesResolvedProfileAndKeepsRawURLs(t *testing.T) {
@@ -166,24 +168,57 @@ func TestDoctorHumanReportKeepsFailuresDetailed(t *testing.T) {
 			report := doctorReport{OK: status != "error", Scope: doctorScope,
 				Checks: []doctorCheck{{Name: "runner", Status: status, Detail: "diagnostic detail", Hint: "repair guidance"}}}
 			var out bytes.Buffer
-			if err := writeDoctorReport(&out, report, false); err != nil {
-				t.Fatal(err)
-			}
-			if status == "ok" {
-				if !strings.Contains(out.String(), "runner") || strings.Contains(out.String(), doctorScope) || strings.Contains(out.String(), "diagnostic detail") {
-					t.Fatalf("healthy report should be compact: %s", &out)
+			writeDoctorReport(termui.Plain(&out, &out).Out, report, false)
+			got := out.String()
+			switch status {
+			case "ok":
+				if !strings.Contains(got, "✓ ") || strings.Contains(got, doctorScope) || strings.Contains(got, "diagnostic detail") || !strings.Contains(got, "All good.") {
+					t.Fatalf("healthy report should be compact: %s", got)
 				}
-			} else if !strings.Contains(out.String(), "diagnostic detail") || !strings.Contains(out.String(), "repair guidance") {
-				t.Fatalf("unhealthy report lost guidance: %s", &out)
+			case "warning":
+				if !strings.Contains(got, "! ") || !strings.Contains(got, "diagnostic detail") || !strings.Contains(got, "repair guidance") || !strings.Contains(got, "1 warning.") {
+					t.Fatalf("warning lost guidance: %s", got)
+				}
+			default:
+				if !strings.Contains(got, "✗ ") || !strings.Contains(got, "didn't answer (diagnostic detail)") || !strings.Contains(got, "repair guidance") || !strings.Contains(got, "1 problem.") {
+					t.Fatalf("failure lost guidance: %s", got)
+				}
 			}
 			out.Reset()
-			if err := writeDoctorReport(&out, report, true); err != nil {
-				t.Fatal(err)
-			}
-			var got doctorReport
-			if err := json.Unmarshal(out.Bytes(), &got); err != nil || got.Scope != doctorScope || got.Checks[0].Detail != "diagnostic detail" {
+			finishDoctorReport(termui.Plain(&out, io.Discard), report, true, outputFlags{})
+			var decoded doctorReport
+			if err := json.Unmarshal(out.Bytes(), &decoded); err != nil || decoded.Scope != doctorScope || decoded.Checks[0].Detail != "diagnostic detail" {
 				t.Fatalf("JSON lost detail: %s, %v", &out, err)
 			}
 		})
+	}
+}
+
+func TestDoctorMentionsRunnersItCannotResolve(t *testing.T) {
+	writeClientConfig(t, "default_peer = 'test'\n[peers.test]\nurl = 'http://test.invalid'\n[peers.broken]\nurl = 'http://broken.invalid'\nssh = 'broken'\n")
+	checks := otherRunnerChecks("test", func(context.Context, string) (proto.Info, error) {
+		return proto.Info{Proto: proto.ProtoVersion, Version: version}, nil
+	})
+	for _, check := range checks {
+		if check.Status == "warning" && strings.Contains(check.Detail, "broken") {
+			return
+		}
+	}
+	t.Fatalf("an unresolvable runner produced no check: %+v", checks)
+}
+
+func TestDoctorQuietKeepsErrorsAndQuotesRunnerText(t *testing.T) {
+	writeClientConfig(t, "default_peer = 'test'\n[peers.test]\nurl = 'http://runner.invalid'\n")
+	t.Chdir(t.TempDir())
+	probe := func(context.Context, string) (proto.Info, error) {
+		return proto.Info{}, &client.ProbeError{Kind: client.ProbeNotErrand, Detail: "bad body \x1b[2J"}
+	}
+	for _, args := range [][]string{{"-q"}, nil} {
+		var out, errOut bytes.Buffer
+		code := cmdDoctorTo(args, &out, &errOut, probe)
+		text := out.String() + errOut.String()
+		if code != 1 || !strings.Contains(text, "bad body") || strings.ContainsRune(text, '\x1b') {
+			t.Fatalf("doctor %v = %d: %q", args, code, text)
+		}
 	}
 }

@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -13,6 +14,28 @@ import (
 	"testing"
 	"time"
 )
+
+func TestForwardQuietSuppressesStartupButKeepsFailures(t *testing.T) {
+	for _, quiet := range []bool{false, true} {
+		var stderr bytes.Buffer
+		view := newRunView(RunOptions{Stdout: io.Discard, Stderr: &stderr, Display: RunDisplay{Quiet: quiet}})
+		mapping := PortForward{Local: unusedTCPPort(t), Remote: 8080}
+		session, err := bindPortForwards([]PortForward{mapping}, view.ui, view.quiet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(session.Close)
+		session.Start("http://runner.test", "job")
+		if quiet && stderr.Len() != 0 || !quiet && !bytes.Contains(stderr.Bytes(), []byte("forwarding localhost:")) {
+			t.Fatalf("quiet=%v startup=%q", quiet, stderr.String())
+		}
+		stderr.Reset()
+		session.report(mapping, errors.New("connection refused"))
+		if !bytes.Contains(stderr.Bytes(), []byte("warning:")) || !bytes.Contains(stderr.Bytes(), []byte("connection refused")) {
+			t.Fatalf("quiet=%v failure=%q", quiet, stderr.String())
+		}
+	}
+}
 
 func unusedTCPPort(t *testing.T) uint16 {
 	t.Helper()
@@ -39,7 +62,7 @@ func TestBindPortForwardsIsAtomic(t *testing.T) {
 	session, err := bindPortForwards([]PortForward{
 		{Local: first, Remote: 3000},
 		{Local: second, Remote: 4000},
-	}, io.Discard)
+	}, io.Discard, false)
 	if err == nil || session != nil {
 		t.Fatalf("atomic bind = %+v, %v; want an error", session, err)
 	}
@@ -57,7 +80,7 @@ func TestBindPortForwardsRejectsIPv6LoopbackCollisionAtomically(t *testing.T) {
 	}
 	defer occupied.Close()
 	port := uint16(occupied.Addr().(*net.TCPAddr).Port)
-	session, err := bindPortForwards([]PortForward{{Local: port, Remote: 3000}}, io.Discard)
+	session, err := bindPortForwards([]PortForward{{Local: port, Remote: 3000}}, io.Discard, false)
 	if err == nil || session != nil {
 		t.Fatalf("IPv6 collision bind = %+v, %v; want an error", session, err)
 	}
@@ -144,7 +167,7 @@ func TestForwardSessionCarriesOpaqueTrafficAndClosesOnDetach(t *testing.T) {
 
 	localPort := unusedTCPPort(t)
 	var stderr bytes.Buffer
-	session, err := bindPortForwards([]PortForward{{Local: localPort, Remote: 4321}}, &stderr)
+	session, err := bindPortForwards([]PortForward{{Local: localPort, Remote: 4321}}, &stderr, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +229,7 @@ func TestForwardSessionUsesSSHTransport(t *testing.T) {
 	t.Cleanup(func() { dialSSHConnection = oldDial })
 
 	localPort := unusedTCPPort(t)
-	session, err := bindPortForwards([]PortForward{{Local: localPort, Remote: 4321}}, io.Discard)
+	session, err := bindPortForwards([]PortForward{{Local: localPort, Remote: 4321}}, io.Discard, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +278,7 @@ func TestForwardSessionAcceptsIPv6LoopbackConnections(t *testing.T) {
 	defer server.Close()
 
 	localPort := unusedTCPPort(t)
-	session, err := bindPortForwards([]PortForward{{Local: localPort, Remote: 4321}}, io.Discard)
+	session, err := bindPortForwards([]PortForward{{Local: localPort, Remote: 4321}}, io.Discard, false)
 	if err != nil {
 		t.Fatal(err)
 	}

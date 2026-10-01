@@ -251,7 +251,7 @@ func TestPushWatchDoesNotFollowRecreatedWorkspaceName(t *testing.T) {
 	err := client.WatchPush(ctx, client.PushOptions{PeerURL: peer, Workspace: ws.Name, Root: root, Apply: true}, func(event client.PushWatchEvent) error {
 		if event.State == "watching" && !recreated {
 			recreated = true
-			if err := client.RemoveWorkspace(peer, ws.Name); err != nil {
+			if _, err := client.RemoveWorkspace(peer, ws.Name); err != nil {
 				return err
 			}
 			if _, err := client.CreateWorkspace(client.RunOptions{PeerURL: peer, Root: root}, ws.Name); err != nil {

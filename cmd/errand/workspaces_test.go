@@ -17,6 +17,37 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+func TestWorkspaceRunHintKeepsSelectedRunner(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	server := httptest.NewServer(d.Handler())
+	defer server.Close()
+	writeClientConfig(t, fmt.Sprintf("default_peer='other'\n[peers.other]\nurl='http://127.0.0.1:1'\n[peers.mini]\nurl=%q\n", server.URL))
+	for _, test := range []struct {
+		name, flag, target string
+	}{
+		{"named", "--on", "mini"},
+		{"raw", "--url", server.URL},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := cmdWorkspacesTo([]string{"create", test.flag, test.target, "--no-snapshot", test.name}, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("workspace creation: %d %s", code, &stderr)
+			}
+			want := "errand " + test.flag + " " + test.target + " --workspace " + test.name + " -- make test"
+			if !strings.Contains(stderr.String(), want) {
+				t.Fatalf("run hint lost selected runner: %q, want %q", stderr.String(), want)
+			}
+		})
+	}
+}
+
 func TestWorkspaceCommandsCreateReuseAndRemove(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true})
@@ -199,6 +230,10 @@ func TestWorkspaceListQueriesEveryConfiguredPeer(t *testing.T) {
 		!strings.HasPrefix(strings.Join(strings.Fields(lines[2]), " "), "mini experiment idle") {
 		t.Fatalf("list table:\n%s", &out)
 	}
+	out.Reset()
+	if code := cmdWorkspacesTo([]string{"-q"}, &out, &stderr); code != 0 || out.String() != "cabal/scratch\nmini/experiment\n" {
+		t.Fatalf("list -q = %d %q", code, &out)
+	}
 
 	out.Reset()
 	if code := cmdWorkspacesTo([]string{"--json"}, &out, &stderr); code != 0 {
@@ -227,7 +262,7 @@ func TestWorkspaceListQueriesEveryConfiguredPeer(t *testing.T) {
 	if code := cmdWorkspacesTo(nil, &out, &stderr); code != 1 {
 		t.Fatalf("partial list: %d %s", code, &stderr)
 	}
-	if !strings.Contains(out.String(), "experiment") || !strings.Contains(out.String(), "scratch") || !strings.Contains(stderr.String(), "peer broken") {
+	if !strings.Contains(out.String(), "experiment") || !strings.Contains(out.String(), "scratch") || !strings.Contains(stderr.String(), "broken:") {
 		t.Fatalf("partial list: stdout=%s stderr=%s", &out, &stderr)
 	}
 }
@@ -269,7 +304,7 @@ func TestProfileWorkspaceRejectsIncompatibleRunOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 	stderr.Reset()
-	if code := cmdPushTo([]string{"--profile", "dev"}, &out, &stderr); code != 2 || !strings.Contains(stderr.String(), "pinned peer") {
+	if code := cmdPushTo([]string{"--profile", "dev"}, &out, &stderr); code != 2 || !strings.Contains(stderr.String(), "lives on one runner") {
 		t.Fatalf("push with automatic placement: %d %s", code, &stderr)
 	}
 }

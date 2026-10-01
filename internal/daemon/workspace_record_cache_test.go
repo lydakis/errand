@@ -73,7 +73,7 @@ func TestWorkspaceRecordCacheForgetsRemovedWorkspace(t *testing.T) {
 	if _, ok := retainedWorkspaceRecord(&d.workspaces.recordCache, ws.ID); !ok {
 		t.Fatal("read did not retain the record")
 	}
-	if err := client.RemoveWorkspace(ts.URL, ws.Name); err != nil {
+	if _, err := client.RemoveWorkspace(ts.URL, ws.Name); err != nil {
 		t.Fatal(err)
 	}
 	c := &d.workspaces.recordCache

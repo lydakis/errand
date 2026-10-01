@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+
+	"github.com/lydakis/errand/internal/termui"
 )
 
 // PortForward maps one local loopback TCP port to a port reachable from the
@@ -40,6 +42,7 @@ type forwardSession struct {
 	forwards  []PortForward
 	listeners []forwardListener
 	stderr    io.Writer
+	quiet     bool
 
 	mu          sync.Mutex
 	outputMu    sync.Mutex
@@ -49,14 +52,14 @@ type forwardSession struct {
 	wg          sync.WaitGroup
 }
 
-func bindPortForwards(forwards []PortForward, stderr io.Writer) (*forwardSession, error) {
+func bindPortForwards(forwards []PortForward, stderr io.Writer, quiet bool) (*forwardSession, error) {
 	if len(forwards) == 0 {
 		return nil, nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	session := &forwardSession{
 		ctx: ctx, cancel: cancel, forwards: append([]PortForward(nil), forwards...),
-		stderr: stderr, connections: map[net.Conn]struct{}{},
+		stderr: stderr, quiet: quiet, connections: map[net.Conn]struct{}{},
 	}
 	for _, mapping := range forwards {
 		if mapping.Local == 0 || mapping.Remote == 0 {
@@ -104,11 +107,14 @@ func (s *forwardSession) Start(peerURL, jobID string) {
 		return
 	}
 	s.started = true
-	forwards := append([]PortForward(nil), s.forwards...)
+	var forwards []PortForward
+	if !s.quiet {
+		forwards = append(forwards, s.forwards...)
+	}
 	listeners := append([]forwardListener(nil), s.listeners...)
 	s.mu.Unlock()
 	for _, mapping := range forwards {
-		s.writef("errand: forwarding localhost:%d to job port %d\n", mapping.Local, mapping.Remote)
+		s.say(false, fmt.Sprintf("forwarding localhost:%d to port %d on the job", mapping.Local, mapping.Remote))
 	}
 	for _, bound := range listeners {
 		s.wg.Add(1)
@@ -122,7 +128,7 @@ func (s *forwardSession) accept(peerURL, jobID string, bound forwardListener) {
 		connection, err := bound.listener.Accept()
 		if err != nil {
 			if s.ctx.Err() == nil {
-				s.writef("errand: accepting forward on %s: %v\n", bound.listener.Addr(), err)
+				s.say(true, fmt.Sprintf("forward on %s stopped accepting connections: %v", bound.listener.Addr(), err))
 			}
 			return
 		}
@@ -199,14 +205,21 @@ func (s *forwardSession) forward(peerURL, jobID string, mapping PortForward, loc
 }
 
 func (s *forwardSession) report(mapping PortForward, err error) {
-	s.writef("errand: forward localhost:%d to job port %d failed: %v\n",
-		mapping.Local, mapping.Remote, err)
+	s.say(true, fmt.Sprintf("forward localhost:%d to port %d failed: %v", mapping.Local, mapping.Remote, err))
 }
 
-func (s *forwardSession) writef(format string, args ...any) {
+func (s *forwardSession) say(warning bool, msg string) {
 	s.outputMu.Lock()
 	defer s.outputMu.Unlock()
-	fmt.Fprintf(s.stderr, format, args...)
+	if ui, ok := s.stderr.(*termui.Stream); ok {
+		if warning {
+			ui.Warnf("%s", msg)
+		} else {
+			ui.Say(termui.Dot, msg)
+		}
+		return
+	}
+	fmt.Fprintf(s.stderr, "errand: %s\n", msg)
 }
 
 func (s *forwardSession) Close() {

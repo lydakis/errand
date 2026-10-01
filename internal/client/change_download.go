@@ -233,6 +233,19 @@ func consumeChangeArchive(part io.Reader, limit int64, extract func(io.Reader) e
 }
 
 func loadStagedBundle(dir string) (proto.ChangeBundle, error) {
+	bundle, err := loadStagedBundleMetadata(dir)
+	if err != nil {
+		return bundle, err
+	}
+	if err := changeops.VerifyExtracted(dir, bundle); err != nil {
+		return bundle, err
+	}
+	return bundle, nil
+}
+
+// loadStagedBundleMetadata validates the description without reading payloads.
+// Applying a bundle must still use loadStagedBundle to verify its file contents.
+func loadStagedBundleMetadata(dir string) (proto.ChangeBundle, error) {
 	var bundle proto.ChangeBundle
 	f, err := os.Open(filepath.Join(dir, "bundle.json"))
 	if err != nil {
@@ -247,9 +260,6 @@ func loadStagedBundle(dir string) (proto.ChangeBundle, error) {
 		return bundle, err
 	}
 	if err := changeops.ValidateBundle(bundle); err != nil {
-		return bundle, err
-	}
-	if err := changeops.VerifyExtracted(dir, bundle); err != nil {
 		return bundle, err
 	}
 	return bundle, nil

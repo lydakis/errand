@@ -136,3 +136,32 @@ func TestPushFallbackRequiresExplicitCacheMissAndStopsAfterFullUpload(t *testing
 		})
 	}
 }
+
+func TestUploadProgressTotalMatchesThePackedStream(t *testing.T) {
+	root := t.TempDir()
+	long := strings.Repeat("deep/", 30) + "file.txt" // past ustar's 100-byte name field
+	for path, body := range map[string]string{"a.txt": "alpha", "empty": "", long: strings.Repeat("z", 700), "skip.txt": "cached"} {
+		if err := os.MkdirAll(filepath.Join(root, filepath.Dir(path)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, path), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink("a.txt", filepath.Join(root, "link")); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := snapshot.Build(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ships := range []func(proto.ManifestEntry) bool{nil, func(e proto.ManifestEntry) bool { return e.Path != "skip.txt" }} {
+		var packed countingDiscard
+		if err := snapshot.PackPartial(&packed, root, manifest, ships); err != nil {
+			t.Fatal(err)
+		}
+		if got := tarStreamSize(manifest, ships); got != int64(packed) {
+			t.Fatalf("progress total = %d, packed stream = %d", got, packed)
+		}
+	}
+}

@@ -242,8 +242,7 @@ func applyTerminalAutomaticallyOwned(peerURL, jobID string, final proto.JobStatu
 	if err := markLocalChangeTerminal(peerURL, jobID); err != nil {
 		return automaticApplyOutcome{}, err
 	}
-	handle := peerLabel("", peerURL) + "/" + jobID
-	if exitCode(final, io.Discard, handle) != 0 {
+	if resultCode(final) != 0 {
 		outcome := automaticApplyOutcome{state: automaticApplySkipped}
 		return outcome, recordAutomaticApply(peerURL, jobID, outcome)
 	}

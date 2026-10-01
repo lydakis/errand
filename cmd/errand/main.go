@@ -5,14 +5,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,76 +21,20 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
-	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
-	"github.com/lydakis/errand/internal/serviceruntime"
 	"github.com/lydakis/errand/internal/setup"
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/termui"
 	"github.com/lydakis/errand/internal/workspace"
 )
 
 var version = "0.1.0-dev"
 
-const usage = `errand: run a command on another machine you own
-
-Usage:
-  errand [options] -- COMMAND [ARG...]
-  errand COMMAND --help
-
-Run options:
-  --on PEER | --url URL | --where FACTS
-                                  Select a runner (local for this machine)
-  --profile NAME                 Use a named configuration profile
-  -d, --detach                   Return a job handle after admission
-  -w, --workdir REL               Command directory within the workspace
-  -e, --env NAME=VALUE            Set an environment variable (repeatable)
-  --passenv NAME                 Forward a local variable (repeatable)
-  -L, --forward [LOCAL:]REMOTE    Forward a port while attached (repeatable)
-  --no-forward                   Clear configured forwarding
-  --apply | --no-apply            Apply retained changes after clean success
-  --artifact PATH                Retain an ignored output (repeatable)
-  --no-artifacts                 Clear configured artifact declarations
-  --cache NAME=PATH               Reuse a runner cache (repeatable)
-  --no-caches                    Clear configured caches
-  -v, --verbose                  Show individual cache and artifact bindings
-  --workspace-root PATH          Select an explicit workspace boundary
-  --workspace NAME               Use an explicitly created persistent workspace
-  --include-all                  Allow a broad snapshot (never /)
-  --no-snapshot                  Run with an empty job workspace
-
-Commands:
-  errand peers                   List, add, remove, or discover runners
-  errand workspaces              Create, list, or remove persistent workspaces
-  errand ps                      List jobs
-  errand status HANDLE           Inspect a job and its results
-  errand attach HANDLE           Follow a job's logs
-  errand fetch HANDLE [PATH]      Stage, apply, or export retained files
-  errand push [options]           Stage or apply local files in a selected workspace
-  errand kill HANDLE             Stop a job
-  errand df                      Show storage use
-  errand gc TARGET               Collect caches, jobs, or local changes
-  errand config                  Explain effective configuration
-  errand doctor                  Diagnose installation and connectivity
-  errand setup                   Install or restart this machine's runner
-  errand access                  Manage this runner's saved access policy
-  errand serve                   Run the daemon in the foreground
-  errand version                 Print the version
-
-Examples:
-  errand --on mac-mini -- make test
-  errand --on local -- make test
-  errand --apply -- gofmt -w .
-  errand fetch --output ./results HANDLE
-
-A HANDLE is peer/ULID, printed when a job is submitted.
-While attached: Ctrl-D detaches; Ctrl-C interrupts the command.
-Full command options: errand COMMAND --help`
-
 func main() { os.Exit(runCLI(os.Args[1:])) }
 
 func runCLI(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, usage)
+		printRootHelp(os.Stderr)
 		return 2
 	}
 	switch args[0] {
@@ -133,8 +74,11 @@ func runCLI(args []string) int {
 		return cmdAutomaticApply(args[1:])
 	case "_stdio":
 		return cmdStdio(args[1:])
-	case "-h", "--help":
-		fmt.Println(usage)
+	case "-h", "--help", "help":
+		printRootHelp(os.Stdout)
+		return 0
+	case "--help-all":
+		printRootHelpAll(os.Stdout, true)
 		return 0
 	default:
 		return cmdRun(args)
@@ -216,6 +160,7 @@ func configuredPeerURL(cfg config.Client, name string) (string, error) {
 }
 
 // resolveHandle turns "peer/ULID" or a bare ULID into (peerURL, label, jobID).
+// The ULID may be shortened to any unique prefix of at least four characters.
 // The peer part must be a configured alias or an explicit HTTP(S) URL. A
 // caller-supplied --url may route an alias-qualified handle on a machine that
 // does not share that alias, but the resulting label is the effective URL.
@@ -225,8 +170,10 @@ func resolveHandle(handleArg, rawURL, on string) (peerURL, label, jobID string, 
 	if i := strings.LastIndexByte(handleArg, '/'); i >= 0 {
 		prefix, jobID = handleArg[:i], handleArg[i+1:]
 	}
-	if !proto.ValidULID(jobID) {
-		return "", "", "", fmt.Errorf("handle %q does not contain a valid job ULID", handleArg)
+	jobID = strings.ToUpper(jobID)
+	short := !proto.ValidULID(jobID)
+	if short && (len(jobID) < 4 || !proto.ValidULIDPrefix(jobID)) {
+		return "", "", "", &badHandleError{handle: handleArg}
 	}
 	if rawURL != "" && on != "" {
 		return "", "", "", fmt.Errorf("--on and --url are mutually exclusive")
@@ -268,99 +215,19 @@ func resolveHandle(handleArg, rawURL, on string) (peerURL, label, jobID string, 
 	if err != nil {
 		return "", "", "", err
 	}
+	if short {
+		jobID, err = client.ResolveJobPrefix(peerURL, jobID)
+		if err != nil {
+			return peerURL, label, "", err
+		}
+	}
 	return peerURL, label, jobID, nil
 }
 
-func cmdAttach(args []string) int {
-	fs := flag.NewFlagSet("errand attach", flag.ContinueOnError)
-	on := fs.String("on", "", "peer name")
-	rawURL := fs.String("url", "", "peer base URL")
-	profile := fs.String("profile", "", "session preferences from workspace or personal configuration")
-	var session sessionFlags
-	session.bind(fs)
-	setFlagUsage(fs, "errand attach [options] HANDLE")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
-	}
-	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "errand attach: exactly one HANDLE (peer/ULID) is required")
-		return 2
-	}
-	cli, err := session.overrides(fs)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return 2
-	}
-	emptyProfile := false
-	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "profile" && *profile == "" {
-			emptyProfile = true
-		}
-	})
-	if emptyProfile {
-		fmt.Fprintln(os.Stderr, "errand: --profile requires a non-empty name")
-		return 2
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return client.ExitTransaction
-	}
-	effective, err := config.ResolveSession(cwd, *profile, cli)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return client.ExitTransaction
-	}
-	forwards, err := sessionForwards(effective.Forwards)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return 2
-	}
-	peerURL, label, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return 2
-	}
-	return client.Attach(client.AttachOptions{BeforeContact: func() { warnRunnerVersion(peerURL, label) }, PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards})
-}
+// badHandleError is a HANDLE argument that can't name a job.
+type badHandleError struct{ handle string }
 
-func cmdKill(args []string) int {
-	fs := flag.NewFlagSet("errand kill", flag.ContinueOnError)
-	force := fs.Bool("force", false, "SIGKILL instead of SIGTERM")
-	fs.BoolVar(force, "f", false, "SIGKILL instead of SIGTERM")
-	on := fs.String("on", "", "peer name")
-	rawURL := fs.String("url", "", "peer base URL")
-	setFlagUsage(fs, "errand kill [options] HANDLE")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
-	}
-	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "errand kill: exactly one HANDLE (peer/ULID) is required")
-		return 2
-	}
-	peerURL, label, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return 2
-	}
-	if err := client.Kill(peerURL, jobID, *force); err != nil {
-		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
-		return 1
-	}
-	label = cmpOr(label, peerURL)
-	if *force {
-		fmt.Fprintf(os.Stderr, "errand: force kill (SIGKILL) requested for %s/%s\n", label, jobID)
-	} else {
-		fmt.Fprintf(os.Stderr, "errand: graceful termination (SIGTERM) requested for %s/%s\n", label, jobID)
-	}
-	return 0
-}
+func (e *badHandleError) Error() string { return fmt.Sprintf("%q isn't a job handle", e.handle) }
 
 func cmpOr(a, b string) string {
 	if a != "" {
@@ -405,27 +272,28 @@ func queryPeerTargets[T any](targets []peerTarget, query func(string) (T, error)
 	return results
 }
 
-var errNoUsablePeers = errors.New("no usable peers configured; check ~/.config/errand/config.toml")
+var errNoUsablePeers = errors.New("no runners configured; add one with errand peers add NAME HOST, or find them with errand peers discover")
 
 // readFleet standardizes the CLI contract for read-only discovery commands:
 // query every configured peer unless explicitly narrowed, preserve partial
 // results, report peer-specific failures, and fail the command if any selected
 // peer could not be read.
-func readFleet[T any](rawURL, on string, stderr io.Writer, query func(string) (T, error)) (fleetRead[T], error) {
+func readFleet[T any](rawURL, on string, e *termui.Stream, query func(string) (T, error)) (fleetRead[T], error) {
 	targets, warnings, err := peerTargets(rawURL, on)
 	if err != nil {
 		return fleetRead[T]{}, err
 	}
 	read := fleetRead[T]{targets: targets, failed: len(warnings) != 0}
 	for _, warning := range warnings {
-		fmt.Fprintf(stderr, "errand: %v\n", warning)
+		e.Warnf("%v", warning)
 	}
 	if len(targets) == 0 {
 		return read, errNoUsablePeers
 	}
 	for _, result := range queryPeerTargets(targets, query) {
 		if result.err != nil {
-			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
+			msg, _ := describeError(result.err, errorScope{peer: result.target.name})
+			e.Warnf("%s: %s", result.target.name, msg)
 			read.failed = true
 			continue
 		}
@@ -482,139 +350,6 @@ func peerTargets(rawURL, on string) ([]peerTarget, []error, error) {
 	return targets, warnings, nil
 }
 
-func cmdPs(args []string) int {
-	return cmdPsTo(args, os.Stdout, os.Stderr)
-}
-
-func cmdPsTo(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("errand ps", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	on := fs.String("on", "", "restrict to one peer name")
-	rawURL := fs.String("url", "", "restrict to one peer base URL")
-	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
-	workspace := fs.String("workspace", "", "restrict to jobs in a persistent workspace name or ID")
-	all := false
-	last := 0
-	fs.BoolVar(&all, "all", false, "include terminal jobs")
-	fs.BoolVar(&all, "a", false, "include terminal jobs")
-	fs.IntVar(&last, "last", 0, "show only the latest N jobs across all states")
-	fs.IntVar(&last, "n", 0, "show only the latest N jobs across all states")
-	setFlagUsage(fs, "errand ps [options]")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "errand: unexpected ps arguments: %s\n", strings.Join(fs.Args(), " "))
-		return 2
-	}
-	if last < 0 {
-		fmt.Fprintln(stderr, "errand: --last must be positive")
-		return 2
-	}
-	workspaceSet := false
-	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "workspace" {
-			workspaceSet = true
-		}
-	})
-	if workspaceSet && !proto.ValidULID(*workspace) {
-		if err := proto.ValidateWorkspaceName(*workspace); err != nil {
-			fmt.Fprintln(stderr, "errand:", err)
-			return 2
-		}
-	}
-	if last > proto.MaxJobListEntries {
-		fmt.Fprintf(stderr, "errand: --last must not exceed %d\n", proto.MaxJobListEntries)
-		return 2
-	}
-	local, inspectErr := client.InspectAutomaticApplies()
-	byPeer := make(map[string][]client.AutomaticApplyInspection)
-	for _, record := range local {
-		byPeer[record.PeerURL] = append(byPeer[record.PeerURL], record)
-	}
-	targets, warnings, err := peerTargets(*rawURL, *on)
-	if err != nil {
-		fmt.Fprintln(stderr, "errand:", err)
-		return 1
-	}
-	read := fleetRead[[]psRow]{targets: targets, failed: len(warnings) != 0 || inspectErr != nil}
-	for _, warning := range warnings {
-		fmt.Fprintln(stderr, "errand:", warning)
-	}
-	if inspectErr != nil {
-		fmt.Fprintln(stderr, "errand: inspecting apply state:", inspectErr)
-	}
-	if len(targets) == 0 {
-		fmt.Fprintln(stderr, "errand:", errNoUsablePeers)
-		return 1
-	}
-	rows := make([]psRow, 0)
-	for _, result := range queryPeerTargets(targets, func(url string) ([]psRow, error) {
-		return psPeerRows(url, *workspace, !all && last == 0, byPeer[url])
-	}) {
-		if result.err != nil {
-			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
-			read.failed = true
-		} else {
-			read.results = append(read.results, result)
-		}
-		for _, row := range result.value {
-			row.Peer = result.target.name
-			rows = append(rows, row)
-		}
-	}
-
-	sort.SliceStable(rows, func(i, k int) bool {
-		return rows[i].ID > rows[k].ID
-	})
-	if !all && last == 0 {
-		active := rows[:0]
-		for _, row := range rows {
-			if activeJobState(row.State) || applyNeedsAttention(row.AutomaticApply) {
-				active = append(active, row)
-			}
-		}
-		rows = active
-	}
-	if last > 0 && len(rows) > last {
-		rows = rows[:last]
-	}
-	if *jsonOutput {
-		encoder := json.NewEncoder(stdout)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(rows); err != nil {
-			fmt.Fprintf(stderr, "errand: encoding job listing: %v\n", err)
-			return 1
-		}
-	} else if len(rows) != 0 {
-		writePs(stdout, rows)
-	} else if len(read.results) != 0 {
-		fmt.Fprintln(stdout, psEmptyMessage(read.targets, !all && last == 0, read.failed))
-	}
-	return read.exitCode()
-}
-
-func psEmptyMessage(targets []peerTarget, activeOnly, partial bool) string {
-	kind := "jobs"
-	if activeOnly {
-		kind = "active jobs"
-	}
-	if partial {
-		return fmt.Sprintf("No %s found on reachable peers.", kind)
-	}
-	if len(targets) == 1 {
-		return fmt.Sprintf("No %s on %s.", kind, terminalSafeField(targets[0].name))
-	}
-	return fmt.Sprintf("No %s.", kind)
-}
-
-func activeJobState(state string) bool {
-	return state == proto.StateStaging || state == proto.StateQueued || state == proto.StateRunning
-}
-
 func parseRetentionDuration(value string) (time.Duration, error) {
 	if strings.HasSuffix(value, "d") {
 		days, err := strconv.ParseInt(strings.TrimSuffix(value, "d"), 10, 64)
@@ -624,124 +359,6 @@ func parseRetentionDuration(value string) (time.Duration, error) {
 		return time.Duration(days) * 24 * time.Hour, nil
 	}
 	return time.ParseDuration(value)
-}
-
-func cmdServe(args []string) int {
-	fs := flag.NewFlagSet("errand serve", flag.ExitOnError)
-	cfgPath := fs.String("config", "", "path to errandd.toml")
-	listen := fs.String("listen", "", `listen address ("tailnet:7443" resolves the tailnet IP; "none" disables TCP)`)
-	stateDir := fs.String("state-dir", "", "receipt and job state directory")
-	insecure := fs.Bool("insecure-no-auth", false, "DANGEROUS: skip all authorization (tests only)")
-	var allowUsers stringList
-	fs.Var(&allowUsers, "allow-user", "tailnet login allowed to use this runner (repeatable)")
-	setFlagUsage(fs, "errand serve [options]")
-	fs.Parse(args)
-
-	fileCfg, err := config.LoadDaemon(*cfgPath)
-	if err != nil {
-		log.Fatalf("errand serve: %v", err)
-	}
-	if fileCfg.Transport == config.TransportLocal && *listen != "" && !strings.EqualFold(strings.TrimSpace(*listen), config.DisabledListener) {
-		log.Print("errand serve: local-only transport cannot enable a network listener; change the saved transport explicitly")
-		return 2
-	}
-	if *listen != "" {
-		fileCfg.Listen = *listen
-	}
-	if *stateDir != "" {
-		fileCfg.StateDir = *stateDir
-	}
-	fileCfg.AllowUsers = append(fileCfg.AllowUsers, allowUsers...)
-
-	// The service manager still launches the installed CLI. Before listening,
-	// move execution to immutable bytes that package cleanup cannot unlink.
-	if err := serviceruntime.Reexec(fileCfg.StateDir); err != nil {
-		log.Fatalf("errand serve: prepare runtime: %v", err)
-	}
-
-	tcpEnabled := !strings.EqualFold(strings.TrimSpace(fileCfg.Listen), config.DisabledListener)
-	var identity tailnet.Provider
-	var addr string
-	if tcpEnabled {
-		addr, identity, err = resolveServeTransport(
-			fileCfg.Listen, *insecure, fileCfg.TailscaledSocket, fileCfg.TailscaleCLI, tailnet.Discover,
-		)
-		if err != nil {
-			log.Fatalf("errand serve: %v", err)
-		}
-	}
-	d, err := daemon.New(daemon.Config{
-		ChangeStorage:      client.ChangeStorageStats,
-		DisableSSH:         fileCfg.Transport == config.TransportTailscale,
-		LocalOnly:          fileCfg.Transport == config.TransportLocal,
-		Listen:             addr,
-		StateDir:           fileCfg.StateDir,
-		AllowUsers:         fileCfg.AllowUsers,
-		DenyUsers:          fileCfg.DenyUsers,
-		Capability:         fileCfg.Capability,
-		TailscaledSocket:   fileCfg.TailscaledSocket,
-		Identity:           identity,
-		InsecureNoAuth:     *insecure,
-		Version:            version,
-		CacheDisabled:      fileCfg.Cache.Disabled,
-		CacheMaxBytes:      fileCfg.Cache.MaxBytes,
-		NamedCacheDisabled: fileCfg.NamedCache.Disabled, NamedCacheMaxBytes: fileCfg.NamedCache.MaxBytes, NamedCacheTTL: time.Duration(fileCfg.NamedCache.TTLHours) * time.Hour,
-		CacheTTL:  time.Duration(fileCfg.Cache.TTLHours) * time.Hour,
-		MaxJobs:   fileCfg.MaxJobs,
-		MaxQueued: fileCfg.MaxQueued,
-	})
-	if err != nil {
-		log.Fatalf("errand serve: %v", err)
-	}
-	defer d.Close()
-	handler := d.Handler()
-	socketPath := fileCfg.SocketPath()
-	unixListener, err := listenUnixSocket(socketPath)
-	if err != nil {
-		log.Fatalf("errand serve: %v", err)
-	}
-	defer os.Remove(socketPath)
-	if tcpEnabled {
-		mode := "INSECURE no-auth"
-		if identity != nil {
-			mode = "tailnet whois via " + identity.Name()
-		}
-		socketUse := "SSH and local control"
-		if fileCfg.Transport == config.TransportTailscale {
-			socketUse = "local control only"
-		}
-		log.Printf("errand %s serving on %s (%s) and %s (%s); state %s",
-			version, addr, mode, socketPath, socketUse, fileCfg.StateDir)
-	} else {
-		mode := "SSH and local jobs"
-		if fileCfg.Transport == config.TransportLocal {
-			mode = "local jobs only"
-		}
-		log.Printf("errand %s serving on %s (%s); state %s", version, socketPath, mode, fileCfg.StateDir)
-	}
-
-	unixServer := &http.Server{
-		Handler:           handler,
-		ConnContext:       daemon.ConnContext,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Minute,
-		IdleTimeout:       2 * time.Minute,
-	}
-	errs := make(chan error, 2)
-	go func() { errs <- unixServer.Serve(unixListener) }()
-	if tcpEnabled {
-		tcpServer := &http.Server{
-			Addr: addr, Handler: handler,
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       30 * time.Minute,
-			IdleTimeout:       2 * time.Minute,
-		}
-		go func() { errs <- tcpServer.ListenAndServe() }()
-	}
-	if err := <-errs; err != nil {
-		log.Fatalf("errand serve: %v", err)
-	}
-	return 0
 }
 
 type tailnetDiscoverFunc func(string, string) (tailnet.Provider, error)

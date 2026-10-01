@@ -11,12 +11,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/setup"
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 type serveTestProvider struct{}
@@ -139,7 +141,7 @@ func TestCmdFetchRejectsInvalidOutputOptions(t *testing.T) {
 
 func TestCmdGCRequiresExplicitTarget(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := cmdGCTo(nil, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "cache|jobs|changes|all") {
+	if code := cmdGCTo(nil, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "errand gc TARGET") || !strings.Contains(stderr.String(), "cache    snapshot blobs") {
 		t.Fatalf("bare gc = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
@@ -147,7 +149,7 @@ func TestCmdGCRequiresExplicitTarget(t *testing.T) {
 func TestCmdGCRejectsUnexpectedArguments(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := cmdGCTo([]string{"cache", "unexpected"}, &stdout, &stderr); code != 2 ||
-		!strings.Contains(stderr.String(), "unexpected gc arguments") {
+		!strings.Contains(stderr.String(), "unexpected arguments: unexpected") {
 		t.Fatalf("gc extra args = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
@@ -158,10 +160,10 @@ func TestCmdGCHelpOnlyShowsFlagsForTarget(t *testing.T) {
 		want   []string
 		reject []string
 	}{
-		{target: "cache", want: []string{"usage: errand gc cache [options]", "-dry-run", "-on", "-url"}, reject: []string{"-keep", "-older-than"}},
-		{target: "jobs", want: []string{"usage: errand gc jobs [options]", "-dry-run", "-keep", "-older-than", "-on", "-url"}},
-		{target: "changes", want: []string{"usage: errand gc changes --older-than DURATION [options]", "-dry-run", "-older-than", "-on", "-url"}, reject: []string{"-keep"}},
-		{target: "all", want: []string{"usage: errand gc all --older-than DURATION [options]", "-dry-run", "-keep", "-older-than", "-on", "-url"}},
+		{target: "cache", want: []string{"errand gc cache [options]", "-n, --dry-run", "--on PEER", "--url URL"}, reject: []string{"--keep", "--older-than"}},
+		{target: "jobs", want: []string{"errand gc jobs (--older-than DURATION | --keep N) [options]", "-n, --dry-run", "--keep N", "--older-than DURATION", "--on PEER", "--url URL"}},
+		{target: "changes", want: []string{"errand gc changes --older-than DURATION [options]", "-n, --dry-run", "--older-than DURATION", "--on PEER", "--url URL"}, reject: []string{"--keep"}},
+		{target: "all", want: []string{"errand gc all --older-than DURATION [options]", "-n, --dry-run", "--keep N", "--older-than DURATION", "--on PEER", "--url URL"}},
 	} {
 		t.Run(test.target, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
@@ -169,13 +171,13 @@ func TestCmdGCHelpOnlyShowsFlagsForTarget(t *testing.T) {
 				t.Fatalf("gc %s --help exit = %d, stderr=%q", test.target, code, stderr.String())
 			}
 			for _, want := range test.want {
-				if !strings.Contains(stderr.String(), want) {
-					t.Errorf("gc %s --help missing %q:\n%s", test.target, want, stderr.String())
+				if !strings.Contains(stdout.String(), want) {
+					t.Errorf("gc %s --help missing %q:\n%s", test.target, want, stdout.String())
 				}
 			}
 			for _, reject := range test.reject {
-				if strings.Contains(stderr.String(), reject) {
-					t.Errorf("gc %s --help unexpectedly contains %q:\n%s", test.target, reject, stderr.String())
+				if strings.Contains(stdout.String(), reject) {
+					t.Errorf("gc %s --help unexpectedly contains %q:\n%s", test.target, reject, stdout.String())
 				}
 			}
 		})
@@ -186,24 +188,74 @@ func TestCmdGCChangesUsesExplicitLocalTarget(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	var stdout, stderr bytes.Buffer
 	if code := cmdGCTo([]string{"changes", "--older-than", "1d", "-n"}, &stdout, &stderr); code != 0 ||
-		!strings.Contains(stdout.String(), "local changes: would remove 0 records") {
+		!strings.Contains(stdout.String(), "Nothing to collect on local (fetched changes)") {
 		t.Fatalf("gc changes = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
 
-func TestCmdKillShortForceFlag(t *testing.T) {
+func TestCmdKillSendsTheSignalAndWaitsForTheJobToEnd(t *testing.T) {
 	id := proto.NewULID()
+	var killed atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/v0/jobs/"+id+"/kill" || r.URL.Query().Get("force") != "1" {
-			t.Errorf("force-kill request = %s %s", r.Method, r.URL.String())
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v0/jobs/"+id+"/kill":
+			if r.URL.Query().Get("force") != "1" {
+				t.Errorf("-f did not request SIGKILL: %s", r.URL)
+			}
+			killed.Store(true)
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs/"+id:
+			details := proto.JobDetails{JobStatus: proto.JobStatus{ID: id, State: proto.StateRunning}}
+			if killed.Load() {
+				details.State = proto.StateKilled
+				details.Result = &proto.Result{State: proto.StateKilled, Signal: "killed", SignalNum: 9}
+			}
+			json.NewEncoder(w).Encode(details)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL)
 			http.NotFound(w, r)
-			return
 		}
-		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
-	if code := cmdKill([]string{"-f", "--url", server.URL, id}); code != 0 {
-		t.Fatalf("short force exit = %d, want 0", code)
+	var stdout, stderr bytes.Buffer
+	if code := cmdKillTo([]string{"-f", "--url", server.URL, id}, &stdout, &stderr); code != 0 {
+		t.Fatalf("kill exit = %d: %s", code, &stderr)
+	}
+	if !strings.Contains(stderr.String(), "stopped "+server.URL+"/"+id) {
+		t.Fatalf("kill did not confirm the job stopped: %q", stderr.String())
+	}
+}
+
+func TestCmdKillDoesNotCallAnUnreachableJobRunning(t *testing.T) {
+	id := proto.NewULID()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.Error(w, `{"error":"restarting"}`, http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	saved := killWait
+	killWait = 200 * time.Millisecond
+	defer func() { killWait = saved }()
+	var stdout, stderr bytes.Buffer
+	if code := cmdKillTo([]string{"--url", server.URL, id}, &stdout, &stderr); code != 1 ||
+		!strings.Contains(stderr.String(), "couldn't confirm") || strings.Contains(stderr.String(), "still running") {
+		t.Fatalf("kill with failing status polls = %d: %q", code, stderr.String())
+	}
+}
+
+func TestCmdKillReportsJobsThatAlreadyFinished(t *testing.T) {
+	id := proto.NewULID()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":"job is not running"}`, http.StatusConflict)
+	}))
+	defer server.Close()
+	var stdout, stderr bytes.Buffer
+	if code := cmdKillTo([]string{"--no-wait", "--url", server.URL, id}, &stdout, &stderr); code != 0 ||
+		!strings.Contains(stderr.String(), "had already finished") {
+		t.Fatalf("kill of a finished job = %d: %q", code, stderr.String())
 	}
 }
 
@@ -263,9 +315,9 @@ func TestCmdGCAllComposesCacheAndJobEndpoints(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := cmdGCTo([]string{"all", "--url", server.URL, "--older-than", "1d", "--keep", "5"}, &stdout, &stderr)
 	if code != 0 || cacheCalls != 1 || jobCalls != 1 || collectedCalls != 1 || acknowledgementCalls != 1 ||
-		!strings.Contains(stdout.String(), "cache: removed 2") ||
-		!strings.Contains(stdout.String(), "jobs: removed 3") ||
-		!strings.Contains(stdout.String(), "workspace changes: removed 1") {
+		!strings.Contains(stdout.String(), "freed 10 B          2 snapshot blobs") ||
+		!strings.Contains(stdout.String(), "freed 20 B          3 jobs older than 1d (keeping the newest 5)") ||
+		!strings.Contains(stdout.String(), "push staging     freed 0 B           1 push older than 1d") {
 		t.Fatalf("gc all = %d, calls=(%d,%d,%d,%d), stdout=%q stderr=%q",
 			code, cacheCalls, jobCalls, collectedCalls, acknowledgementCalls, stdout.String(), stderr.String())
 	}
@@ -312,10 +364,11 @@ func TestCmdGCAllDryRunIsObservationalAcrossEveryTarget(t *testing.T) {
 		"all", "--url", server.URL, "--older-than", "1d", "--keep", "5", "--dry-run",
 	}, &stdout, &stderr)
 	if code != 0 || !cacheRequest.DryRun || !jobRequest.DryRun || reconciliationCalls != 0 ||
-		!strings.Contains(stdout.String(), "cache: would remove 2") ||
-		!strings.Contains(stdout.String(), "jobs: would remove 3") ||
-		!strings.Contains(stdout.String(), "local changes: would remove 0") ||
-		!strings.Contains(stdout.String(), "workspace changes: would remove 1") {
+		!strings.Contains(stdout.String(), "Dry run") ||
+		!strings.Contains(stdout.String(), "would free 10 B     2 snapshot blobs") ||
+		!strings.Contains(stdout.String(), "would free 20 B     3 jobs older than 1d") ||
+		!strings.Contains(stdout.String(), "fetched changes  nothing to collect") ||
+		!strings.Contains(stdout.String(), "would free 0 B      1 push older than 1d") {
 		t.Fatalf("gc all --dry-run = %d, cache=%+v jobs=%+v reconciliation=%d stdout=%q stderr=%q",
 			code, cacheRequest, jobRequest, reconciliationCalls, stdout.String(), stderr.String())
 	}
@@ -355,8 +408,8 @@ func TestCmdGCReportsCleanupFailuresSeparately(t *testing.T) {
 	defer server.Close()
 	var stdout, stderr bytes.Buffer
 	code := cmdGCTo([]string{"jobs", "--url", server.URL, "--keep", "0"}, &stdout, &stderr)
-	if code != 1 || !strings.Contains(stdout.String(), "removed 1") ||
-		!strings.Contains(stdout.String(), "1 cleanup failures") {
+	if code != 1 || !strings.Contains(stdout.String(), "freed 0 B, but 1 cleanup failed on") ||
+		!strings.Contains(stdout.String(), ": 1 job") {
 		t.Fatalf("gc cleanup failure = %d, stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
@@ -443,7 +496,7 @@ url = ""
 	if code := cmdPsTo(nil, &stdout, &stderr); code == 0 {
 		t.Fatalf("partial ps returned success; stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "No active jobs found on reachable peers.") ||
+	if !strings.Contains(stdout.String(), "No active jobs on the runners that answered.") ||
 		!strings.Contains(stderr.String(), "broken") {
 		t.Fatalf("partial ps diagnostics missing; stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
@@ -594,7 +647,7 @@ func TestCmdPsRejectsLastBeyondListingWindow(t *testing.T) {
 	if code := cmdPsTo([]string{"--last", "201"}, &stdout, &stderr); code != 2 {
 		t.Fatalf("ps --last 201 exit = %d; stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "must not exceed 200") {
+	if !strings.Contains(stderr.String(), "can't be more than 200") {
 		t.Fatalf("ps --last 201 diagnostic = %q", stderr.String())
 	}
 }
@@ -765,9 +818,33 @@ url = %q
 		t.Fatalf("df exit = %d; stderr=%q", code, stderr.String())
 	}
 	out := stdout.String()
-	for _, want := range []string{"LOCATION", "CACHE", "JOBS", "CHANGES", "TOTAL", "cabal", "mac-mini", "local", "6.0 MiB", "1.0 GiB", "56 MiB", "84 MiB"} {
+	for _, want := range []string{"WHERE", "SNAPSHOT CACHE", "JOBS", "CHANGES", "TOTAL", "cabal", "mac-mini", "local", "6 MiB of 5 GiB", "1 GiB", "56 MiB", "84 MiB"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("df output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestCmdDfScriptOutputKeepsRunnerOrderWhateverAnswersFirst(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	serve := func(delay time.Duration) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(delay)
+			json.NewEncoder(w).Encode(proto.StorageStats{Changes: &proto.ChangeStorageStats{}, Jobs: proto.StorageCategory{Items: 1, Bytes: 1}})
+		}))
+	}
+	slow, fast := serve(200*time.Millisecond), serve(0)
+	defer slow.Close()
+	defer fast.Close()
+	writeClientConfig(t, fmt.Sprintf("[peers.cabal]\nurl = %q\n[peers.mac-mini]\nurl = %q\n", slow.URL, fast.URL))
+	for _, args := range [][]string{nil, {"--json"}} {
+		var stdout, stderr bytes.Buffer
+		if code := cmdDfTo(args, &stdout, &stderr); code != 0 {
+			t.Fatalf("df %v exit = %d: %s", args, code, &stderr)
+		}
+		out := stdout.String()
+		if c, m := strings.Index(out, "cabal"), strings.Index(out, "mac-mini"); c < 0 || m < 0 || c > m {
+			t.Fatalf("df %v put the faster runner first:\n%s", args, out)
 		}
 	}
 }
@@ -798,12 +875,9 @@ url = %q
 	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
 		t.Fatalf("decoding df JSON: %v; output=%q", err, stdout.String())
 	}
-	if !strings.Contains(stdout.String(), `"changes"`) {
-		t.Fatalf("df JSON does not expose local changes: %s", stdout.String())
-	}
-	if len(rows) != 2 || rows[0].Location != "cabal" || rows[0].Cache == nil ||
-		rows[0].Cache.Bytes != 42 || rows[0].Jobs.Bytes != 58 || rows[0].TotalBytes != 125 || rows[0].Changes == nil || rows[0].Changes.Bytes != 25 ||
-		rows[1].Location != "local" || rows[1].Changes == nil {
+	// --on names one remote runner, so this machine's own changes stay out.
+	if len(rows) != 1 || rows[0].Location != "cabal" || rows[0].Cache == nil ||
+		rows[0].Cache.Bytes != 42 || rows[0].Jobs.Bytes != 58 || rows[0].TotalBytes != 125 || rows[0].Changes == nil || rows[0].Changes.Bytes != 25 {
 		t.Fatalf("df JSON = %+v", rows)
 	}
 }
@@ -910,19 +984,19 @@ func TestSetupHelpAndFlagAliases(t *testing.T) {
 	if code := cmdSetupTo([]string{"--help"}, &stdout, &stderr, nil); code != 0 {
 		t.Fatalf("setup --help exit = %d", code)
 	}
-	if !strings.Contains(stderr.String(), "usage: errand setup [options]") || stdout.Len() != 0 {
+	if !strings.Contains(stdout.String(), "errand setup [options]") || stderr.Len() != 0 {
 		t.Fatalf("setup --help stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
-	for _, want := range []string{"-allow-user", "-dry-run", "-f", "-force", "-n"} {
-		if !strings.Contains(stderr.String(), want) {
-			t.Errorf("setup --help missing %q:\n%s", want, stderr.String())
+	for _, want := range []string{"--allow-user LOGIN", "-n, --dry-run", "-f, --force", "--max-jobs N", "Examples"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("setup --help missing %q:\n%s", want, stdout.String())
 		}
 	}
-	if strings.Contains(stderr.String(), "-allow value") || strings.Contains(stderr.String(), "-service-name") {
-		t.Fatalf("setup exposes an inconsistent or unnecessary flag:\n%s", stderr.String())
+	if strings.Contains(stdout.String(), "-allow value") || strings.Contains(stdout.String(), "-service-name") {
+		t.Fatalf("setup --help lists removed flags:\n%s", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "full runner access") {
-		t.Fatalf("setup understates --allow-user authority:\n%s", stderr.String())
+	if !strings.Contains(stdout.String(), "full runner access") {
+		t.Fatalf("setup understates --allow-user authority:\n%s", stdout.String())
 	}
 
 	stdout.Reset()
@@ -942,8 +1016,8 @@ func TestSetupDryRunDoesNotClaimTheRunnerIsReady(t *testing.T) {
 		Config:     setup.ConfigChoice{Listen: "tailnet:7443", MaxJobs: 1},
 	}
 	var output bytes.Buffer
-	printSetupReport(&output, report, true)
-	if strings.Contains(output.String(), "is ready") || !strings.Contains(output.String(), "would be configured") {
+	printSetupReport(termui.Plain(&output, &output).Out, report, true, true)
+	if strings.Contains(output.String(), "is ready") || !strings.Contains(output.String(), "would accept jobs") {
 		t.Fatalf("dry-run readiness summary = %q", output.String())
 	}
 }
@@ -953,7 +1027,7 @@ func TestSetupRejectsNegativeMaxJobs(t *testing.T) {
 	if code := cmdSetupTo([]string{"--max-jobs", "-1", "--print-acl"}, &stdout, &stderr, nil); code != 2 {
 		t.Fatalf("negative max-jobs exit = %d", code)
 	}
-	if !strings.Contains(stderr.String(), "--max-jobs must be positive") {
+	if !strings.Contains(stderr.String(), "--max-jobs must be at least 1") {
 		t.Fatalf("negative max-jobs diagnostic = %q", stderr.String())
 	}
 }
@@ -964,7 +1038,7 @@ func TestSetupRejectsConflictingTailnetProviders(t *testing.T) {
 		"--tailscaled-socket", "/run/tailscaled.sock",
 		"--tailscale-cli", "/usr/local/bin/tailscale", "--print-acl",
 	}, &stdout, &stderr, nil)
-	if code != 2 || !strings.Contains(stderr.String(), "mutually exclusive") {
+	if code != 2 || !strings.Contains(stderr.String(), "can't be combined") {
 		t.Fatalf("conflicting providers exit=%d stderr=%q", code, stderr.String())
 	}
 }
@@ -991,7 +1065,7 @@ func TestSetupReportUsesTheEffectiveListener(t *testing.T) {
 		Info: &proto.Info{MaxJobs: 1},
 	}
 	var output bytes.Buffer
-	printSetupReport(&output, report, false)
+	printSetupReport(termui.Plain(&output, &output).Out, report, false, true)
 	if strings.Contains(output.String(), "url =") || !strings.Contains(output.String(), `ssh = "mini"`) ||
 		!strings.Contains(output.String(), `remote_command = "/Users/george/bin/errand"`) ||
 		!strings.Contains(output.String(), `remote_socket = "/Users/george/.errand/errand.sock"`) {
@@ -1001,7 +1075,7 @@ func TestSetupReportUsesTheEffectiveListener(t *testing.T) {
 	report.Config.Listen = "tailnet:9443"
 	report.RemoteCommand = ""
 	output.Reset()
-	printSetupReport(&output, report, false)
+	printSetupReport(termui.Plain(&output, &output).Out, report, false, true)
 	if !strings.Contains(output.String(), `url = "http://mini.example.ts.net:9443"`) {
 		t.Fatalf("custom listener setup instructions = %q", output.String())
 	}

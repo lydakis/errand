@@ -903,6 +903,8 @@ an unavailable source, reporting the first failure. Push staging uses the bulk
 operation response deadline because verification and durable staging continue
 after the last request byte arrives;
 `GET /v0/storage` reports caller-visible storage, including snapshot and named caches;
+`DELETE /v0/workspaces/<id>` returns `200 OK` with a JSON removal report,
+including freed bytes (`-1` when measurement is unavailable);
 `POST /v0/cache/gc` prunes snapshot blobs and idle named caches;
 `POST /v0/jobs/gc` applies bounded owner-scoped receipt retention;
 `GET /v0/jobs/<ulid>/changes` transfers the immutable retained workspace-change bundle;

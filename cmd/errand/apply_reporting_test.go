@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
 func savedInterruptedApply(t *testing.T, peer, id, workspaceID string) string {
@@ -114,15 +116,15 @@ func TestPsApplyGuidanceStaysWithItsRow(t *testing.T) {
 		{Peer: "test", JobListEntry: proto.JobListEntry{ID: proto.NewULID(), State: proto.StateExited}, AutomaticApply: &client.AutomaticApplyStatus{State: client.AutomaticApplyNeedsRecovery}},
 	}
 	var out bytes.Buffer
-	writePsWithOptions(&out, rows, psRenderOptions{})
+	writePs(termui.Plain(&out, &out).Out, rows, false)
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	if len(lines) != 3 || strings.Contains(lines[1], "fetch --apply") || !strings.Contains(lines[2], "fetch --apply test/"+rows[1].ID) {
 		t.Fatalf("table guidance detached from row: %s", &out)
 	}
-	out.Reset()
-	writePsWithOptions(&out, rows, psRenderOptions{interactive: true, width: 160})
-	if strings.Count(out.String(), "fetch --apply") != 1 || strings.Contains(out.String(), "automatic apply: applied") {
-		t.Fatalf("cards: %s", &out)
+	con, screen := terminal(160)
+	writePs(con.Out, rows, false)
+	if strings.Count(screen.String(), "fetch --apply") != 1 || strings.Contains(screen.String(), "automatic apply: applied") {
+		t.Fatalf("terminal rows: %s", screen)
 	}
 }
 
@@ -253,5 +255,19 @@ func TestDoctorRecoveryUsesConfiguredSSHHandle(t *testing.T) {
 	checks := doctorApplyChecks()
 	if len(checks) != 1 || !strings.Contains(checks[0].Hint, "fetch --apply builder/"+id) || strings.Contains(checks[0].Hint, "ssh://peer-") {
 		t.Fatalf("checks = %+v", checks)
+	}
+}
+
+func TestDoctorKeepsLocalApplyChecksWhenNoRunnerMatches(t *testing.T) {
+	id := proto.NewULID()
+	savedInterruptedApply(t, "http://runner.invalid", id, "")
+	writeClientConfig(t, "default_peer = 'test'\n[peers.test]\nurl = 'http://runner.invalid'\n")
+	t.Chdir(t.TempDir())
+	var out, errOut bytes.Buffer
+	code := cmdDoctorTo([]string{"--json", "--where", "os=plan9"}, &out, &errOut, func(context.Context, string) (proto.Info, error) {
+		return proto.Info{Proto: proto.ProtoVersion, Version: version, Facts: proto.Facts{OS: "linux"}}, nil
+	})
+	if code != 1 || !strings.Contains(out.String(), `"automatic_apply"`) || !strings.Contains(out.String(), id) {
+		t.Fatalf("doctor dropped the apply check after placement failed: %d %s %s", code, &out, &errOut)
 	}
 }

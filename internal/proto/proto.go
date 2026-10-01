@@ -298,6 +298,9 @@ type JobStatus struct {
 	State  string  `json:"state"`
 	Digest string  `json:"digest,omitempty"`
 	Result *Result `json:"result,omitempty"`
+	// QueueAhead counts admitted jobs that will start before this one. It is
+	// set only while the job is queued.
+	QueueAhead *int `json:"queue_ahead,omitempty"`
 }
 
 // JobDetails is the owner-visible status view for one job. Spec is the
@@ -334,6 +337,8 @@ type JobListEntry struct {
 	ProjectTruncated      bool       `json:"project_truncated,omitempty"`
 	ExitCode              *int       `json:"exit_code,omitempty"`
 	Signal                string     `json:"signal,omitempty"`
+	// ChangedPaths counts retained workspace changes waiting to be fetched.
+	ChangedPaths int `json:"changed_paths,omitempty"`
 }
 
 type BlobRef struct {

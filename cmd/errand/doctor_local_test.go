@@ -109,7 +109,7 @@ func TestDoctorCombinesLocalRunnerWithSelectedPeer(t *testing.T) {
 				args = append(args, "--on", "second")
 				wantURL = "http://second.invalid"
 			}
-			probes := 0
+			probes := map[string]int{}
 			code := cmdDoctorWith(args, &out, &errOut, doctorServices{
 				local: func(_ context.Context, path string) setup.Diagnosis {
 					if path != "/custom/runner.toml" {
@@ -121,10 +121,7 @@ func TestDoctorCombinesLocalRunnerWithSelectedPeer(t *testing.T) {
 					return setup.Diagnosis{Checks: []setup.DiagnosticCheck{{Name: "runner", Status: "ok"}}, Info: &proto.Info{Version: "local-version"}, SocketPath: "/custom/socket"}
 				},
 				probe: func(_ context.Context, target string) (proto.Info, error) {
-					probes++
-					if target != wantURL {
-						t.Fatal(target)
-					}
+					probes[target]++
 					return proto.Info{Version: version}, nil
 				},
 			})
@@ -132,7 +129,9 @@ func TestDoctorCombinesLocalRunnerWithSelectedPeer(t *testing.T) {
 			if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 				t.Fatal(err)
 			}
-			if probes != 1 || report.OK == localFailure || (code == 0) == localFailure || report.Info.Version != version {
+			// The selected runner decides the verdict; the other configured
+			// runner is checked once too.
+			if probes[wantURL] != 1 || len(probes) != 2 || report.OK == localFailure || (code == 0) == localFailure || report.Info.Version != version {
 				t.Fatalf("%d %s", code, &out)
 			}
 			if !localFailure && report.LocalInfo.Version != "local-version" {

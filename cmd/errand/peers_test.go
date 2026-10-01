@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -19,6 +21,47 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/tailnet"
 )
+
+func TestQuietPeersReportsFailuresAndKeepsReachableNames(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	var calls atomic.Int32
+	deps := peersDeps{
+		load: func() (config.Client, error) {
+			return config.Client{Peers: map[string]config.Peer{
+				"online":  {URL: "http://online.invalid"},
+				"offline": {URL: "http://offline.invalid"},
+				"bad":     {Socket: "relative/socket"},
+			}}, nil
+		},
+		probe: func(_ context.Context, target string) (proto.Info, error) {
+			calls.Add(1)
+			if target == "http://offline.invalid" {
+				return proto.Info{}, errors.New("connection refused\x1b[2J")
+			}
+			return proto.Info{Version: version}, nil
+		},
+	}
+	var stdout, stderr bytes.Buffer
+	code := cmdPeersList([]string{"-q"}, &stdout, &stderr, deps)
+	if code != 1 || stdout.String() != "online\n" || calls.Load() != 2 {
+		t.Fatalf("quiet peers: code=%d stdout=%q probes=%d", code, stdout.String(), calls.Load())
+	}
+	for _, want := range []string{"bad:", "absolute Unix path", "offline:", "connection refused"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("stderr=%q, want %q", stderr.String(), want)
+		}
+	}
+	if strings.Contains(stderr.String(), "\x1b") {
+		t.Fatalf("unescaped diagnostic: %q", stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	calls.Store(0)
+	code = cmdPeersList([]string{"-q", "--on", "online"}, &stdout, &stderr, deps)
+	if code != 0 || stdout.String() != "online\n" || stderr.Len() != 0 || calls.Load() != 1 {
+		t.Fatalf("reachable quiet peer: code=%d stdout=%q stderr=%q probes=%d", code, stdout.String(), stderr.String(), calls.Load())
+	}
+}
 
 type stubProvider struct {
 	self  tailnet.Self
@@ -157,8 +200,8 @@ func TestPeersAddVerifiesThenWritesAndSetsDefault(t *testing.T) {
 	if !strings.Contains(string(raw), `default_peer = "cabal"`) || !strings.Contains(string(raw), `url = "`+runner.URL+`"`) {
 		t.Fatalf("config after add:\n%s", raw)
 	}
-	if !strings.Contains(out.String(), "now the default peer") {
-		t.Fatalf("stdout: %s", out.String())
+	if !strings.Contains(errb.String(), "Added cabal") && !strings.Contains(errb.String(), "added cabal") || !strings.Contains(errb.String(), "default runner now") {
+		t.Fatalf("stderr: %s", errb.String())
 	}
 	out.Reset()
 	if code := cmdPeersTo([]string{"add", "mini", runner.URL + "/"}, &out, &errb, deps); code != 0 {
@@ -183,6 +226,93 @@ func TestPeersAddVerifiesThenWritesAndSetsDefault(t *testing.T) {
 	}
 }
 
+func TestPeerReplacementHintPreservesOptionsAndShellArguments(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is unavailable")
+	}
+	sshPeer := config.Peer{SSH: "george@buildbox", RemoteCommand: "/opt/errand tools/errand's $build", RemoteSocket: "/run/errand & jobs/daemon.sock"}
+	for _, tc := range []struct {
+		name    string
+		flags   []string
+		alias   string
+		host    string
+		want    config.Peer
+		preview bool
+		probes  int
+	}{
+		{"ssh", []string{"--ssh", "--remote-command", sshPeer.RemoteCommand, "--remote-socket", sshPeer.RemoteSocket, "--no-verify"}, "mini", sshPeer.SSH, sshPeer, false, 0},
+		{"url", []string{"--no-verify"}, "mini", "http://localhost/build&test", config.Peer{URL: "http://localhost/build&test"}, false, 0},
+		{"verify", nil, "mini", "buildbox", config.Peer{URL: "http://buildbox:7443"}, false, 1},
+		{"preview", []string{"-ssh", "-n", "--no-verify=true"}, "mini", sshPeer.SSH, config.Peer{SSH: sshPeer.SSH}, true, 0},
+		{"force_false", []string{"--force=false", "--no-verify"}, "mini", "buildbox", config.Peer{URL: "http://buildbox:7443"}, false, 0},
+		{"flag_like_alias", []string{"--ssh", "--no-verify"}, "--mini", sshPeer.SSH, config.Peer{SSH: sshPeer.SSH}, false, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			if _, err := config.AddPeer(path, tc.alias, config.Peer{URL: "http://old"}, false); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			probes := 0
+			deps := peersDeps{
+				configPath: func() (string, error) { return path, nil },
+				probe: func(context.Context, string) (proto.Info, error) {
+					probes++
+					return proto.Info{Version: version}, nil
+				},
+			}
+			var stdout, stderr bytes.Buffer
+			args := append(append([]string(nil), tc.flags...), "--", tc.alias, tc.host)
+			if code := cmdPeersAdd(args, &stdout, &stderr, deps); code != 1 {
+				t.Fatalf("duplicate add: code=%d stderr=%q", code, stderr.String())
+			}
+			_, hint, ok := strings.Cut(stderr.String(), "replace it with ")
+			if !ok || strings.Count(hint, "\n") != 1 || strings.Contains(hint, "\x1b") {
+				t.Fatalf("missing or unsafe hint: %q", stderr.String())
+			}
+			// Capture the suggested argv through a real shell, then run it
+			// against the same config without executing external programs.
+			captured, err := exec.Command(bash, "-c", "printf '%s\\0' "+strings.TrimSuffix(hint, "\n")).Output()
+			if err != nil {
+				t.Fatalf("hint %q: %v", hint, err)
+			}
+			replacement := strings.Split(strings.TrimSuffix(string(captured), "\x00"), "\x00")
+			if len(replacement) < 3 || strings.Join(replacement[:3], " ") != "errand peers add" {
+				t.Fatalf("invalid replacement argv: %q", replacement)
+			}
+			stdout.Reset()
+			stderr.Reset()
+			if code := cmdPeersAdd(replacement[3:], &stdout, &stderr, deps); code != 0 {
+				t.Fatalf("replacement: code=%d stderr=%q", code, stderr.String())
+			}
+			if probes != tc.probes {
+				t.Fatalf("probes=%d, want %d", probes, tc.probes)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.preview {
+				if !bytes.Equal(after, before) || !strings.Contains(stdout.String(), `ssh = "`+tc.want.SSH+`"`) {
+					t.Fatalf("preview changed config or lost SSH: config=%s stdout=%q", after, stdout.String())
+				}
+				return
+			}
+			var cfg config.Client
+			if _, err := toml.Decode(string(after), &cfg); err != nil {
+				t.Fatal(err)
+			}
+			if got := cfg.Peers[tc.alias]; got != tc.want {
+				t.Fatalf("replacement saved %#v, want %#v; hint=%q", got, tc.want, hint)
+			}
+		})
+	}
+}
+
 func TestPeersAddRefusesForbiddenRunnerWithRemedyAndWritesNothing(t *testing.T) {
 	runner := fakeRunner(t, true)
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
@@ -194,9 +324,8 @@ func TestPeersAddRefusesForbiddenRunnerWithRemedyAndWritesNothing(t *testing.T) 
 	if _, err := os.Stat(cfgPath); !os.IsNotExist(err) {
 		t.Fatal("a refused peer must not be written")
 	}
-	if !strings.Contains(errb.String(), `add "george@example.com" to allow_users`) ||
-		!strings.Contains(errb.String(), "config used by its errand service") ||
-		!strings.Contains(errb.String(), "same `--config` value") ||
+	if !strings.Contains(errb.String(), "errand access add george@example.com") ||
+		!strings.Contains(errb.String(), "the same --config its service uses") ||
 		strings.Contains(errb.String(), "~/.config/errand/errandd.toml") ||
 		strings.Contains(errb.String(), "setup --allow-user") {
 		t.Fatalf("remedy missing: %s", errb.String())
@@ -374,16 +503,16 @@ func TestPeersHelpUsesEstablishedFlagAliases(t *testing.T) {
 	if code := cmdPeersTo([]string{"--help"}, &out, &errb, deps); code != 0 {
 		t.Fatalf("peers --help exit %d", code)
 	}
-	if !strings.Contains(errb.String(), "errand peers discover [-a | --all]") {
-		t.Fatalf("peers help omits discovery aliases:\n%s", errb.String())
+	if !strings.Contains(out.String(), "errand peers discover [-a] [--json]") {
+		t.Fatalf("peers help omits discovery aliases:\n%s", out.String())
 	}
 
 	for _, tc := range []struct {
 		args []string
 		want []string
 	}{
-		{[]string{"add", "--help"}, []string{"-f", "-force", "-n", "-dry-run", "-no-verify", "-remote-command", "-remote-socket", "-ssh"}},
-		{[]string{"discover", "--help"}, []string{"-a", "-all", "-json"}},
+		{[]string{"add", "--help"}, []string{"-f, --force", "-n, --dry-run", "--no-verify", "--remote-command PATH", "--remote-socket PATH", "--ssh"}},
+		{[]string{"discover", "--help"}, []string{"-a, --all", "--json"}},
 	} {
 		out.Reset()
 		errb.Reset()
@@ -391,8 +520,8 @@ func TestPeersHelpUsesEstablishedFlagAliases(t *testing.T) {
 			t.Fatalf("%v exit %d", tc.args, code)
 		}
 		for _, want := range tc.want {
-			if !strings.Contains(errb.String(), want) {
-				t.Errorf("%v help missing %q:\n%s", tc.args, want, errb.String())
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("%v help missing %q:\n%s", tc.args, want, out.String())
 			}
 		}
 	}
@@ -565,8 +694,7 @@ func TestPeersDiscoverClassifiesTailnetNodes(t *testing.T) {
 	}
 	text := out.String()
 	if !strings.Contains(text, "errand peers add cabal cabal.example.ts.net") ||
-		!strings.Contains(text, `add "george@example.com" to allow_users`) ||
-		!strings.Contains(text, "run `errand setup` to restart") ||
+		!strings.Contains(text, "locked refused you; on it, run errand access add george@example.com, then errand setup") ||
 		strings.Contains(text, "web ") {
 		t.Fatalf("discover output:\n%s", text)
 	}

@@ -130,6 +130,13 @@ func applyWorkspaceJob(opts ChangeFetchOptions, details proto.JobDetails, origin
 		}
 		result, applyErr := session.Apply(index.ID, selected, opts.MaterializeConflicts)
 		opts.meter.paths(result.Applied, nil)
+		if opts.Changes != nil {
+			keep := map[string]bool{}
+			for _, p := range result.Applied {
+				keep[p] = true
+			}
+			*opts.Changes = pathChanges(delta, keep)
+		}
 		var conflict *changeops.MergeConflictError
 		if errors.As(applyErr, &conflict) {
 			index.Retry = true

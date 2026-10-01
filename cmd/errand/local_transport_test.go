@@ -41,7 +41,7 @@ func TestLocalRunnerEndToEnd(t *testing.T) {
 	}
 	// A stale service override must not undo local-only mode.
 	out, err := exec.Command(bin, "serve", "--config", cfgPath, "--listen", "127.0.0.1:0").CombinedOutput()
-	if err == nil || !strings.Contains(string(out), "local-only transport cannot enable") {
+	if err == nil || !strings.Contains(string(out), "set to local jobs only, so it can't listen on the network") {
 		t.Fatalf("network override: %v %s", err, out)
 	}
 	server := exec.Command(bin, "serve", "--config", cfgPath)
@@ -113,8 +113,8 @@ func TestLocalRunnerEndToEnd(t *testing.T) {
 	handleFrom := func(logs string) string {
 		t.Helper()
 		for _, line := range strings.Split(logs, "\n") {
-			if strings.HasPrefix(line, "errand: job ") {
-				return strings.Fields(line)[2]
+			if _, rest, ok := strings.Cut(line, " · job "); ok && strings.HasPrefix(line, "errand: ") {
+				return strings.Fields(rest)[0]
 			}
 		}
 		t.Fatalf("missing job handle: %s", logs)
