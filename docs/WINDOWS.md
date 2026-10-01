@@ -14,7 +14,15 @@ yet.
 
 ## Install
 
-Download `errand_VERSION_windows_amd64.zip` (or `_arm64`) from
+With [Scoop](https://scoop.sh), in PowerShell:
+
+```powershell
+scoop bucket add errand https://github.com/lydakis/scoop-errand
+scoop install errand
+errand setup
+```
+
+Or download `errand_VERSION_windows_amd64.zip` (or `_arm64`) from
 [GitHub Releases](https://github.com/lydakis/errand/releases) and unzip
 `errand.exe` somewhere permanent, such as `%LOCALAPPDATA%\Programs\errand`.
 The binary is not signed yet, so a browser download shows a SmartScreen
@@ -35,9 +43,9 @@ New Windows runners listen on the tailnet only (`transport = "tailscale"`),
 because SSH callers are not supported on Windows yet. The runner log is
 `%LOCALAPPDATA%\errand\errand.log`.
 
-To upgrade, replace `errand.exe` and run `errand.exe setup` again. The running
-task uses its own copy, so replacing the file never fails because the runner
-is using it.
+To upgrade, run `scoop update errand` (or replace `errand.exe`), then run
+`errand setup` again. The running task uses its own copy, so replacing the
+file never fails because the runner is using it.
 
 ## Send jobs from your Mac
 

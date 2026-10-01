@@ -145,6 +145,34 @@ It installs the CLI only; it does not start a runner, modify its authorization,
 or remove runner receipts and config on uninstall. Do not publish a prerelease
 formula over the stable tap entry.
 
+## Scoop bucket
+
+Windows users install from the Scoop bucket
+[lydakis/scoop-errand](https://github.com/lydakis/scoop-errand). It needs a
+`main` branch (an initial README is enough) before the first update, and
+`GORELEASER_TOKEN` needs Contents read/write access to it as well as to the tap.
+
+The **Publish Scoop** workflow also runs on `release.published` and skips drafts
+and prereleases. A Windows job with no secrets downloads the published Windows
+zips and `checksums.txt`, renders `bucket/errand.json` with
+`scripts/prepare_scoop_update.py`, installs it with Scoop and checks
+`errand version`. A second job renders the manifest again from the same
+assets and updates the bucket through the GitHub Contents API, with the same
+guards as the tap: identical updates do nothing, older releases cannot
+downgrade it, and a different manifest for the same version is refused. If it
+fails, fix the problem and rerun **Publish Scoop** with the published tag.
+
+Users then install or upgrade with:
+
+```powershell
+scoop bucket add errand https://github.com/lydakis/scoop-errand
+scoop install errand
+scoop update errand
+```
+
+The manifest installs the CLI only. Scoop prints a note to run `errand setup`,
+which starts or restarts the runner after an install or update.
+
 ## Runner upgrades
 
 For runners on 0.2.1 or earlier, follow the
