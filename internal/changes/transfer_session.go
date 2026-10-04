@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -172,7 +173,16 @@ func (s *TransferSession) stage(ctx context.Context, id string, source transferM
 		return "", b, err
 	}
 	defer RemoveTree(tmp)
-	if err := s.materializeStage(ctx, source, tmp, b); err != nil {
+	var baseLinks fslink.Lookup
+	if fslink.NativeTypes {
+		for _, entry := range b.BaseManifest.Entries {
+			if entry.Type == proto.EntrySymlink {
+				baseLinks = fslink.ManifestLookup(v.state.Manifest)
+				break
+			}
+		}
+	}
+	if err := s.materializeStage(ctx, source, tmp, b, baseLinks); err != nil {
 		return "", b, err
 	}
 	a := TransferAttempt{ID: id, Revision: v.revision(), SourceRoot: sourceRoot, BundleRoot: b.RootHash(), CreatedAt: time.Now().UTC()}

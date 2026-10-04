@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -30,7 +31,7 @@ func validateTransferMaterialization(manifest proto.Manifest, maxBytes int64) er
 // materializePrivate builds an unpublished member of a caller-owned transaction.
 // The caller cleans up on failure and publishes the containing directory only
 // after all members are durable. No standalone change-base name is published.
-func (s TransferBlobStore) materializePrivate(ctx context.Context, dest string, m proto.Manifest, maxBytes int64) error {
+func (s TransferBlobStore) materializePrivate(ctx context.Context, dest string, m proto.Manifest, maxBytes int64, lookup fslink.Lookup) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -56,7 +57,7 @@ func (s TransferBlobStore) materializePrivate(ctx context.Context, dest string, 
 	if err := transferStorageOutsideWorkspace(tree.root, storage.identity); err != nil {
 		return err
 	}
-	if err := materializeTransferBase(ctx, storage.root, tree.root, m); err != nil {
+	if err := materializeTransferBaseWithLinks(ctx, storage.root, tree.root, m, lookup); err != nil {
 		return err
 	}
 	return verifyTransferPaths(storage, tree)

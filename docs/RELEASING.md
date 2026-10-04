@@ -1,10 +1,10 @@
 # Releases and Homebrew
 
-The release pipeline builds macOS and Linux binaries for amd64 and arm64,
+The release pipeline builds macOS, Linux and Windows binaries for amd64 and arm64,
 a source archive, SHA-256 checksums, and a Homebrew formula. It creates a
 **draft** GitHub release after the same macOS/Linux checks used for pull
-requests pass. Publishing a stable release then triggers a validated Homebrew
-tap update automatically.
+requests pass. Publishing a stable release then triggers validated Homebrew
+tap and [Scoop bucket](#scoop-bucket) updates automatically.
 
 ## Local rehearsal
 
@@ -35,11 +35,13 @@ The generated `dist/` directory is disposable and ignored by Git.
 2. Choose a version and push its tag, for example `v0.1.0`. Stable tags use
    `vMAJOR.MINOR.PATCH`; prereleases can use `v0.1.0-rc.1`. Do not move an
    existing release tag. The workflow runs only for pushed `v*` tags.
-3. Review the resulting draft on GitHub. It contains four binary archives,
+3. Review the resulting draft on GitHub. It contains four macOS/Linux
+   `.tar.gz` archives, two Windows `.zip` archives,
    `errand_VERSION_source.tar.gz`, `checksums.txt`, and `errand.rb`. All archives
    and the formula are covered by `checksums.txt`. Binary archives contain
-   `errand`, `LICENSE`, and `README.md`; `errand version` reports the tag version
-   without the leading `v`.
+   `errand` (`errand.exe` on Windows), `LICENSE`, and `README.md`; `errand
+   version` reports the tag version without the leading `v`. The Windows
+   binaries are unsigned, so a browser download shows a SmartScreen warning.
 4. Download the draft assets and verify checksums and native binaries. Review
    the generated release notes, then publish the draft. Prerelease tags are
    marked as prereleases automatically.
@@ -142,6 +144,34 @@ and uses Go as a build dependency. It supports the host macOS/Linux architecture
 It installs the CLI only; it does not start a runner, modify its authorization,
 or remove runner receipts and config on uninstall. Do not publish a prerelease
 formula over the stable tap entry.
+
+## Scoop bucket
+
+Windows users install from the Scoop bucket
+[lydakis/scoop-errand](https://github.com/lydakis/scoop-errand). It needs a
+`main` branch (an initial README is enough) before the first update, and
+`GORELEASER_TOKEN` needs Contents read/write access to it as well as to the tap.
+
+The **Publish Scoop** workflow also runs on `release.published` and skips drafts
+and prereleases. A Windows job with no secrets downloads the published Windows
+zips and `checksums.txt`, renders `bucket/errand.json` with
+`scripts/prepare_scoop_update.py`, installs it with Scoop and checks
+`errand version`. A second job renders the manifest again from the same
+assets and updates the bucket through the GitHub Contents API, with the same
+guards as the tap: identical updates do nothing, older releases cannot
+downgrade it, and a different manifest for the same version is refused. If it
+fails, fix the problem and rerun **Publish Scoop** with the published tag.
+
+Users then install or upgrade with:
+
+```powershell
+scoop bucket add errand https://github.com/lydakis/scoop-errand
+scoop install errand
+scoop update errand
+```
+
+The manifest installs the CLI only. Scoop prints a note to run `errand setup`,
+which starts or restarts the runner after an install or update.
 
 ## Runner upgrades
 

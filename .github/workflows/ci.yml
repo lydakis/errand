@@ -89,3 +89,38 @@ jobs:
           ruby -c dist/errand.rb
           cd dist
           sha256sum --check checksums.txt
+
+  windows:
+    name: Check (windows-2025)
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: ${{ inputs.ref == '' }}
+          cache-dependency-path: go.sum
+      - name: Vet
+        run: go vet ./...
+      - name: Build and check binary
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/errand.exe" ./cmd/errand
+          "$RUNNER_TEMP/errand.exe" version
+      # Packages are added here as their Windows support lands.
+      - name: Test Windows-supported packages
+        run: >-
+          go test -count=1 -timeout=5m
+          ./internal/archive ./internal/durable ./internal/filelock ./internal/fsidentity ./internal/fsowner
+          ./internal/logio ./internal/manifest ./internal/pathpolicy ./internal/placement
+          ./internal/proctree ./internal/proto ./internal/serviceruntime ./internal/setup
+          ./internal/unixpeer
+      # Windows-only tests in packages whose other tests still assume Unix.
+      - name: Test Windows-specific behavior
+        run: go test -count=1 -timeout=5m -run 'OnWindows$' ./...
