@@ -4,15 +4,18 @@ import (
 	"net/http"
 	"os"
 
+	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/proto"
 )
 
-func (d *Daemon) pushBase(row workspaceRecord, client string) (proto.Manifest, error) {
-	v, err := d.pushSession(row, client).Checkpoint().Read()
+// pushBase is the client's retained checkpoint or, before its first push, the
+// creation snapshot. Either carries its identity for later requests to reuse.
+func (d *Daemon) pushBase(row workspaceRecord, client string) (*changeops.SourceBase, error) {
+	base, err := d.pushSession(row, client).Checkpoint().Base()
 	if os.IsNotExist(err) {
-		return row.Manifest, nil
+		return row.creation, nil
 	}
-	return v.Manifest, err
+	return base, err
 }
 
 // The retained source checkpoint is independent of the running application's
@@ -42,5 +45,5 @@ func (d *Daemon) handleWorkspacePushBase(w http.ResponseWriter, r *http.Request,
 		workspaceHTTPError(w, err)
 		return
 	}
-	writeJSON(w, 200, base)
+	writeJSON(w, 200, base.Manifest())
 }
