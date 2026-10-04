@@ -8,7 +8,11 @@ import (
 )
 
 // Peer is the effective identity of the process at the other end of a socket.
-type Peer struct{ UID, GID uint32 }
+// User, when set, names the peer's account.
+type Peer struct {
+	UID, GID uint32
+	User     string
+}
 
 // Dial connects only to a server running as the expected effective UID.
 // Credentials are checked on the connected socket before any request is sent,

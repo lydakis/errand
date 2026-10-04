@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/lydakis/errand/internal/durable"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -369,5 +370,5 @@ func syncTreeDirectory(path string) error {
 	if err != nil {
 		return err
 	}
-	return errors.Join(f.Sync(), f.Close())
+	return errors.Join(durable.Sync(f), f.Close())
 }

@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/fsmode"
 )
 
 // A group changes existing regular files under verified existing parents. Independent
@@ -58,7 +59,7 @@ func planApplyFileGroup(destination *applyDestination, journal applyJournal, inp
 			return nil, "non-regular-value"
 		}
 		// Group installation/recovery uses final physical modes directly.
-		if value.Mode().Perm() != merged.original[item.Path] {
+		if !fsmode.Matches(value, uint32(merged.original[item.Path])) {
 			return nil, "widened-mode"
 		}
 	}

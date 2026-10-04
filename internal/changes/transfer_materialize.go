@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -22,10 +23,11 @@ const (
 // materializationPolicy keeps the permission and durability choices together.
 // Clone support is optional; every path verifies the resulting bytes before sync.
 type materializationPolicy struct {
-	permissions treePermissions
-	cloneFiles  bool
-	syncData    func(*os.File) error
-	barrier     func() error
+	linkDirectory func(proto.ManifestEntry) bool
+	permissions   treePermissions
+	cloneFiles    bool
+	syncData      func(*os.File) error
+	barrier       func() error
 }
 
 type materializedDirectory struct {
@@ -112,11 +114,19 @@ func materializeTransferTree(ctx context.Context, tree *os.Root, manifest proto.
 		return err
 	}
 	// No file or implicit directory creation can traverse a link we created.
+	if fslink.NativeTypes && len(symlinks) != 0 && policy.linkDirectory == nil {
+		lookup := fslink.ManifestLookup(manifest)
+		policy.linkDirectory = func(e proto.ManifestEntry) bool { return fslink.IsDirectory(e, lookup) }
+	}
 	for _, e := range symlinks {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := tree.Symlink(e.Target, e.Path); err != nil {
+		directory := false
+		if fslink.NativeTypes {
+			directory = policy.linkDirectory(e)
+		}
+		if err := fslink.Create(tree, e.Target, e.Path, directory); err != nil {
 			return err
 		}
 	}

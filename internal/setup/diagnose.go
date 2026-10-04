@@ -72,7 +72,7 @@ func Diagnose(ctx context.Context, configPath string, sys DiagnosticSystem) Diag
 	r := Diagnosis{}
 	diagnoseBinary(sys, &r)
 	d, configErr := sys.LoadDaemon(configPath)
-	serviceCtx, stopService := context.WithTimeout(ctx, 4*time.Second)
+	serviceCtx, stopService := context.WithTimeout(ctx, 10*time.Second)
 	active, serviceErr := serviceActive(serviceCtx, sys)
 	stopService()
 	definition, definitionErr := diagnosticServiceDefinition(sys)
@@ -229,7 +229,7 @@ func diagnosticPathPresent(sys DiagnosticSystem, path string) bool {
 }
 
 func diagnosticServiceDefinition(sys DiagnosticSystem) (bool, error) {
-	if sys.GOOS() != "linux" && sys.GOOS() != "darwin" {
+	if !managedServiceOS(sys.GOOS()) {
 		return false, nil
 	}
 	home, err := sys.Home()
@@ -237,8 +237,11 @@ func diagnosticServiceDefinition(sys DiagnosticSystem) (bool, error) {
 		return false, err
 	}
 	path := filepath.Join(home, linuxUnitSubdir, DefaultServiceName+".service")
-	if sys.GOOS() == "darwin" {
+	switch sys.GOOS() {
+	case "darwin":
 		path = filepath.Join(home, darwinAgentSubdir, LaunchAgentLabel+".plist")
+	case "windows":
+		path = scheduledTaskPath(home)
 	}
 	return diagnosticPathPresent(sys, path), nil
 }
