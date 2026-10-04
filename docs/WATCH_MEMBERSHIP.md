@@ -129,6 +129,7 @@ Raw reports: [benchmarks/2026-09-25-watch-membership-linux.json](benchmarks/2026
 - Relisting reads the whole directory, and after a lost event it also lstats
   that directory's selected files. The cost therefore grows with directory
   size. Very large flat directories were not measured.
-- Starting from a clean Git worktree, the first change flips `GitInfo.Dirty`.
-  That fails the preparation's final metadata check once, and the retry uses
-  full selection. This behavior predates the change and was not measured.
+- Starting from a clean Git worktree, the first change flipped `GitInfo.Dirty`.
+  That failed the preparation's final metadata check once, and the retry used
+  full selection. This behavior predated the change and was not measured.
+  [Removing that check](WATCH_GIT_STATUS.md) made that edit incremental.

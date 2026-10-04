@@ -142,7 +142,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	var sourceState *manifeststate.Snapshot
 	var preparedDelta *changeops.SnapshotDelta
 	if opts.watchState != nil && opts.watchState.watcher != nil {
-		sourceState, prep.gitInfo, prep.selection, prep.guard, prep.err = opts.watchState.watcher.PrepareSnapshot(builder)
+		sourceState, prep.selection, prep.guard, prep.err = opts.watchState.watcher.PrepareSnapshot(builder)
 		prep.stage = "preparing watched source"
 	} else {
 		prep = prepareSnapshotWithBuilder(origin.Root, opts.IncludeAll, ws.Selection.Caches, builder)

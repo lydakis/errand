@@ -29,7 +29,7 @@ func BenchmarkWatchPreparation(b *testing.B) {
 				w := &Watch{root: root, identity: info, Changed: make(chan struct{}, 1)}
 				builder := new(Builder)
 				prepare := func() {
-					_, _, _, guard, err := w.Prepare(builder)
+					_, _, guard, err := w.Prepare(builder)
 					if err != nil {
 						b.Fatal(err)
 					}

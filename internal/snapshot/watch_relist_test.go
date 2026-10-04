@@ -378,7 +378,7 @@ func TestWatchPrepareRejectsDirectoryCreatedDuringCapture(t *testing.T) {
 				createDuringCapture(t, w, dir)
 				// Explicit selection lists directories, so its reselection
 				// rejects the preparation. Git does not list empty directories.
-				if _, _, _, _, err := w.Prepare(b); err != nil && !IsSourceChanged(err) {
+				if _, _, _, err := w.Prepare(b); err != nil && !IsSourceChanged(err) {
 					t.Fatal(err)
 				}
 				if testHookBeforeDirectoryStamps != nil {
