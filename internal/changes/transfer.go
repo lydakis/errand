@@ -376,14 +376,7 @@ func readTransferRecord(root *os.Root, name string, record any) error {
 }
 
 func readTransferRecordBytes(root *os.Root, name string) ([]byte, error) {
-	info, err := root.Lstat(name)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("transfer state is not a regular file")
-	}
-	f, err := root.Open(name)
+	f, err := openTransferRecord(root, name)
 	if err != nil {
 		return nil, err
 	}
@@ -396,6 +389,17 @@ func readTransferRecordBytes(root *os.Root, name string) ([]byte, error) {
 		return nil, fmt.Errorf("transfer state exceeds size limit")
 	}
 	return raw, nil
+}
+
+func openTransferRecord(root *os.Root, name string) (*os.File, error) {
+	info, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("transfer state is not a regular file")
+	}
+	return root.Open(name)
 }
 
 func writeTransferState(root *os.Root, name string, state transferApplyState) error {
