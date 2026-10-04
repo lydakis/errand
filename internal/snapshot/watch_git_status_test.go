@@ -155,3 +155,40 @@ func TestSelectionGuardBindsRepositoryMetadataOnlyForJobs(t *testing.T) {
 	}
 	job(GitInfo{Repository: true, Commit: head()})
 }
+
+// Push binds no HEAD, but Git selection still needs a repository Git
+// recognizes. Breaking it after preparation fails the post-freeze guard and
+// the next incremental cycle, as a fresh selection would.
+func TestGitWatchRejectsBrokenRepository(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		damage func(gitDir string) error
+	}{
+		{"HEAD removed", func(dir string) error { return os.Remove(filepath.Join(dir, "HEAD")) }},
+		{"HEAD corrupted", func(dir string) error { return os.WriteFile(filepath.Join(dir, "HEAD"), []byte("corrupt\n"), 0o644) }},
+		{"objects removed", func(dir string) error { return os.RemoveAll(filepath.Join(dir, "objects")) }},
+		{"refs removed", func(dir string) error { return os.RemoveAll(filepath.Join(dir, "refs")) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, b, _ := prepareGitWatchFixture(t)
+			guard := assertPreparedMatchesFull(t, w, b)
+			if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
+				t.Fatal("watch captured no Git evidence")
+			}
+			if err := tc.damage(filepath.Join(w.root, ".git")); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, _, err := SelectFilesWithOptions(w.root, w.opts); err == nil {
+				t.Fatal("fresh selection accepted the broken repository")
+			}
+			if err := guard.Verify(); !IsSourceChanged(err) {
+				t.Fatalf("guard accepted a broken repository: %v", err)
+			}
+			writeFile(t, w.root, "value", "edited")
+			w.invalidatePath(filepath.Join(w.root, "value"), dirtyContent)
+			if _, _, _, err := w.PrepareSnapshot(b); err == nil {
+				t.Fatal("incremental cycle accepted a broken repository")
+			}
+		})
+	}
+}

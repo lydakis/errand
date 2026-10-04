@@ -27,8 +27,13 @@ Git selection.
   selection as it was. Under Git selection, HEAD and the index are also
   watched control files, so either change runs full selection on the next
   cycle anyway.
-- A removed or broken repository still fails Git evidence: the index is gone
-  or `git ls-files` fails. Explicit selection does not depend on Git.
+- A removed or broken repository still fails Git evidence, which a fresh
+  selection would also reject. The index is gone or `git ls-files` fails, or
+  Git would no longer recognize the repository: Git evidence records HEAD's
+  contents with the other Git sources, and requires the objects and refs
+  directories to remain. HEAD is already a watched control file, so recording
+  it adds no full selections. This costs one small read and two stats per
+  check, with no Git process. Explicit selection does not depend on Git.
 - Content is still verified. Every shipped body is checked against its
   manifest entry when it is frozen.
 
