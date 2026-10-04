@@ -573,8 +573,9 @@ terminal and no stdin, and the runner does not source shell profiles; use
 `sh -lc '...'` when a command depends on them. Its environment is `PATH`,
 `HOME`, `USER`, `LOGNAME`, `LANG`, and `TMPDIR` from the runner, plus
 `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` when the runner has them,
-then declared variables and `ERRAND_JOB_ID`, `ERRAND_GIT_COMMIT`, and
-`ERRAND_GIT_DIRTY`. On Linux, `errand setup` runs the runner as a systemd user
+then declared variables and `ERRAND_JOB_ID`. When the snapshot came from a Git
+commit, `ERRAND_GIT_COMMIT` and `ERRAND_GIT_DIRTY` are set too; `--no-snapshot`
+jobs, non-Git directories, and repositories without a commit don't get them. On Linux, `errand setup` runs the runner as a systemd user
 service, whose manager sets `XDG_RUNTIME_DIR` (and, on most distributions, the
 user bus address), so jobs can use `systemctl --user` directly.
 
