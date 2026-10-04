@@ -570,14 +570,19 @@ merge is required. Missing Git fails that apply safely before installation.
 
 A job is a plain process on the runner, not a login session. It gets no
 terminal and no stdin, and the runner does not source shell profiles; use
-`sh -lc '...'` when a command depends on them. Its environment is `PATH`,
-`HOME`, `USER`, `LOGNAME`, `LANG`, and `TMPDIR` from the runner, plus
-`XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` when the runner has them,
-then declared variables and `ERRAND_JOB_ID`. When the snapshot came from a Git
-commit, `ERRAND_GIT_COMMIT` and `ERRAND_GIT_DIRTY` are set too; `--no-snapshot`
-jobs, non-Git directories, and repositories without a commit don't get them. On Linux, `errand setup` runs the runner as a systemd user
+`sh -lc '...'` when a command depends on them. Its environment starts from a
+small allowlist of the runner's own variables, then adds declared variables and
+`ERRAND_JOB_ID`. When the snapshot came from a Git commit, `ERRAND_GIT_COMMIT`
+and `ERRAND_GIT_DIRTY` are set too; `--no-snapshot` jobs, non-Git directories,
+and repositories without a commit don't get them.
+
+On macOS and Linux runners the allowlist is `PATH`, `HOME`, `USER`, `LOGNAME`,
+`LANG`, and `TMPDIR`, plus `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` when
+the runner has them. On Linux, `errand setup` runs the runner as a systemd user
 service, whose manager sets `XDG_RUNTIME_DIR` (and, on most distributions, the
-user bus address), so jobs can use `systemctl --user` directly.
+user bus address), so jobs can use `systemctl --user` directly. Windows runners
+pass Windows variables instead, such as `USERPROFILE`, `APPDATA`, `TEMP`,
+`SystemRoot`, `ComSpec`, and `PATHEXT`, and none of the Unix-only names above.
 
 Jobs share the runner's network, including its loopback. Bind services to
 `127.0.0.1` and reach them with `--forward` (see above).
@@ -597,8 +602,13 @@ dependencies = "node_modules"
 ```
 
 ```sh
-errand --on mac-mini --detach -- sh -c 'npm install --prefer-offline --no-audit && npm start'
+errand --on mac-mini -- npm install --prefer-offline --no-audit
+errand --on mac-mini --detach -- npm start
 ```
+
+Install in its own job, and run it again when dependencies change. A cache is
+saved only when a job exits 0, and a service usually ends by being killed, so
+anything a service job installs into the cache is discarded.
 
 `npm ci` deletes `node_modules` before installing, so it discards a cached
 tree; `npm install` keeps it and only installs what changed. npm's own
