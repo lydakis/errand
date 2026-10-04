@@ -18,6 +18,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +28,8 @@ import (
 
 	"github.com/lydakis/errand/internal/archive"
 	changeops "github.com/lydakis/errand/internal/changes"
+	"github.com/lydakis/errand/internal/durable"
+	"github.com/lydakis/errand/internal/filelock"
 	"github.com/lydakis/errand/internal/logio"
 	"github.com/lydakis/errand/internal/namedcache"
 	"github.com/lydakis/errand/internal/pathpolicy"
@@ -134,6 +137,11 @@ func New(cfg Config) (*Daemon, error) {
 	if cfg.MaxUploadBytes <= cfg.MaxLimits.MaxWorkspaceBytes {
 		return nil, fmt.Errorf("max upload bytes must exceed the workspace byte ceiling")
 	}
+	if runtime.GOOS == "windows" {
+		// Named cache trees rely on hard links and POSIX modes that NTFS
+		// doesn't give them yet.
+		cfg.NamedCacheDisabled = true
+	}
 	if cfg.NamedCacheMaxBytes == 0 {
 		cfg.NamedCacheMaxBytes = defaultCacheMaxBytes
 	}
@@ -225,13 +233,28 @@ func (d *Daemon) lockStateDir() error {
 	if err != nil {
 		return err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	err = filelock.TryLock(f)
+	// Windows releases a stopped process's locks only after it has fully
+	// exited. A service manager restarting the runner, as setup does on an
+	// upgrade, can start the new one first, so it waits briefly.
+	for deadline := time.Now().Add(stateLockWait); errors.Is(err, filelock.ErrLocked) && time.Now().Before(deadline); {
+		time.Sleep(100 * time.Millisecond)
+		err = filelock.TryLock(f)
+	}
+	if err != nil {
 		_ = f.Close()
 		return fmt.Errorf("state directory %q is already in use: %w", d.cfg.StateDir, err)
 	}
 	d.lockFile = f
 	return nil
 }
+
+var stateLockWait = func() time.Duration {
+	if runtime.GOOS == "windows" {
+		return 10 * time.Second
+	}
+	return 0
+}()
 
 // Close releases the process-wide ownership of the daemon state directory.
 func (d *Daemon) Close() error {
@@ -245,7 +268,7 @@ func (d *Daemon) Close() error {
 		if d.lockFile == nil {
 			return
 		}
-		if err := syscall.Flock(int(d.lockFile.Fd()), syscall.LOCK_UN); err != nil {
+		if err := filelock.Unlock(d.lockFile); err != nil {
 			d.closeErr = err
 		}
 		if err := d.lockFile.Close(); err != nil && d.closeErr == nil {
@@ -284,7 +307,7 @@ func syncDirectory(path string) error {
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return durable.Sync(dir)
 }
 
 func ensureChildDirectoryDurable(path string, mode os.FileMode) error {

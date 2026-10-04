@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/lydakis/errand/internal/proto"
@@ -80,7 +79,7 @@ func startAutomaticApplyWorkerProcess(peerURL, jobID string) error {
 	cmd.Stdin = null
 	cmd.Stdout = null
 	cmd.Stderr = null
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	detachWorker(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
