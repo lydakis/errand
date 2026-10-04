@@ -463,6 +463,11 @@ Non-terminal EOF is ignored, so scripts remain attached unless they request
 `--forward [LOCAL:]REMOTE` opens TCP listeners on IPv4 and IPv6 local loopback for the
 attached session. It is repeatable and can be added when initially running a
 job or on any later `attach`. Omitting `LOCAL` uses the remote port locally.
+The runner end connects to `127.0.0.1:REMOTE`, then `[::1]:REMOTE`, on the
+runner itself, so a service bound only to loopback is reachable and should stay
+that way. Binding `0.0.0.0` is never needed for forwarding and exposes the port
+to everything that can reach the runner. A connection fails with "connecting to
+job port" when nothing listens on runner loopback at that port.
 Ctrl-D closes the attachment's listeners and active connections without
 stopping the job. Forwarding is not remembered, and `--detach --forward` is
 rejected because no attached client would remain to own the listener. Host
@@ -560,6 +565,43 @@ Git is not required for non-Git snapshots, running jobs, status, logs, or plain
 fetches. Applying changes needs `git merge-file` on the client only when both
 the local and remote sides changed the same text file and a true three-way text
 merge is required. Missing Git fails that apply safely before installation.
+
+## What a job runs with
+
+A job is a plain process on the runner, not a login session. It gets no
+terminal and no stdin, and the runner does not source shell profiles; use
+`sh -lc '...'` when a command depends on them. Its environment is `PATH`,
+`HOME`, `USER`, `LOGNAME`, `LANG`, and `TMPDIR` from the runner, plus
+`XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` when the runner has them,
+then declared variables and `ERRAND_JOB_ID`, `ERRAND_GIT_COMMIT`, and
+`ERRAND_GIT_DIRTY`. On Linux, `errand setup` runs the runner as a systemd user
+service, whose manager sets `XDG_RUNTIME_DIR` (and, on most distributions, the
+user bus address), so jobs can use `systemctl --user` directly.
+
+Jobs share the runner's network, including its loopback. Bind services to
+`127.0.0.1` and reach them with `--forward` (see above).
+
+Every ordinary run starts in a fresh workspace that is removed after the job
+finishes, so a restarted service starts from the files you sent. Keep state
+that must survive restarts, such as a SQLite database, either in a
+[persistent workspace](#persistent-workspaces) or in a runner path outside the
+workspace that the service is configured to use. To avoid reinstalling
+dependencies on every restart, declare them as a
+[named cache](NAMED_CACHES.md). For npm:
+
+```toml
+# .errand.toml
+[caches]
+dependencies = "node_modules"
+```
+
+```sh
+errand --on mac-mini --detach -- sh -c 'npm install --prefer-offline --no-audit && npm start'
+```
+
+`npm ci` deletes `node_modules` before installing, so it discards a cached
+tree; `npm install` keeps it and only installs what changed. npm's own
+download cache in the runner's `~/.npm` is reused between jobs either way.
 
 ## Job state and control
 
