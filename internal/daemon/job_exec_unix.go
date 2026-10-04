@@ -7,7 +7,13 @@ import (
 )
 
 // baseEnvNames are taken from the daemon's environment into every job.
-var baseEnvNames = []string{"PATH", "HOME", "USER", "LOGNAME", "LANG", "TMPDIR"}
+// XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS come from the systemd user
+// manager that runs the Linux runner, so jobs can use systemctl --user and
+// other user-session services the way a login shell can.
+var baseEnvNames = []string{
+	"PATH", "HOME", "USER", "LOGNAME", "LANG", "TMPDIR",
+	"XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS",
+}
 
 func envNameEqual(a, b string) bool { return a == b }
 
