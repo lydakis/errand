@@ -735,7 +735,7 @@ func TestExecutableResolutionUsesEffectiveJobPATH(t *testing.T) {
 	if execution.Path != "" {
 		t.Fatalf("execution receipt exposed declared PATH metadata: %+v", execution)
 	}
-	if _, err := resolveExecutable("sh", "", t.TempDir()); err == nil {
+	if _, err := resolveExecutable("sh", "", t.TempDir(), ""); err == nil {
 		t.Fatal("effective empty PATH fell back to the daemon's ambient PATH")
 	}
 }

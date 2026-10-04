@@ -43,12 +43,35 @@ func parseServicePID(value string) (int, error) {
 // A responsive socket alone is not proof that setup owns that daemon. Refuse
 // to change its config or install a competing service, even with --force.
 func verifyServiceOwner(ctx context.Context, sys System, socket string, pid int) error {
+	if sys.GOOS() == "windows" {
+		return verifyScheduledTaskOwner(ctx, sys, socket, pid)
+	}
 	managedPID, err := managedServicePID(ctx, sys)
 	if err != nil {
 		return fmt.Errorf("runner PID %d already owns %s, but its setup-managed service cannot be verified: %w; use the existing service manager or explicitly migrate the runner before rerunning setup", pid, socket, err)
 	}
 	if managedPID != pid {
 		return fmt.Errorf("runner PID %d owns %s, but the setup-managed service runs PID %d; use the existing service manager or explicitly migrate the runner before rerunning setup", pid, socket, managedPID)
+	}
+	return nil
+}
+
+// Task Scheduler does not report a task's PID. The runner is setup's when the
+// task is running and the socket's process runs the task's command.
+func verifyScheduledTaskOwner(ctx context.Context, sys System, socket string, pid int) error {
+	task, err := queryScheduledTask(ctx, sys)
+	if err == nil && task.State != "Running" {
+		err = fmt.Errorf("scheduled task %s is %s", scheduledTaskName, strings.ToLower(task.State))
+	}
+	var image string
+	if err == nil {
+		image, err = sys.ProcessImage(pid)
+	}
+	if err != nil {
+		return fmt.Errorf("runner PID %d already owns %s, but its setup-managed service cannot be verified: %w; use the existing service manager or explicitly migrate the runner before rerunning setup", pid, socket, err)
+	}
+	if !sys.SameFile(image, task.Command) {
+		return fmt.Errorf("runner PID %d owns %s and runs %s, but scheduled task %s runs %s; use the existing service manager or explicitly migrate the runner before rerunning setup", pid, socket, image, scheduledTaskName, task.Command)
 	}
 	return nil
 }

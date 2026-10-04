@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/lydakis/errand/internal/fslink"
+	"github.com/lydakis/errand/internal/fsmode"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -21,13 +23,13 @@ func transferDirectorySource(source string) transferMaterializer {
 	}
 }
 
-func (s *TransferSession) retainedSource() transferMaterializer {
+func (s *TransferSession) retainedSource(lookup fslink.Lookup) transferMaterializer {
 	return func(ctx context.Context, dest string, m proto.Manifest) error {
-		return s.Blobs().materializePrivate(ctx, dest, m, s.MaxSourceBytes)
+		return s.Blobs().materializePrivate(ctx, dest, m, s.MaxSourceBytes, lookup)
 	}
 }
 
-func (s *TransferSession) materializeStage(ctx context.Context, source transferMaterializer, dir string, b proto.ChangeBundle) error {
+func (s *TransferSession) materializeStage(ctx context.Context, source transferMaterializer, dir string, b proto.ChangeBundle, baseLinks fslink.Lookup) error {
 	metadata, err := marshalBundle(b)
 	if err != nil {
 		return err
@@ -35,7 +37,7 @@ func (s *TransferSession) materializeStage(ctx context.Context, source transferM
 	if b.Bytes > s.MaxChangeBytes {
 		return ErrByteLimitExceeded
 	}
-	if err := s.retainedSource()(ctx, filepath.Join(dir, "base"), b.BaseManifest); err != nil {
+	if err := s.retainedSource(baseLinks)(ctx, filepath.Join(dir, "base"), b.BaseManifest); err != nil {
 		return err
 	}
 	if err := source(ctx, filepath.Join(dir, "remote"), b.RemoteManifest); err != nil {
@@ -82,6 +84,7 @@ func materializeSourceAtRoot(ctx context.Context, source, tree *os.Root, m proto
 		}
 		return physical[e.Path]
 	}
+	var linkDirectories map[string]bool
 	for _, e := range m.Entries {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -91,9 +94,15 @@ func materializeSourceAtRoot(ctx context.Context, source, tree *os.Root, m proto
 		if e.Type == proto.EntryFile {
 			continue
 		}
-		if err := checkMaterializationSource(&paths, e, mode(e)); err != nil {
+		if fslink.NativeTypes && e.Type == proto.EntrySymlink && linkDirectories == nil {
+			linkDirectories = make(map[string]bool)
+		}
+		if err := checkMaterializationSource(&paths, e, mode(e), linkDirectories); err != nil {
 			return err
 		}
+	}
+	if fslink.NativeTypes && linkDirectories != nil {
+		policy.linkDirectory = func(e proto.ManifestEntry) bool { return linkDirectories[e.Path] }
 	}
 	return materializeTransferTree(ctx, tree, m, policy, func(e proto.ManifestEntry) (io.ReadCloser, error) {
 		parent, name, lease, err := paths.parent(e.Path)
@@ -117,7 +126,7 @@ func materializeSourceAtRoot(ctx context.Context, source, tree *os.Root, m proto
 			return nil, err
 		}
 		opened, err := f.Stat()
-		if err != nil || !opened.Mode().IsRegular() || (info != nil && !os.SameFile(info, opened)) || opened.Size() != e.Size || uint32(opened.Mode().Perm()) != mode(e) {
+		if err != nil || !opened.Mode().IsRegular() || (info != nil && !os.SameFile(info, opened)) || opened.Size() != e.Size || !fsmode.Matches(opened, mode(e)) {
 			return nil, errors.Join(fmt.Errorf("transfer source %q changed while opening", e.Path), f.Close())
 		}
 		return &transferSourceReader{File: f, entry: e, mode: mode(e)}, nil
@@ -132,7 +141,7 @@ type transferSourceReader struct {
 
 func (r *transferSourceReader) Close() error {
 	info, err := r.Stat()
-	if err == nil && (!info.Mode().IsRegular() || info.Size() != r.entry.Size || uint32(info.Mode().Perm()) != r.mode) {
+	if err == nil && (!info.Mode().IsRegular() || info.Size() != r.entry.Size || !fsmode.Matches(info, r.mode)) {
 		err = fmt.Errorf("transfer source %q changed while copying", r.entry.Path)
 	}
 	return errors.Join(err, r.File.Close())
@@ -142,7 +151,7 @@ func (r *transferSourceReader) cloneTo(tree *os.Root, name string) (*os.File, er
 	return cloneFileInto(r.File, tree, name)
 }
 
-func checkMaterializationSource(paths *materializationPaths, e proto.ManifestEntry, mode uint32) error {
+func checkMaterializationSource(paths *materializationPaths, e proto.ManifestEntry, mode uint32, linkDirectories map[string]bool) error {
 	parent, name, lease, err := paths.parent(e.Path)
 	defer paths.release(lease)
 	var info os.FileInfo
@@ -155,7 +164,7 @@ func checkMaterializationSource(paths *materializationPaths, e proto.ManifestEnt
 	if err != nil {
 		return err
 	}
-	if uint32(info.Mode().Perm()) != mode {
+	if !fsmode.Matches(info, mode) {
 		return fmt.Errorf("transfer source %q changed mode", e.Path)
 	}
 	switch e.Type {
@@ -171,8 +180,11 @@ func checkMaterializationSource(paths *materializationPaths, e proto.ManifestEnt
 		if err != nil {
 			return err
 		}
-		if target != e.Target {
+		if filepath.ToSlash(target) != e.Target {
 			return fmt.Errorf("transfer source %q changed target", e.Path)
+		}
+		if fslink.NativeTypes {
+			linkDirectories[e.Path] = fslink.Directory(info)
 		}
 	}
 	return nil

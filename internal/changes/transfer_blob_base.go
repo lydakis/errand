@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -75,7 +76,15 @@ func (s TransferBlobStore) MaterializeBase(ctx context.Context, jobDir string, m
 }
 
 func materializeTransferBase(ctx context.Context, storage, tree *os.Root, manifest proto.Manifest) error {
-	return materializeTransferTree(ctx, tree, manifest, durableMaterialization(func() error { return syncApplyRootDirectory(tree, ".") }), func(e proto.ManifestEntry) (io.ReadCloser, error) {
+	return materializeTransferBaseWithLinks(ctx, storage, tree, manifest, nil)
+}
+
+func materializeTransferBaseWithLinks(ctx context.Context, storage, tree *os.Root, manifest proto.Manifest, lookup fslink.Lookup) error {
+	policy := durableMaterialization(func() error { return syncApplyRootDirectory(tree, ".") })
+	if fslink.NativeTypes && lookup != nil {
+		policy.linkDirectory = func(e proto.ManifestEntry) bool { return fslink.IsDirectory(e, lookup) }
+	}
+	return materializeTransferTree(ctx, tree, manifest, policy, func(e proto.ManifestEntry) (io.ReadCloser, error) {
 		return openTransferBlob(storage, strings.ToLower(e.SHA256), e)
 	})
 }

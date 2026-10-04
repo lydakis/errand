@@ -28,8 +28,10 @@ func ConnContext(ctx context.Context, conn net.Conn) context.Context {
 	if err != nil {
 		return ctx
 	}
-	if u, lookupErr := user.LookupId(strconv.FormatUint(uint64(peer.UID), 10)); lookupErr == nil {
-		peer.User = u.Username
+	if peer.User == "" {
+		if u, lookupErr := user.LookupId(strconv.FormatUint(uint64(peer.UID), 10)); lookupErr == nil {
+			peer.User = u.Username
+		}
 	}
 	return context.WithValue(ctx, localPeerKey{}, peer)
 }
@@ -42,5 +44,5 @@ func localPeerFromContext(ctx context.Context) (LocalPeer, bool) {
 func currentUID() uint32 { return unixpeer.CurrentUID() }
 func peerCredentials(conn *net.UnixConn) (LocalPeer, error) {
 	peer, err := unixpeer.Credentials(conn)
-	return LocalPeer{UID: peer.UID, GID: peer.GID}, err
+	return LocalPeer{UID: peer.UID, GID: peer.GID, User: peer.User}, err
 }

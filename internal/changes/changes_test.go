@@ -18,7 +18,6 @@ import (
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
-	"golang.org/x/sys/unix"
 )
 
 type testChangeRoot struct {
@@ -766,6 +765,7 @@ func TestWorkspacePathDiscoveryExcludesApplyTransactions(t *testing.T) {
 }
 
 func TestCollectRefusesUnsupportedNodeReplacingSubmittedPath(t *testing.T) {
+	requireFIFOs(t)
 	workspace := t.TempDir()
 	jobDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "artifact"), []byte("submitted"), 0o600); err != nil {
@@ -781,7 +781,7 @@ func TestCollectRefusesUnsupportedNodeReplacingSubmittedPath(t *testing.T) {
 	if err := os.Remove(filepath.Join(workspace, "artifact")); err != nil {
 		t.Fatal(err)
 	}
-	if err := unix.Mkfifo(filepath.Join(workspace, "artifact"), 0o600); err != nil {
+	if err := mkfifo(filepath.Join(workspace, "artifact")); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, baseline, proto.SelectionPolicy{}, 1<<20); err == nil ||
@@ -791,13 +791,14 @@ func TestCollectRefusesUnsupportedNodeReplacingSubmittedPath(t *testing.T) {
 }
 
 func TestCollectIgnoresNewUnsupportedNodesWithoutInventingDeletes(t *testing.T) {
+	requireFIFOs(t)
 	workspace := t.TempDir()
 	jobDir := t.TempDir()
 	baseline := proto.Manifest{}
 	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
 		t.Fatal(err)
 	}
-	if err := unix.Mkfifo(filepath.Join(workspace, "events"), 0o600); err != nil {
+	if err := mkfifo(filepath.Join(workspace, "events")); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(workspace, "artifact"), []byte("retained"), 0o600); err != nil {

@@ -15,11 +15,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/lydakis/errand/internal/client"
@@ -29,6 +29,7 @@ import (
 	"github.com/lydakis/errand/internal/serviceruntime"
 	"github.com/lydakis/errand/internal/setup"
 	"github.com/lydakis/errand/internal/tailnet"
+	"github.com/lydakis/errand/internal/unixpeer"
 	"github.com/lydakis/errand/internal/workspace"
 )
 
@@ -94,6 +95,10 @@ func main() { os.Exit(runCLI(os.Args[1:])) }
 func runCLI(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, usage)
+		return 2
+	}
+	if unsupportedOnThisPlatform(args[0]) {
+		fmt.Fprintln(os.Stderr, windowsClientUnsupported)
 		return 2
 	}
 	switch args[0] {
@@ -632,10 +637,18 @@ func cmdServe(args []string) int {
 	listen := fs.String("listen", "", `listen address ("tailnet:7443" resolves the tailnet IP; "none" disables TCP)`)
 	stateDir := fs.String("state-dir", "", "receipt and job state directory")
 	insecure := fs.Bool("insecure-no-auth", false, "DANGEROUS: skip all authorization (tests only)")
+	logFile := fs.String("log-file", "", "append the runner log to this file instead of stderr")
 	var allowUsers stringList
 	fs.Var(&allowUsers, "allow-user", "tailnet login allowed to use this runner (repeatable)")
 	setFlagUsage(fs, "errand serve [options]")
 	fs.Parse(args)
+	if *logFile != "" {
+		f, err := os.OpenFile(*logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+		if err != nil {
+			log.Fatalf("errand serve: %v", err)
+		}
+		useServiceLog(f)
+	}
 
 	fileCfg, err := config.LoadDaemon(*cfgPath)
 	if err != nil {
@@ -744,6 +757,26 @@ func cmdServe(args []string) int {
 	return 0
 }
 
+// retiredStdio keeps replaced standard files reachable. A collected *os.File
+// closes its handle, and once a Windows runner detaches its console, that
+// handle value can belong to an unrelated object.
+var retiredStdio []*os.File
+
+// useServiceLog sends everything the runner writes to f, the log a service
+// manager gives it.
+func useServiceLog(f *os.File) {
+	retiredStdio = append(retiredStdio, os.Stdout, os.Stderr)
+	os.Stdout, os.Stderr = f, f
+	log.SetOutput(f)
+	// The runtime writes fatal errors to the process's own stderr, which
+	// a service may not have; keep them in the log too.
+	if err := debug.SetCrashOutput(f, debug.CrashOptions{}); err != nil {
+		log.Printf("errand serve: crash output stays on stderr: %v", err)
+	}
+	logServiceStop()
+	detachServiceConsole(f)
+}
+
 type tailnetDiscoverFunc func(string, string) (tailnet.Provider, error)
 
 func resolveServeTransport(
@@ -791,7 +824,7 @@ func listenUnixSocket(path string) (net.Listener, error) {
 			conn.Close()
 			return nil, fmt.Errorf("local socket %q already has a live listener", path)
 		}
-		if !errors.Is(dialErr, syscall.ECONNREFUSED) {
+		if !unixpeer.ConnectionRefused(dialErr) {
 			return nil, fmt.Errorf("checking existing local socket %q: %w", path, dialErr)
 		}
 		if err := os.Remove(path); err != nil {

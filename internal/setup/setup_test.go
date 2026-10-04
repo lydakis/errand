@@ -1,3 +1,6 @@
+// The fake system models Unix paths; Windows setup decisions run here too.
+//go:build unix
+
 package setup
 
 import (
@@ -43,6 +46,10 @@ type fakeSystem struct {
 	discoverErr    error
 	discoverSocket string
 	discoverCLI    string
+	taskState      string
+	taskCommand    string
+	taskDefinition string
+	processImage   string
 }
 
 func newFake(t *testing.T, goos string) *fakeSystem {
@@ -117,6 +124,39 @@ func (f *fakeSystem) Run(_ context.Context, name string, args ...string) (string
 	if strings.HasPrefix(line, "launchctl bootstrap ") || strings.HasPrefix(line, "systemctl --user restart ") {
 		f.currentPID++
 	}
+	if name == "powershell.exe" {
+		if f.taskState == "" {
+			return "Missing", nil
+		}
+		out := f.taskState + "\r\n" + f.taskCommand
+		if args[len(args)-1] == scheduledTaskDefinitionQuery {
+			definition := f.taskDefinition
+			if definition == "" {
+				definition, _ = decodeUTF16(renderScheduledTask("S-1-5-21-1-2-3-1001", f.taskCommand,
+					f.home+"/.config/errand/errandd.toml", f.home+"/AppData/Local/errand/errand.log"))
+			}
+			out += "\r\n" + definition
+		}
+		return out, nil
+	}
+	switch {
+	case strings.HasPrefix(line, "schtasks /Create "):
+		command, err := taskCommand(f.files[args[4]])
+		if err != nil {
+			return "", err
+		}
+		f.taskCommand = command
+		f.taskDefinition, _ = decodeUTF16(f.files[args[4]])
+		if f.taskState == "" {
+			f.taskState = "Ready"
+		}
+	case strings.HasPrefix(line, "schtasks /End "):
+		f.taskState = "Ready"
+	case strings.HasPrefix(line, "schtasks /Run "):
+		f.taskState = "Running"
+		f.currentPID++
+		f.processImage = f.taskCommand
+	}
 	if out, ok := f.cmdOutput[line]; ok {
 		return out, nil
 	}
@@ -145,7 +185,7 @@ func (f *fakeSystem) SocketPID(_ context.Context, _ string) (int, error) {
 	if f.socketPID != 0 {
 		return f.socketPID, nil
 	}
-	if ran(f, "launchctl bootstrap") || ran(f, "systemctl --user restart") {
+	if ran(f, "launchctl bootstrap") || ran(f, "systemctl --user restart") || ran(f, "schtasks /Run") {
 		return f.currentPID, nil
 	}
 	if f.quiesceErr != nil {
@@ -184,6 +224,15 @@ func testActiveJobSummary(info proto.Info) string {
 	}
 	return strings.Join(active, ", ")
 }
+func (f *fakeSystem) RuntimePath(exe, stateDir string, create bool) (string, error) {
+	path := filepath.Join(stateDir, "runtime", "0123abcd", "errand.exe")
+	if create {
+		f.files[path] = "runtime copy of " + exe
+	}
+	return path, nil
+}
+func (f *fakeSystem) UserSID() (string, error)         { return "S-1-5-21-1-2-3-1001", nil }
+func (f *fakeSystem) ProcessImage(int) (string, error) { return f.processImage, nil }
 func (f *fakeSystem) ReleaseQuiesce(_ context.Context, socket, token string) error {
 	f.releasedLeases = append(f.releasedLeases, socket+"\x00"+token)
 	return nil
