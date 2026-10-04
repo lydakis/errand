@@ -14,7 +14,6 @@ import (
 
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/proto"
-	"golang.org/x/sys/unix"
 )
 
 // TransferTarget records one immutable apply request in private receiver state.
@@ -285,11 +284,10 @@ func transferStorageOutsideWorkspace(storage *os.Root, workspace fsidentity.Iden
 		if id == workspace {
 			return fmt.Errorf("transfer state must be outside the destination workspace")
 		}
-		fd, err := unix.Openat(int(current.Fd()), "..", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+		parent, err := openParentDirectory(current)
 		if err != nil {
 			return err
 		}
-		parent := os.NewFile(uintptr(fd), "transfer state ancestor")
 		parentInfo, err := parent.Stat()
 		if err != nil {
 			parent.Close()

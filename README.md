@@ -29,11 +29,25 @@ brew install lydakis/errand/errand
 ```
 
 Or download a binary from [GitHub Releases](https://github.com/lydakis/errand/releases).
+
 To build from source, use the Go version in [go.mod](go.mod):
 
 ```sh
 go build -trimpath -o errand ./cmd/errand
 ```
+
+**Windows (experimental, runner only).** A Windows PC can run jobs sent from
+a Mac or Linux machine over Tailscale. It can't send jobs yet. With
+[Scoop](https://scoop.sh):
+
+```powershell
+scoop bucket add errand https://github.com/lydakis/scoop-errand
+scoop install errand
+errand setup
+```
+
+See [Windows runner (experimental)](docs/WINDOWS.md) for what works and what
+doesn't yet.
 
 ## Quickstart
 
@@ -133,7 +147,9 @@ errand --on mac-mini -L 3000 -- sh -c 'pnpm install && pnpm dev'
 
 For a server listening on port 3000, open `http://localhost:3000` on your
 laptop. The server runs on the mini; the port is available locally while
-you're attached.
+you're attached. Errand connects to the port on the mini's own loopback
+(`127.0.0.1`, then `::1`), so the server can listen on `localhost`. It
+doesn't need `0.0.0.0`, which would also expose it to the mini's network.
 
 Each run uses the files sent when it starts. For a persistent workspace,
 `errand push --workspace NAME --watch --apply` sends later local edits continuously.

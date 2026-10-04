@@ -3,10 +3,10 @@ package client
 import (
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"time"
 
+	"github.com/lydakis/errand/internal/filelock"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -30,7 +30,7 @@ func TestAutomaticApplyWorkerDoesNotMistakeInspectorForOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_SH); err != nil {
+	if err := filelock.TryRLock(f); err != nil {
 		t.Fatal(err)
 	}
 	type result struct {
@@ -50,7 +50,7 @@ func TestAutomaticApplyWorkerDoesNotMistakeInspectorForOwner(t *testing.T) {
 		t.Fatalf("worker gave up while inspector held lock: %+v", result)
 	case <-time.After(20 * time.Millisecond):
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_UN); err != nil {
+	if err := filelock.Unlock(f); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -121,7 +121,7 @@ func TestWorkerLeaseKeepsOneInodeAcrossOwners(t *testing.T) {
 	if err != nil || !os.SameFile(before, after) {
 		t.Fatalf("lease inode changed: %v", err)
 	}
-	if err := syscall.Flock(int(observer.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err == nil {
+	if err := filelock.TryRLock(observer); err == nil {
 		t.Fatal("observer missed the replacement owner")
 	}
 }

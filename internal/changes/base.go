@@ -55,6 +55,10 @@ func captureWorkspaceBaseContext(ctx context.Context, workspace, jobDir string, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	// Windows refuses to rename a directory while a handle to it is open.
+	if err := tree.Close(); err != nil {
+		return err
+	}
 	if err := os.Rename(tmp, workspaceBasePath(jobDir)); err != nil {
 		return err
 	}
