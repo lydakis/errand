@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -170,6 +171,9 @@ func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, er
 		"-o", "ControlPath=" + filepath.Join(controlDir, "%C"),
 		"-o", "ControlPersist=60s",
 		"-o", "ServerAliveInterval=30",
+		// Like dialPeer's budget: an unreachable host fails in the connect
+		// step. It covers the TCP connect and key exchange, not prompts.
+		"-o", fmt.Sprintf("ConnectTimeout=%d", int((peerConnectTimeout+time.Second-1)/time.Second)),
 		"--", target, remoteInvocation,
 	}
 	cmd := exec.CommandContext(ctx, "ssh", args...)
@@ -194,12 +198,58 @@ func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, er
 	// unread buffered output. Keep the read side ourselves and close only the
 	// parent's writer; the child closes its inherited writer when it exits.
 	stdoutWriter.Close()
-	conn := &stdioConn{cmd: cmd, r: stdout, w: stdin, host: target}
+	conn := &stdioConn{cmd: cmd, r: stdout, w: stdin, host: target, exit: make(chan struct{})}
 	go func() {
 		err := cmd.Wait()
 		conn.exited(err)
 	}()
+	// As in dialPeer: ssh still silent shortly after starting may be waiting
+	// on a Tailscale node that is gone. Only a direct connection is judged,
+	// against tailscaled's view from after ssh started: a connection ssh did
+	// make, even one slow to answer, leaves a fresh WireGuard handshake.
+	a, budget, directHost := newAttempt(), peerConnectTimeout, sshDirectHost
+	check := time.AfterFunc(tailnetCheckAfter, func() {
+		if conn.read.Load() {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), budget)
+		defer cancel()
+		host, ok := directHost(ctx, target)
+		if !ok || conn.read.Load() {
+			return
+		}
+		if gone := a.tailnetGone(ctx, host); gone != nil && !conn.read.Load() {
+			conn.abort(gone)
+		}
+	})
+	go func() {
+		<-conn.exit
+		check.Stop()
+	}()
 	return conn, nil
+}
+
+// sshDirectHost asks ssh which host it connects to for target, after
+// ssh_config aliases, without connecting. It reports false when ssh would
+// go through a proxy, since this machine never reaches that host itself.
+var sshDirectHost = func(ctx context.Context, target string) (string, bool) {
+	out, err := exec.CommandContext(ctx, "ssh", "-G", "--", target).Output()
+	if err != nil {
+		return "", false
+	}
+	host := ""
+	for _, line := range strings.Split(string(out), "\n") {
+		key, value, _ := strings.Cut(strings.TrimSpace(line), " ")
+		switch key {
+		case "hostname":
+			host = value
+		case "proxyjump", "proxycommand":
+			if value != "none" {
+				return "", false
+			}
+		}
+	}
+	return host, host != ""
 }
 
 func sshControlDir() (string, error) {
@@ -233,10 +283,24 @@ type stdioConn struct {
 	w    io.WriteCloser
 	host string
 
+	exit chan struct{} // closed once ssh has exited
+	read atomic.Bool   // whether the remote side ever sent a byte
+
 	mu      sync.Mutex
 	closed  bool
 	exitErr error
 	done    bool
+	aborted error // why the connection attempt was cut short
+}
+
+// abort ends a connection attempt that cannot succeed.
+func (c *stdioConn) abort(err error) {
+	c.mu.Lock()
+	c.aborted = err
+	c.mu.Unlock()
+	if c.cmd.Process != nil {
+		_ = c.cmd.Process.Kill()
+	}
 }
 
 func (c *stdioConn) exited(err error) {
@@ -244,10 +308,32 @@ func (c *stdioConn) exited(err error) {
 	c.done = true
 	c.exitErr = err
 	c.mu.Unlock()
+	close(c.exit)
 }
 
 func (c *stdioConn) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
+	if n > 0 {
+		c.read.Store(true)
+	}
+	if err != nil && n == 0 && !c.read.Load() && !c.isClosed() {
+		// ssh closes its output as it exits. Exit status 255 before the
+		// remote side said anything is ssh's own failure to connect.
+		select {
+		case <-c.exit:
+		case <-time.After(time.Second):
+		}
+		var exitErr *exec.ExitError
+		c.mu.Lock()
+		exit, aborted := c.exitErr, c.aborted
+		c.mu.Unlock()
+		if aborted != nil {
+			return 0, aborted
+		}
+		if errors.As(exit, &exitErr) && exitErr.ExitCode() == 255 {
+			return 0, &UnreachableError{Addr: c.host, Reason: "ssh could not connect to " + c.host, Err: exit}
+		}
+	}
 	if err != nil && n == 0 {
 		c.mu.Lock()
 		exit := c.exitErr
@@ -260,12 +346,21 @@ func (c *stdioConn) Read(p []byte) (int, error) {
 	return n, err
 }
 
+func (c *stdioConn) isClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
+}
+
 func (c *stdioConn) Write(p []byte) (int, error) {
 	n, err := c.w.Write(p)
 	if err != nil {
 		c.mu.Lock()
-		exit := c.exitErr
+		exit, aborted := c.exitErr, c.aborted
 		c.mu.Unlock()
+		if aborted != nil {
+			return n, aborted
+		}
 		if exit != nil {
 			return n, fmt.Errorf("ssh to %s ended: %w", c.host, exit)
 		}

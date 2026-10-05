@@ -390,9 +390,42 @@ type peerQueryResult[T any] struct {
 }
 
 type fleetRead[T any] struct {
-	targets []peerTarget
-	results []peerQueryResult[T]
-	failed  bool
+	targets  []peerTarget
+	results  []peerQueryResult[T]
+	failures []peerFailure
+	failed   bool
+}
+
+type peerFailure struct {
+	name string
+	err  error
+}
+
+func (r *fleetRead[T]) fail(name string, err error) {
+	r.failures = append(r.failures, peerFailure{name: name, err: err})
+	r.failed = true
+}
+
+// reportFailures follows the results: what could be read is shown first,
+// then one line for each peer that could not be.
+func (r fleetRead[T]) reportFailures(stderr io.Writer) {
+	for _, f := range r.failures {
+		fmt.Fprintf(stderr, "errand: peer %s: %s\n", terminalSafeField(f.name), terminalSafeField(describePeerError(f.err)))
+	}
+}
+
+// describePeerError tells apart a peer that could not be connected to from
+// one that was connected to but did not answer in time.
+func describePeerError(err error) string {
+	var unreachable *client.UnreachableError
+	if errors.As(err, &unreachable) {
+		return unreachable.Error()
+	}
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &netErr) && netErr.Timeout() {
+		return "timed out: connected, but the runner did not answer in time"
+	}
+	return err.Error()
 }
 
 func queryPeerTargets[T any](targets []peerTarget, query func(string) (T, error)) []peerQueryResult[T] {
@@ -430,8 +463,7 @@ func readFleet[T any](rawURL, on string, stderr io.Writer, query func(string) (T
 	}
 	for _, result := range queryPeerTargets(targets, query) {
 		if result.err != nil {
-			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
-			read.failed = true
+			read.fail(result.target.name, result.err)
 			continue
 		}
 		read.results = append(read.results, result)
@@ -561,8 +593,7 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 		return psPeerRows(url, *workspace, !all && last == 0, byPeer[url])
 	}) {
 		if result.err != nil {
-			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
-			read.failed = true
+			read.fail(result.target.name, result.err)
 		} else {
 			read.results = append(read.results, result)
 		}
@@ -599,6 +630,7 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	} else if len(read.results) != 0 {
 		fmt.Fprintln(stdout, psEmptyMessage(read.targets, !all && last == 0, read.failed))
 	}
+	read.reportFailures(stderr)
 	return read.exitCode()
 }
 

@@ -90,6 +90,10 @@ func probeInfo(ctx context.Context, peerURL, query string, timeout time.Duration
 }
 
 func shortNetErr(err error) string {
+	var unreachable *UnreachableError
+	if errors.As(err, &unreachable) {
+		return unreachable.Reason
+	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "timed out"
 	}

@@ -63,8 +63,14 @@ type Peer struct {
 	HostName string
 	OS       string
 	Online   bool
-	IPs      []string
-	UserID   int64
+	// LastSeen is when the coordination server last heard from an offline
+	// node; zero when online or unknown.
+	LastSeen time.Time
+	// LastHandshake is this node's latest WireGuard handshake with the peer:
+	// evidence the data path worked, independent of the control plane.
+	LastHandshake time.Time
+	IPs           []string
+	UserID        int64
 }
 
 // statusWire is the subset of tailscaled's status document both providers
@@ -83,12 +89,14 @@ type statusWire struct {
 		LoginName string `json:"LoginName"`
 	} `json:"User"`
 	Peer map[string]struct {
-		DNSName      string   `json:"DNSName"`
-		HostName     string   `json:"HostName"`
-		OS           string   `json:"OS"`
-		Online       bool     `json:"Online"`
-		TailscaleIPs []string `json:"TailscaleIPs"`
-		UserID       int64    `json:"UserID"`
+		DNSName       string    `json:"DNSName"`
+		HostName      string    `json:"HostName"`
+		OS            string    `json:"OS"`
+		Online        bool      `json:"Online"`
+		LastSeen      time.Time `json:"LastSeen"`
+		LastHandshake time.Time `json:"LastHandshake"`
+		TailscaleIPs  []string  `json:"TailscaleIPs"`
+		UserID        int64     `json:"UserID"`
 	} `json:"Peer"`
 }
 
@@ -100,7 +108,7 @@ func (w statusWire) toPeers() ([]Peer, error) {
 	for _, p := range w.Peer {
 		peers = append(peers, Peer{
 			DNSName: strings.TrimSuffix(p.DNSName, "."), HostName: p.HostName, OS: p.OS,
-			Online: p.Online, IPs: p.TailscaleIPs, UserID: p.UserID,
+			Online: p.Online, LastSeen: p.LastSeen, LastHandshake: p.LastHandshake, IPs: p.TailscaleIPs, UserID: p.UserID,
 		})
 	}
 	sort.Slice(peers, func(i, j int) bool { return peers[i].DNSName < peers[j].DNSName })

@@ -180,6 +180,7 @@ func listWorkspaces(rawURL, on string, jsonOutput bool, out, stderr io.Writer) i
 			fmt.Fprintln(stderr, "errand:", err)
 			return 1
 		}
+		read.reportFailures(stderr)
 		return read.exitCode()
 	}
 	tw := tabwriter.NewWriter(out, 2, 8, 2, ' ', 0)
@@ -195,5 +196,6 @@ func listWorkspaces(rawURL, on string, jsonOutput bool, out, stderr io.Writer) i
 		fmt.Fprintln(stderr, "errand:", err)
 		return 1
 	}
+	read.reportFailures(stderr)
 	return read.exitCode()
 }
