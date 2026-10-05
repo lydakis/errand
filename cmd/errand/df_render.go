@@ -87,6 +87,7 @@ func cmdDfTo(args []string, stdout, stderr io.Writer) int {
 			writeDfDetails(stdout, rows)
 		}
 	}
+	read.reportFailures(stderr)
 	if read.failed {
 		return 1
 	}

@@ -170,6 +170,9 @@ func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, er
 		"-o", "ControlPath=" + filepath.Join(controlDir, "%C"),
 		"-o", "ControlPersist=60s",
 		"-o", "ServerAliveInterval=30",
+		// Like dialPeer's budget: an unreachable host fails in the connect
+		// step. It covers the TCP connect and key exchange, not prompts.
+		"-o", fmt.Sprintf("ConnectTimeout=%d", int((peerConnectTimeout+time.Second-1)/time.Second)),
 		"--", target, remoteInvocation,
 	}
 	cmd := exec.CommandContext(ctx, "ssh", args...)
@@ -194,7 +197,7 @@ func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, er
 	// unread buffered output. Keep the read side ourselves and close only the
 	// parent's writer; the child closes its inherited writer when it exits.
 	stdoutWriter.Close()
-	conn := &stdioConn{cmd: cmd, r: stdout, w: stdin, host: target}
+	conn := &stdioConn{cmd: cmd, r: stdout, w: stdin, host: target, exit: make(chan struct{})}
 	go func() {
 		err := cmd.Wait()
 		conn.exited(err)
@@ -233,6 +236,9 @@ type stdioConn struct {
 	w    io.WriteCloser
 	host string
 
+	exit chan struct{} // closed once ssh has exited
+	read bool          // whether the remote side ever sent a byte
+
 	mu      sync.Mutex
 	closed  bool
 	exitErr error
@@ -244,10 +250,29 @@ func (c *stdioConn) exited(err error) {
 	c.done = true
 	c.exitErr = err
 	c.mu.Unlock()
+	close(c.exit)
 }
 
 func (c *stdioConn) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
+	if n > 0 {
+		c.read = true
+	}
+	if err != nil && n == 0 && !c.read && !c.isClosed() {
+		// ssh closes its output as it exits. Exit status 255 before the
+		// remote side said anything is ssh's own failure to connect.
+		select {
+		case <-c.exit:
+		case <-time.After(time.Second):
+		}
+		var exitErr *exec.ExitError
+		c.mu.Lock()
+		exit := c.exitErr
+		c.mu.Unlock()
+		if errors.As(exit, &exitErr) && exitErr.ExitCode() == 255 {
+			return 0, &UnreachableError{Addr: c.host, Reason: "ssh could not connect to " + c.host, Err: exit}
+		}
+	}
 	if err != nil && n == 0 {
 		c.mu.Lock()
 		exit := c.exitErr
@@ -258,6 +283,12 @@ func (c *stdioConn) Read(p []byte) (int, error) {
 		}
 	}
 	return n, err
+}
+
+func (c *stdioConn) isClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
 }
 
 func (c *stdioConn) Write(p []byte) (int, error) {

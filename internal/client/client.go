@@ -41,6 +41,7 @@ const (
 var directTransport = func() *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.Proxy = nil
+	t.DialContext = dialPeer
 	t.ResponseHeaderTimeout = controlRequestTimeout
 	return t
 }()
@@ -55,6 +56,7 @@ var directHTTP = &http.Client{
 var maintenanceTransport = func() *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.Proxy = nil
+	t.DialContext = dialPeer
 	t.ResponseHeaderTimeout = maintenanceTimeout
 	return t
 }()

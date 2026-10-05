@@ -27,6 +27,19 @@ runner response under `info`, including CPU count, version, capacity, and tool
 paths. Failed peers remain in the array with a `detail` message and no `info`.
 The command exits nonzero if any selected peer cannot be queried.
 
+### Unreachable peers
+
+Commands that ask every peer (`peers`, `ps`, `df`, `workspaces`, and
+`--where` placement) show what the reachable peers returned, then name each
+peer that could not be read and why. A peer that cannot be connected to fails
+in the connect step, which gets 3 seconds of its own; the request that follows
+keeps its full budget, so a slow runner is not mistaken for a missing one.
+When a connection to a Tailscale address is still pending after a moment,
+errand asks tailscaled whether that node is online; a node Tailscale reports
+offline fails at once with when it was last seen. SSH peers use the same
+3-second `ConnectTimeout`. Single-peer commands such as `run` and `attach`
+fail the same way.
+
 ## Runner setup
 
 `errand setup` defaults to both SSH and Tailscale for new runners.
