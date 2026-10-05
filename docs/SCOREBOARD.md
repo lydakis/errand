@@ -45,9 +45,9 @@ whole-tree verification.
 
 ## Running it
 
-Build the commit being scored and install the same build on every runner;
-the client and daemons must match. Generated reports stay under ignored
-`dist/` because they contain peer facts and job handles.
+Build the commit being scored; the client and every daemon it talks to must
+run that build. Generated reports stay under ignored `dist/` because they
+contain peer facts and job handles.
 
 ```sh
 git rev-parse --short HEAD
@@ -63,6 +63,35 @@ python3 scripts/benchmark_loop.py --binary dist/errand-score \
   --files 1000 --files 10000 --output dist/score/laptop-to-runners
 ```
 
+To score a build without touching a runner's installed daemon and its
+workspaces, start a scratch daemon of the build beside it, with its own state
+and socket, and point a scratch client config at it. Over SSH, on the runner:
+
+```sh
+mkdir -p ~/errand-score && cp errand-score ~/errand-score/errand
+cat > ~/errand-score/errandd.toml <<CONFIG
+transport = "ssh"
+state_dir = "$HOME/errand-score/state"
+socket = "$HOME/errand-score/errand.sock"
+CONFIG
+~/errand-score/errand serve --config ~/errand-score/errandd.toml
+```
+
+and on the laptop, with `XDG_CONFIG_HOME` pointing at a scratch directory whose
+`errand/config.toml` names it:
+
+```toml
+[peers.score-cabal]
+ssh = "cabal"
+remote_command = "/home/you/errand-score/errand"
+remote_socket = "/home/you/errand-score/errand.sock"
+```
+
+then pass `--on score-cabal --observe score-cabal=cabal:~/errand-score/state`.
+An SSH peer starts the remote command for each request over a shared SSH
+connection, a cost a tailnet peer does not pay, so record which transport a
+row used.
+
 `--files 100000` adds the large checkout; on a slow disk its cold job and
 workspace creation take minutes, so raise `--timeout` if a command gets near
 600 s. The harness refuses a runner with active jobs at the start, but nothing
@@ -72,4 +101,55 @@ removes the workspace it created.
 
 ## Current main
 
-Pending.
+### Linux cloud host, `154c370`
+
+Client and isolated daemon on one 4-CPU Linux VM with ext4, which cannot clone
+files. Creating a file there takes about 200 µs, roughly ten times a laptop
+SSD, so job rows overstate what Cabal or a Mac would show. Native and
+laptop-to-runner rows will replace these. Summary data:
+[`benchmarks/2026-10-05-scoreboard-linux.json`](benchmarks/2026-10-05-scoreboard-linux.json).
+
+Median / p95; rows measured once show one value.
+
+| Case | 1K files | 10K files |
+|---|---:|---:|
+| workspace-create | 1.3 s | 13.1 s |
+| watch-start | 0.42 s | 2.6 s |
+| save, visible | 34 / 42 ms | 55 / 90 ms |
+| save, receipt | 45 / 55 ms | 78 / 115 ms |
+| burst, last save visible / last receipt | 149 / 162 ms | 226 / 247 ms |
+| job-cold | 0.60 s | 6.8 s |
+| job-warm | 1.60 / 1.85 s | 9.4 / 11.9 s |
+| job-edit | 1.81 / 1.87 s | 9.6 / 10.2 s |
+| first-output, `ready` printed | 1.43 s | 8.1 s |
+| first-output, exit | 1.58 / 1.75 s | 9.9 / 10.1 s |
+| apply | 1.65 / 1.87 s | 9.8 / 12.6 s |
+| detach-submit | 1.58 / 1.71 s | 8.1 / 9.8 s |
+| detach-attach | 159 / 185 ms | 1.68 / 1.92 s |
+| fetch-apply | 28 / 37 ms | 28 / 39 ms |
+
+A warm job used 3.0 s of daemon CPU at 1K and 17 s at 10K, against 0.2 s and
+0.9 s in the client. A watch save used about 20 and 60 ms of daemon CPU.
+
+At 100K files, measured with `scripts/benchmark_watch.py` on the same build
+(Git selection, 30 saves): workspace creation 95 s, watch start 25 s, a save
+visible in 210 / 382 ms (one took 3.5 s) with its receipt at 358 / 570 ms. A
+20-save burst took 5.0 s to show its last save, in a single receipt.
+
+What this shows on this host:
+
+- Jobs are where users wait. A job that does nothing takes 1.6 s at 1K files
+  and over 9 s at 10K before it exits; a save shows on the runner in 34 and
+  55 ms.
+- A job whose content is already on the runner is slower than the first one:
+  1.6 against 0.6 s at 1K and 9.4 against 6.8 s at 10K, with five to six times
+  the daemon CPU. A warm job rebuilds the tree from the runner's cache and keeps
+  a second copy as its base; on a filesystem that cannot clone, each file is
+  also created, removed after the failed clone, and created again. Skipping
+  the clone after the first failure cut a 10K warm job from 8.5 to 6.5 s in a
+  prototype. Whether APFS and Btrfs runners pay the same is what the native
+  rows will show.
+- A detached submit returns after most of the staging (8.1 of about 9.8 s at
+  10K), so `-d` saves little.
+- `fetch --apply` of a finished job is flat at about 28 ms.
+- At 100K files a burst of saves costs about 25 times a single save.
