@@ -866,8 +866,15 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 	}
 
 	lease := ready()
-	if code, got := info(proto.ActionLease); code != http.StatusOK || len(got.Leases) != 1 || got.Leases[0].Target != nil {
-		t.Fatalf("a caller without submit was shown its lease's target: %d %+v", code, got.Leases)
+	// The release may already have finished, so the lease need not be listed.
+	code, got := info(proto.ActionLease)
+	if code != http.StatusOK || len(got.Leases) > 1 {
+		t.Fatalf("info with lease only: %d %+v", code, got.Leases)
+	}
+	for _, l := range got.Leases {
+		if l.Target != nil {
+			t.Fatalf("a caller without submit was shown its lease's target: %+v", l)
+		}
 	}
 	ended(lease, "its owner lost submit")
 
