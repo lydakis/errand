@@ -532,14 +532,15 @@ func (b *Broker) work(l *lease) {
 // the lease is ready or releasing, or the broker is closing, so it never
 // acquires twice.
 func (b *Broker) launch(l *lease) {
-	offer := b.offers[l.Offer] // only this process's leases are launching
 	b.mu.Lock()
 	if l.State != proto.LeaseLaunching {
 		b.mu.Unlock()
 		return // released before the acquire started
 	}
+	offer := b.offers[l.Offer] // only this process's leases are launching
 	// The hard stop holds while launching too.
-	deadline := earlier(l.CreatedAt.Add(b.cfg.AcquireTimeout), l.ExpiresAt)
+	created := l.CreatedAt
+	deadline := earlier(created.Add(b.cfg.AcquireTimeout), l.ExpiresAt)
 	ctx, cancel := context.WithDeadline(b.ctx, deadline)
 	l.stop = cancel
 	id, where, login, sshKey := l.ID, l.Where, l.Login, l.SSHKey
@@ -559,7 +560,7 @@ func (b *Broker) launch(l *lease) {
 	if ctx.Err() != nil {
 		err = errors.New("acquire canceled")
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			err = fmt.Errorf("acquire did not finish within %s", deadline.Sub(l.CreatedAt))
+			err = fmt.Errorf("acquire did not finish within %s", deadline.Sub(created))
 		}
 	}
 	if err == nil {
