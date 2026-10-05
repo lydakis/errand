@@ -14,6 +14,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"github.com/lydakis/errand/internal/limitbuf"
 	"github.com/lydakis/errand/internal/nowindow"
 	"path/filepath"
 )
@@ -159,9 +160,13 @@ func RunSSH(ctx context.Context, target, command string, stdin io.Reader) error 
 	cmd.Stdin = stdin
 	cmd.WaitDelay = time.Second
 	nowindow.Hide(cmd)
-	out, err := cmd.CombinedOutput()
+	// The remote side decides how much it prints, so keep only enough to
+	// explain a failure.
+	stderr := &limitbuf.Buffer{Limit: 4096}
+	cmd.Stdout, cmd.Stderr = io.Discard, stderr
+	err = cmd.Run()
 	if err != nil {
-		if msg := strings.TrimSpace(string(out)); msg != "" {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return fmt.Errorf("ssh %s: %w: %s", target, err, msg)
 		}
 		return fmt.Errorf("ssh %s: %w", target, err)

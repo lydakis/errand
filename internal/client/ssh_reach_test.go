@@ -2,8 +2,10 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,5 +113,22 @@ func TestSSHKeepsSlowConnectionToNodeWithLiveDataPath(t *testing.T) {
 	_, err := ProbeInfo(context.Background(), ConfigureSSHPeer("ssh://cabal", "cabal", "", ""), time.Second)
 	if kind, _ := ProbeKindOf(err); kind != ProbeUnreachable || err.Error() != "unreachable: timed out" {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// A remote command that prints without end costs the caller a bounded
+// amount of memory, and its failure still says why.
+func TestRunSSHKeepsBoundedOutput(t *testing.T) {
+	bin := t.TempDir()
+	script := "#!/bin/sh\necho 'denied' >&2\nhead -c 1000000 /dev/zero | tr '\\0' x\nhead -c 1000000 /dev/zero | tr '\\0' y >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	err := RunSSH(context.Background(), "ubuntu@gone", "true", nil)
+	if err == nil || !strings.Contains(err.Error(), "denied") || len(err.Error()) > 5000 {
+		t.Fatalf("err (%d bytes) = %.200v", len(fmt.Sprint(err)), err)
 	}
 }
