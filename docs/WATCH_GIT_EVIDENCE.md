@@ -25,6 +25,9 @@ the watch records:
 - **Include targets:** all declared, even absent; `onbranch:` keeps full selection.
 - **Repository location:** a linked worktree's `.git` file and the Git
   directory's `commondir` file, which locate the index, config and excludes.
+- **Repository validity:** HEAD by contents, and the objects and refs
+  directories, which must remain directories. Git recognizes a repository by
+  these, and a fresh selection fails without them.
 - **Standard config files, even absent:** `~/.gitconfig` and the XDG config
   (or the `GIT_CONFIG_GLOBAL` file), `config.worktree`, and the system config
   that `git var GIT_CONFIG_SYSTEM` reports, unless `GIT_CONFIG_NOSYSTEM` is

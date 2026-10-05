@@ -18,9 +18,11 @@ import (
 	"strings"
 
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/fsmode"
 	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/relpath"
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
@@ -51,7 +53,7 @@ const (
 )
 
 func validatePath(value string) error {
-	if value == "" || strings.HasPrefix(value, "/") || path.Clean(value) != value ||
+	if value == "" || strings.HasPrefix(value, "/") || !relpath.IsClean(value) ||
 		value == "." || value == ".." || strings.HasPrefix(value, "../") || strings.ContainsRune(value, '\x00') {
 		return fmt.Errorf("unsafe change path %q", value)
 	}
@@ -62,7 +64,7 @@ func validatePath(value string) error {
 }
 
 func pathContainsGitMetadata(value string) bool {
-	for _, component := range strings.Split(filepath.ToSlash(value), "/") {
+	for component := range strings.SplitSeq(filepath.ToSlash(value), "/") {
 		if strings.EqualFold(component, ".git") {
 			return true
 		}
@@ -249,7 +251,7 @@ func captureManifestAtRootBoundedContext(
 		if err != nil {
 			return proto.Manifest{}, false, 0, 0, err
 		}
-		entry := proto.ManifestEntry{Path: current, Mode: uint32(info.Mode().Perm())}
+		entry := proto.ManifestEntry{Path: current, Mode: fsmode.Perm(info)}
 		switch {
 		case info.Mode().IsRegular():
 			entry.Type = proto.EntryFile
@@ -260,6 +262,7 @@ func captureManifestAtRootBoundedContext(
 		case info.Mode()&fs.ModeSymlink != 0:
 			entry.Type = proto.EntrySymlink
 			entry.Target, err = root.Readlink(current)
+			entry.Target = filepath.ToSlash(entry.Target)
 		default:
 			err = fmt.Errorf("unsupported change type %v at %s", info.Mode(), current)
 		}
@@ -397,6 +400,7 @@ func collectAccessibleWorkspaceChangesContext(
 		return proto.ChangeBundle{}, false, err
 	}
 	access.logicalize(&current)
+	inheritBaselineModes(baseline, &current)
 	bundle, err := workspaceDelta(ctx, baseline, current, maxBytes)
 	if err != nil || len(bundle.Paths) == 0 {
 		return bundle, false, err
@@ -515,6 +519,20 @@ func workspaceDelta(ctx context.Context, baseline, current proto.Manifest, maxBy
 }
 
 func workspaceSnapshotDelta(ctx context.Context, before, after *manifest.Snapshot, maxBytes int64) (proto.ChangeBundle, error) {
+	bundle, err := selectSnapshotDelta(ctx, before, after, maxBytes)
+	if err != nil {
+		return proto.ChangeBundle{}, err
+	}
+	bundle.BaselineRoot, err = before.RootHash(ctx)
+	if err != nil {
+		return proto.ChangeBundle{}, err
+	}
+	return bundle, nil
+}
+
+// selectSnapshotDelta leaves BaselineRoot unset for a caller that already holds
+// the identity of before's exact entries.
+func selectSnapshotDelta(ctx context.Context, before, after *manifest.Snapshot, maxBytes int64) (proto.ChangeBundle, error) {
 	edits, err := before.Diff(ctx, after)
 	if err != nil {
 		return proto.ChangeBundle{}, err
@@ -560,11 +578,7 @@ func workspaceSnapshotDelta(ctx context.Context, before, after *manifest.Snapsho
 		return proto.ChangeBundle{}, fmt.Errorf("%w: changes exceed %d paths", ErrEntryLimitExceeded, MaxChangeEntries)
 	}
 
-	rootHash, err := before.RootHash(ctx)
-	if err != nil {
-		return proto.ChangeBundle{}, err
-	}
-	bundle := proto.ChangeBundle{V: BundleVersion, BaselineRoot: rootHash, Paths: roots}
+	bundle := proto.ChangeBundle{V: BundleVersion, Paths: roots}
 	baseSelected := make(map[string]proto.ManifestEntry)
 	remoteSelected := make(map[string]proto.ManifestEntry)
 	for _, root := range roots {

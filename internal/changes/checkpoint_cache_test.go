@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -80,6 +81,57 @@ func TestCheckpointCacheIndependentRequests(t *testing.T) {
 	}
 	if _, err := request().Read(); err == nil {
 		t.Fatal("shared cache accepted corrupt record")
+	}
+}
+
+// Advance retains the record it publishes with that record's identity
+// already computed, so the next delta does not hash the checkpoint before its
+// files can appear. A new request decoding the published bytes agrees.
+func TestCheckpointAdvanceRetainsRecordIdentity(t *testing.T) {
+	root, bundle, staged := applyFixture(t, "original\n", "source\n")
+	target := transferTarget(t, root)
+	checkpoint := checkpointFor(t, target)
+	if _, err := checkpoint.Initialize(bundle.BaseManifest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := target.Apply(staged, bundle, nil, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	version, err := checkpoint.Advance(0, target.StatePath, bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checkpoint.cache == nil || checkpoint.cache.record == nil {
+		t.Fatal("advance retained no record")
+	}
+	if got, want := checkpoint.cache.record.root, version.Manifest.RootHash(); got != want {
+		t.Fatalf("retained identity %q, want %q", got, want)
+	}
+	fresh := &TransferCheckpoint{Root: checkpoint.Root, RootID: checkpoint.RootID, Owner: checkpoint.Owner,
+		SourceID: checkpoint.SourceID, StatePath: checkpoint.StatePath}
+	decoded, err := fresh.readVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(decoded.state, checkpoint.cache.record.state) || decoded.rootHash() != version.Manifest.RootHash() {
+		t.Fatal("retained record differs from the published one")
+	}
+}
+
+// A decoded record of another relationship is refused for that before its
+// manifest, however large or malformed, is validated.
+func TestCheckpointRecordChecksRelationshipBeforeManifest(t *testing.T) {
+	checkpoint := checkpointFor(t, transferTarget(t, t.TempDir()))
+	unsorted := proto.Manifest{Entries: []proto.ManifestEntry{
+		{Path: "b", Type: proto.EntryDir, Mode: 0o755}, {Path: "a", Type: proto.EntryDir, Mode: 0o755}}}
+	state := checkpointState{Version: 1, Owner: "another owner", SourceID: checkpoint.SourceID, RootID: checkpoint.RootID,
+		InitialRoot: unsorted.RootHash(), CheckpointVersion: CheckpointVersion{Manifest: unsorted}}
+	if _, err := checkpoint.validatedRecord(nil, state); err == nil || !strings.Contains(err.Error(), "relationship") {
+		t.Fatalf("got %v, want the relationship refusal", err)
+	}
+	state.Owner = checkpoint.Owner
+	if _, err := checkpoint.validatedRecord(nil, state); err == nil || strings.Contains(err.Error(), "relationship") {
+		t.Fatalf("got %v, want the manifest refusal", err)
 	}
 }
 

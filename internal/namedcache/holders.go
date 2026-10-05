@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"slices"
-	"syscall"
 
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -14,7 +13,7 @@ import (
 // Each job has a durable empty file. Keeping holders outside record.json
 // avoids imposing a new concurrency limit through the metadata size bound.
 func (s *Store) readHolders(name string) ([]string, error) {
-	dir, err := s.root.OpenFile(name+"/holders", os.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW, 0)
+	dir, err := s.root.OpenFile(name+"/holders", os.O_RDONLY|openDirectory|openNoFollow, 0)
 	if err != nil {
 		return nil, err
 	}

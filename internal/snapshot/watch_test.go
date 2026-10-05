@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -224,7 +223,7 @@ func TestWatchGitSelectionNeverWatchesGlobalControlDirectories(t *testing.T) {
 			home, xdg := isolateGlobalGit(t)
 			// Entries a kqueue watch on $HOME would open: a FIFO blocks readers
 			// and macOS guards folders like Desktop behind a privacy prompt.
-			if err := syscall.Mkfifo(filepath.Join(home, "fifo"), 0600); err != nil {
+			if err := mkfifo(filepath.Join(home, "fifo")); err != nil && fifosSupported {
 				t.Fatal(err)
 			}
 			writeFile(t, home, "Desktop/private", "unrelated")
@@ -364,7 +363,7 @@ func expectGlobalChange(t *testing.T, w *Watch, included bool, controls []string
 			t.Fatal("idle checkout missed a global control change")
 		}
 	}
-	m, _, _, _, err := w.Prepare(new(Builder))
+	m, _, _, err := w.Prepare(new(Builder))
 	if err != nil {
 		t.Fatal(err)
 	}

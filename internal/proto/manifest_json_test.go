@@ -58,6 +58,28 @@ func TestManifestJSONMatchesEncodingJSON(t *testing.T) {
 	}
 }
 
+// Every byte value on its own, and fuzzed strings, in each string field.
+func FuzzManifestJSONMatchesEncodingJSON(f *testing.F) {
+	for c := range 256 {
+		f.Add(string([]byte{byte(c)}))
+	}
+	for _, s := range []string{"dir/file.txt", "a<b>&c", "\u2028", "\u2029", "é", "bad\xffutf8"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		m := Manifest{Entries: []ManifestEntry{{Path: s, Type: s, Mode: 1, Size: 2, SHA256: s, Target: s}}}
+		want, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got bytes.Buffer
+		writeManifestJSON(&got, m)
+		if !bytes.Equal(got.Bytes(), want) {
+			t.Fatalf("encoding of %q differs\n got %q\nwant %q", s, got.Bytes(), want)
+		}
+	})
+}
+
 func benchmarkManifest(n int) Manifest {
 	m := Manifest{Entries: make([]ManifestEntry, n)}
 	for i := range m.Entries {

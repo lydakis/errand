@@ -16,7 +16,8 @@ import (
 )
 
 // gitSelectionEvidence binds a Git-driven selection to everything Git reads
-// to produce it: the tracked set (index), ignore sources and configuration.
+// to produce it: the tracked set (index), ignore sources and configuration,
+// and what makes Git recognize the repository at all.
 // Together with the unignored directory stamps held by selectionEvidence, an
 // unchanged proof means tracked ∪ untracked-unignored is unchanged, so a watch
 // can refresh hinted files without asking Git to enumerate the tree again.
@@ -24,10 +25,13 @@ type gitSelectionEvidence struct {
 	index       string
 	indexInfo   fs.FileInfo // of the file Git reads; nil when absent
 	indexDigest [sha256.Size]byte
-	// Ignore and configuration sources are small and can be edited in place
-	// without changing any directory stamp, so their contents are compared.
-	// A nil value records an absent file.
+	// Ignore and configuration sources, and HEAD, are small and can be
+	// edited in place without changing any directory stamp, so their contents
+	// are compared. A nil value records an absent file.
 	contents map[string][]byte
+	// Git recognizes a repository by a valid HEAD and its objects and refs
+	// directories. A fresh selection fails without them, so they must remain.
+	repository []string
 }
 
 // Test hooks around capture's first Git queries: before they run, and after
@@ -100,7 +104,7 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 		return nil, nil, nil
 	}
 	lines := strings.Split(strings.TrimSuffix(string(paths), "\n"), "\n")
-	if len(lines) != 6 || e.index == "" {
+	if len(lines) != 9 || e.index == "" {
 		return nil, nil, nil
 	}
 	resolve := func(name string) string {
@@ -118,7 +122,13 @@ func captureGitSelection(root string, opts SelectOptions) (*gitSelectionEvidence
 	// The .git file of a linked worktree names the directory holding its
 	// index, and that directory's commondir file names the shared one. The
 	// origin listing below omits a repository config with no entries.
-	sources := []string{resolve(lines[2]), resolve(lines[3]), resolve(lines[4]), resolve(lines[5])}
+	sources := []string{resolve(lines[2]), resolve(lines[3]), resolve(lines[4]), resolve(lines[5]), resolve(lines[6])}
+	e.repository = []string{resolve(lines[7]), resolve(lines[8])}
+	for _, dir := range e.repository {
+		if !directory(dir) {
+			return nil, nil, nil
+		}
+	}
 	if gitfile := filepath.Join(worktree, ".git"); regularFile(gitfile) {
 		sources = append(sources, gitfile)
 	}
@@ -356,18 +366,24 @@ func includeTarget(value, origin string) (string, bool) {
 }
 
 // gitLocations reports the top of the worktree, then the index, info/exclude,
-// config.worktree, commondir and repository config paths, as Git resolves
-// them through .git.
+// config.worktree, commondir, repository config, HEAD, objects and refs paths,
+// as Git resolves them through .git.
 func gitLocations(root string) ([]byte, error) {
 	return exec.Command("git", "-C", root, "rev-parse", "--show-toplevel", "--git-path", "index",
 		"--git-path", "info/exclude", "--git-path", "config.worktree", "--git-path", "commondir",
-		"--git-path", "config").Output()
+		"--git-path", "config", "--git-path", "HEAD", "--git-path", "objects", "--git-path", "refs").Output()
 }
 
 // regularFile reports whether name, following symbolic links, is a regular file.
 func regularFile(name string) bool {
 	info, err := os.Stat(name)
 	return err == nil && info.Mode().IsRegular()
+}
+
+// directory reports whether name, following symbolic links, is a directory.
+func directory(name string) bool {
+	info, err := os.Stat(name)
+	return err == nil && info.IsDir()
 }
 
 // gitConfigOrigins lists every configuration entry with the file it came
@@ -448,6 +464,11 @@ func (e *gitSelectionEvidence) verify(root string) error {
 		}
 		if (data == nil) != (want == nil) || !bytes.Equal(data, want) {
 			return sourceChangedf("snapshot: Git selection policy changed after manifest construction; retry")
+		}
+	}
+	for _, dir := range e.repository {
+		if !directory(dir) {
+			return sourceChangedf("snapshot: Git repository changed after manifest construction; retry")
 		}
 	}
 	info, _ := os.Stat(e.index)

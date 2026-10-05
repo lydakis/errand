@@ -1,16 +1,8 @@
+//go:build unix
+
 package daemon
 
 import "fmt"
-
-// A process group supplements the inherited marker for programs whose
-// environment cannot be inspected (including macOS platform binaries).
-// Birth identifies the original leader, so restart cannot claim a reused PID.
-// Boot proves that every process from a previous machine boot is gone.
-type processGroupRecord struct {
-	PID   int    `json:"pid"`
-	Birth string `json:"birth"`
-	Boot  string `json:"boot,omitempty"`
-}
 
 type processGroupSnapshot struct {
 	pids        []int

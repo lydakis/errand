@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -61,6 +62,12 @@ func (s *TransferSession) sourceError(err error) error {
 	return fmt.Errorf("retaining workspace source (limit %d bytes; gc changes can reclaim only unreferenced bodies; creation and checkpoint bodies remain pinned): %w", s.MaxSourceBytes, err)
 }
 func (s *TransferSession) Initialize(ctx context.Context, source string, initial proto.Manifest) error {
+	return s.InitializeBase(ctx, source, NewSourceBase(initial))
+}
+
+// InitializeBase lets a caller that retains the creation snapshot reuse its
+// validation and identity on every request.
+func (s *TransferSession) InitializeBase(ctx context.Context, source string, initial *SourceBase) error {
 	if err := s.Checkpoint().checkInitialized(initial); err == nil {
 		return nil
 	} else if !os.IsNotExist(err) {
@@ -71,10 +78,10 @@ func (s *TransferSession) Initialize(ctx context.Context, source string, initial
 			return err
 		}
 	}
-	if err := s.Blobs().Retain(ctx, source, initial); err != nil {
+	if err := s.Blobs().Retain(ctx, source, initial.manifest); err != nil {
 		return s.sourceError(err)
 	}
-	_, err := s.Checkpoint().Initialize(initial)
+	_, err := s.Checkpoint().Initialize(initial.manifest)
 	return err
 }
 
@@ -172,7 +179,16 @@ func (s *TransferSession) stage(ctx context.Context, id string, source transferM
 		return "", b, err
 	}
 	defer RemoveTree(tmp)
-	if err := s.materializeStage(ctx, source, tmp, b); err != nil {
+	var baseLinks fslink.Lookup
+	if fslink.NativeTypes {
+		for _, entry := range b.BaseManifest.Entries {
+			if entry.Type == proto.EntrySymlink {
+				baseLinks = fslink.ManifestLookup(v.state.Manifest)
+				break
+			}
+		}
+	}
+	if err := s.materializeStage(ctx, source, tmp, b, baseLinks); err != nil {
 		return "", b, err
 	}
 	a := TransferAttempt{ID: id, Revision: v.revision(), SourceRoot: sourceRoot, BundleRoot: b.RootHash(), CreatedAt: time.Now().UTC()}

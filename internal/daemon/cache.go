@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -161,6 +162,16 @@ func (c *blobCache) Materialize(ctx context.Context, dest string, e proto.Manife
 		return false, nil // miss
 	}
 	defer src.Close()
+	// The open handle names the blob this copy reads, even if the path is
+	// replaced meanwhile.
+	blob, err := src.Stat()
+	if err != nil {
+		return false, nil
+	}
+	blobIdentity, err := fsidentity.FromInfo(blob)
+	if err != nil {
+		return false, nil
+	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return false, err
 	}
@@ -193,7 +204,9 @@ func (c *blobCache) Materialize(ctx context.Context, dest string, e proto.Manife
 		// Cache cleanup is best effort. An unavailable or read-only cache
 		// must still allow the caller to retry with the original file body.
 		// Destination failures and cancellation remain hard errors.
-		_ = c.removeIfCurrent(ctx, e.SHA256, fi)
+		// Windows cannot remove a file that is still open.
+		src.Close()
+		_ = c.removeIfCurrent(ctx, e.SHA256, blobIdentity)
 		return false, ctx.Err()
 	}
 	if err := ctx.Err(); err != nil {
@@ -291,10 +304,12 @@ func (c *blobCache) Insert(ctx context.Context, src, sha string, size int64) err
 }
 
 func (c *blobCache) remove(sha string) {
-	_ = c.removeIfCurrent(context.Background(), sha, nil)
+	_ = c.removeIfCurrent(context.Background(), sha, fsidentity.Identity{})
 }
 
-func (c *blobCache) removeIfCurrent(ctx context.Context, sha string, expected fs.FileInfo) error {
+// removeIfCurrent removes the blob at sha's path. A non-zero expected identity
+// limits removal to that file, sparing a replacement published meanwhile.
+func (c *blobCache) removeIfCurrent(ctx context.Context, sha string, expected fsidentity.Identity) error {
 	if !validBlobHash(sha) {
 		return fmt.Errorf("cache: invalid blob hash %q", sha)
 	}
@@ -303,14 +318,14 @@ func (c *blobCache) removeIfCurrent(ctx context.Context, sha string, expected fs
 	}
 	defer c.mu.Unlock()
 	p := c.path(sha)
-	fi, err := os.Lstat(p)
+	identity, fi, err := fsidentity.Lstat(p)
 	if os.IsNotExist(err) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if expected != nil && !os.SameFile(expected, fi) {
+	if !expected.IsZero() && identity != expected {
 		return nil
 	}
 	if err := os.Remove(p); err != nil {

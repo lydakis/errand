@@ -18,6 +18,7 @@ import (
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/relpath"
 )
 
 var ErrCheckpointChanged = errors.New("transfer checkpoint changed; prepare a new transfer")
@@ -104,6 +105,16 @@ func (c *TransferCheckpoint) Read() (CheckpointVersion, error) {
 		return CheckpointVersion{}, err
 	}
 	return state.export(), nil
+}
+
+// Base reads like Read and returns the accepted source for expanding a delta.
+// It shares the record's identity, so a stage of the same bytes reuses it.
+func (c *TransferCheckpoint) Base() (*SourceBase, error) {
+	record, err := c.readVersion()
+	if err != nil {
+		return nil, err
+	}
+	return record.sourceBase(), nil
 }
 func (s checkpointState) export() CheckpointVersion {
 	return CheckpointVersion{Revision: s.Revision, Manifest: cloneSourceManifest(s.Manifest)}
@@ -258,7 +269,11 @@ func mergeAcceptedSourceContext(ctx context.Context, base proto.Manifest, bundle
 	}
 	replaced := func(name string) bool {
 		accepted := metadata[name]
-		for current := name; current != "."; current = path.Dir(current) {
+		dir := path.Dir
+		if relpath.IsClean(name) {
+			dir = relpath.Dir // and so are its ancestors
+		}
+		for current := name; current != "."; current = dir(current) {
 			// A separately selected metadata conflict affects only that entry.
 			// Installed child roots still contribute their accepted source values.
 			if conflicts[current] && (current == name || !bundleHasMetadataPath(bundle, current)) {
@@ -351,6 +366,8 @@ func (c *TransferCheckpoint) open(statePath string) (*applyDestination, *applyDe
 	return destination, storage, filepath.Base(statePath), nil
 }
 
+// save publishes state, whose manifest the caller has validated as a
+// checkpoint manifest, and retains it as the record a read would decode.
 func (c *TransferCheckpoint) save(destination, storage *applyDestination, name string, state checkpointState) error {
 	// Publication may fail after rename. Never keep a cache across a failed write.
 	if c.cache != nil {
@@ -370,7 +387,11 @@ func (c *TransferCheckpoint) save(destination, storage *applyDestination, name s
 		return nil
 	}
 	state.Manifest = cloneSourceManifest(state.Manifest) // own it, as a decoded record would
-	if record, err := c.validatedRecord(raw, state); err == nil {
+	if record, err := c.checkedRecord(raw, state, true); err == nil {
+		// The next delta expands against this record and needs its identity.
+		// Hash it now, after the install, rather than before the next save's
+		// files can appear.
+		record.rootHash()
 		c.remember(record)
 		c.Reuse.put(c.StatePath, record)
 	}

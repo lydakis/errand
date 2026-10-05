@@ -46,7 +46,9 @@ migrated before running setup. `--force` does not override that ownership check.
 After an upgrade, setup verifies that a new service process answers and reports
 any version difference from the CLI. Updating a binary on disk does not update an
 already-running daemon. On macOS, setup re-enables its own LaunchAgent before
-loading it; it does not adopt or restart custom system LaunchDaemons.
+loading it; it does not adopt or restart custom system LaunchDaemons. On
+Windows, setup registers a Task Scheduler task that starts at sign-in; see
+[Windows runner (experimental)](WINDOWS.md).
 
 Generated services retain the absolute entries from the setup shell's `PATH`
 and add the standard system directories, so runner-installed developer tools

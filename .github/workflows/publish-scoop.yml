@@ -1,0 +1,113 @@
+name: Publish Scoop
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Already published stable release tag (for example v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-scoop
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+
+jobs:
+  # Installs the manifest with Scoop on Windows. No secrets reach this job.
+  validate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (!github.event.release.draft && !github.event.release.prerelease)
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download published release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo 'Expected a stable tag such as v0.1.0' >&2
+            exit 1
+          fi
+          gh api "repos/lydakis/errand/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          gh release download "$RELEASE_TAG" --repo lydakis/errand --pattern checksums.txt \
+            --pattern "errand_${RELEASE_TAG#v}_windows_*.zip" --dir "$RUNNER_TEMP/release"
+      - name: Render manifest
+        run: |
+          python scripts/prepare_scoop_update.py "$RELEASE_TAG" "$RUNNER_TEMP/release.json" \
+            "$RUNNER_TEMP/release" "$RUNNER_TEMP/manifest/errand.json" "$RUNNER_TEMP/request.json"
+      - name: Install with Scoop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = "$env:RUNNER_TEMP\install-scoop.ps1"
+          Invoke-WebRequest -UseBasicParsing -OutFile $installer `
+            https://raw.githubusercontent.com/ScoopInstaller/Install/1e2f334083d609986d8c8bc9e31ae8e87c39fab4/install.ps1
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne '94F983B190438311E006B957DB7C8422709E0BA62A6C2AC04E278164108F2512') {
+            throw 'Scoop installer hash changed'
+          }
+          & $installer -RunAsAdmin
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          scoop install "$env:RUNNER_TEMP\manifest\errand.json"
+          if ($LASTEXITCODE -ne 0) { throw 'scoop install failed' }
+          $version = (errand version).Trim()
+          if ($version -ne "errand $($env:RELEASE_TAG.Substring(1))") { throw "unexpected version: $version" }
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download published release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/lydakis/errand/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          gh release download "$RELEASE_TAG" --repo lydakis/errand --pattern checksums.txt \
+            --pattern "errand_${RELEASE_TAG#v}_windows_*.zip" --dir "$RUNNER_TEMP/release"
+      - name: Check out bucket
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: lydakis/scoop-errand
+          ref: main
+          path: bucket
+          persist-credentials: false
+      - name: Verify release and prepare update
+        id: prepare
+        run: |
+          python3 scripts/prepare_scoop_update.py "$RELEASE_TAG" "$RUNNER_TEMP/release.json" \
+            "$RUNNER_TEMP/release" bucket/bucket/errand.json "$RUNNER_TEMP/bucket-update.json"
+          if [ -f "$RUNNER_TEMP/bucket-update.json" ]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish validated manifest
+        if: steps.prepare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GORELEASER_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo 'Set GORELEASER_TOKEN with Contents write access to lydakis/scoop-errand.' >&2
+            exit 1
+          fi
+          gh api --method PUT repos/lydakis/scoop-errand/contents/bucket/errand.json \
+            --input "$RUNNER_TEMP/bucket-update.json" --jq .commit.html_url

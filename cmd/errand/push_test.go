@@ -81,3 +81,104 @@ func TestPushRejectsAmbiguousInterface(t *testing.T) {
 		}
 	}
 }
+
+func TestPushPrintsRunnableRecoveryForEarlierTransferState(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	server := httptest.NewServer(d.Handler())
+	defer server.Close()
+	writeClientConfig(t, fmt.Sprintf("[peers.test]\nurl = %q\n[profiles.dev.run]\npeer = 'test'\nworkspace = 'api'\n", server.URL))
+	root := t.TempDir()
+	t.Chdir(root)
+	for name, body := range map[string]string{".errandignore": "", "value": "initial\n"} {
+		if err := os.WriteFile(name, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out, stderr bytes.Buffer
+	if code := cmdWorkspacesTo([]string{"create", "--on", "test", "api"}, &out, &stderr); code != 0 {
+		t.Fatalf("create: %d %s", code, &stderr)
+	}
+	ws, err := client.GetWorkspace(server.URL, "api")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirs, err := filepath.Glob(filepath.Join(state, "errand", "workspace-transfers", "*-"+ws.ID))
+	if err != nil || len(dirs) != 1 {
+		t.Fatalf("transfer state: %v %v", dirs, err)
+	}
+	dir := dirs[0]
+	// Rewrite the relationship as an earlier errand recorded it: the creation
+	// manifest embedded in origin.json, no initial_root and no initial.json.
+	var origin map[string]json.RawMessage
+	raw, err := os.ReadFile(filepath.Join(dir, "origin.json"))
+	if err == nil {
+		err = json.Unmarshal(raw, &origin)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if origin["initial"], err = os.ReadFile(filepath.Join(dir, "initial.json")); err != nil {
+		t.Fatal(err)
+	}
+	delete(origin, "initial_root")
+	if raw, err = json.Marshal(origin); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "origin.json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "initial.json")); err != nil {
+		t.Fatal(err)
+	}
+	recovery := fmt.Sprintf("errand workspaces rm --on test %s && errand workspaces create --on test%%s api && rm -r '%s'", ws.ID, dir)
+	for _, c := range []struct {
+		args    []string
+		profile string
+	}{
+		{[]string{"--on", "test", "--workspace", "api"}, ""},
+		{[]string{"--on", "test", "--workspace", "api", "--watch"}, ""},
+		{[]string{"--profile", "dev"}, " --profile 'dev'"},
+	} {
+		stderr.Reset()
+		if code := cmdPushTo(c.args, &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "workspace api was created by an earlier errand") ||
+			!strings.Contains(stderr.String(), fmt.Sprintf(recovery, c.profile)) {
+			t.Fatalf("push %v: %d %s", c.args, code, &stderr)
+		}
+	}
+	stderr.Reset()
+	if code := cmdGCTo([]string{"changes", "--older-than", "1d"}, &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "created by an earlier errand") {
+		t.Fatalf("gc with earlier state: %d %s", code, &stderr)
+	}
+	// Run the printed recovery, then push the checkout's current contents.
+	if code := cmdWorkspacesTo([]string{"rm", "--on", "test", ws.ID}, &out, &stderr); code != 0 {
+		t.Fatalf("rm: %d %s", code, &stderr)
+	}
+	if code := cmdWorkspacesTo([]string{"create", "--on", "test", "--profile", "dev", "api"}, &out, &stderr); code != 0 {
+		t.Fatalf("recreate: %d %s", code, &stderr)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("value", []byte("local\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stderr.Reset()
+	if code := cmdPushTo([]string{"--profile", "dev", "--apply"}, &out, &stderr); code != 0 {
+		t.Fatalf("push after recovery: %d %s", code, &stderr)
+	}
+	var run bytes.Buffer
+	if code := client.Run(client.RunOptions{PeerURL: server.URL, Root: root, Workspace: "api", Argv: []string{"cat", "value"}, Stdout: &run, Stderr: &stderr}); code != 0 || run.String() != "local\n" {
+		t.Fatalf("recreated workspace: %d %s %s", code, &run, &stderr)
+	}
+	out.Reset()
+	stderr.Reset()
+	if code := cmdGCTo([]string{"changes", "--older-than", "1d"}, &out, &stderr); code != 0 || !strings.HasSuffix(out.String(), "0 failed)\n") {
+		t.Fatalf("gc after recovery: %d %q %q", code, &out, &stderr)
+	}
+}
