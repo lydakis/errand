@@ -141,15 +141,22 @@ What this shows on this host:
 - Jobs are where users wait. A job that does nothing takes 1.6 s at 1K files
   and over 9 s at 10K before it exits; a save shows on the runner in 34 and
   55 ms.
-- A job whose content is already on the runner is slower than the first one:
-  1.6 against 0.6 s at 1K and 9.4 against 6.8 s at 10K, with five to six times
-  the daemon CPU. A warm job rebuilds the tree from the runner's cache and keeps
-  a second copy as its base; on a filesystem that cannot clone, each file is
-  also created, removed after the failed clone, and created again. Skipping
-  the clone after the first failure cut a 10K warm job from 8.5 to 6.5 s in a
-  prototype. Whether APFS and Btrfs runners pay the same is what the native
-  rows will show.
+- Every job, cold or warm, copies the whole workspace a second time as its
+  change base, and that copy was 75–80% of the daemon's CPU in profiles of
+  both. On a filesystem that cannot clone, each file of it is first created
+  for a clone that fails, removed, and created again; skipping the clone after
+  the first failure cut a 10K warm job from 8.5 to 6.5 s in a prototype.
+  Whether APFS and Btrfs runners pay the same is what the native rows will show.
+- Warm jobs are somewhat slower than cold ones. The single cold samples above
+  are faster than repeated runs: in interleaved cold/warm pairs on a fresh
+  daemon, cold took 0.92 s and warm 1.24 s at 1K (median of 5, warm slower in
+  4), and 7.6 and 8.9 s at 10K (median of 3, warm slower in 2). Run-to-run
+  spread on this host is wide (0.65–1.6 s at 1K).
 - A detached submit returns after most of the staging (8.1 of about 9.8 s at
   10K), so `-d` saves little.
 - `fetch --apply` of a finished job is flat at about 28 ms.
-- At 100K files a burst of saves costs about 25 times a single save.
+- At 100K files a burst of saves costs about 25 times a single save. The
+  watch trace (`ERRAND_TRACE_WATCH=1`) shows why: a save landed while the
+  previous push was still reading that file, the push stopped with "source
+  changed", and the watch then dropped every cached hash and rescanned and
+  rehashed all 100K files (4.6 s) instead of the one file that changed.
