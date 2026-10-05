@@ -36,9 +36,11 @@ in the connect step, which gets 3 seconds of its own; the request that follows
 keeps its full budget, so a slow runner is not mistaken for a missing one.
 When a connection to a Tailscale address is still pending after a moment,
 errand asks tailscaled whether that node is online; a node Tailscale reports
-offline fails at once with when it was last seen. SSH peers use the same
-3-second `ConnectTimeout`. Single-peer commands such as `run` and `attach`
-fail the same way.
+offline fails at once with when it was last seen. SSH peers get the same
+treatment: a 3-second `ConnectTimeout`, and when ssh has not answered after a
+moment, errand looks up where the ssh_config host points (`ssh -G`) and asks
+tailscaled about that address. Single-peer commands such as `run` and
+`attach` fail the same way.
 
 ## Runner setup
 
