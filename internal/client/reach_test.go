@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -16,9 +17,9 @@ import (
 // hangs until its context ends, as a SYN to a vanished host does.
 func fakeReach(t *testing.T, budget time.Duration, peers []tailnet.Peer) *atomic.Int32 {
 	t.Helper()
-	oldBudget, oldAfter, oldDial, oldPeers := peerConnectTimeout, tailnetCheckAfter, dialTCP, tailnetPeers
+	oldBudget, oldAfter, oldDial, oldPeers, oldResolve := peerConnectTimeout, tailnetCheckAfter, dialTCP, tailnetPeers, resolveHost
 	t.Cleanup(func() {
-		peerConnectTimeout, tailnetCheckAfter, dialTCP, tailnetPeers = oldBudget, oldAfter, oldDial, oldPeers
+		peerConnectTimeout, tailnetCheckAfter, dialTCP, tailnetPeers, resolveHost = oldBudget, oldAfter, oldDial, oldPeers, oldResolve
 	})
 	peerConnectTimeout, tailnetCheckAfter = budget, 10*time.Millisecond
 	dialTCP = func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -26,7 +27,12 @@ func fakeReach(t *testing.T, budget time.Duration, peers []tailnet.Peer) *atomic
 		return nil, &net.OpError{Op: "dial", Net: "tcp", Err: ctx.Err()}
 	}
 	var lookups atomic.Int32
-	tailnetPeers = func(context.Context) ([]tailnet.Peer, error) {
+	started := time.Now()
+	tailnetPeers = func(_ context.Context, notBefore time.Time) ([]tailnet.Peer, error) {
+		// Each attempt must ask for a view from after it began.
+		if notBefore.Before(started) {
+			t.Errorf("lookup accepts a view from before the attempt (%s)", started.Sub(notBefore))
+		}
 		lookups.Add(1)
 		return peers, nil
 	}
@@ -121,5 +127,41 @@ func TestDialPeerKeepsTryingNodeWithLiveDataPath(t *testing.T) {
 	_, err := dialPeer(context.Background(), "tcp", "100.64.0.3:7443")
 	if !IsUnreachable(err) || !strings.Contains(err.Error(), "no answer within 100ms") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestDialPeerKeepsHostWithAnotherRoute(t *testing.T) {
+	// The name also resolves to a LAN address the dialer may be trying, so
+	// the offline tailnet node does not settle the attempt.
+	fakeReach(t, 100*time.Millisecond, []tailnet.Peer{{HostName: "cabal", IPs: []string{"100.64.0.3"}}})
+	resolveHost = func(context.Context, string, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("100.64.0.3"), netip.MustParseAddr("192.168.1.20")}, nil
+	}
+	_, err := dialPeer(context.Background(), "tcp", "cabal:7443")
+	if !IsUnreachable(err) || !strings.Contains(err.Error(), "no answer within 100ms") {
+		t.Fatalf("err = %v", err)
+	}
+	resolveHost = func(context.Context, string, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("100.64.0.3")}, nil
+	}
+	_, err = dialPeer(context.Background(), "tcp", "cabal:7443")
+	if err == nil || !strings.HasPrefix(err.Error(), "unreachable: Tailscale reports cabal offline") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestTailnetLookupIsSharedOnlyByEarlierAttempts(t *testing.T) {
+	oldAsked, oldPeers, oldErr := tailnetCache.asked, tailnetCache.peers, tailnetCache.err
+	t.Cleanup(func() {
+		tailnetCache.asked, tailnetCache.peers, tailnetCache.err = oldAsked, oldPeers, oldErr
+	})
+	asked := time.Now()
+	tailnetCache.asked, tailnetCache.peers, tailnetCache.err = asked, []tailnet.Peer{{HostName: "cached"}}, nil
+	if peers, err := cachedTailnetPeers(context.Background(), asked.Add(-time.Second)); err != nil || len(peers) != 1 || peers[0].HostName != "cached" {
+		t.Fatalf("an attempt that began before the lookup did not share it: %v %v", peers, err)
+	}
+	cachedTailnetPeers(context.Background(), asked.Add(time.Nanosecond))
+	if !tailnetCache.asked.After(asked) {
+		t.Fatal("an attempt that began after the lookup reused it")
 	}
 }

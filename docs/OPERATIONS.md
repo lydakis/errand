@@ -42,7 +42,9 @@ node reaches its coordination server, so a recent handshake keeps the
 connection attempt going.) SSH peers get the same
 treatment: a 3-second `ConnectTimeout`, and when ssh has not answered after a
 moment, errand looks up where the ssh_config host points (`ssh -G`) and asks
-tailscaled about that address. Single-peer commands such as `run` and
+tailscaled about that address, unless ssh goes through a `ProxyJump` or
+`ProxyCommand`. The early answer is used only when it covers every address
+the host resolves to and was observed after the connection attempt began. Single-peer commands such as `run` and
 `attach` fail the same way.
 
 ## Runner setup

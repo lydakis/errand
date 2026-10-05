@@ -47,15 +47,25 @@ func TestSSHToTailscaleOfflineNodeFailsFast(t *testing.T) {
 	}
 }
 
-func TestSSHHostAddrFollowsSSHConfig(t *testing.T) {
+func TestSSHDirectHostFollowsSSHConfigAndSkipsProxies(t *testing.T) {
 	bin := t.TempDir()
-	script := "#!/bin/sh\nprintf 'hostname box.example.ts.net\\nport 2222\\n'\n"
-	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	if addr, err := sshHostAddr(context.Background(), "alias"); err != nil || addr != "box.example.ts.net:2222" {
-		t.Fatalf("addr = %q, err = %v", addr, err)
+	for _, tc := range []struct {
+		config, host string
+		ok           bool
+	}{
+		{"hostname box.example.ts.net\\nport 2222\\n", "box.example.ts.net", true},
+		{"hostname box\\nproxycommand none\\n", "box", true},
+		{"hostname box\\nproxyjump bastion\\n", "", false},
+		{"hostname box\\nproxycommand nc %%h %%p\\n", "", false},
+	} {
+		script := "#!/bin/sh\nprintf '" + tc.config + "'\n"
+		if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if host, ok := sshDirectHost(context.Background(), "alias"); host != tc.host || ok != tc.ok {
+			t.Fatalf("%q: host = %q, ok = %v", tc.config, host, ok)
+		}
 	}
 }
 

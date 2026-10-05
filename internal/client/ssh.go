@@ -204,22 +204,22 @@ func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, er
 		conn.exited(err)
 	}()
 	// As in dialPeer: ssh still silent shortly after starting may be waiting
-	// on a Tailscale node that is gone. A connection ssh did make, even one
-	// whose request is slow to answer, leaves a fresh WireGuard handshake,
-	// so tailnetOffline never cuts it.
-	budget, hostAddr, lookup := peerConnectTimeout, sshHostAddr, tailnetPeers
+	// on a Tailscale node that is gone. Only a direct connection is judged,
+	// against tailscaled's view from after ssh started: a connection ssh did
+	// make, even one slow to answer, leaves a fresh WireGuard handshake.
+	a, budget, directHost := newAttempt(), peerConnectTimeout, sshDirectHost
 	check := time.AfterFunc(tailnetCheckAfter, func() {
 		if conn.read.Load() {
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), budget)
 		defer cancel()
-		addr, err := hostAddr(ctx, target)
-		if err != nil || conn.read.Load() {
+		host, ok := directHost(ctx, target)
+		if !ok || conn.read.Load() {
 			return
 		}
-		if offline := tailnetOffline(ctx, addr, lookup); offline != nil && !conn.read.Load() {
-			conn.abort(offline)
+		if gone := a.tailnetGone(ctx, host); gone != nil && !conn.read.Load() {
+			conn.abort(gone)
 		}
 	})
 	go func() {
@@ -229,27 +229,27 @@ func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, er
 	return conn, nil
 }
 
-// sshHostAddr asks ssh where it connects for target, after ssh_config
-// aliases, without connecting.
-var sshHostAddr = func(ctx context.Context, target string) (string, error) {
+// sshDirectHost asks ssh which host it connects to for target, after
+// ssh_config aliases, without connecting. It reports false when ssh would
+// go through a proxy, since this machine never reaches that host itself.
+var sshDirectHost = func(ctx context.Context, target string) (string, bool) {
 	out, err := exec.CommandContext(ctx, "ssh", "-G", "--", target).Output()
 	if err != nil {
-		return "", err
+		return "", false
 	}
-	host, port := "", "22"
+	host := ""
 	for _, line := range strings.Split(string(out), "\n") {
 		key, value, _ := strings.Cut(strings.TrimSpace(line), " ")
 		switch key {
 		case "hostname":
 			host = value
-		case "port":
-			port = value
+		case "proxyjump", "proxycommand":
+			if value != "none" {
+				return "", false
+			}
 		}
 	}
-	if host == "" {
-		return "", fmt.Errorf("ssh -G %s printed no hostname", target)
-	}
-	return net.JoinHostPort(host, port), nil
+	return host, host != ""
 }
 
 func sshControlDir() (string, error) {

@@ -25,16 +25,17 @@ import (
 // Tailscale node, tailscaled may already know that node is gone; asking it
 // turns a timeout into an immediate, named answer.
 //
-// Tailscale's Online flag is control-plane state: a node that lost its
-// coordination server can still carry traffic, for example over a LAN. So a
-// node only counts as gone when it is offline and this machine has had no
-// WireGuard handshake with it within a session lifetime, which any working
-// data path (and any connection made a moment ago) would have.
+// The answer only short-circuits an attempt it settles completely; see
+// tailnetGone. Tailscale's Online flag is control-plane state (a node that
+// lost its coordination server can still carry traffic, for example over a
+// LAN), so it counts only together with the absence of a recent WireGuard
+// handshake, which any working data path would have.
 var (
 	peerConnectTimeout = 3 * time.Second
 	tailnetCheckAfter  = 300 * time.Millisecond
 	dialTCP            = (&net.Dialer{KeepAlive: 30 * time.Second}).DialContext
-	tailnetPeers       = cachedTailnetPeers
+	tailnetPeers       = tailnetLookup(cachedTailnetPeers)
+	resolveHost        = net.DefaultResolver.LookupNetIP
 )
 
 // wireGuardSessionLife is WireGuard's Reject-After-Time: a peer with no
@@ -63,9 +64,13 @@ func dialPeer(ctx context.Context, network, addr string) (net.Conn, error) {
 	defer cancel(nil)
 	dialCtx, cancelBudget := context.WithTimeout(dialCtx, peerConnectTimeout)
 	defer cancelBudget()
-	lookup := tailnetPeers
+	a := newAttempt()
 	check := time.AfterFunc(tailnetCheckAfter, func() {
-		if err := tailnetOffline(dialCtx, addr, lookup); err != nil {
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			return
+		}
+		if err := a.tailnetGone(dialCtx, host); err != nil {
 			cancel(err)
 		}
 	})
@@ -115,79 +120,100 @@ var tailnetPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("fd7a:115c:a1e0::/48"),
 }
 
-// tailnetOffline returns an UnreachableError when addr belongs to a node that
-// tailscaled reports offline and that has no live WireGuard session. Any
-// doubt (not a tailnet address, no tailscaled, an unknown node, a recent
-// handshake) leaves the connection attempt alone.
-func tailnetOffline(ctx context.Context, addr string, lookup func(context.Context) ([]tailnet.Peer, error)) error {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil
-	}
+// attempt is one connection attempt, with the lookups it may use captured
+// when it began.
+type attempt struct {
+	began   time.Time
+	lookup  tailnetLookup
+	resolve func(ctx context.Context, network, host string) ([]netip.Addr, error)
+}
+
+func newAttempt() attempt {
+	return attempt{began: time.Now(), lookup: tailnetPeers, resolve: resolveHost}
+}
+
+// tailnetGone returns an UnreachableError only when tailscaled's answer
+// settles the whole attempt: every address host resolves to belongs to a
+// node that is offline and has no WireGuard handshake from this machine
+// within a session lifetime, as observed after the attempt began. Anything
+// less certain (an address outside the tailnet, an unknown node, a recent
+// handshake, no tailscaled) leaves the attempt to its own connect budget.
+func (a attempt) tailnetGone(ctx context.Context, host string) error {
 	var ips []netip.Addr
-	if ip, err := netip.ParseAddr(host); err == nil {
+	if ip, err := netip.ParseAddr(strings.Trim(host, "[]")); err == nil {
 		ips = []netip.Addr{ip}
-	} else if ips, err = net.DefaultResolver.LookupNetIP(ctx, "ip", host); err != nil {
+	} else if ips, err = a.resolve(ctx, "ip", host); err != nil || len(ips) == 0 {
 		return nil
 	}
-	wanted := map[netip.Addr]bool{}
 	for _, ip := range ips {
-		ip = ip.Unmap()
-		for _, prefix := range tailnetPrefixes {
-			if prefix.Contains(ip) {
-				wanted[ip] = true
-			}
+		if !inTailnet(ip.Unmap()) {
+			return nil
 		}
 	}
-	if len(wanted) == 0 {
-		return nil
-	}
-	peers, err := lookup(ctx)
+	peers, err := a.lookup(ctx, a.began)
 	if err != nil {
 		return nil
 	}
-	for _, peer := range peers {
-		for _, raw := range peer.IPs {
-			ip, err := netip.ParseAddr(raw)
-			if err != nil || !wanted[ip.Unmap()] {
-				continue
+	var gone *tailnet.Peer
+	for _, ip := range ips {
+		peer := tailnetPeerFor(peers, ip.Unmap())
+		if peer == nil || peer.Online || time.Since(peer.LastHandshake) < wireGuardSessionLife {
+			return nil
+		}
+		gone = peer
+	}
+	name := gone.HostName
+	if name == "" {
+		name = gone.DNSName
+	}
+	reason := "Tailscale reports " + name + " offline"
+	if !gone.LastSeen.IsZero() {
+		reason += ", last seen " + agoText(time.Since(gone.LastSeen))
+	}
+	return &UnreachableError{Addr: host, Reason: reason}
+}
+
+func inTailnet(ip netip.Addr) bool {
+	for _, prefix := range tailnetPrefixes {
+		if prefix.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func tailnetPeerFor(peers []tailnet.Peer, ip netip.Addr) *tailnet.Peer {
+	for i := range peers {
+		for _, raw := range peers[i].IPs {
+			if candidate, err := netip.ParseAddr(raw); err == nil && candidate.Unmap() == ip {
+				return &peers[i]
 			}
-			if peer.Online || time.Since(peer.LastHandshake) < wireGuardSessionLife {
-				return nil
-			}
-			name := peer.HostName
-			if name == "" {
-				name = peer.DNSName
-			}
-			reason := "Tailscale reports " + name + " offline"
-			if !peer.LastSeen.IsZero() {
-				reason += ", last seen " + agoText(time.Since(peer.LastSeen))
-			}
-			return &UnreachableError{Addr: addr, Reason: reason}
 		}
 	}
 	return nil
 }
 
-// tailnetStatusFresh bounds how stale a shared status may be: long enough
-// for one fan-out's slow connections to share a lookup, short enough that a
-// handshake made since is seen.
-const tailnetStatusFresh = 2 * time.Second
+// tailnetLookup returns tailscaled's view of the tailnet as observed no
+// earlier than notBefore.
+type tailnetLookup func(ctx context.Context, notBefore time.Time) ([]tailnet.Peer, error)
 
 var tailnetCache struct {
 	sync.Mutex
-	at    time.Time
+	asked time.Time // when the cached answer was requested
 	peers []tailnet.Peer
 	err   error
 }
 
-// cachedTailnetPeers asks tailscaled at most once per tailnetStatusFresh.
+// cachedTailnetPeers shares one tailscaled lookup among the attempts that
+// began before it was made, such as one fan-out's slow connections; an
+// attempt that began later gets a new one, so a handshake it made is seen.
 // Only connections that are already slow get here, so a healthy fleet never
 // pays for the lookup.
-func cachedTailnetPeers(ctx context.Context) ([]tailnet.Peer, error) {
+func cachedTailnetPeers(ctx context.Context, notBefore time.Time) ([]tailnet.Peer, error) {
 	tailnetCache.Lock()
 	defer tailnetCache.Unlock()
-	if time.Since(tailnetCache.at) >= tailnetStatusFresh {
+	if tailnetCache.asked.IsZero() || tailnetCache.asked.Before(notBefore) {
+		asked := time.Now()
 		provider, err := tailnet.Discover("", "")
 		var peers []tailnet.Peer
 		if err == nil {
@@ -197,7 +223,7 @@ func cachedTailnetPeers(ctx context.Context) ([]tailnet.Peer, error) {
 		if ctx.Err() != nil {
 			return peers, err
 		}
-		tailnetCache.at, tailnetCache.peers, tailnetCache.err = time.Now(), peers, err
+		tailnetCache.asked, tailnetCache.peers, tailnetCache.err = asked, peers, err
 	}
 	return tailnetCache.peers, tailnetCache.err
 }
