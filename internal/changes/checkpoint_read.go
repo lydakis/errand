@@ -179,6 +179,12 @@ func (r *checkpointRecord) rootHash() string {
 	return r.root
 }
 
+// setRootHash records the identity of r's manifest, already hashed from its
+// encoding, unless rootHash computed it first.
+func (r *checkpointRecord) setRootHash(root string) {
+	r.once.Do(func() { r.root = root })
+}
+
 // sourceBase borrows the manifest validatedRecord checked and shares the
 // record's identity, so every handle that reads these exact bytes shares one hash.
 func (r *checkpointRecord) sourceBase() *SourceBase {
