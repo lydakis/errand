@@ -18,6 +18,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/lydakis/errand/internal/limitbuf"
 	"github.com/lydakis/errand/internal/nowindow"
 )
 
@@ -292,9 +293,8 @@ func (p *LambdaProvider) ssh() func(context.Context, []string, io.Reader) ([]byt
 		cmd.Stdin = stdin
 		cmd.WaitDelay = 5 * time.Second
 		nowindow.Hide(cmd)
-		var out limitedBuffer
-		out.limit = 4096
-		cmd.Stdout, cmd.Stderr = &out, &out
+		out := &limitbuf.Buffer{Limit: 4096}
+		cmd.Stdout, cmd.Stderr = out, out
 		err := cmd.Run()
 		return out.Bytes(), err
 	}

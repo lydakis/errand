@@ -3,12 +3,10 @@
 package cloud
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -952,22 +950,3 @@ func (b *Broker) persist(r *record) error {
 	defer dir.Close()
 	return durable.Sync(dir)
 }
-
-type limitedBuffer struct {
-	bytes.Buffer
-	limit    int
-	overflow bool
-}
-
-func (w *limitedBuffer) Write(p []byte) (int, error) {
-	if room := w.limit - w.Len(); room < len(p) {
-		w.overflow = true
-		if room > 0 {
-			w.Buffer.Write(p[:room])
-		}
-		return len(p), nil
-	}
-	return w.Buffer.Write(p)
-}
-
-var _ io.Writer = (*limitedBuffer)(nil)
