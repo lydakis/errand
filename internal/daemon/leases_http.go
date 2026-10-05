@@ -121,8 +121,10 @@ func leaseView(id Identity, leases []proto.Lease) []proto.Lease {
 	if id.Allowed(proto.ActionSubmit) {
 		return leases
 	}
+	// Provider output can name the machine too, as a pool's "claimed URL"
+	// does, so none of it is shown either.
 	for i := range leases {
-		leases[i].Target = nil
+		leases[i].Target, leases[i].Progress, leases[i].Error = nil, nil, ""
 	}
 	return leases
 }

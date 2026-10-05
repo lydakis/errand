@@ -799,7 +799,7 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 	}
 	dir := t.TempDir()
 	acquire := filepath.Join(dir, "acquire.sh")
-	os.WriteFile(acquire, []byte("#!/bin/sh\necho '{\"url\":\"http://box:7443\"}'\n"), 0o700)
+	os.WriteFile(acquire, []byte("#!/bin/sh\necho 'claimed http://box:7443' >&2\necho '{\"url\":\"http://box:7443\"}'\n"), 0o700)
 	release := filepath.Join(dir, "release.sh")
 	os.WriteFile(release, []byte("#!/bin/sh\n"), 0o700)
 	gpu := []proto.GPU{{Name: "NVIDIA H100 80GB HBM3", MemoryMiB: 81559}}
@@ -882,7 +882,7 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 	var released proto.Lease
 	json.NewDecoder(res.Body).Decode(&released)
 	res.Body.Close()
-	if res.StatusCode != http.StatusOK || released.ID != lease.ID || released.Target != nil {
+	if res.StatusCode != http.StatusOK || released.ID != lease.ID || released.Target != nil || strings.Contains(strings.Join(released.Progress, "\n")+released.Error, "box") {
 		t.Fatalf("release without submit: %d %+v", res.StatusCode, released)
 	}
 	ended(lease, "its owner released it without submit")
