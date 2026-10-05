@@ -38,6 +38,7 @@ type fakeLambda struct {
 	rateLimited int               // requests to refuse with 429 first
 	fileSystems map[string]string // name → region
 	sshKeys     map[string]string // name → public key
+	keysAdded   int               // POST /ssh-keys calls
 	launchError int               // status to refuse launches with
 	pollErrors  int               // status polls to fail with 502 first
 	pageSize    int               // instances per page, when set
@@ -77,6 +78,17 @@ func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			list = append(list, map[string]string{"id": "key-" + name, "name": name, "public_key": public})
 		}
 		reply(list)
+	case r.Method == http.MethodPost && r.URL.Path == "/ssh-keys":
+		var body map[string]string
+		json.NewDecoder(r.Body).Decode(&body)
+		if _, taken := f.sshKeys[body["name"]]; taken || body["public_key"] == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, `{"error":{"code":"global/invalid-parameters","message":"Invalid SSH key"}}`)
+			return
+		}
+		f.keysAdded++
+		f.sshKeys[body["name"]] = body["public_key"]
+		reply(map[string]string{"id": "key-" + body["name"], "name": body["name"], "public_key": body["public_key"]})
 	case r.Method == http.MethodGet && r.URL.Path == "/file-systems":
 		var list []map[string]any
 		for name, region := range f.fileSystems {
@@ -288,17 +300,19 @@ func newLambda(t *testing.T) (*LambdaProvider, *fakeLambda, *fakeSSH) {
 		}
 		return path
 	}
-	api := &fakeLambda{capacity: []string{"us-west-1", "us-east-1"}, instances: map[string]*lambdaInstance{}, sshKeys: map[string]string{"errand": "ssh-ed25519 AAAAclient errand"}}
+	api := &fakeLambda{capacity: []string{"us-west-1", "us-east-1"}, instances: map[string]*lambdaInstance{}, sshKeys: map[string]string{"laptop": "ssh-ed25519 AAAAlaptop george@mac"}}
 	srv := httptest.NewServer(api)
 	t.Cleanup(srv.Close)
 	ssh := &fakeSSH{refusals: 2, staleKeys: 2}
 	api.rateLimited = 2
 	return &LambdaProvider{
-		APIKeyFile:           write("lambda.key", "secret-key\n"),
-		InstanceType:         "gpu_1x_h100_pcie",
-		Regions:              []string{"us-east-1"},
-		SSHKeyName:           "errand",
-		SSHPrivateKeyFile:    write("lambda_ed25519", "private key"),
+		APIKeyFile:   write("lambda.key", "secret-key\n"),
+		InstanceType: "gpu_1x_h100_pcie",
+		Regions:      []string{"us-east-1"},
+		KeyDir:       filepath.Join(dir, "lambda"),
+		Keygen: func(context.Context, string, string) (string, error) {
+			return "ssh-ed25519 AAAApeer errand-cloud-peer", nil
+		},
 		TailscaleAuthKeyFile: write("ts.key", "tskey-auth-FAKE\n"),
 		ErrandBinary:         copyFile(t, fakeErrand(t, "linux", "amd64"), filepath.Join(dir, "errand")),
 		Arch:                 "amd64",
@@ -335,6 +349,15 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 	launch := api.launches[0]
 	if launch["region_name"] != "us-east-1" || launch["name"] != host || launch["instance_type_name"] != "gpu_1x_h100_pcie" {
 		t.Fatalf("launch %v", launch)
+	}
+	// The cloud peer's own key is added to the account once and named on
+	// every launch; the account's other keys are left alone.
+	keyName := "errand-" + keyID("ssh-ed25519 AAAApeer")
+	if names, _ := launch["ssh_key_names"].([]any); len(names) != 1 || names[0] != keyName || api.sshKeys[keyName] != "ssh-ed25519 AAAApeer errand-cloud-peer" || len(api.sshKeys) != 2 {
+		t.Fatalf("ssh keys: launch %v, account %v", launch["ssh_key_names"], api.sshKeys)
+	}
+	if !slices.Contains(ssh.lastArgs, filepath.Join(p.KeyDir, "lambda_ed25519")) {
+		t.Fatalf("install did not use the cloud peer's key: %q", ssh.lastArgs)
 	}
 	// The instance gets the host key SSH then pins; the Tailscale key never
 	// travels in launch metadata.
@@ -378,6 +401,9 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 			t.Errorf("bundle %s is %d bytes, want %d", name, len(got), len(want))
 		}
 	}
+	if _, ok := ssh.files["authorized-keys"]; ok {
+		t.Error("a tailnet machine got a client SSH key")
+	}
 	if ssh.modes["tailscale-auth-key"] != 0o600 || ssh.modes["errand"] != 0o755 {
 		t.Errorf("bundle modes %v", ssh.modes)
 	}
@@ -408,10 +434,10 @@ func TestLambdaAcquireOverSSH(t *testing.T) {
 	t.Setenv("HOME", cache)
 	p, _, ssh := newLambda(t)
 	p.TailscaleAuthKeyFile = ""
-	p.AuthorizedKeys = []string{"ssh-ed25519 AAAAmac george@mac", "ssh-ed25519 AAAAmini george@mini"}
 	id := proto.NewULID()
-	// A request without a tailnet login is fine: SSH keys decide who gets in.
-	machine, err := p.Acquire(context.Background(), AcquireRequest{LeaseID: id, Offer: "h100", Where: "gpu", Progress: func(string) {}, Save: noSave})
+	// A request without a tailnet login is fine: the client's key decides
+	// who gets in.
+	machine, err := p.Acquire(context.Background(), AcquireRequest{LeaseID: id, Offer: "h100", Where: "gpu", SSHKey: "ssh-ed25519 AAAAmac errand", Progress: func(string) {}, Save: noSave})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -428,16 +454,16 @@ func TestLambdaAcquireOverSSH(t *testing.T) {
 	if _, ok := ssh.files["tailscale-auth-key"]; ok {
 		t.Fatal("bundle carries an auth key")
 	}
-	if got := ssh.files["authorized-keys"]; got != "ssh-ed25519 AAAAmac george@mac\nssh-ed25519 AAAAmini george@mini\n" {
+	if got := ssh.files["authorized-keys"]; got != "ssh-ed25519 AAAAmac errand\n" {
 		t.Fatalf("authorized-keys %q", got)
 	}
-	// This cloud peer watches the machine with the key it installed with.
+	// This cloud peer watches the machine with its own key.
 	base, _ := os.UserCacheDir()
 	pins, _ := filepath.Glob(filepath.Join(base, "errand", "ssh", "pins", "*.identity"))
 	if len(pins) != 1 {
 		t.Fatalf("identity pins %q", pins)
 	}
-	if got, _ := os.ReadFile(pins[0]); string(got) != p.SSHPrivateKeyFile {
+	if got, _ := os.ReadFile(pins[0]); string(got) != filepath.Join(p.KeyDir, "lambda_ed25519") {
 		t.Fatalf("identity pin %q", got)
 	}
 }
@@ -551,15 +577,12 @@ func TestLambdaRefusals(t *testing.T) {
 			t.Errorf("%s: %v, %d launches", binary, err, len(api3.launches))
 		}
 	}
+	// Over SSH, a request without the client's key would rent a machine
+	// that admits no one.
 	pk, apiK, _ := newLambda(t)
-	pk.SSHPrivateKeyFile = t.TempDir()
-	if _, err := pk.Acquire(context.Background(), req); err == nil || !strings.Contains(err.Error(), "ssh_private_key_file") || len(apiK.launches) != 0 {
-		t.Errorf("key directory: %v, %d launches", err, len(apiK.launches))
-	}
-	pn, apiN, _ := newLambda(t)
-	pn.SSHKeyName = "missing"
-	if _, err := pn.Acquire(context.Background(), req); err == nil || !strings.Contains(err.Error(), `no SSH key named "missing"`) || len(apiN.launches) != 0 {
-		t.Errorf("unregistered key: %v, %d launches", err, len(apiN.launches))
+	pk.TailscaleAuthKeyFile = ""
+	if _, err := pk.Acquire(context.Background(), req); err == nil || !strings.Contains(err.Error(), "no SSH key") || len(apiK.launches) != 0 {
+		t.Errorf("no client key: %v, %d launches", err, len(apiK.launches))
 	}
 	// With no caller login and no allow_users, the machine would admit no one.
 	pl, apiL, _ := newLambda(t)
@@ -580,47 +603,31 @@ func TestLambdaRefusals(t *testing.T) {
 	}
 }
 
-// With the real ssh, a key that cannot load without a passphrase is refused
-// before anything is rented.
-func TestLambdaChecksPrivateKey(t *testing.T) {
-	for _, tool := range []string{"ssh", "ssh-keygen"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf("no %s: %v", tool, err)
-		}
+// The cloud peer makes its own key on first use and adds it to the Lambda
+// account once; a key the account already has is used under its name.
+func TestLambdaRegistersOwnKey(t *testing.T) {
+	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		t.Skip("no ssh-keygen")
 	}
-	dir := t.TempDir()
-	good := filepath.Join(dir, "good")
-	if out, err := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", good).CombinedOutput(); err != nil {
-		t.Fatalf("ssh-keygen: %v %s", err, out)
+	p, api, _ := newLambda(t)
+	p.Keygen = nil
+	ctx := context.Background()
+	name, err := p.registerKey(ctx, "secret-key")
+	if err != nil {
+		t.Fatal(err)
 	}
-	locked := filepath.Join(dir, "locked")
-	if out, err := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "secret", "-f", locked).CombinedOutput(); err != nil {
-		t.Fatalf("ssh-keygen: %v %s", err, out)
+	public, err := os.ReadFile(filepath.Join(p.KeyDir, "lambda_ed25519.pub"))
+	if err != nil || !strings.HasPrefix(name, "errand-") || api.sshKeys[name] != strings.TrimSpace(string(public)) {
+		t.Fatalf("registered %q: %v, account %v", name, err, api.sshKeys)
 	}
-	garbage := filepath.Join(dir, "garbage")
-	os.WriteFile(garbage, []byte("not a key\n"), 0600)
-	p, _, _ := newLambda(t)
-	p.SSH = nil
-	p.SSHPrivateKeyFile = good
-	public, err := p.checkInstall(context.Background())
-	if err != nil || !strings.HasPrefix(public, "ssh-ed25519 ") {
-		t.Fatalf("good key: %q %v", public, err)
+	if again, err := p.registerKey(ctx, "secret-key"); err != nil || again != name || api.keysAdded != 1 {
+		t.Fatalf("second call: %q %v, %d keys added", again, err, api.keysAdded)
 	}
-	// A registered key that is not this private key's would rent a machine
-	// that refuses the install.
-	pm, apiM, _ := newLambda(t)
-	pm.SSH, pm.SSHPrivateKeyFile = nil, good
-	reqM := AcquireRequest{LeaseID: proto.NewULID(), Progress: func(string) {}, Save: noSave}
-	if _, err := pm.Acquire(context.Background(), reqM); err == nil || !strings.Contains(err.Error(), "is not the public half") || len(apiM.launches) != 0 {
-		t.Errorf("mismatched key: %v, %d launches", err, len(apiM.launches))
-	}
-	for _, key := range []string{locked, garbage} {
-		p, api, _ := newLambda(t)
-		p.SSH, p.SSHPrivateKeyFile = nil, key
-		req := AcquireRequest{LeaseID: proto.NewULID(), Progress: func(string) {}, Save: noSave}
-		if _, err := p.Acquire(context.Background(), req); err == nil || !strings.Contains(err.Error(), "not a usable private key") || len(api.launches) != 0 {
-			t.Errorf("%s: %v, %d launches", filepath.Base(key), err, len(api.launches))
-		}
+	// Someone added the same key by hand under another name.
+	delete(api.sshKeys, name)
+	api.sshKeys["mine"] = strings.TrimSpace(string(public)) + " edited comment"
+	if got, err := p.registerKey(ctx, "secret-key"); err != nil || got != "mine" || api.keysAdded != 1 {
+		t.Fatalf("existing key: %q %v, %d keys added", got, err, api.keysAdded)
 	}
 }
 
@@ -935,7 +942,7 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 	if offers := b.Offers(); offers[0].PricePerHour != 2.49 {
 		t.Fatalf("offers %+v", offers)
 	}
-	l, err := b.Acquire("george", "george@github", "gpu=h100")
+	l, err := b.Acquire("george", "george@github", "gpu=h100", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -999,7 +1006,7 @@ func TestLambdaInstallCommandUnpacksBundle(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, w := io.Pipe()
-	go func() { w.CloseWithError(p.writeInstallBundle(w, config, "errand-lease-host", "tskey-auth-FAKE")) }()
+	go func() { w.CloseWithError(p.writeInstallBundle(w, config, "errand-lease-host", "tskey-auth-FAKE", "")) }()
 	cmd := exec.Command("sh", "-c", lambdaInstallCommand)
 	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	cmd.Stdin = r
@@ -1029,7 +1036,7 @@ func TestLambdaInstallCommandUnpacksBundle(t *testing.T) {
 	// still goes.
 	os.WriteFile(filepath.Join(bin, "sudo"), []byte("#!/bin/sh\necho 'sudo: a password is required' >&2\nexit 1\n"), 0o755)
 	r, w = io.Pipe()
-	go func() { w.CloseWithError(p.writeInstallBundle(w, config, "errand-lease-host", "tskey-auth-FAKE")) }()
+	go func() { w.CloseWithError(p.writeInstallBundle(w, config, "errand-lease-host", "tskey-auth-FAKE", "")) }()
 	cmd = exec.Command("sh", "-c", lambdaInstallCommand)
 	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	cmd.Stdin = r

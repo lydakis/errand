@@ -3,6 +3,7 @@ package cloud
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,6 +34,9 @@ type AcquireRequest struct {
 	// Login is the tailnet login of the caller, when it has one, so the
 	// machine can admit them without a capability grant.
 	Login string
+	// SSHKey is the caller's SSH public key, when it sent one, so a machine
+	// reached over SSH can admit them.
+	SSHKey string
 	// Progress shows a line to the waiting client.
 	Progress func(string)
 	// Save persists provider state as soon as there is any, such as an
@@ -59,7 +63,7 @@ type CommandProvider struct {
 
 func (p CommandProvider) Acquire(ctx context.Context, req AcquireRequest) (Machine, error) {
 	cmd := exec.CommandContext(ctx, p.AcquireCommand[0], p.AcquireCommand[1:]...)
-	cmd.Env = append(os.Environ(), "ERRAND_LEASE_ID="+req.LeaseID, "ERRAND_OFFER="+req.Offer, "ERRAND_LEASE_WHERE="+req.Where, "ERRAND_LEASE_LOGIN="+req.Login)
+	cmd.Env = append(os.Environ(), "ERRAND_LEASE_ID="+req.LeaseID, "ERRAND_OFFER="+req.Offer, "ERRAND_LEASE_WHERE="+req.Where, "ERRAND_LEASE_LOGIN="+req.Login, "ERRAND_LEASE_SSH_KEY="+req.SSHKey)
 	cmd.WaitDelay = 5 * time.Second
 	nowindow.Hide(cmd)
 	var stdout limitedBuffer
@@ -132,4 +136,15 @@ func checkTarget(t proto.LeaseTarget) error {
 		return errors.New("provider named a host_key without an ssh target")
 	}
 	return nil
+}
+
+// ValidSSHPublicKey accepts one authorized_keys line: a key type, its base64
+// blob and an optional comment, without options.
+func ValidSSHPublicKey(s string) bool {
+	fields := strings.Fields(s)
+	if len(fields) < 2 || len(s) > 16<<10 || strings.ContainsAny(s, "\r\n") || !strings.HasPrefix(fields[0], "ssh-") && !strings.HasPrefix(fields[0], "ecdsa-") && !strings.HasPrefix(fields[0], "sk-") {
+		return false
+	}
+	_, err := base64.StdEncoding.DecodeString(fields[1])
+	return err == nil
 }

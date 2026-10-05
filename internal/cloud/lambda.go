@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -38,20 +39,21 @@ type LambdaProvider struct {
 	InstanceType         string
 	Regions              []string // preference order; empty means any with capacity
 	FileSystems          []string
-	SSHKeyName           string   // registered with Lambda
-	SSHPrivateKeyFile    string   // its private half: installs errand, watches an SSH runner
 	User                 string   // login on the instance; Lambda images use ubuntu
 	TailscaleAuthKeyFile string   // empty: clients reach the machine over SSH
 	ErrandBinary         string   // a linux build for Arch
 	Arch                 string   // the instance's architecture, amd64 or arm64
 	AllowUsers           []string // tailnet logins admitted besides the caller
-	AuthorizedKeys       []string // SSH public keys of the clients' machines
+	// KeyDir holds the cloud peer's own SSH key, made and registered with
+	// Lambda on first use. The broker sets it to its state directory.
+	KeyDir string
 
 	// Tests replace these.
 	BaseURL    string
 	HTTP       *http.Client
 	SSH        func(ctx context.Context, args []string, stdin io.Reader) ([]byte, error)
 	HostKey    func(ctx context.Context) (private, public string, err error)
+	Keygen     func(ctx context.Context, path, comment string) (public string, err error)
 	Now        func() time.Time
 	Poll       time.Duration
 	LaunchGap  time.Duration
@@ -93,6 +95,10 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 	if tailnet && req.Login == "" && len(p.allowUsers()) == 0 {
 		return Machine{}, errors.New("this lease request has no tailnet login to admit (it came over SSH or the local socket); ask over the tailnet, or set allow_users on the offer")
 	}
+	// Over SSH the machine admits only the key the client sent.
+	if !tailnet && req.SSHKey == "" {
+		return Machine{}, errors.New("this lease request carries no SSH key for the machine to admit; update errand where you ran it")
+	}
 	key, err := readSecret(p.APIKeyFile, "Lambda API key")
 	if err != nil {
 		return Machine{}, err
@@ -104,11 +110,11 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 		}
 	}
 	// Everything the install needs is checked before paying for a machine.
-	public, err := p.checkInstall(ctx)
-	if err != nil {
+	if err := p.checkInstall(); err != nil {
 		return Machine{}, err
 	}
-	if err := p.checkSSHKeyName(ctx, key, public); err != nil {
+	keyName, err := p.registerKey(ctx, key)
+	if err != nil {
 		return Machine{}, err
 	}
 	region, price, err := p.pickRegion(ctx, key)
@@ -126,7 +132,7 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 	launch := map[string]any{
 		"region_name":        region,
 		"instance_type_name": p.InstanceType,
-		"ssh_key_names":      []string{p.SSHKeyName},
+		"ssh_key_names":      []string{keyName},
 		"name":               name,
 		"user_data":          hostKeyCloudConfig(hostPrivate, hostPublic),
 	}
@@ -167,17 +173,16 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 		return Machine{}, err
 	}
 	req.Progress("instance is up at " + ip + "; installing errand")
-	if err := p.install(ctx, ip, hostPublic, name, authKey, req.Login); err != nil {
+	if err := p.install(ctx, ip, hostPublic, name, authKey, req.Login, req.SSHKey); err != nil {
 		return Machine{}, err
 	}
 	if tailnet {
 		state.LeaseTarget = proto.LeaseTarget{URL: "http://" + name + ":7443"}
 	} else {
 		// The runner listens on no port; jobs reach it over SSH, as the
-		// login it runs as. This cloud peer watches it with the key it
-		// installed it with, which clients never need.
+		// login it runs as. This cloud peer watches it with its own key.
 		state.LeaseTarget = proto.LeaseTarget{SSH: p.user() + "@" + ip, HostKey: hostPublic}
-		if err := client.PinSSHIdentity("ssh://"+state.SSH, p.SSHPrivateKeyFile); err != nil {
+		if err := client.PinSSHIdentity("ssh://"+state.SSH, p.keyFile()); err != nil {
 			return Machine{}, err
 		}
 	}
@@ -257,6 +262,12 @@ func (p *LambdaProvider) Release(ctx context.Context, req ReleaseRequest) error 
 		return fmt.Errorf("Lambda did not confirm terminating %s; trying again", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+func (p *LambdaProvider) useStateDir(dir string) {
+	if p.KeyDir == "" {
+		p.KeyDir = filepath.Join(dir, "lambda")
+	}
 }
 
 // user is the login on the instance.

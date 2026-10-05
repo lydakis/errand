@@ -34,11 +34,12 @@ var lambdaInstallScript = strings.ReplaceAll(lambdaInstallScriptFile, "\r\n", "\
 // It is the only command run with the bundle, and it never changes.
 const lambdaInstallCommand = `d="$HOME/.errand-lease"; rm -rf "$d" && mkdir -m 700 "$d" || exit 1; tar -xf - -C "$d" && sudo bash "$d/install.sh"; s=$?; rm -rf "$d"; exit $s`
 
-// install copies errand, its runner config and the tailnet auth key to the
-// machine as one archive over SSH stdin and runs a fixed script from it.
-// Values travel only as file contents, so none needs quoting for a shell or
-// systemd, and the auth key never appears in launch metadata or a command.
-func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, authKey, login string) error {
+// install copies errand, its runner config and either the tailnet auth key
+// or the client's SSH key to the machine as one archive over SSH stdin and
+// runs a fixed script from it. Values travel only as file contents, so none
+// needs quoting for a shell or systemd, and the auth key never appears in
+// launch metadata or a command.
+func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, authKey, login, clientKey string) error {
 	known, err := os.CreateTemp("", "errand-lease-known-hosts-")
 	if err != nil {
 		return err
@@ -53,7 +54,7 @@ func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, 
 	}
 	user := p.user()
 	base := []string{
-		"-i", p.SSHPrivateKeyFile,
+		"-i", p.keyFile(),
 		"-o", "BatchMode=yes",
 		"-o", "IdentitiesOnly=yes",
 		"-o", "ConnectTimeout=10",
@@ -93,7 +94,7 @@ func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, 
 	bundle, w := io.Pipe()
 	wrote := make(chan error, 1)
 	go func() {
-		err := p.writeInstallBundle(w, config, hostname, authKey)
+		err := p.writeInstallBundle(w, config, hostname, authKey, clientKey)
 		w.CloseWithError(err)
 		wrote <- err
 	}()
@@ -127,7 +128,8 @@ func lambdaRunnerConfig(tailnet bool, allowUsers []string) ([]byte, error) {
 }
 
 // writeInstallBundle writes the archive lambdaInstallCommand unpacks.
-func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname, authKey string) error {
+// Over SSH the machine admits clientKey; on the tailnet it needs no key.
+func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname, authKey, clientKey string) error {
 	tw := tar.NewWriter(w)
 	add := func(name string, mode int64, size int64, body io.Reader) error {
 		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: mode, Size: size, ModTime: time.Unix(0, 0), Typeflag: tar.TypeReg}); err != nil {
@@ -147,8 +149,8 @@ func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname
 			return err
 		}
 	}
-	if len(p.AuthorizedKeys) > 0 {
-		if err := addString("authorized-keys", 0o644, strings.Join(p.AuthorizedKeys, "\n")+"\n"); err != nil {
+	if authKey == "" {
+		if err := addString("authorized-keys", 0o644, clientKey+"\n"); err != nil {
 			return err
 		}
 	}
@@ -174,42 +176,22 @@ func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname
 	return tw.Close()
 }
 
-// checkInstall checks what the install needs before anything is rented, and
-// returns the SSH key's public half when it derived one.
-func (p *LambdaProvider) checkInstall(ctx context.Context) (string, error) {
-	if info, err := os.Stat(p.SSHPrivateKeyFile); err != nil {
-		return "", fmt.Errorf("lambda ssh_private_key_file: %w", err)
-	} else if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("lambda ssh_private_key_file: %s is not a regular file", p.SSHPrivateKeyFile)
-	}
+// checkInstall checks what the install needs before anything is rented.
+func (p *LambdaProvider) checkInstall() error {
 	if err := checkLinuxBinary(p.ErrandBinary, p.Arch); err != nil {
-		return "", fmt.Errorf("lambda errand_binary: %w", err)
+		return fmt.Errorf("lambda errand_binary: %w", err)
 	}
-	if p.HostKey == nil {
+	if p.HostKey == nil || p.Keygen == nil {
 		if _, err := exec.LookPath("ssh-keygen"); err != nil {
-			return "", fmt.Errorf("installing errand on Lambda machines needs ssh-keygen: %w", err)
+			return fmt.Errorf("renting Lambda machines needs ssh-keygen: %w", err)
 		}
 	}
 	if p.SSH == nil {
 		if _, err := exec.LookPath("ssh"); err != nil {
-			return "", fmt.Errorf("installing errand on Lambda machines needs ssh: %w", err)
+			return fmt.Errorf("installing errand on Lambda machines needs ssh: %w", err)
 		}
-		// ssh runs in batch mode and cannot ask for a passphrase, so the key
-		// must load as it is. Deriving its public half proves that.
-		cmd := exec.CommandContext(ctx, "ssh-keygen", "-y", "-P", "", "-f", p.SSHPrivateKeyFile)
-		nowindow.Hide(cmd)
-		out, err := cmd.Output()
-		if err != nil {
-			detail := ""
-			var exit *exec.ExitError
-			if errors.As(err, &exit) {
-				detail = lastLine(exit.Stderr)
-			}
-			return "", fmt.Errorf("lambda ssh_private_key_file %s is not a usable private key without a passphrase: %s", p.SSHPrivateKeyFile, detail)
-		}
-		return strings.TrimSpace(string(out)), nil
 	}
-	return "", nil
+	return nil
 }
 
 func (p *LambdaProvider) hostKey() func(context.Context) (string, string, error) {

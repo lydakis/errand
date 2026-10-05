@@ -519,6 +519,9 @@ const (
 
 type LeaseRequest struct {
 	Where string `json:"where"`
+	// SSHKey is the caller's SSH public key. A leased machine reached over
+	// SSH admits only the key of the client that asked for it.
+	SSHKey string `json:"ssh_key,omitempty"`
 }
 
 // LeaseTarget says how to reach a leased runner, with the same fields and

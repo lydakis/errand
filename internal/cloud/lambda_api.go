@@ -9,10 +9,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lydakis/errand/internal/client"
 )
 
 const lambdaAPI = "https://cloud.lambda.ai/api/v1"
@@ -352,29 +355,58 @@ func (p *LambdaProvider) fileSystemRegion(ctx context.Context, key string) (stri
 	return region, nil
 }
 
-// checkSSHKeyName makes sure ssh_key_name is registered with Lambda and, when
-// the private key's public half is known, that it is that key: otherwise the
-// machine would be rented and then refuse the install.
-func (p *LambdaProvider) checkSSHKeyName(ctx context.Context, key, public string) error {
+// lambdaKeyMu keeps launches from making or registering the key twice.
+var lambdaKeyMu sync.Mutex
+
+// registerKey returns the name Lambda knows the cloud peer's own SSH key by,
+// making the key and adding it to the account first if needed. Lambda puts
+// it on every machine the cloud peer launches, which then installs errand
+// and watches the runner with it.
+func (p *LambdaProvider) registerKey(ctx context.Context, apiKey string) (string, error) {
+	lambdaKeyMu.Lock()
+	defer lambdaKeyMu.Unlock()
+	if p.KeyDir == "" {
+		return "", errors.New("lambda provider has no directory for its SSH key")
+	}
+	public, err := p.keygen()(ctx, p.keyFile(), "errand-cloud-peer")
+	if err != nil {
+		return "", err
+	}
 	var list struct {
 		Data []struct {
 			Name      string `json:"name"`
 			PublicKey string `json:"public_key"`
 		} `json:"data"`
 	}
-	if err := p.call(ctx, key, http.MethodGet, "/ssh-keys", nil, &list); err != nil {
-		return fmt.Errorf("listing Lambda SSH keys: %w", err)
+	if err := p.call(ctx, apiKey, http.MethodGet, "/ssh-keys", nil, &list); err != nil {
+		return "", fmt.Errorf("listing Lambda SSH keys: %w", err)
 	}
 	for _, k := range list.Data {
-		if k.Name != p.SSHKeyName {
-			continue
+		if sshKeyBody(k.PublicKey) == sshKeyBody(public) {
+			return k.Name, nil
 		}
-		if public != "" && sshKeyBody(k.PublicKey) != sshKeyBody(public) {
-			return fmt.Errorf("Lambda SSH key %q is not the public half of ssh_private_key_file %s", p.SSHKeyName, p.SSHPrivateKeyFile)
-		}
-		return nil
 	}
-	return fmt.Errorf("Lambda has no SSH key named %q; add it in the Lambda console", p.SSHKeyName)
+	name := "errand-" + keyID(sshKeyBody(public))
+	var added struct {
+		Data struct {
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	if err := p.call(ctx, apiKey, http.MethodPost, "/ssh-keys", map[string]string{"name": name, "public_key": public}, &added); err != nil {
+		return "", fmt.Errorf("adding errand's SSH key to Lambda: %w", err)
+	}
+	return name, nil
+}
+
+func (p *LambdaProvider) keyFile() string {
+	return filepath.Join(p.KeyDir, "lambda_ed25519")
+}
+
+func (p *LambdaProvider) keygen() func(context.Context, string, string) (string, error) {
+	if p.Keygen != nil {
+		return p.Keygen
+	}
+	return client.EnsureSSHKey
 }
 
 // sshKeyBody is a public key's type and data, without its comment.

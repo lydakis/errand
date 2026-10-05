@@ -29,7 +29,7 @@ they do with any runner. The next `--where gpu=h100` selects it directly.
 - Never for `--where '*'`.
 - The first configured cloud peer (by name) with a matching offer is used, and
   its first matching offer. A ready or launching lease of yours that already
-  matches is reused.
+  matches is reused, if you asked for it from the same machine.
 - An offer's facts are a claim. The lease becomes ready only once the machine
   answers as an errand runner whose measured facts match, and the runner
   rechecks them when the job is admitted.
@@ -111,11 +111,10 @@ launched together take turns.
 Clients reach the machine one of two ways:
 
 - **Over SSH** (the default). The runner listens on no port, and jobs reach
-  it over SSH on port 22, as they reach any SSH peer. The lease carries the
-  machine's host key, so errand checks it without a `known_hosts` entry. List
-  the SSH public keys of the machines you run errand from in
-  `authorized_keys`. The cloud peer reaches the machine with
-  `ssh_private_key_file`.
+  it over SSH on port 22, as they reach any SSH peer. Each machine you run
+  errand from makes an SSH key of its own and sends the public half with the
+  lease request; the leased machine admits only that key. The lease carries
+  the machine's host key, so errand checks it without a `known_hosts` entry.
 - **Over your tailnet**, when `tailscale_auth_key_file` is set. The machine
   joins as `errand-<lease id>`, and the runner listens only on the tailnet.
 
@@ -131,9 +130,6 @@ price_per_hour = 2.49
 instance_type = "gpu_1x_h100_pcie"
 regions = ["us-east-1", "us-west-1"]     # preference order; omit for any
 api_key_file = "/home/you/.config/errand/lambda-api-key"
-ssh_key_name = "errand"                  # the public half of the key below, added in the Lambda console
-ssh_private_key_file = "/home/you/.ssh/lambda_errand"
-authorized_keys = ["ssh-ed25519 AAAA... you@laptop"]  # who may run jobs over SSH
 # file_systems = ["datasets"]            # Lambda filesystems to attach (one region)
 # errand_binary = "/path/to/linux-amd64/errand"
 # tailscale_auth_key_file = "/home/you/.config/errand/tailscale-lease-key"
@@ -148,32 +144,34 @@ architecture. errand checks this before renting anything.
 
 Set up once:
 
-1. Create a Lambda API key and save it alone in `api_key_file`. Both key files
-   must belong to the user errand runs as, with mode 600; errand refuses
-   files other users can read.
-2. Add an SSH public key in the Lambda console and give its name as
-   `ssh_key_name`. The cloud peer uses the private half to install errand and
-   to watch the runner. For each lease it also makes a fresh SSH host key and
-   hands it to the instance through cloud-init, then refuses any other host
-   key, so no connection to the machine can be intercepted. Clients get the
-   same host key with the lease. The host key's private half is in that
-   lease's Lambda launch data. The cloud peer needs `ssh` and `ssh-keygen`.
-3. Over SSH, put the public key of each machine you run errand from in
-   `authorized_keys`. A machine whose key is listed can run jobs on every
-   lease of this offer, whoever asked for it.
-4. Over your tailnet instead, create a reusable, ephemeral, pre-approved
-   auth key tagged `tag:errand-lease` and save it in
-   `tailscale_auth_key_file`. The key goes to
-   the machine over SSH, never in Lambda's launch metadata. Ephemeral nodes
-   leave the tailnet on their own once terminated. Your policy must let your
-   devices reach the tag:
+1. Create a Lambda API key and save it alone in `api_key_file`, owned by the
+   user errand runs as, with mode 600. errand refuses files other users can
+   read.
+2. Restart the cloud peer with `errand setup`.
+
+That is all for SSH. The cloud peer needs `ssh` and `ssh-keygen`, and so do
+the machines you run errand from. On first use the cloud peer makes an SSH
+key in its state directory and adds the public half to your Lambda account
+as `errand-<fingerprint>`; it installs errand and watches the runner with
+it. For each lease it also makes a fresh SSH host key and hands it to the
+instance through cloud-init, then refuses any other host key, so no
+connection to the machine can be intercepted. Clients get the same host key
+with the lease. The host key's private half is in that lease's Lambda launch
+data.
+
+To use your tailnet instead, do these too before restarting:
+
+1. Create a reusable, ephemeral, pre-approved auth key tagged
+   `tag:errand-lease` and save it in `tailscale_auth_key_file`, with the same
+   ownership and mode. The key goes to the machine over SSH, never in
+   Lambda's launch metadata. Ephemeral nodes leave the tailnet on their own
+   once terminated.
+2. Let your devices reach the tag in your tailnet policy:
 
    ```jsonc
    "tagOwners": { "tag:errand-lease": ["autogroup:admin"] },
    "grants": [{ "src": ["autogroup:member"], "dst": ["tag:errand-lease"], "ip": ["tcp:7443"] }]
    ```
-
-5. Restart the cloud peer with `errand setup`.
 
 Over the tailnet, the leased runner admits the tailnet login that asked for
 the lease, plus `allow_users`. A lease asked for over SSH or the cloud peer's local socket has
@@ -209,6 +207,7 @@ runner's environment plus:
 | `ERRAND_OFFER` | yes | yes |
 | `ERRAND_LEASE_WHERE` | yes | no |
 | `ERRAND_LEASE_LOGIN` | yes, the caller's tailnet login or empty | no |
+| `ERRAND_LEASE_SSH_KEY` | yes, the caller's SSH public key | no |
 | `ERRAND_LEASE_STATE` | no | the JSON acquire printed, or empty |
 
 **acquire** creates the machine and exits 0 once it exists. Each stderr line is

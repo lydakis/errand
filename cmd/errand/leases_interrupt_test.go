@@ -3,10 +3,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -57,5 +60,23 @@ func TestLeasePeerPinsHostKey(t *testing.T) {
 	target.HostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 errand-lease"
 	if _, peerURL, err := leasePeer("cloud-7f3a", target); err != nil || peerURL != "ssh://ubuntu@203.0.113.7" {
 		t.Fatalf("%q %v", peerURL, err)
+	}
+	// The client reaches the machine with the key it sent with the request.
+	t.Setenv("XDG_STATE_HOME", t.TempDir()) // the lease record stays here
+	writeClientConfig(t, "")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // stop at the probe; the pins come first
+	lease := proto.Lease{ID: proto.NewULID(), Offer: "h100", Target: &target}
+	keyFile := filepath.Join(t.TempDir(), "errand_ed25519")
+	if _, err := recordLeasePeer(ctx, "cloud", lease, "gpu", keyFile, io.Discard); err == nil {
+		t.Fatal("probe of an unreachable lease succeeded")
+	}
+	base, _ := os.UserCacheDir()
+	pins, _ := filepath.Glob(filepath.Join(base, "errand", "ssh", "pins", "*.identity"))
+	if len(pins) != 1 {
+		t.Fatalf("identity pins %q", pins)
+	}
+	if got, _ := os.ReadFile(pins[0]); string(got) != keyFile {
+		t.Fatalf("identity pin %q, want %q", got, keyFile)
 	}
 }

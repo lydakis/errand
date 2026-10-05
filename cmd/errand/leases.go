@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -93,8 +94,17 @@ func leaseRunner(opt leaseOption, where string, stderr io.Writer) (placementChoi
 	// Ctrl-C does not cut the request short: the cloud peer may already be
 	// launching, and only its answer names the lease to release. The loop
 	// below releases a launching lease once it sees the interrupt.
+	// A machine reached over SSH admits this client by its own errand key.
+	keyFile, err := leaseKeyFile()
+	if err != nil {
+		return placementChoice{}, err
+	}
+	sshKey, err := client.EnsureSSHKey(ctx, keyFile, "errand")
+	if err != nil {
+		return placementChoice{}, err
+	}
 	acquireCtx, cancelAcquire := context.WithTimeout(context.WithoutCancel(ctx), leaseRequestTimeout)
-	lease, err := client.AcquireLease(acquireCtx, broker.Target, where)
+	lease, err := client.AcquireLease(acquireCtx, broker.Target, where, sshKey)
 	cancelAcquire()
 	if err != nil {
 		return placementChoice{}, fmt.Errorf("leasing from %s: %w", broker.Name, err)
@@ -147,10 +157,19 @@ func leaseRunner(opt leaseOption, where string, stderr io.Writer) (placementChoi
 		}
 		return placementChoice{}, fmt.Errorf("lease %s from %s did not become ready: %s", lease.ID, broker.Name, detail)
 	}
-	return recordLeasePeer(ctx, broker.Name, lease, where, stderr)
+	return recordLeasePeer(ctx, broker.Name, lease, where, keyFile, stderr)
 }
 
-func recordLeasePeer(ctx context.Context, brokerName string, lease proto.Lease, where string, stderr io.Writer) (placementChoice, error) {
+// leaseKeyFile is the SSH key this client sends with lease requests.
+func leaseKeyFile() (string, error) {
+	dir, err := config.StateDirectory()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "ssh", "errand_ed25519"), nil
+}
+
+func recordLeasePeer(ctx context.Context, brokerName string, lease proto.Lease, where, keyFile string, stderr io.Writer) (placementChoice, error) {
 	cfg, err := config.LoadClient()
 	if err != nil {
 		return placementChoice{}, err
@@ -168,6 +187,11 @@ func recordLeasePeer(ctx context.Context, brokerName string, lease proto.Lease, 
 	peer, peerURL, err := leasePeer(name, *lease.Target)
 	if err != nil {
 		return placementChoice{}, fmt.Errorf("lease %s has an unusable target: %w", name, err)
+	}
+	if lease.Target.SSH != "" {
+		if err := client.PinSSHIdentity(peerURL, keyFile); err != nil {
+			return placementChoice{}, err
+		}
 	}
 	target := client.ConfigureSSHPeer(peerURL, name, peer.RemoteCommand, peer.RemoteSocket)
 	info, err := client.ProbeWhereInfo(ctx, target, where, 10*time.Second)

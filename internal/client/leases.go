@@ -16,8 +16,8 @@ const maxLeaseResponseBytes = 1 << 20
 
 // AcquireLease asks a cloud peer for a machine matching where. The answer may
 // be an existing lease of the caller's that already matches.
-func AcquireLease(ctx context.Context, peerURL, where string) (proto.Lease, error) {
-	body, _ := json.Marshal(proto.LeaseRequest{Where: where})
+func AcquireLease(ctx context.Context, peerURL, where, sshKey string) (proto.Lease, error) {
+	body, _ := json.Marshal(proto.LeaseRequest{Where: where, SSHKey: sshKey})
 	var lease proto.Lease
 	err := leaseRequest(ctx, http.MethodPost, strings.TrimSuffix(peerURL, "/")+"/v0/leases", body, &lease)
 	return lease, err

@@ -68,6 +68,7 @@ type record struct {
 	proto.Lease
 	Owner         string          `json:"owner"`
 	Login         string          `json:"login,omitempty"`    // admitted by the machine
+	SSHKey        string          `json:"ssh_key,omitempty"`  // the caller's public key, admitted by the machine
 	Provider      string          `json:"provider,omitempty"` // kind of provider that acquired it
 	ProviderState json.RawMessage `json:"provider_state,omitempty"`
 	LastBusy      time.Time       `json:"last_busy,omitzero"`
@@ -123,6 +124,10 @@ func New(cfg Config) (*Broker, error) {
 		}
 		if _, dup := b.offers[o.Name]; dup {
 			return nil, fmt.Errorf("cloud offer %q is defined twice", o.Name)
+		}
+		// Providers that keep files of their own keep them with the leases.
+		if k, ok := o.Provider.(interface{ useStateDir(string) }); ok {
+			k.useStateDir(cfg.StateDir)
 		}
 		b.offers[o.Name] = o
 	}
@@ -216,7 +221,9 @@ func (b *Broker) Offers() []proto.Offer {
 // Acquire returns the owner's matching ready or launching lease, or starts
 // a new one from the first matching offer. login is the caller's tailnet
 // login, when it has one.
-func (b *Broker) Acquire(owner, login, where string) (proto.Lease, error) {
+// sshKey is the caller's SSH public key, or empty; a machine reached over SSH
+// admits only that key.
+func (b *Broker) Acquire(owner, login, where, sshKey string) (proto.Lease, error) {
 	q, err := placement.Parse(where)
 	if err != nil {
 		return proto.Lease{}, &Error{http.StatusBadRequest, err.Error()}
@@ -226,6 +233,9 @@ func (b *Broker) Acquire(owner, login, where string) (proto.Lease, error) {
 	}
 	if owner == "" {
 		return proto.Lease{}, &Error{http.StatusForbidden, "caller has no ownership identity"}
+	}
+	if sshKey != "" && !ValidSSHPublicKey(sshKey) {
+		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -238,9 +248,10 @@ func (b *Broker) Acquire(owner, login, where string) (proto.Lease, error) {
 		if l.Active() {
 			active++
 		}
-		// The machine admits the login it was launched for, which can change
-		// while the owner (a tailnet user ID) stays the same.
-		if l.Owner != owner || l.Login != login {
+		// The machine admits the login and key it was launched for. The login
+		// can change while the owner (a tailnet user ID) stays the same, and
+		// each machine the owner runs errand from has its own key.
+		if l.Owner != owner || l.Login != login || l.SSHKey != sshKey {
 			continue
 		}
 		switch {
@@ -271,7 +282,7 @@ func (b *Broker) Acquire(owner, login, where string) (proto.Lease, error) {
 		return proto.Lease{}, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease limit reached (%d active, max_leases = %d)", active, b.cfg.MaxLeases)}
 	}
 	now := time.Now()
-	l := &lease{record: record{Owner: owner, Login: login, Provider: providerKind(offer.Provider), Lease: proto.Lease{
+	l := &lease{record: record{Owner: owner, Login: login, SSHKey: sshKey, Provider: providerKind(offer.Provider), Lease: proto.Lease{
 		ID: proto.NewULID(), Offer: offer.Name, Where: where, State: proto.LeaseLaunching,
 		CreatedAt: now, ExpiresAt: now.Add(offer.MaxLifetime),
 	}}}
@@ -286,15 +297,15 @@ func (b *Broker) Acquire(owner, login, where string) (proto.Lease, error) {
 	l.cancelLaunch, l.launching = cancel, true
 	b.leases[l.ID] = l
 	b.wg.Add(1)
-	go b.launch(ctx, l, *offer, login)
+	go b.launch(ctx, l, *offer)
 	return l.view(), nil
 }
 
-func (b *Broker) launch(ctx context.Context, l *lease, offer Offer, login string) {
+func (b *Broker) launch(ctx context.Context, l *lease, offer Offer) {
 	defer b.wg.Done()
 	defer l.cancelLaunch()
 	machine, err := offer.Provider.Acquire(ctx, AcquireRequest{
-		LeaseID: l.ID, Offer: offer.Name, Where: l.Where, Login: login,
+		LeaseID: l.ID, Offer: offer.Name, Where: l.Where, Login: l.Login, SSHKey: l.SSHKey,
 		Progress: func(line string) { b.progress(l, line) },
 		Save: func(state json.RawMessage) error {
 			b.mu.Lock()

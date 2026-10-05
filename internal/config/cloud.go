@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/base64"
 	"fmt"
 	"math"
 	"os"
@@ -46,13 +45,10 @@ type LambdaOffer struct {
 	Regions              []string `toml:"regions"`
 	FileSystems          []string `toml:"file_systems"`
 	APIKeyFile           string   `toml:"api_key_file"`
-	SSHKeyName           string   `toml:"ssh_key_name"`
-	SSHPrivateKeyFile    string   `toml:"ssh_private_key_file"`
 	User                 string   `toml:"user"`
 	TailscaleAuthKeyFile string   `toml:"tailscale_auth_key_file"`
 	ErrandBinary         string   `toml:"errand_binary"`
 	AllowUsers           []string `toml:"allow_users"`
-	AuthorizedKeys       []string `toml:"authorized_keys"`
 }
 
 const (
@@ -179,22 +175,18 @@ func validateOfferName(name string) error {
 }
 
 func (l LambdaOffer) provider(arch string) (*cloud.LambdaProvider, error) {
-	if l.InstanceType == "" || l.SSHKeyName == "" {
-		return nil, fmt.Errorf("lambda needs instance_type and ssh_key_name")
+	if l.InstanceType == "" {
+		return nil, fmt.Errorf("lambda needs instance_type")
 	}
-	for name, path := range map[string]string{"api_key_file": l.APIKeyFile, "ssh_private_key_file": l.SSHPrivateKeyFile, "tailscale_auth_key_file": l.TailscaleAuthKeyFile} {
+	for name, path := range map[string]string{"api_key_file": l.APIKeyFile, "tailscale_auth_key_file": l.TailscaleAuthKeyFile} {
 		if !filepath.IsAbs(path) && (path != "" || name != "tailscale_auth_key_file") {
 			return nil, fmt.Errorf("lambda %s must be an absolute path", name)
 		}
 	}
-	// Without Tailscale the machine admits SSH keys, not tailnet logins.
+	// Without Tailscale the machine admits the SSH key of the client that
+	// asked for it, not tailnet logins.
 	if l.TailscaleAuthKeyFile == "" && len(l.AllowUsers) > 0 {
-		return nil, fmt.Errorf("lambda allow_users names tailnet logins and needs tailscale_auth_key_file; without it, list SSH public keys in authorized_keys")
-	}
-	for _, k := range l.AuthorizedKeys {
-		if !sshPublicKey(k) {
-			return nil, fmt.Errorf("lambda authorized_keys entry %q is not one SSH public key", k)
-		}
+		return nil, fmt.Errorf("lambda allow_users names tailnet logins and needs tailscale_auth_key_file")
 	}
 	user := l.User
 	if user == "" {
@@ -231,19 +223,6 @@ func (l LambdaOffer) provider(arch string) (*cloud.LambdaProvider, error) {
 	}
 	return &cloud.LambdaProvider{
 		APIKeyFile: l.APIKeyFile, InstanceType: l.InstanceType, Regions: l.Regions, FileSystems: l.FileSystems,
-		SSHKeyName: l.SSHKeyName, SSHPrivateKeyFile: l.SSHPrivateKeyFile, User: user,
-		TailscaleAuthKeyFile: l.TailscaleAuthKeyFile, ErrandBinary: binary, Arch: arch, AllowUsers: l.AllowUsers,
-		AuthorizedKeys: l.AuthorizedKeys,
+		User: user, TailscaleAuthKeyFile: l.TailscaleAuthKeyFile, ErrandBinary: binary, Arch: arch, AllowUsers: l.AllowUsers,
 	}, nil
-}
-
-// sshPublicKey accepts one authorized_keys line: a key type, its base64
-// blob and an optional comment, without options.
-func sshPublicKey(s string) bool {
-	fields := strings.Fields(s)
-	if len(fields) < 2 || strings.ContainsAny(s, "\r\n") || !strings.HasPrefix(fields[0], "ssh-") && !strings.HasPrefix(fields[0], "ecdsa-") && !strings.HasPrefix(fields[0], "sk-") {
-		return false
-	}
-	_, err := base64.StdEncoding.DecodeString(fields[1])
-	return err == nil
 }

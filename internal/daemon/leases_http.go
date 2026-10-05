@@ -68,7 +68,7 @@ func (d *Daemon) handleLeaseAcquire(w http.ResponseWriter, r *http.Request, id I
 	if id.Local {
 		login = ""
 	}
-	lease, err := d.broker.Acquire(leaseOwner(id), login, req.Where)
+	lease, err := d.broker.Acquire(leaseOwner(id), login, req.Where, req.SSHKey)
 	if err != nil {
 		leaseError(w, err)
 		return

@@ -62,7 +62,8 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	releaseLog := filepath.Join(scripts, "released")
 	acquire := filepath.Join(scripts, "acquire.sh")
 	release := filepath.Join(scripts, "release.sh")
-	os.WriteFile(acquire, []byte(fmt.Sprintf("#!/bin/sh\necho \"booting $ERRAND_OFFER\" >&2\necho '{\"url\":%q}'\n", boxServer.URL)), 0700)
+	sentKey := filepath.Join(scripts, "ssh-key")
+	os.WriteFile(acquire, []byte(fmt.Sprintf("#!/bin/sh\necho \"booting $ERRAND_OFFER\" >&2\necho \"$ERRAND_LEASE_SSH_KEY\" > %q\necho '{\"url\":%q}'\n", sentKey, boxServer.URL)), 0700)
 	os.WriteFile(release, []byte(fmt.Sprintf("#!/bin/sh\necho \"$ERRAND_LEASE_ID\" >> %q\n", releaseLog)), 0700)
 	brokerCfg, err := config.DaemonCloud{Offers: []config.CloudOffer{{
 		Name: "h100", OS: runtime.GOOS, GPU: "H100 80GB", VRAM: 80, Price: 2.49,
@@ -124,6 +125,12 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	}
 	if boxJobs.Load() != 1 {
 		t.Fatalf("leased runner admitted %d jobs", boxJobs.Load())
+	}
+	// The client sent the public half of its own errand key.
+	sent, _ := os.ReadFile(sentKey)
+	public, err := os.ReadFile(filepath.Join(state, "errand", "ssh", "errand_ed25519.pub"))
+	if err != nil || !strings.HasPrefix(string(sent), "ssh-ed25519 ") || strings.TrimSpace(string(sent)) != strings.TrimSpace(string(public)) {
+		t.Fatalf("lease key %q, client key %q %v", sent, public, err)
 	}
 
 	// The ready lease is now an ordinary peer: matched directly, no new lease.
