@@ -32,7 +32,7 @@ func TestLeaseInterruptedDuringRequestIsWithdrawn(t *testing.T) {
 	}{
 		{proto.LeaseLaunching, proto.LeaseReleasing, "released lease " + id, false},
 		{proto.LeaseReady, proto.LeaseReady, "will be released unless a job is running on it", false},
-		{proto.LeaseLaunching, proto.LeaseLaunching, "also given to another run", true},
+		{proto.LeaseLaunching, proto.LeaseLaunching, "still held by another run", true},
 	} {
 		var requested, withdrawn atomic.Value
 		requested.Store("")
@@ -110,6 +110,12 @@ func TestLeasePeerNames(t *testing.T) {
 	// has left.
 	if brokers, code := leaseBrokers(cfg, "cloud", io.Discard); code != 0 || len(brokers) != 1 {
 		t.Fatalf("cloud peer without offers: %v %d", brokers, code)
+	}
+	// Placement can rent from the implicit local peer, so it is asked for
+	// leases too (here it is not running).
+	var stderr strings.Builder
+	if _, code := leaseBrokers(config.Client{DefaultPeer: "local"}, "local", &stderr); code == 0 || strings.Contains(stderr.String(), "unknown peer") {
+		t.Fatalf("the implicit local peer is not asked for leases: %d %s", code, stderr.String())
 	}
 	for _, name := range []string{"cloud", "elsewhere-7f3a", "cloud-xyz", "cloud-il0u"} {
 		if _, ok, err := findLeasePeer(cfg, name); ok || err != nil {

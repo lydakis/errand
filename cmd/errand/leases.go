@@ -258,8 +258,8 @@ func leaseRunner(opt leaseOption, where string, stderr io.Writer) (placementChoi
 }
 
 // withdrawLease tells the cloud peer an interrupted run no longer needs the
-// lease its request was given. The lease ends unless another run asked for
-// it too, or, once ready, a job is running on it.
+// lease its request was given. The lease ends unless another run still holds
+// it or a job has run on it.
 func withdrawLease(broker placementChoice, requestID, id string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -268,7 +268,7 @@ func withdrawLease(broker placementChoice, requestID, id string) error {
 	case err != nil:
 		return fmt.Errorf("interrupted; withdrawing lease %s failed: %v (errand leases rm --on %s %s releases it)", id, err, broker.Name, id)
 	case lease.Shared:
-		return fmt.Errorf("interrupted; lease %s was also given to another run, so it stays until idle", id)
+		return fmt.Errorf("interrupted; lease %s is still held by another run, so it stays until idle", id)
 	case lease.State == proto.LeaseReady:
 		return fmt.Errorf("interrupted; lease %s will be released unless a job is running on it", id)
 	}
@@ -484,6 +484,8 @@ type leaseBroker struct{ name, target string }
 // leaseBrokers lists configured peers that advertise offers or hold leases
 // of the caller's.
 func leaseBrokers(cfg config.Client, on string, stderr io.Writer) ([]leaseBroker, int) {
+	// Placement can rent from the implicit local peer too.
+	cfg = cfg.WithLocalPeer()
 	var names []string
 	for name := range cfg.Peers {
 		if on == "" || on == name {

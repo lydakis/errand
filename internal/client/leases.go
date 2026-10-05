@@ -61,11 +61,17 @@ func ReleaseLease(ctx context.Context, peerURL, id string) (proto.Lease, error) 
 }
 
 // WithdrawLeaseRequest tells a cloud peer that the run that sent requestID
-// no longer needs its lease. The cloud peer ends the lease only if that
-// request made it and no other request was handed it.
+// no longer needs its lease. The cloud peer ends the lease once no request
+// it was handed wants it; the answer is Shared if it stays for other runs.
+// A request the cloud peer no longer ties to a lease is answered the same
+// way, since that lease, if any, now ends only when idle.
 func WithdrawLeaseRequest(ctx context.Context, peerURL, requestID string) (proto.Lease, error) {
 	var lease proto.Lease
 	err := leaseRequest(ctx, http.MethodDelete, strings.TrimSuffix(peerURL, "/")+"/v0/lease-requests/"+url.PathEscape(requestID), nil, &lease)
+	var refused *controlHTTPError
+	if errors.As(err, &refused) && refused.statusCode == http.StatusNotFound {
+		return proto.Lease{Shared: true}, nil
+	}
 	return lease, err
 }
 

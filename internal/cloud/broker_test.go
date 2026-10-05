@@ -340,35 +340,32 @@ func TestIdleAndExpiredLeasesRelease(t *testing.T) {
 	}
 }
 
-// An interrupted run withdraws its request. The lease ends only if that
-// request made it and no other request was handed it, and once ready only
-// if no job is running on it.
+// An interrupted run withdraws its request. The lease ends once no request
+// it was handed still wants it, and once ready only if no job is running on
+// it.
 func TestWithdrawEndsOnlyAnUnsharedLease(t *testing.T) {
 	h := newHarness(t, "echo booting >&2\nexec sleep 30\n")
 	h.cfg.MaxLeases = 3
 	b := h.start(t)
 	first, second := proto.NewULID(), proto.NewULID()
-	shared, err := b.Acquire("george", "", "gpu", "", first)
-	if err != nil {
-		t.Fatal(err)
+	l, err := b.Acquire("george", "", "gpu", "", first)
+	if err != nil || l.Shared {
+		t.Fatalf("first request: %+v %v", l, err)
 	}
-	if l, err := b.Acquire("george", "", "gpu", "", second); err != nil || l.ID != shared.ID || !l.Shared {
-		t.Fatalf("second request: %+v %v", l, err)
-	}
-	if l, err := b.Withdraw("george", first); err != nil || l.State != proto.LeaseLaunching {
-		t.Fatalf("withdrawing a launch another run waits for: %+v %v", l, err)
+	if again, err := b.Acquire("george", "", "gpu", "", second); err != nil || again.ID != l.ID || !again.Shared {
+		t.Fatalf("second request: %+v %v", again, err)
 	}
 	if _, err := b.Withdraw("someone", second); err == nil {
 		t.Fatal("withdrew another owner's request")
 	}
-	b.Release("george", shared.ID)
-	alone := proto.NewULID()
-	l, err := b.Acquire("george", "", "gpu", "", alone)
-	if err != nil || l.ID == shared.ID {
-		t.Fatalf("new lease: %+v %v", l, err)
+	if w, err := b.Withdraw("george", first); err != nil || w.State != proto.LeaseLaunching || !w.Shared {
+		t.Fatalf("withdrawing a launch another run still holds: %+v %v", w, err)
 	}
-	if w, err := b.Withdraw("george", alone); err != nil || w.State == proto.LeaseLaunching {
-		t.Fatalf("withdrawing its own launch: %+v %v", w, err)
+	if _, err := b.Withdraw("george", proto.NewULID()); err == nil {
+		t.Fatal("withdrew a request the lease was never handed")
+	}
+	if w, err := b.Withdraw("george", second); err != nil || w.State == proto.LeaseLaunching || w.Shared {
+		t.Fatalf("withdrawing the last request: %+v %v", w, err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 
