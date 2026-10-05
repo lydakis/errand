@@ -55,12 +55,12 @@ func TestCheckpointRecordsSourceAndPreservesDestinationEdits(t *testing.T) {
 	// A second source edit is compared with the accepted source version.
 	sender, job := t.TempDir(), t.TempDir()
 	writeTransferFile(t, sender, "artifact", source)
-	if err := CaptureWorkspaceBaseContext(context.Background(), sender, job, first.Manifest); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), sender, job, first.Manifest, nil); err != nil {
 		t.Fatal(err)
 	}
 	source2 := strings.Replace(source, "source", "source two", 1)
 	writeTransferFile(t, sender, "artifact", source2)
-	bundle2, _, err := CollectWorkspaceChangesContext(context.Background(), sender, job, first.Manifest, proto.SelectionPolicy{}, 1<<20)
+	bundle2, _, err := CollectWorkspaceChangesContext(context.Background(), sender, job, ChangeBase{}, first.Manifest, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestCheckpointMetadataDeletionAndTypeChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), sourceRoot, job, base); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), sourceRoot, job, base, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(filepath.Join(sourceRoot, "dir"), 0700); err != nil {
@@ -252,7 +252,7 @@ func TestCheckpointMetadataDeletionAndTypeChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeTransferFile(t, sourceRoot, "replace/child", "new")
-	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), sourceRoot, job, base, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), sourceRoot, job, ChangeBase{}, base, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}

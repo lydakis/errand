@@ -33,7 +33,7 @@ func insertContent(t *testing.T, c *blobCache, content string) (sha string, size
 	if err := os.WriteFile(src, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Insert(context.Background(), src, sha, int64(len(content))); err != nil {
+	if err := c.Insert(context.Background(), src, sha, int64(len(content)), nil); err != nil {
 		t.Fatal(err)
 	}
 	return sha, int64(len(content))
@@ -55,7 +55,7 @@ func TestCacheInsertMaterializeRoundTrip(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "out.txt")
 	hit, err := c.Materialize(context.Background(), dest, proto.ManifestEntry{
 		Path: "out.txt", Type: proto.EntryFile, Mode: 0o640, Size: size, SHA256: sha,
-	})
+	}, nil)
 	if err != nil || !hit {
 		t.Fatalf("materialize hit=%v err=%v", hit, err)
 	}
@@ -80,7 +80,7 @@ func TestCacheInsertRejectsContentThatDoesNotMatchHash(t *testing.T) {
 	}
 	want := sha256.Sum256([]byte("right"))
 	sha := hex.EncodeToString(want[:])
-	if err := c.Insert(context.Background(), src, sha, int64(len("wrong"))); err == nil {
+	if err := c.Insert(context.Background(), src, sha, int64(len("wrong")), nil); err == nil {
 		t.Fatal("cache accepted content that did not match its address")
 	}
 	if _, err := os.Lstat(c.path(sha)); !os.IsNotExist(err) {
@@ -98,7 +98,7 @@ func TestCacheCorruptBlobDegradesToMiss(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "f")
 	hit, err := c.Materialize(context.Background(), dest, proto.ManifestEntry{
 		Path: "f", Type: proto.EntryFile, Mode: 0o644, Size: size, SHA256: sha,
-	})
+	}, nil)
 	if err != nil || hit {
 		t.Fatalf("corrupt blob materialized: hit=%v err=%v", hit, err)
 	}
@@ -325,7 +325,7 @@ func TestCacheInsertCanBeCanceledWhileWaiting(t *testing.T) {
 	sum := sha256.Sum256(content)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := c.Insert(ctx, src, hex.EncodeToString(sum[:]), int64(len(content))); !errors.Is(err, context.Canceled) {
+	if err := c.Insert(ctx, src, hex.EncodeToString(sum[:]), int64(len(content)), nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled insert error = %v, want context.Canceled", err)
 	}
 }
@@ -338,7 +338,7 @@ func TestCacheMaterializeHonorsCanceledContext(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "out")
 	hit, err := c.Materialize(ctx, dest, proto.ManifestEntry{
 		Path: "out", Type: proto.EntryFile, Mode: 0o600, Size: size, SHA256: sha,
-	})
+	}, nil)
 	if hit || !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled materialize = hit %v, error %v", hit, err)
 	}
@@ -356,7 +356,7 @@ func TestCacheMaterializePreservesDestinationErrors(t *testing.T) {
 	}
 	hit, err := c.Materialize(context.Background(), dest, proto.ManifestEntry{
 		Path: "occupied", Type: proto.EntryFile, Mode: 0600, Size: size, SHA256: sha,
-	})
+	}, nil)
 	if hit || !errors.Is(err, os.ErrExist) {
 		t.Fatalf("destination error treated as a cache miss: hit=%v err=%v", hit, err)
 	}
@@ -419,7 +419,7 @@ func TestCacheInsertRollsBackWhenEvictionFails(t *testing.T) {
 	if err := os.WriteFile(src, content, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Insert(context.Background(), src, sha, int64(len(content))); err == nil {
+	if err := c.Insert(context.Background(), src, sha, int64(len(content)), nil); err == nil {
 		t.Fatal("insert succeeded despite eviction scan failure")
 	}
 	if _, err := os.Lstat(c.path(sha)); !os.IsNotExist(err) {

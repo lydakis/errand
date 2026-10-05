@@ -10,7 +10,7 @@ import (
 
 func TestCacheExclusionWinsOverArtifactAncestors(t *testing.T) {
 	root, job := t.TempDir(), t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), root, job, proto.Manifest{}); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), root, job, proto.Manifest{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"out/report.txt", "out/cache/object"} {
@@ -23,7 +23,7 @@ func TestCacheExclusionWinsOverArtifactAncestors(t *testing.T) {
 		}
 	}
 	policy := proto.SelectionPolicy{Artifacts: []string{"out"}, Ignore: []string{"out/"}, Caches: []proto.CacheBinding{{Name: "compiler", Path: "out/cache"}}}
-	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, proto.Manifest{}, policy, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, ChangeBase{}, proto.Manifest{}, policy, 1<<20)
 	if err != nil || !collected {
 		t.Fatalf("collect: %v %v", collected, err)
 	}
@@ -39,7 +39,7 @@ func TestCacheExclusionWinsOverArtifactAncestors(t *testing.T) {
 
 func TestCacheRetentionPreservesDistinctPathCase(t *testing.T) {
 	root, job := t.TempDir(), t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), root, job, proto.Manifest{}); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), root, job, proto.Manifest{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Mkdir(filepath.Join(root, "Build"), 0700); err != nil {
@@ -53,7 +53,7 @@ func TestCacheRetentionPreservesDistinctPathCase(t *testing.T) {
 		t.Fatal(statErr)
 	}
 	policy := proto.SelectionPolicy{Caches: []proto.CacheBinding{{Name: "compiler", Path: "build"}}}
-	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, proto.Manifest{}, policy, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, ChangeBase{}, proto.Manifest{}, policy, 1<<20)
 	if statErr == nil {
 		if err == nil {
 			t.Fatal("accepted ambiguous cache casing")

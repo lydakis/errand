@@ -43,7 +43,7 @@ func TestCollectionKeepsSubmittedModesOnWindows(t *testing.T) {
 	for i := range baseline.Entries {
 		baseline.Entries[i].Mode = submitted[baseline.Entries[i].Path]
 	}
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -53,7 +53,7 @@ func TestCollectionKeepsSubmittedModesOnWindows(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "bin", "new.txt"), []byte("new\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, ChangeBase{}, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestApplyKeepsSubmittedModesOnWindows(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := CaptureWorkspaceBaseContext(ctx, source, job, baseline); err != nil {
+			if err := CaptureJobBaseContext(ctx, source, job, baseline, nil); err != nil {
 				t.Fatal(err)
 			}
 			if tc.delete {
@@ -118,7 +118,7 @@ func TestApplyKeepsSubmittedModesOnWindows(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			bundle, collected, err := CollectWorkspaceChangesContext(ctx, source, job, baseline, proto.SelectionPolicy{}, 1<<20)
+			bundle, collected, err := CollectWorkspaceChangesContext(ctx, source, job, ChangeBase{}, baseline, proto.SelectionPolicy{}, 1<<20)
 			if err != nil || !collected {
 				t.Fatalf("collect = %v, %v", collected, err)
 			}

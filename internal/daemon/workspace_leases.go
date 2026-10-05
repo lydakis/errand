@@ -22,8 +22,7 @@ type workspaceLeaseRef struct {
 
 func (d *Daemon) acquireWorkspace(ctx context.Context, j *Job) error {
 	s := d.workspaces
-	var record workspaceRecord
-	err := func() error {
+	return func() error {
 		unlock := s.lockWorkspace(j.Spec.WorkspaceID)
 		defer unlock()
 		s.mu.Lock()
@@ -69,15 +68,12 @@ func (d *Daemon) acquireWorkspace(ctx context.Context, j *Job) error {
 		if err := s.write(r); err != nil {
 			return err
 		}
-		j.workspaceRoot, j.baseline, record = data, r.Manifest, r
+		// The creation tree holds every baseline body and stays unchanged while
+		// the lease holds the workspace, so collection reads it in place.
+		j.workspaceRoot, j.baseline = data, r.Manifest
+		j.changeBase = changeops.TreeBase(filepath.Join(s.dir, r.ID, "change-base"))
 		return nil
 	}()
-	if err != nil {
-		return err
-	}
-	// The durable lease protects the tree; copying must not hold the global
-	// metadata mutex or delay status/cancellation of unrelated jobs.
-	return changeops.CaptureWorkspaceBaseContext(ctx, filepath.Join(s.dir, record.ID, "change-base"), j.Dir, record.Manifest)
 }
 
 func sameWorkspacePolicy(a, b proto.SelectionPolicy) bool {

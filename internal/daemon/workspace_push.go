@@ -148,7 +148,7 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		httpError(w, 400, err.Error())
 		return
 	}
-	extractOpts, restored := d.snapshotExtractOptions(r.Context())
+	extractOpts, restored := d.snapshotExtractOptions(r.Context(), nil)
 	extractOpts.SymlinkManifest = &request.Manifest
 	if err := archive.ExtractWith(&contextReader{ctx: r.Context(), r: part}, source, sourceManifest, d.cfg.MaxLimits.MaxWorkspaceBytes, extractOpts); err != nil {
 		if errors.Is(err, archive.ErrCacheMiss) {
