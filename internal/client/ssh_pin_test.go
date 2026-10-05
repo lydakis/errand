@@ -22,6 +22,15 @@ func pinArgs(t *testing.T, target string) []string {
 }
 
 func TestSSHPinArgs(t *testing.T) {
+	sshTrustMu.Lock()
+	saved := sshTrusted
+	sshTrusted = map[string]sshTrust{} // what this process trusts so far
+	sshTrustMu.Unlock()
+	t.Cleanup(func() {
+		sshTrustMu.Lock()
+		sshTrusted = saved
+		sshTrustMu.Unlock()
+	})
 	cache := filepath.Join(t.TempDir(), "cache dir") // ssh splits unquoted paths at spaces
 	t.Setenv("XDG_CACHE_HOME", cache)
 	t.Setenv("HOME", cache)
