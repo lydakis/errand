@@ -52,10 +52,18 @@ func writeManifestJSON(w io.Writer, m Manifest) {
 	flush()
 }
 
+// jsonPlain marks the bytes json.Marshal copies into a string unescaped:
+// printable ASCII other than the quote, the backslash and the HTML characters.
+var jsonPlain = func() (plain [256]bool) {
+	for c := 0x20; c < utf8.RuneSelf; c++ {
+		plain[c] = c != '"' && c != '\\' && c != '<' && c != '>' && c != '&'
+	}
+	return plain
+}()
+
 func appendJSONString(buf []byte, s string) []byte {
 	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c < 0x20 || c == '"' || c == '\\' || c == '<' || c == '>' || c == '&' || c >= utf8.RuneSelf {
+		if !jsonPlain[s[i]] {
 			encoded, err := json.Marshal(s)
 			if err != nil {
 				panic(err) // strings always marshal
