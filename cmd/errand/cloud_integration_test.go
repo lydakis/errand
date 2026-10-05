@@ -133,9 +133,9 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 		t.Fatalf("lease key %q, client key %q %v", sent, public, err)
 	}
 
-	// The ready lease is now an ordinary peer: matched directly, no new lease.
+	// The next run is handed the same lease by the cloud peer: no new machine.
 	out, err = cli("--where", "gpu=h100", "--no-apply", "--", "/bin/cat", "input.txt")
-	if err != nil || strings.Contains(out, "leasing") || !strings.Contains(out, "selected "+name[1]+" for gpu=h100") {
+	if err != nil || strings.Contains(out, "booting") || !strings.Contains(out, "reusing your ready lease") || !strings.Contains(out, "selected "+name[1]+" for gpu=h100") {
 		t.Fatalf("second run: %v\n%s", err, out)
 	}
 	if out, err = cli("--on", name[1], "--no-apply", "--", "/bin/cat", "input.txt"); err != nil || !strings.Contains(out, "trained on the leased box") {
