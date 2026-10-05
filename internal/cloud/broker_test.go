@@ -472,6 +472,12 @@ func TestRestartRecoversLeases(t *testing.T) {
 	if got, ok := b2.Get("george", l.ID); !ok || got.State != proto.LeaseReady || got.IdleUntil.Before(restarted.Add(h.cfg.Offers[0].IdleTimeout)) {
 		t.Fatalf("ready lease after restart: %+v", got)
 	}
+	// Runners list active leases in /v0/info, with the same deadline.
+	for _, a := range b2.Active("george") {
+		if a.ID == l.ID && a.IdleUntil.IsZero() {
+			t.Fatalf("active lease without its idle deadline: %+v", a)
+		}
+	}
 	failed := waitState(t, b2, "george", crashed.ID, proto.LeaseFailed)
 	if !strings.Contains(failed.Error, "restarted") || !strings.Contains(h.releases(), crashed.ID) {
 		t.Fatalf("crashed launch %+v releases %q", failed, h.releases())

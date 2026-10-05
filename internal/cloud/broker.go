@@ -835,7 +835,7 @@ func (b *Broker) Active(owner string) []proto.Lease {
 	var out []proto.Lease
 	for _, l := range b.sorted() {
 		if l.Owner == owner && l.Active() {
-			v := l.Lease
+			v := l.view()
 			v.Progress = nil
 			out = append(out, v)
 		}
