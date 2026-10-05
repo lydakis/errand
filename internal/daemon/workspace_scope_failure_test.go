@@ -31,7 +31,7 @@ func TestWorkspaceScopeWriteFailureReleasesVerifiedRuntime(t *testing.T) {
 	if err != nil || len(entries) != 1 || entries[0].LeaseID != "" {
 		t.Fatalf("cache remained leased: %+v %v", entries, err)
 	}
-	if err := client.RemoveWorkspace(ts.URL, ws.Name); err != nil {
+	if _, err := client.RemoveWorkspace(ts.URL, ws.Name); err != nil {
 		t.Fatalf("cannot remove cleaned workspace: %v", err)
 	}
 }

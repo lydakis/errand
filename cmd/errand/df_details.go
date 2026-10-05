@@ -2,72 +2,97 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"strings"
-	"text/tabwriter"
+	"sort"
+	"time"
+
+	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
-func writeDfDetails(w io.Writer, rows []dfRow) {
-	fmt.Fprintln(w, "\nSizes are logical file bytes; filesystem clones may share physical blocks.")
+// writeDfDetails breaks each location down, largest first, folding the
+// small items into one line and leaving empty categories out.
+func writeDfDetails(s *termui.Stream, rows []dfRow) {
+	const listed = 5
+	label := func(text string) string { return "  " + s.D(padRight(text, 15)) + " " }
+	indent := "  " + padRight("", 15) + " "
 	for _, row := range rows {
-		fmt.Fprintf(w, "\n%s:\n", terminalSafeField(row.Location))
+		s.Print("")
+		s.Print(s.B(terminalSafeField(row.Location)) + " " + s.D("· "+termui.Bytes(row.TotalBytes)))
+		d := row.Details
+		if row.hasRunner && row.Jobs.Items > 0 {
+			s.Print(label("jobs") + termui.Bytes(row.Jobs.Bytes) + " in " + termui.Count(row.Jobs.Items))
+			if d != nil {
+				jobs := append([]proto.JobStorage(nil), d.Jobs...)
+				sort.SliceStable(jobs, func(i, j int) bool { return jobs[i].Bytes > jobs[j].Bytes })
+				var rest int64
+				for i, job := range jobs {
+					if i >= listed {
+						rest += job.Bytes
+						continue
+					}
+					extra := ""
+					if job.CleanupPending {
+						extra = " " + s.Paint("cleanup pending", termui.Yellow)
+					}
+					s.Print(indent + s.ID(termui.ShortID(job.ID)) + "  " + termui.Bytes(job.Bytes) + extra)
+				}
+				if more := len(jobs) - listed; more > 0 {
+					s.Print(indent + s.D(fmt.Sprintf("%d more, %s together", more, termui.Bytes(rest))))
+				}
+			}
+		}
 		if row.Cache != nil {
-			fmt.Fprintf(w, "  Snapshot cache: %d blobs, %s\n", row.Cache.Blobs, formatByteSize(row.Cache.Bytes))
+			policy := ""
+			if row.Cache.MaxBytes > 0 {
+				policy = " · budget " + termui.Bytes(row.Cache.MaxBytes)
+			}
+			if row.Cache.TTLHours > 0 {
+				policy += " · unused blobs expire after " + termui.Duration(time.Duration(row.Cache.TTLHours)*time.Hour)
+			}
+			s.Print(label("snapshot cache") + termui.Bytes(row.Cache.Bytes) + " in " + termui.Things(row.Cache.Blobs, "blob", "blobs") + s.D(policy))
 		}
-		if row.Changes != nil {
-			fmt.Fprintf(w, "  Fetched changes: %d entries, %s\n", row.Changes.Items, formatByteSize(row.Changes.Bytes))
+		if row.NamedCaches != nil && row.NamedCaches.Items > 0 {
+			line := termui.Bytes(row.NamedCaches.Bytes) + " in " + termui.Count(row.NamedCaches.Items)
+			if row.NamedCaches.Unmeasured > 0 {
+				line += s.D(fmt.Sprintf(" · %d not measured yet", row.NamedCaches.Unmeasured))
+			}
+			if row.NamedCaches.Protected > 0 {
+				line += s.D(fmt.Sprintf(" · %d in use", row.NamedCaches.Protected))
+			}
+			s.Print(label("named caches") + line)
+			if d != nil {
+				caches := append([]proto.NamedCacheStorage(nil), d.NamedCaches...)
+				sort.SliceStable(caches, func(i, j int) bool { return caches[i].Bytes > caches[j].Bytes })
+				for i, c := range caches {
+					if i >= listed {
+						s.Print(indent + s.D(fmt.Sprintf("%d more", len(caches)-listed)))
+						break
+					}
+					size := termui.Bytes(c.Bytes)
+					if c.BytesUnknown {
+						size = s.D("not measured")
+					}
+					s.Print(indent + terminalSafeField(c.Name) + "  " + size)
+				}
+			}
 		}
-		if row.Details == nil {
-			continue
+		if row.Workspaces != nil && row.Workspaces.Items > 0 {
+			s.Print(label("workspaces") + termui.Bytes(row.Workspaces.Bytes) + " in " + termui.Count(row.Workspaces.Items))
+			if d != nil {
+				for _, w := range d.Workspaces {
+					parts := fmt.Sprintf("files %s · base %s · transfers %s · metadata %s", termui.Bytes(w.WorkingBytes), termui.Bytes(w.BaseBytes), termui.Bytes(w.TransferBytes), termui.Bytes(w.MetadataBytes))
+					s.Print(indent + s.B(terminalSafeField(w.Name)) + "  " + termui.Bytes(w.Bytes) + " " + s.D("· "+parts))
+				}
+			}
 		}
-		details := row.Details
-		fmt.Fprintf(w, "\n  Workspaces (%d):\n", len(details.Workspaces))
-		tw := tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-		fmt.Fprintln(tw, "  NAME\tID\tJOBS\tWORKING FILES\tCREATION BASE\tTRANSFERS\tMETADATA\tTOTAL")
-		for _, item := range details.Workspaces {
-			job := strings.Join(item.JobIDs, ",")
-			if job == "" {
-				job = "-"
+		if row.Changes != nil && row.Changes.Items > 0 {
+			what := "push staging"
+			if row.Location == "local" {
+				what = "fetched changes"
 			}
-			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", terminalSafeField(item.Name), terminalSafeField(item.ID), terminalSafeField(job), formatByteSize(item.WorkingBytes), formatByteSize(item.BaseBytes), formatByteSize(item.TransferBytes), formatByteSize(item.MetadataBytes), formatByteSize(item.Bytes))
+			s.Print(label(what) + termui.Bytes(row.Changes.Bytes) + " in " + termui.Things(row.Changes.Items, "entry", "entries"))
 		}
-		_ = tw.Flush()
-		fmt.Fprintf(w, "\n  Named caches (%d; sizes from last release or GC measurement):\n", len(details.NamedCaches))
-		tw = tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-		fmt.Fprintln(tw, "  NAME\tPROJECT ID\tWORKSPACE ID\tJOBS\tSIZE")
-		for _, item := range details.NamedCaches {
-			job := item.JobID
-			workspace := item.WorkspaceID
-			if workspace == "" {
-				workspace = "-"
-			}
-			if len(item.JobIDs) > 0 {
-				job = strings.Join(item.JobIDs, ",")
-			}
-			if job == "" {
-				job = "-"
-			}
-			size := formatByteSize(item.Bytes)
-			if item.BytesUnknown {
-				size = "unmeasured"
-			}
-			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\n", terminalSafeField(item.Name), terminalSafeField(item.ProjectID), terminalSafeField(workspace), terminalSafeField(job), size)
-		}
-		_ = tw.Flush()
-		fmt.Fprintf(w, "\n  Job storage (%d):\n", len(details.Jobs))
-		tw = tabwriter.NewWriter(w, 2, 8, 2, ' ', 0)
-		fmt.Fprintln(tw, "  JOB\tWORKSPACE ID\tSIZE\tCLEANUP")
-		for _, item := range details.Jobs {
-			workspace := item.WorkspaceID
-			if workspace == "" {
-				workspace = "-"
-			}
-			cleanup := "-"
-			if item.CleanupPending {
-				cleanup = "pending"
-			}
-			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", terminalSafeField(item.ID), terminalSafeField(workspace), formatByteSize(item.Bytes), cleanup)
-		}
-		_ = tw.Flush()
 	}
+	s.Print("")
+	s.Print(s.D("Logical sizes; cloned files may share disk blocks."))
 }

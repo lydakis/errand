@@ -139,7 +139,7 @@ func (c Client) PeerURL(name string) (string, error) {
 		return LocalURL(socket)
 	}
 	if !ok || (p.URL == "" && p.SSH == "") {
-		return "", fmt.Errorf("peer %q is not configured", name)
+		return "", &UnknownPeerError{Name: name}
 	}
 	if p.URL != "" && p.SSH != "" {
 		return "", fmt.Errorf("peer %q sets both url and ssh; choose one transport", name)
@@ -499,3 +499,8 @@ func writeFile(path, text string) error {
 	}
 	return os.Rename(tmp.Name(), path)
 }
+
+// UnknownPeerError names a runner that personal configuration doesn't define.
+type UnknownPeerError struct{ Name string }
+
+func (e *UnknownPeerError) Error() string { return fmt.Sprintf("peer %q is not configured", e.Name) }

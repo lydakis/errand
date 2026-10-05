@@ -2,6 +2,7 @@ package proto
 
 import (
 	"crypto/rand"
+	"strings"
 	"time"
 )
 
@@ -77,4 +78,18 @@ func ULIDTimestamp(s string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return time.UnixMilli(int64(encoded)), true
+}
+
+// ValidULIDPrefix reports whether s could begin a ULID: 1 to 26 characters
+// of the Crockford alphabet. Short job ids shown by the CLI are prefixes.
+func ValidULIDPrefix(s string) bool {
+	if len(s) == 0 || len(s) > 26 {
+		return false
+	}
+	for _, c := range s {
+		if !strings.ContainsRune(crockford, c) {
+			return false
+		}
+	}
+	return true
 }

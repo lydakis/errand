@@ -903,6 +903,8 @@ an unavailable source, reporting the first failure. Push staging uses the bulk
 operation response deadline because verification and durable staging continue
 after the last request byte arrives;
 `GET /v0/storage` reports caller-visible storage, including snapshot and named caches;
+`DELETE /v0/workspaces/<id>` returns `200 OK` with a JSON removal report,
+including freed bytes (`-1` when measurement is unavailable);
 `POST /v0/cache/gc` prunes snapshot blobs and idle named caches;
 `POST /v0/jobs/gc` applies bounded owner-scoped receipt retention;
 `GET /v0/jobs/<ulid>/changes` transfers the immutable retained workspace-change bundle;
@@ -1172,3 +1174,12 @@ unpublished upload directories. Failed upload cleanup stays inventoried and bloc
 new uploads to that workspace until startup retries it. GC stops on cancellation,
 including while waiting for a workspace gate. Push retries retain the original immutable request after
 an uncertain outcome, while completed receipts replay without reapplying files.
+## Lifecycle log buffering
+
+Runner lifecycle logging runs on its own goroutine so slow log output does not
+delay job starts, runtime limits, or result publication. Each pending batch is
+limited to 1,024 events and 4 MiB of retained payloads; the consumer may hold one
+additional bounded batch. Retained events keep their order. If output stalls
+past those limits, the runner discards excess lifecycle events and emits an
+aggregated warning when output resumes. Job receipts remain independent of
+this diagnostic log.

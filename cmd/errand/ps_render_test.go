@@ -2,21 +2,19 @@ package main
 
 import (
 	"bytes"
-	"os"
 	"strings"
 	"testing"
 	"time"
-	"unicode"
 
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/termui"
 )
 
-func TestPsEmptyStateDoesNotRenderTable(t *testing.T) {
+// terminal is a console that behaves like an interactive terminal of the
+// given width; Text strips styling for assertions.
+func terminal(width int) (*termui.Console, *bytes.Buffer) {
 	var out bytes.Buffer
-	writePs(&out, nil)
-	if got := out.String(); got != "No jobs.\n" {
-		t.Fatalf("empty ps = %q", got)
-	}
+	return termui.New(&out, &out, termui.Options{OutTTY: true, ErrTTY: true, Color: true, Width: width}), &out
 }
 
 func TestPsTableShowsProjectsAndTruthfulWorkdirs(t *testing.T) {
@@ -38,13 +36,6 @@ func TestPsTableShowsProjectsAndTruthfulWorkdirs(t *testing.T) {
 		t.Fatalf("explicit root ps table = %q", got)
 	}
 
-	rows[0].Workdir = "atlas"
-	out.Reset()
-	writePsTable(&out, rows)
-	if got := out.String(); !strings.Contains(got, "WORKDIR") || !strings.Contains(got, "atlas") {
-		t.Fatalf("project-root ps table = %q", got)
-	}
-
 	rows[0].Workdir = "atlas/docs"
 	out.Reset()
 	writePsTable(&out, rows)
@@ -53,27 +44,7 @@ func TestPsTableShowsProjectsAndTruthfulWorkdirs(t *testing.T) {
 	}
 }
 
-func TestPsInteractiveOutputAlwaysUsesCards(t *testing.T) {
-	rows := []psRow{{
-		Peer: "cabal",
-		JobListEntry: proto.JobListEntry{
-			ID: proto.NewULID(), State: proto.StateRunning, Project: "atlas",
-			Command: `"true"`,
-		},
-	}}
-	var out bytes.Buffer
-	writePsWithOptions(&out, rows, psRenderOptions{interactive: true, width: 220})
-	if got := out.String(); !strings.Contains(got, "  command ") || strings.HasPrefix(got, "PEER") {
-		t.Fatalf("interactive ps did not use cards: %q", got)
-	}
-	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
-		if len([]rune(line)) > 220 {
-			t.Fatalf("ps line exceeds terminal width: %d runes in %q", len([]rune(line)), line)
-		}
-	}
-}
-
-func TestPsPipedOutputAlwaysUsesPlainTable(t *testing.T) {
+func TestPsPipedOutputKeepsTheStableTable(t *testing.T) {
 	rows := []psRow{{
 		Peer: "cabal",
 		JobListEntry: proto.JobListEntry{
@@ -82,114 +53,85 @@ func TestPsPipedOutputAlwaysUsesPlainTable(t *testing.T) {
 		},
 	}}
 	var out bytes.Buffer
-	t.Setenv("COLUMNS", "60")
-	writePs(&out, rows)
-	if got := out.String(); !strings.HasPrefix(got, "PEER") || strings.Contains(got, "\x1b[") {
-		t.Fatalf("piped ps was not a plain table: %q", got)
+	writePs(termui.Plain(&out, &out).Out, rows, false)
+	if got := out.String(); !strings.HasPrefix(got, "PEER") || strings.Contains(got, "\x1b[") || !strings.Contains(got, rows[0].ID) {
+		t.Fatalf("piped ps was not the plain full-id table: %q", got)
 	}
 }
 
-func TestPsInteractiveOutputBoldsOnlyJobIdentity(t *testing.T) {
-	jobID := proto.NewULID()
-	rows := []psRow{{
-		Peer: "cabal",
-		JobListEntry: proto.JobListEntry{
-			ID: jobID, State: proto.StateRunning, Project: "atlas", Command: `"nix" "build"`,
-		},
-	}}
-	var out bytes.Buffer
-	writePsWithOptions(&out, rows, psRenderOptions{interactive: true, width: 120, style: true})
-	wantIdentity := "\x1b[1mcabal/" + jobID + "\x1b[0m"
-	if got := out.String(); !strings.Contains(got, wantIdentity) {
-		t.Fatalf("interactive ps did not emphasize identity: %q", got)
-	} else if strings.Contains(got, "\x1b[1mcommand") || strings.Contains(got, "\x1b[1m\"nix\"") {
-		t.Fatalf("interactive ps over-emphasized command: %q", got)
+func TestPsTerminalShowsOneRowPerJob(t *testing.T) {
+	now := time.Now()
+	started := now.Add(-90 * time.Second)
+	zero, three := 0, 3
+	rows := []psRow{
+		{Peer: "cabal", JobListEntry: proto.JobListEntry{ID: "01M3BF93Y7HS3VNGGZDB4M0GCK", State: proto.StateRunning, Project: "atlas",
+			AdmittedAt: started, StartedAt: &started, DurationMS: 90000, Command: `"bash" "harbor-arms/run.sh"`}},
+		{Peer: "mini", JobListEntry: proto.JobListEntry{ID: "01M3BFTQ6QD4GRXZKC3F4PTG15", State: proto.StateExited, ExitCode: &zero,
+			AdmittedAt: now.Add(-6 * time.Minute), StartedAt: &started, DurationMS: 3, ChangedPaths: 2,
+			Command: `"sh" "-c" "echo gen > gen.txt; echo done"`}},
+		{Peer: "mini", JobListEntry: proto.JobListEntry{ID: "01M3BFTQX1WFQKGP1SP1RCDYW2", State: proto.StateExited, ExitCode: &three,
+			AdmittedAt: now.Add(-6 * time.Minute), Command: `"sh" "-c" "exit 3"`}},
 	}
-}
-
-func TestPsStylingRespectsNoColor(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
-	if terminalStylingEnabled(true) {
-		t.Fatal("NO_COLOR did not disable terminal styling")
+	con, out := terminal(100)
+	writePs(con.Out, rows, false)
+	lines := strings.Split(strings.TrimSpace(termui.StripANSI(out.String())), "\n")
+	if len(lines) != 4 {
+		t.Fatalf("want a header and one line per job:\n%s", strings.Join(lines, "\n"))
 	}
-	t.Setenv("NO_COLOR", "")
-	if terminalStylingEnabled(true) {
-		t.Fatal("present but empty NO_COLOR did not disable terminal styling")
+	for _, want := range []string{"JOB", "STATE", "AGE", "TIME", "PROJECT", "CHANGED", "COMMAND"} {
+		if !strings.Contains(lines[0], want) {
+			t.Fatalf("header %q lacks %s", lines[0], want)
+		}
 	}
-	os.Unsetenv("NO_COLOR")
-	if !terminalStylingEnabled(true) {
-		t.Fatal("interactive terminal styling remained disabled without NO_COLOR")
+	if !strings.HasPrefix(lines[1], "cabal/01M3BF93Y7HS ") || !strings.Contains(lines[1], "● running") || !strings.Contains(lines[1], "1m30s") ||
+		!strings.Contains(lines[1], "bash harbor-arms/run.sh") {
+		t.Fatalf("running row = %q", lines[1])
 	}
-	if terminalStylingEnabled(false) {
-		t.Fatal("non-interactive output enabled terminal styling")
+	if !strings.Contains(lines[2], "✓ exited 0") || !strings.Contains(lines[2], "6m") || !strings.Contains(lines[2], "2 files") ||
+		!strings.Contains(lines[2], `sh -c 'echo gen > gen.txt; echo done'`) {
+		t.Fatalf("finished row = %q", lines[2])
 	}
-}
-
-func TestPsCardsWrapToTerminalWidth(t *testing.T) {
-	started := time.Date(2026, 8, 30, 14, 0, 0, 0, time.Local)
-	rows := []psRow{{
-		Peer: "cabal",
-		JobListEntry: proto.JobListEntry{
-			ID: proto.NewULID(), State: proto.StateRunning, Project: "atlas", Workdir: "atlas/docs",
-			AdmittedAt: started.Add(-time.Minute), StartedAt: &started, DurationMS: 123000,
-			GitCommit: strings.Repeat("a", 40), Command: `"nix" "build" "a-very-long-output-name-that-needs-to-wrap-cleanly"`,
-		},
-	}}
-	var out bytes.Buffer
-	writePsWithOptions(&out, rows, psRenderOptions{interactive: true, width: 72})
-	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if len(lines) < 4 {
-		t.Fatalf("narrow ps did not wrap: %q", out.String())
+	if !strings.Contains(lines[3], "✗ exited 3") || !strings.Contains(out.String(), "\x1b[31m✗ exited 3") {
+		t.Fatalf("failed row isn't red: %q", lines[3])
 	}
 	for _, line := range lines {
-		if len([]rune(line)) > 72 {
-			t.Fatalf("ps line exceeds terminal width: %d runes in %q", len([]rune(line)), line)
-		}
-	}
-	if got := out.String(); !strings.Contains(got, "atlas") || !strings.Contains(got, "workdir atlas/docs") ||
-		!strings.Contains(got, "command") {
-		t.Fatalf("narrow ps omitted context: %q", got)
-	}
-	if got := out.String(); !strings.Contains(got, "\n          \"") {
-		t.Fatalf("wrapped command lacks hanging indent: %q", got)
-	}
-	if got := out.String(); strings.Contains(got, "source\n") || strings.Contains(got, "workdir\n") {
-		t.Fatalf("wrapped metadata separated a label from its value: %q", got)
-	}
-}
-
-func TestPsMeasuresAndWrapsUnicodeByTerminalCells(t *testing.T) {
-	rows := []psRow{{
-		Peer: "cabal",
-		JobListEntry: proto.JobListEntry{
-			ID: proto.NewULID(), State: proto.StateRunning,
-			Project: strings.Repeat("界", 40), Command: `"true"`,
-		},
-	}}
-	for _, width := range []int{160, 60} {
-		var out bytes.Buffer
-		writePsWithOptions(&out, rows, psRenderOptions{interactive: true, width: width})
-		if got := out.String(); strings.HasPrefix(got, "PEER") {
-			t.Fatalf("width %d selected an overflowing table: %q", width, got)
-		}
-		for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
-			if cells := testTerminalCells(line); cells > width {
-				t.Fatalf("width %d rendered %d cells in %q", width, cells, line)
-			}
+		if termui.CellWidth(line) > 99 {
+			t.Fatalf("row exceeds the terminal: %q", line)
 		}
 	}
 }
 
-func testTerminalCells(value string) int {
-	width := 0
-	for _, r := range value {
-		switch {
-		case unicode.Is(unicode.Mn, r), unicode.Is(unicode.Me, r), r == '\u200d':
-		case r <= unicode.MaxASCII:
-			width++
-		default:
-			width += 2
+func TestPsVerboseShowsCardsWithTimesAndSource(t *testing.T) {
+	now := time.Now()
+	started := now.Add(-2 * time.Minute)
+	rows := []psRow{{Peer: "cabal", JobListEntry: proto.JobListEntry{
+		ID: proto.NewULID(), State: proto.StateRunning, Project: "atlas", Workdir: "atlas/docs",
+		AdmittedAt: started.Add(-3 * time.Second), StartedAt: &started, DurationMS: 120000,
+		GitCommit: strings.Repeat("a", 40), GitDirty: true, Command: `"nix" "build"`,
+	}}}
+	con, out := terminal(120)
+	writePs(con.Out, rows, true)
+	got := termui.StripANSI(out.String())
+	for _, want := range []string{"cabal/" + rows[0].ID, "● running", "started 3s later", "source aaaaaaaaaaaa +dirty", "workdir atlas/docs", "nix build"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("verbose ps lacks %q:\n%s", want, got)
 		}
 	}
-	return width
+}
+
+func TestPsEmptyMessageNamesTheRunners(t *testing.T) {
+	targets := []peerTarget{{name: "cabal"}, {name: "mini"}}
+	if got := psEmptyMessage(targets, true, false); got != "No active jobs on cabal or mini." {
+		t.Fatalf("empty message = %q", got)
+	}
+	if got := psEmptyMessage(targets, false, true); got != "No jobs on the runners that answered." {
+		t.Fatalf("partial empty message = %q", got)
+	}
+}
+
+func TestPsCommandFallsBackWhenTheRenderingIsTruncated(t *testing.T) {
+	row := psRow{JobListEntry: proto.JobListEntry{Command: `"sh" "-c" "a very long comm…`}}
+	if got := psCommand(row); got != row.Command {
+		t.Fatalf("truncated command = %q", got)
+	}
 }

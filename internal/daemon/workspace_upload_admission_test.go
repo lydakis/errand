@@ -53,7 +53,7 @@ func TestWorkspaceUploadAdmissionAndInventory(t *testing.T) {
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("upload admission allocated excess storage: %v %v", entries, err)
 	}
-	if err := client.RemoveWorkspace(ts.URL, ws.Name); err != nil {
+	if _, err := client.RemoveWorkspace(ts.URL, ws.Name); err != nil {
 		t.Fatal(err)
 	}
 	after, err = client.StorageStatsDetailed(ts.URL)

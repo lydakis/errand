@@ -26,7 +26,7 @@ func TestMismatchedRunnerRemainsDiscoverable(t *testing.T) {
 	}
 	var out, stderr bytes.Buffer
 	code := cmdPeersTo([]string{"discover"}, &out, &stderr, deps)
-	if code != 0 || !strings.Contains(out.String(), "runner") || strings.Contains(out.String(), "no errand runners") || !strings.Contains(out.String(), "different version") {
+	if code != 0 || !strings.Contains(out.String(), "runner") || strings.Contains(out.String(), "no errand runners") || !strings.Contains(out.String(), "errand old") {
 		t.Fatalf("discovery: %d %s %s", code, &out, &stderr)
 	}
 	out.Reset()

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -11,9 +12,52 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
 	"github.com/lydakis/errand/internal/daemon"
 )
+
+type configFailingWriter struct {
+	writes    int
+	failAfter int
+}
+
+func (w *configFailingWriter) Write(p []byte) (int, error) {
+	w.writes++
+	if w.writes > w.failAfter {
+		return 0, io.ErrClosedPipe
+	}
+	return len(p), nil
+}
+
+func TestConfigReportsOutputFailureAndStopsWriting(t *testing.T) {
+	writeClientConfig(t, "default_peer='test'\n[peers.test]\nurl='http://runner.invalid:7443'\n")
+	t.Chdir(t.TempDir())
+	for _, tc := range []struct {
+		name      string
+		flags     []string
+		failAfter int
+	}{
+		{"plain", nil, 0},
+		{"verbose", []string{"--verbose"}, 0},
+		{"quiet", []string{"--quiet"}, 0},
+		{"json", []string{"--json"}, 0},
+		{"partial", nil, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			stdout := &configFailingWriter{failAfter: tc.failAfter}
+			args := append([]string{"--no-snapshot"}, tc.flags...)
+			code := cmdConfigTo(args, stdout, &stderr)
+			if code != client.ExitTransaction || !strings.Contains(stderr.String(), "writing config: "+io.ErrClosedPipe.Error()) {
+				t.Fatalf("code=%d stderr=%q", code, stderr.String())
+			}
+			if stdout.writes != tc.failAfter+1 {
+				t.Fatalf("writes=%d, want stop after write %d", stdout.writes, tc.failAfter+1)
+			}
+		})
+	}
+}
 
 func TestConfigInspectionAndRunUseWorkspacePreferences(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())

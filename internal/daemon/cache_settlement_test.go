@@ -66,7 +66,7 @@ func TestCachePublicationFailureReleasesFinishedWorkspaceMember(t *testing.T) {
 	}
 	restored := submitWorkspaceCommand(t, ts.URL, root, ws, "test \"$(cat cache/value)\" = repaired")
 	requireCacheJobSuccess(t, ts.URL, restored)
-	if err := client.RemoveWorkspace(ts.URL, ws.Name); err != nil {
+	if _, err := client.RemoveWorkspace(ts.URL, ws.Name); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -75,7 +75,7 @@ func TestTransferReportingRoundTrip(t *testing.T) {
 	if code := cmdPushTo([]string{"--workspace", "dev"}, &out, &stderr); code != 0 {
 		t.Fatalf("push: %d %s", code, &stderr)
 	}
-	if !proto.ValidULID(strings.TrimSpace(out.String())) || !strings.Contains(stderr.String(), "push: staged 1 changed path") || !strings.Contains(stderr.String(), "transferred in") {
+	if !proto.ValidULID(strings.TrimSpace(out.String())) || !strings.Contains(stderr.String(), "staged 1 changed file for dev") || !strings.Contains(stderr.String(), "errand push --apply --workspace dev") {
 		t.Fatalf("stage output: %s %s", &out, &stderr)
 	}
 	out.Reset()
@@ -127,7 +127,7 @@ func TestTransferReportingRoundTrip(t *testing.T) {
 	if _, err := os.Stat(strings.TrimSpace(out.String())); err != nil {
 		t.Fatal("fetch stdout lost its staged path", err)
 	}
-	if !strings.Contains(stderr.String(), "fetch: staged 1 changed path") || !strings.Contains(stderr.String(), "transferred in") {
+	if !strings.Contains(stderr.String(), "downloaded 1 changed file from") || !strings.Contains(stderr.String(), "errand fetch --apply") {
 		t.Fatalf("fetch output: %s", &stderr)
 	}
 	out.Reset()
@@ -146,20 +146,58 @@ func TestTransferReportingRoundTrip(t *testing.T) {
 	}
 }
 
-func TestRunBindingOutputIsCompactUnlessVerbose(t *testing.T) {
-	e := config.EffectiveRun{Artifacts: []string{"out"}}
+func TestFetchJSONHasOneShapeWhenNothingChanged(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	server := httptest.NewServer(d.Handler())
+	t.Cleanup(server.Close)
+	writeClientConfig(t, fmt.Sprintf("default_peer='test'\n[peers.test]\nurl=%q\n", server.URL))
+	root := t.TempDir()
+	t.Chdir(root)
+	if err := os.WriteFile(".errandignore", nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if code := client.Run(client.RunOptions{PeerURL: server.URL, Root: root, Argv: []string{"true"}, Stdout: io.Discard, Stderr: io.Discard}); code != 0 {
+		t.Fatalf("run: %d", code)
+	}
+	jobs, err := client.List(server.URL)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs: %v %v", jobs, err)
+	}
+	var out, stderr bytes.Buffer
+	if code := cmdFetchTo([]string{"--json", "test/" + jobs[0].ID}, &out, &stderr); code != 0 {
+		t.Fatalf("fetch: %d %s", code, &stderr)
+	}
+	var report map[string]any
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := report["path"]; !ok || report["status"] != "unchanged" {
+		t.Fatalf("unchanged fetch JSON = %s", &out)
+	}
+}
+
+func TestRunBindingsAreCountedInTheHeaderAndListedInVerbose(t *testing.T) {
+	e := config.EffectiveRun{Artifacts: []string{"out"}, Sources: map[string]string{"workspace_root": "current directory"}}
 	for i := 0; i < 26; i++ {
 		e.Caches = append(e.Caches, proto.CacheBinding{Name: fmt.Sprintf("cache%d", i), Path: fmt.Sprintf("packages/%d/node_modules", i)})
 	}
-	var out bytes.Buffer
-	printRunBindings(&out, e, false)
-	if strings.Count(out.String(), "\n") != 1 || !strings.Contains(out.String(), "26 caches") || strings.Contains(out.String(), "node_modules") {
-		t.Fatalf("noisy summary: %s", &out)
+	d := runDisplay(nil, e, outputFlags{verbose: true})
+	if d.Bindings != "26 caches, 1 artifact" {
+		t.Fatalf("header bindings = %q", d.Bindings)
 	}
-	out.Reset()
-	printRunBindings(&out, e, true)
-	if !strings.Contains(out.String(), "packages/25/node_modules") || !strings.Contains(out.String(), "out") {
-		t.Fatal("verbose output lost binding details")
+	var bound string
+	for _, detail := range d.Details {
+		if detail[0] == "bindings" {
+			bound = detail[1]
+		}
+	}
+	if !strings.Contains(bound, "packages/25/node_modules") || !strings.Contains(bound, "artifact out") {
+		t.Fatalf("verbose bindings lost details: %q", bound)
 	}
 }
 
@@ -224,6 +262,12 @@ func TestFetchReportingSelectionAndConflict(t *testing.T) {
 			if err := os.WriteFile("conflict", []byte("local\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
+			// A conflict on one selected path suggests retrying just that path.
+			stderr.Reset()
+			if code := cmdFetchTo([]string{"--apply", handle, "conflict"}, &out, &stderr); code != client.ExitTransaction ||
+				!strings.Contains(stderr.String(), "errand fetch --apply --conflicts "+handle+" conflict") {
+				t.Fatalf("path-scoped conflict hint: %d %s", code, &stderr)
+			}
 			for _, materialize := range []bool{false, true} {
 				out.Reset()
 				stderr.Reset()
@@ -249,5 +293,49 @@ func TestFetchReportingSelectionAndConflict(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSuggestedApplyCommandsQuotePathsWithSpaces(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	server := httptest.NewServer(d.Handler())
+	t.Cleanup(server.Close)
+	writeClientConfig(t, fmt.Sprintf("default_peer='test'\n[peers.test]\nurl=%q\n", server.URL))
+	root := t.TempDir()
+	t.Chdir(root)
+	for path, body := range map[string]string{".errandignore": "", "my notes.txt": "one\n"} {
+		if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := client.CreateWorkspace(client.RunOptions{PeerURL: server.URL, Root: root}, "dev"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("my notes.txt", []byte("two\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	if code := cmdPushTo([]string{"--workspace", "dev", "my notes.txt"}, &out, &stderr); code != 0 ||
+		!strings.Contains(stderr.String(), "errand push --apply --workspace dev 'my notes.txt'") {
+		t.Fatalf("push hint: %d %s", code, &stderr)
+	}
+
+	if code := client.Run(client.RunOptions{PeerURL: server.URL, Root: root, Argv: []string{"sh", "-c", "echo x > 'out file'"}, Stdout: io.Discard, Stderr: io.Discard}); code != 0 {
+		t.Fatalf("run: %d", code)
+	}
+	jobs, err := client.List(server.URL)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs: %v %v", jobs, err)
+	}
+	stderr.Reset()
+	handle := "test/" + jobs[0].ID
+	if code := cmdFetchTo([]string{handle, "out file"}, &out, &stderr); code != 0 ||
+		!strings.Contains(stderr.String(), "errand fetch --apply "+handle+" 'out file'") {
+		t.Fatalf("fetch hint: %d %s", code, &stderr)
 	}
 }

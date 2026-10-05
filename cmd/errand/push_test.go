@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,6 +16,45 @@ import (
 	"github.com/lydakis/errand/internal/daemon"
 	"github.com/lydakis/errand/internal/proto"
 )
+
+func TestPushRetryFlagsPreserveValuesAndPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		args, want []string
+	}{
+		{"bare flags", []string{"--apply", "-conflicts", "--workspace", "dev"}, []string{"--workspace", "dev"}},
+		{"explicit values", []string{"--apply=false", "-apply=true", "--conflicts=false", "-conflicts=true", "--workspace", "dev"}, []string{"--workspace", "dev"}},
+		{"string values resembling flags", []string{"--workspace", "--apply", "--profile", "--conflicts", "--apply=false"}, []string{"--workspace", "--apply", "--profile", "--conflicts"}},
+		{"equals string value", []string{"--workspace=--apply", "--apply=false"}, []string{"--workspace=--apply"}},
+		{"unrelated boolean", []string{"--watch", "--json=false", "--apply=false"}, []string{"--watch", "--json=false"}},
+		{"explicit separator", []string{"--workspace", "dev", "--apply=false", "--", "--apply"}, []string{"--workspace", "dev", "--", "--apply"}},
+		{"positional", []string{"--workspace", "dev", "--apply=false", "path", "--conflicts=false"}, []string{"--workspace", "dev", "path", "--conflicts=false"}},
+		{"single dash positional", []string{"--apply=false", "-", "--apply"}, []string{"-", "--apply"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := flag.NewFlagSet("push", flag.ContinueOnError)
+			apply, conflicts := fs.Bool("apply", false, ""), fs.Bool("conflicts", false, "")
+			workspace, profile := fs.String("workspace", "", ""), fs.String("profile", "", "")
+			fs.Bool("watch", false, "")
+			fs.Bool("json", false, "")
+			if err := fs.Parse(tc.args); err != nil {
+				t.Fatal(err)
+			}
+			originalWorkspace, originalProfile := *workspace, *profile
+			originalPaths := slices.Clone(fs.Args())
+			got := withoutFlag(fs, tc.args, "apply", "conflicts")
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("retry args = %q, want %q", got, tc.want)
+			}
+			if err := fs.Parse(append([]string{"--apply", "--conflicts"}, got...)); err != nil {
+				t.Fatal(err)
+			}
+			if !*apply || !*conflicts || *workspace != originalWorkspace || *profile != originalProfile || !slices.Equal(fs.Args(), originalPaths) {
+				t.Fatalf("retry changed flags or paths: apply=%v conflicts=%v workspace=%q profile=%q paths=%q", *apply, *conflicts, *workspace, *profile, fs.Args())
+			}
+		})
+	}
+}
 
 func TestPushUsesConfiguredPeerAndExplicitApply(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
@@ -62,7 +103,7 @@ func TestPushUsesConfiguredPeerAndExplicitApply(t *testing.T) {
 		t.Fatalf("remote: %d %s %s", code, &run, &stderr)
 	}
 	stderr.Reset()
-	if code := cmdPushTo(append(args, "--workspace", "missing"), &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "404") {
+	if code := cmdPushTo(append(args, "--workspace", "missing"), &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "has no workspace named missing") {
 		t.Fatalf("explicit workspace did not override profile: %d %s", code, &stderr)
 	}
 	// A different checkout cannot accidentally replace this workspace's source.
@@ -178,7 +219,7 @@ func TestPushPrintsRunnableRecoveryForEarlierTransferState(t *testing.T) {
 	}
 	out.Reset()
 	stderr.Reset()
-	if code := cmdGCTo([]string{"changes", "--older-than", "1d"}, &out, &stderr); code != 0 || !strings.HasSuffix(out.String(), "0 failed)\n") {
+	if code := cmdGCTo([]string{"changes", "--older-than", "1d"}, &out, &stderr); code != 0 || !strings.Contains(out.String(), "nothing to collect") {
 		t.Fatalf("gc after recovery: %d %q %q", code, &out, &stderr)
 	}
 }
