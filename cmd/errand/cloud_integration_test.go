@@ -72,7 +72,7 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	brokerCfg.Probe = probeLeaseTarget
+	brokerCfg.Probe, brokerCfg.AdmitKeys = probeLeaseTarget, admitLeaseKeys
 	brokerCfg.ReadyPoll = 10 * time.Millisecond
 	broker, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: version, GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: brokerCfg})
 	if err != nil {
@@ -211,7 +211,8 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 
 func TestCloudPeerRefusesWildcardLeases(t *testing.T) {
 	brokerCfg := &cloud.Config{Offers: []cloud.Offer{{Name: "x", Provider: cloud.CommandProvider{AcquireCommand: []string{"/bin/false"}, ReleaseCommand: []string{"/bin/true"}}, IdleTimeout: time.Minute, MaxLifetime: time.Minute}},
-		Probe: func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) { return proto.Info{}, nil }}
+		Probe:     func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) { return proto.Info{}, nil },
+		AdmitKeys: admitLeaseKeys}
 	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: version, Cloud: brokerCfg})
 	if err != nil {
 		t.Fatal(err)

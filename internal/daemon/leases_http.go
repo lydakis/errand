@@ -80,6 +80,40 @@ func (d *Daemon) handleLeaseAcquire(w http.ResponseWriter, r *http.Request, id I
 	writeJSON(w, http.StatusOK, lease)
 }
 
+// handleLeaseAdmit lets another of the caller's devices into a leased
+// machine by its SSH key. Like a lease request it hands out access to the
+// machine, so it has the same requirements.
+func (d *Daemon) handleLeaseAdmit(w http.ResponseWriter, r *http.Request, id Identity) {
+	if !id.Allowed(proto.ActionSubmit) {
+		httpError(w, http.StatusForbidden, "using a leased machine needs the submit action as well as lease")
+		return
+	}
+	if !d.requireBroker(w) {
+		return
+	}
+	if mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mediaType != "application/json" || r.Header.Get("Origin") != "" {
+		httpError(w, http.StatusUnsupportedMediaType, "lease requests must be application/json and not come from a browser")
+		return
+	}
+	var req proto.LeaseRequest
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid key request: "+err.Error())
+		return
+	}
+	login := id.Login
+	if id.Local {
+		login = ""
+	}
+	lease, err := d.broker.Admit(leaseOwner(id), login, r.PathValue("id"), req.SSHKey)
+	if err != nil {
+		leaseError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, lease)
+}
+
 func (d *Daemon) handleLeaseList(w http.ResponseWriter, _ *http.Request, id Identity) {
 	if !d.requireBroker(w) {
 		return

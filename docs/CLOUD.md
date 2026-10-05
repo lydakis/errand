@@ -25,9 +25,15 @@ selects it directly.
 
 Your machine keeps no record of its leases. The cloud peer lists your active
 leases, with how to reach them, whenever errand asks it, so a name like
-`cabal-7f3a` works from any process and stops working when the lease ends. A
-lease reached over SSH is listed only on the machine whose key it admits. All
-this needs the cloud peer to answer: if you point the name `cabal` at another
+`cabal-7f3a` works from any process and stops working when the lease ends.
+
+A lease is yours, not one device's. Each device you run errand from has its
+own SSH key, and a machine reached over SSH lets in only the keys the cloud
+peer added. The cloud peer adds a device's key when that device asks for a
+machine the lease matches, or names the lease with `--on cabal-7f3a`; the
+device waits until it has. Until then the lease is not a peer on that device,
+though `errand leases` lists it. No private key leaves its device. All this
+needs the cloud peer to answer: if you point the name `cabal` at another
 runner, its leases, and job handles such as `cabal-7f3a/01K...`, are no longer
 reachable by name, and `errand leases release` cannot reach them either. The
 cloud peer still ends them when they go idle or reach their lifetime.
@@ -44,8 +50,8 @@ cloud peer still ends them when they go idle or reach their lifetime.
   request down before starting anything (no permission, nothing matches any
   more, or it is at `max_leases`), the next one is asked. A cloud peer that
   does not answer is skipped, so keep offers on an always-on machine. A ready
-  or launching lease of yours that already matches is reused, if you asked
-  for it from the same machine.
+  or launching lease of yours that already matches is reused, from any of
+  your devices.
 - An offer's facts are a claim. The lease becomes ready only once the machine
   answers as an errand runner whose measured facts match, and the runner
   rechecks them when the job is admitted.

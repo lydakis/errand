@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,6 +24,23 @@ type fakeMachine struct {
 	running atomic.Int32
 	down    atomic.Bool
 	probes  atomic.Int32
+
+	mu       sync.Mutex
+	admitted []string // keys added after launch
+	refuse   atomic.Bool
+}
+
+func (m *fakeMachine) admit(_ context.Context, target proto.LeaseTarget, _ string, keys []string) error {
+	if target.SSH == "" {
+		return fmt.Errorf("admitting keys over %+v", target)
+	}
+	if m.refuse.Load() {
+		return errors.New("permission denied")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.admitted = append(m.admitted, keys...)
+	return nil
 }
 
 func (m *fakeMachine) probe(_ context.Context, target proto.LeaseTarget, _, _ string) (proto.Info, error) {
@@ -70,6 +88,7 @@ func newHarness(t *testing.T, acquireBody string) *harness {
 		}},
 		AcquireTimeout: 5 * time.Second,
 		Probe:          h.machine.probe,
+		AdmitKeys:      h.machine.admit,
 		ReadyPoll:      10 * time.Millisecond,
 		IdlePoll:       10 * time.Millisecond,
 	}
@@ -236,14 +255,64 @@ echo '{"ssh":"ubuntu@box"}'
 	if same, err := b.Acquire("george", "", "gpu", mac, ""); err != nil || same.ID != l.ID {
 		t.Fatalf("same key must reuse: %+v %v", same, err)
 	}
-	if other, err := b.Acquire("george", "", "gpu", mini, ""); err != nil || other.ID == l.ID {
-		t.Fatalf("another key must not reuse: %+v %v", other, err)
-	}
 	for _, bad := range []string{"AAAA george@mac", mac + "\n" + mini, `command="sh" ` + mac} {
 		var refused *Error
 		if _, err := b.Acquire("george", "", "gpu", bad, ""); !errors.As(err, &refused) || refused.Status != http.StatusBadRequest {
 			t.Errorf("key %q: %v", bad, err)
 		}
+	}
+}
+
+// A lease is the owner's, not one device's: another device of the owner's
+// that asks for it, or names it, reuses it once the worker has added its key
+// to the machine. A key that could not be added is retried.
+func TestLeaseAdmitsOwnersOtherDevices(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = 20 * time.Millisecond
+	b := h.start(t)
+	const mac, mini, air = "ssh-ed25519 bWFj errand", "ssh-ed25519 bWluaQ== errand", "ssh-ed25519 YWly errand"
+	l, err := b.Acquire("george", "", "gpu", mac, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	h.machine.refuse.Store(true)
+	other, err := b.Acquire("george", "", "gpu", mini, "")
+	if err != nil || other.ID != l.ID || slices.Contains(other.SSHKeys, mini) {
+		t.Fatalf("another device must reuse the lease once let in: %+v %v", other, err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if got, _ := b.Get("george", l.ID); slices.Contains(got.SSHKeys, mini) {
+		t.Fatalf("a key the machine refused is listed: %v", got.SSHKeys)
+	}
+	h.machine.refuse.Store(false)
+	deadline := time.Now().Add(5 * time.Second)
+	for got, _ := b.Get("george", l.ID); !slices.Contains(got.SSHKeys, mini); got, _ = b.Get("george", l.ID) {
+		if time.Now().After(deadline) {
+			t.Fatalf("key never added: %+v", got)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := b.Admit("george", "", l.ID, air); err != nil {
+		t.Fatal(err)
+	}
+	for got, _ := b.Get("george", l.ID); !slices.Contains(got.SSHKeys, air); got, _ = b.Get("george", l.ID) {
+		if time.Now().After(deadline) {
+			t.Fatalf("named lease never let the device in: %+v", got)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	h.machine.mu.Lock()
+	admitted := slices.Clone(h.machine.admitted)
+	h.machine.mu.Unlock()
+	if !slices.Equal(admitted, []string{mini, air}) {
+		t.Fatalf("machine was asked to add %q", admitted)
+	}
+	if _, err := b.Admit("someone", "", l.ID, air); err == nil {
+		t.Fatal("let another owner's device in")
+	}
+	if _, err := b.Admit("george", "", l.ID, "AAAA"); err == nil {
+		t.Fatal("admitted a malformed key")
 	}
 }
 

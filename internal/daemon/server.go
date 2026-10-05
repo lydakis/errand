@@ -747,6 +747,7 @@ func (d *Daemon) Handler() http.Handler {
 	mux.HandleFunc("GET /v0/leases", d.auth(proto.ActionLease, d.handleLeaseList))
 	mux.HandleFunc("GET /v0/leases/{id}", d.auth(proto.ActionLease, d.handleLeaseGet))
 	mux.HandleFunc("DELETE /v0/leases/{id}", d.auth(proto.ActionLease, d.handleLeaseRelease))
+	mux.HandleFunc("POST /v0/leases/{id}/ssh-keys", d.auth(proto.ActionLease, d.handleLeaseAdmit))
 	mux.HandleFunc("DELETE /v0/lease-requests/{id}", d.auth(proto.ActionLease, d.handleLeaseWithdraw))
 	mux.HandleFunc("POST /v0/setup/quiesce", d.auth("", d.handleSetupQuiesce))
 	mux.HandleFunc("DELETE /v0/setup/quiesce", d.auth("", d.handleSetupQuiesceRelease))
