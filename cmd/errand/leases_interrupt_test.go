@@ -181,7 +181,7 @@ func TestLeasedRunWithdrawsOnlyWhenNothingWasAdmitted(t *testing.T) {
 	}
 }
 
-// errand leases rm takes a bare lease ID and finds the cloud peer holding it.
+// errand leases release takes a bare lease ID and finds the cloud peer holding it.
 func TestLeaseIDFindsItsCloudPeer(t *testing.T) {
 	id := proto.NewULID()
 	lease := proto.Lease{ID: id, Offer: "a10", State: proto.LeaseReady}

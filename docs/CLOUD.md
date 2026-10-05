@@ -29,8 +29,8 @@ leases, with how to reach them, whenever errand asks it, so a name like
 lease reached over SSH is listed only on the machine whose key it admits. All
 this needs the cloud peer to answer: if you point the name `cabal` at another
 runner, its leases, and job handles such as `cabal-7f3a/01K...`, are no longer
-reachable by name, and `errand leases rm` cannot reach them either. The cloud
-peer still ends them when they go idle or reach their lifetime.
+reachable by name, and `errand leases release` cannot reach them either. The
+cloud peer still ends them when they go idle or reach their lifetime.
 
 ## When errand leases
 
@@ -56,9 +56,9 @@ lease starts a full idle window.
 ## Leases
 
 ```sh
-errand leases                    # your leases on every cloud peer
+errand leases                     # your leases on every cloud peer
 errand leases --json
-errand leases rm cabal-7f3a      # release now; a full lease ID works too
+errand leases release cabal-7f3a  # release now; a full lease ID works too
 ```
 
 The cloud peer logs each lease's launch, readiness, release and any failed

@@ -133,17 +133,24 @@ func splitLeaseName(cfg config.Client, name string) (broker, suffix string, ok b
 // findLeasePeer resolves a lease peer name by asking its cloud peer, for
 // config.FindLeasePeer.
 func findLeasePeer(cfg config.Client, name string) (config.Peer, bool, error) {
+	lp, ok, err := leasePeerNamed(cfg, name)
+	return lp.Peer, ok, err
+}
+
+// leasePeerNamed finds the ready lease a name such as cloud-7f3a stands for.
+// It reports false for a name that is not a lease name.
+func leasePeerNamed(cfg config.Client, name string) (leasePeer, bool, error) {
 	broker, suffix, ok := splitLeaseName(cfg, name)
 	if !ok {
-		return config.Peer{}, false, nil
+		return leasePeer{}, false, nil
 	}
 	target, err := configuredPeerURL(cfg, broker)
 	if err != nil {
-		return config.Peer{}, false, err
+		return leasePeer{}, false, err
 	}
 	info, err := client.ProbeInfo(context.Background(), target, 10*time.Second)
 	if err != nil {
-		return config.Peer{}, false, fmt.Errorf("asking %s for your leases: %w", broker, err)
+		return leasePeer{}, false, fmt.Errorf("asking %s for your leases: %w", broker, err)
 	}
 	var found []leasePeer
 	for _, lp := range leasePeersOf(cfg, broker, info) {
@@ -153,11 +160,11 @@ func findLeasePeer(cfg config.Client, name string) (config.Peer, bool, error) {
 	}
 	switch len(found) {
 	case 0:
-		return config.Peer{}, false, fmt.Errorf("%s has no ready lease of yours whose ID ends in %s; see errand leases", broker, suffix)
+		return leasePeer{}, false, fmt.Errorf("%s has no ready lease of yours whose ID ends in %s; see errand leases", broker, suffix)
 	case 1:
-		return found[0].Peer, true, nil
+		return found[0], true, nil
 	}
-	return config.Peer{}, false, fmt.Errorf("more than one lease on %s ends in %s; use a longer name", broker, suffix)
+	return leasePeer{}, false, fmt.Errorf("more than one lease on %s ends in %s; use a longer name", broker, suffix)
 }
 
 // leaseTargetPeer is the peer entry for a lease target. The host key of an
@@ -280,7 +287,7 @@ func withdrawLease(broker placementChoice, requestID, id string) string {
 	lease, err := client.WithdrawLeaseRequest(ctx, broker.Target, requestID)
 	switch {
 	case err != nil:
-		return fmt.Sprintf("withdrawing lease %s failed: %v (errand leases rm --on %s %s releases it)", id, err, broker.Name, id)
+		return fmt.Sprintf("withdrawing lease %s failed: %v (errand leases release --on %s %s releases it)", id, err, broker.Name, id)
 	case lease.Shared:
 		return fmt.Sprintf("lease %s is held by another run or was used by a job, so it stays until idle", id)
 	case lease.State == proto.LeaseReady:
@@ -388,10 +395,10 @@ func cmdLeases(args []string, stdout, stderr io.Writer) int {
 	switch verb {
 	case "ls", "list":
 		setFlagUsage(fs, "errand leases [ls] [--on PEER] [--json]")
-	case "rm":
-		setFlagUsage(fs, "errand leases rm [--on PEER] LEASE...")
+	case "release":
+		setFlagUsage(fs, "errand leases release [--on PEER] LEASE...")
 	default:
-		fmt.Fprintf(stderr, "errand leases: unknown command %q (use ls or rm)\n", verb)
+		fmt.Fprintf(stderr, "errand leases: unknown command %q (use ls or release)\n", verb)
 		return 2
 	}
 	if err := fs.Parse(args); err != nil {
@@ -405,9 +412,9 @@ func cmdLeases(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "errand leases:", err)
 		return 1
 	}
-	if verb == "rm" {
+	if verb == "release" {
 		if fs.NArg() == 0 {
-			fmt.Fprintln(stderr, "errand leases rm: name at least one lease")
+			fmt.Fprintln(stderr, "errand leases release: name at least one lease")
 			return 2
 		}
 		return releaseLeases(cfg, *on, fs.Args(), stdout, stderr)
@@ -564,33 +571,33 @@ func releaseLeases(cfg config.Client, on string, names []string, stdout, stderr 
 		if !proto.ValidULID(arg) {
 			b, suffix, ok := splitLeaseName(cfg, arg)
 			if !ok || on != "" && on != b {
-				fmt.Fprintf(stderr, "errand leases rm: %q is not a lease name; pass one such as cloud-7f3a, or --on CLOUD with a lease ID\n", arg)
+				fmt.Fprintf(stderr, "errand leases release: %q is not a lease name; pass one such as cloud-7f3a, or --on CLOUD with a lease ID\n", arg)
 				code = 2
 				continue
 			}
 			var err error
 			if broker, id, err = findLeaseID(cfg, b, suffix); err != nil {
-				fmt.Fprintf(stderr, "errand leases rm: %s: %v\n", terminalSafeField(arg), err)
+				fmt.Fprintf(stderr, "errand leases release: %s: %v\n", terminalSafeField(arg), err)
 				code = 1
 				continue
 			}
 		} else if on == "" {
 			var err error
 			if broker, err = leaseOwnerPeer(cfg, id); err != nil {
-				fmt.Fprintf(stderr, "errand leases rm: %s: %v\n", arg, err)
+				fmt.Fprintf(stderr, "errand leases release: %s: %v\n", arg, err)
 				code = 1
 				continue
 			}
 		}
 		target, err := configuredPeerURL(cfg, broker)
 		if err != nil {
-			fmt.Fprintf(stderr, "errand leases rm: %v\n", err)
+			fmt.Fprintf(stderr, "errand leases release: %v\n", err)
 			code = 1
 			continue
 		}
 		lease, err := waitReleased(target, id)
 		if err != nil {
-			fmt.Fprintf(stderr, "errand leases rm: %s: %v\n", terminalSafeField(arg), err)
+			fmt.Fprintf(stderr, "errand leases release: %s: %v\n", terminalSafeField(arg), err)
 			code = 1
 			continue
 		}
