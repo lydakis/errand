@@ -54,7 +54,7 @@ func TestLeaseInterruptedDuringRequestIsWithdrawn(t *testing.T) {
 			}
 		}))
 		opt := leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: "cloud"}, Target: srv.URL}, Offer: proto.Offer{Name: "h100"}}
-		_, err := leaseRunner(opt, "gpu", io.Discard)
+		_, _, err := leaseRunner(opt, "gpu", io.Discard)
 		srv.Close()
 		if err == nil || !strings.Contains(err.Error(), tc.want) || withdrawn.Load() == "" || withdrawn.Load() != requested.Load() {
 			t.Fatalf("%s: err %v, requested %q, withdrawn %q", tc.state, err, requested.Load(), withdrawn.Load())

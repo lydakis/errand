@@ -208,3 +208,36 @@ func TestWorkspacePlacementDoesNotRetryUncertainOrOtherRejections(t *testing.T) 
 		})
 	}
 }
+
+// A machine resolved for a run alone is let go if the run ends before it
+// submits anything there, and kept once something was submitted.
+func TestRunAbandonsResolvedTargetsOnlyBeforeSubmission(t *testing.T) {
+	var puts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			puts.Add(1)
+			_, _ = io.Copy(io.Discard, r.Body)
+		}
+		http.Error(w, "refused", 403)
+	}))
+	defer server.Close()
+	for _, tc := range []struct {
+		name      string
+		root      string
+		abandoned int32
+	}{
+		{"fails before submitting", "", 1}, // change state needs a workspace root
+		{"submitted, then refused", t.TempDir(), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			puts.Store(0)
+			var abandoned atomic.Int32
+			code := Run(RunOptions{Where: "gpu", Root: tc.root, NoSnapshot: true, Argv: []string{"true"}, Stdout: io.Discard, Stderr: io.Discard, Resolve: func() ([]RunTarget, func(), error) {
+				return []RunTarget{{PeerURL: server.URL, PeerName: "lease"}}, func() { abandoned.Add(1) }, nil
+			}})
+			if code == 0 || abandoned.Load() != tc.abandoned || (puts.Load() > 0) != (tc.abandoned == 0) {
+				t.Fatalf("code=%d abandoned=%d puts=%d", code, abandoned.Load(), puts.Load())
+			}
+		})
+	}
+}

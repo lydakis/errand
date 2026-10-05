@@ -24,9 +24,9 @@ func TestWorkspaceListingRejectsIgnoredServerFilter(t *testing.T) {
 // A workspace whose snapshot cannot be prepared rents no machine.
 func TestCreateWorkspaceResolvesAfterSnapshot(t *testing.T) {
 	resolved := false
-	opts := RunOptions{Where: "gpu", Root: filepath.Join(t.TempDir(), "missing"), Resolve: func() ([]RunTarget, error) {
+	opts := RunOptions{Where: "gpu", Root: filepath.Join(t.TempDir(), "missing"), Resolve: func() ([]RunTarget, func(), error) {
 		resolved = true
-		return nil, nil
+		return nil, nil, nil
 	}}
 	if _, err := CreateWorkspace(opts, "train"); err == nil || resolved {
 		t.Fatalf("err %v, resolved %v", err, resolved)

@@ -450,8 +450,10 @@ func TestRestartRecoversLeases(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(h.cfg.StateDir, "leases", crashed.ID+".json"), data, 0600); err != nil {
 		t.Fatal(err)
 	}
+	restarted := time.Now()
 	b2 := h.start(t)
-	if got, ok := b2.Get("george", l.ID); !ok || got.State != proto.LeaseReady {
+	// The ready lease gets a full idle window, and says so.
+	if got, ok := b2.Get("george", l.ID); !ok || got.State != proto.LeaseReady || got.IdleUntil.Before(restarted.Add(h.cfg.Offers[0].IdleTimeout)) {
 		t.Fatalf("ready lease after restart: %+v", got)
 	}
 	failed := waitState(t, b2, "george", crashed.ID, proto.LeaseFailed)
@@ -738,4 +740,18 @@ echo '{"url":"http://box:7443"}'
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
+}
+
+// Files a lease record names stay valid whatever directory the runner is
+// later started from.
+func TestStateDirIsAbsolute(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	t.Chdir(h.dir)
+	lambda := &LambdaProvider{InstanceType: "t", APIKeyFile: "/a"}
+	h.cfg.StateDir = "state"
+	h.cfg.Offers = append(h.cfg.Offers, Offer{Name: "lambda", Provider: lambda, IdleTimeout: time.Hour, MaxLifetime: time.Hour})
+	h.start(t)
+	if want := filepath.Join(h.dir, "state", "lambda"); lambda.KeyDir != want {
+		t.Fatalf("key dir %q, want %q", lambda.KeyDir, want)
+	}
 }

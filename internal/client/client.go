@@ -71,8 +71,12 @@ type RunOptions struct {
 	Candidates []RunTarget     // ordered eligible runners; used only with Where
 	OnSelected func(RunTarget) // advisory before contacting each selected runner
 	// Resolve, when set, supplies Candidates once local preparation has
-	// succeeded, so a machine is rented only for a run that can start.
-	Resolve        func() ([]RunTarget, error)
+	// succeeded, so a machine is rented only for a run that can start. The
+	// abandon function it may return is called if the run ends before
+	// anything is submitted to those candidates, so a machine rented for
+	// this run alone is let go.
+	Resolve        func() (candidates []RunTarget, abandon func(), err error)
+	onSubmit       func()
 	Workspace      string // explicitly selected existing persistent workspace
 	workspaceID    string
 	Caches         []proto.CacheBinding
@@ -211,12 +215,21 @@ func runWithDetachNotifications(
 				return code
 			}
 		}
-		candidates, err := opts.Resolve()
+		candidates, abandon, err := opts.Resolve()
 		if err != nil {
 			errf("%v", err)
 			return ExitTransaction
 		}
 		opts.Candidates = candidates
+		if abandon != nil {
+			submitted := false
+			opts.onSubmit = func() { submitted = true }
+			defer func() {
+				if !submitted {
+					abandon()
+				}
+			}()
+		}
 	}
 	return tryCandidates(opts, func(attempt RunOptions) (int, bool) {
 		if prep == nil {
@@ -356,6 +369,9 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 	}()
 
 	submissionStarted = true
+	if opts.onSubmit != nil {
+		opts.onSubmit()
+	}
 	status, admissionUncertain, err := submit(opts, jobID, spec, manifest, plan)
 	if err != nil {
 		errf("%v", err)

@@ -136,6 +136,13 @@ func New(cfg Config) (*Broker, error) {
 	if cfg.IdlePoll <= 0 {
 		cfg.IdlePoll = 30 * time.Second
 	}
+	// Paths kept in lease records, such as the identity a machine is reached
+	// with, must not depend on the directory the runner was started from.
+	dir, err := filepath.Abs(cfg.StateDir)
+	if err != nil {
+		return nil, err
+	}
+	cfg.StateDir = dir
 	b := &Broker{cfg: cfg, offers: map[string]Offer{}, dir: filepath.Join(cfg.StateDir, "leases"), leases: map[string]*lease{}}
 	for _, o := range cfg.Offers {
 		if o.Name == "" || o.Provider == nil || o.IdleTimeout <= 0 || o.MaxLifetime <= 0 {
@@ -582,7 +589,7 @@ func (b *Broker) launch(l *lease) {
 			now := time.Now()
 			r.State = proto.LeaseReady
 			r.Target, r.Facts = &machine.Target, &facts
-			r.ReadyAt, r.LastBusy, r.IdleUntil = now, now, now.Add(r.IdleTimeout)
+			r.ReadyAt, r.LastBusy = now, now
 			r.addProgress(fmt.Sprintf("ready after %s", now.Sub(r.CreatedAt).Round(time.Second)))
 			return true
 		}); err == nil {
@@ -649,7 +656,7 @@ func (b *Broker) watch(l *lease) {
 		case b.busy(l, r):
 			// In use, so no longer unwanted: from here the idle rule decides.
 			_ = b.update(l, func(r *record) bool {
-				r.LastBusy, r.IdleUntil, r.Unwanted, r.Kept = now, now.Add(r.IdleTimeout), false, true
+				r.LastBusy, r.Unwanted, r.Kept = now, false, true
 				return r.State == proto.LeaseReady
 			})
 		case r.Unwanted:
@@ -727,7 +734,7 @@ func (b *Broker) release(l *lease) {
 		if r.Error != "" {
 			r.State = proto.LeaseFailed
 		}
-		r.ReleasedAt, r.IdleUntil = time.Now(), time.Time{}
+		r.ReleasedAt = time.Now()
 		r.addProgress("released")
 		return true
 	})
@@ -878,6 +885,12 @@ func (l *lease) handed() proto.Lease {
 func (l *lease) view() proto.Lease {
 	v := l.Lease
 	v.Progress = append([]string(nil), l.Progress...)
+	// The idle deadline follows from when the lease was last busy, which a
+	// restart resets, so it is derived here rather than stored.
+	v.IdleUntil = time.Time{}
+	if v.State == proto.LeaseReady {
+		v.IdleUntil = l.LastBusy.Add(l.IdleTimeout)
+	}
 	return v
 }
 

@@ -97,6 +97,11 @@ func sshPinArgs(target string) ([]string, error) {
 		"-o", "UpdateHostKeys=no",
 		"-o", `ControlPath="` + filepath.Join(controlDir, "pin-"+hex.EncodeToString(sum[:10])) + `"`,
 	}
+	// Only the lease's own keys are offered: an agent or config with many
+	// keys could otherwise use up the server's authentication attempts.
+	if len(trust.identities) > 0 {
+		args = append(args, "-o", "IdentitiesOnly=yes")
+	}
 	for _, identity := range trust.identities {
 		args = append(args, "-i", identity)
 	}

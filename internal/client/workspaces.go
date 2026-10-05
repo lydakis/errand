@@ -113,17 +113,21 @@ func CreateWorkspace(opts RunOptions, name string) (proto.Workspace, error) {
 			return result, err
 		}
 	}
+	var abandon func()
 	if opts.Resolve != nil {
-		candidates, err := opts.Resolve()
+		candidates, release, err := opts.Resolve()
 		if err != nil {
 			return result, err
 		}
-		opts.Candidates = candidates
+		opts.Candidates, abandon = candidates, release
 	}
 	resultWithError := tryCandidates(opts, func(attempt RunOptions) (workspaceCreation, bool) {
 		w, err := createPreparedWorkspace(attempt, prep, request)
 		return workspaceCreation{w, err}, placementRejection(err)
 	})
+	if resultWithError.err != nil && abandon != nil {
+		abandon()
+	}
 	return resultWithError.workspace, resultWithError.err
 }
 

@@ -40,7 +40,7 @@ func TestSSHPinArgs(t *testing.T) {
 	if err := TrustSSHHost(target, testHostKey, ""); err != nil {
 		t.Fatal(err)
 	}
-	if args := pinArgs(t, target); !slices.Contains(args, "StrictHostKeyChecking=yes") || slices.Contains(args, "-i") {
+	if args := pinArgs(t, target); !slices.Contains(args, "StrictHostKeyChecking=yes") || slices.Contains(args, "-i") || slices.Contains(args, "IdentitiesOnly=yes") {
 		t.Fatalf("args %q", args)
 	}
 	// A cloud peer and a client in one process each offer their own key.
@@ -50,7 +50,9 @@ func TestSSHPinArgs(t *testing.T) {
 		}
 	}
 	args := pinArgs(t, target)
-	if want := []string{"-i", "/keys/lambda", "-i", "/keys/errand"}; !slices.Equal(args[len(args)-4:], want) {
+	// Only those keys: others from an agent could use up the server's
+	// authentication attempts first.
+	if want := []string{"-o", "IdentitiesOnly=yes", "-i", "/keys/lambda", "-i", "/keys/errand"}; !slices.Equal(args[len(args)-6:], want) {
 		t.Fatalf("args %q", args)
 	}
 	if pinArgs(t, "ubuntu@203.0.113.8") != nil {
