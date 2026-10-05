@@ -112,6 +112,7 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 			return view.report(*event.Result, event.Stats, event.Err, event.State)
 		})
 		watcher.clear()
+		nameEarlierStateRecovery(err, settings, effective.Peer)
 		if err != nil {
 			return failWith(e, client.ExitTransaction, fmt.Errorf("watch stopped: %w", err), errorScope{peer: label, workspace: workspace})
 		}
@@ -127,6 +128,7 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 		spin = e.Spin("Syncing with " + e.B(workspace) + " on " + e.B(label) + "…")
 	}
 	result, err := client.PushChanges(opts)
+	nameEarlierStateRecovery(err, settings, effective.Peer)
 	if spin != nil {
 		spin.Stop()
 	}
@@ -145,6 +147,15 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 		return client.ExitTransaction
 	}
 	return 0
+}
+
+// The recovery command for a workspace recorded by an earlier errand repeats
+// this push's peer and profile, so it recreates the same workspace.
+func nameEarlierStateRecovery(err error, settings runConfigFlags, peer string) {
+	var earlier *client.EarlierTransferStateError
+	if errors.As(err, &earlier) {
+		earlier.URL, earlier.Peer, earlier.Profile = settings.url, peer, settings.profile
+	}
 }
 
 // pushView renders push results.

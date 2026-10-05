@@ -249,6 +249,10 @@ func TestCmdKillDoesNotCallAnUnreachableJobRunning(t *testing.T) {
 func TestCmdKillReportsJobsThatAlreadyFinished(t *testing.T) {
 	id := proto.NewULID()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			json.NewEncoder(w).Encode(proto.JobDetails{JobStatus: proto.JobStatus{ID: id, State: proto.StateExited, Result: &proto.Result{ExitCode: new(int)}}})
+			return
+		}
 		http.Error(w, `{"error":"job is not running"}`, http.StatusConflict)
 	}))
 	defer server.Close()

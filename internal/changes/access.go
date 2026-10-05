@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/fsmode"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -152,7 +153,7 @@ func makeTreeAccessibleAtRootFilteredContext(
 				access.regular += info.Size()
 			}
 		}
-		mode := info.Mode().Perm()
+		mode := fs.FileMode(fsmode.Perm(info))
 		physical := mode
 		if rel != "." {
 			switch {
@@ -174,7 +175,7 @@ func makeTreeAccessibleAtRootFilteredContext(
 				}
 				afterIdentity, identityErr := fsidentity.FromInfo(after)
 				if identityErr != nil || afterIdentity != identity ||
-					after.Mode().Type() != info.Mode().Type() || after.Mode().Perm() != physical {
+					after.Mode().Type() != info.Mode().Type() || !fsmode.Matches(after, uint32(physical)) {
 					return fmt.Errorf("workspace path %q changed while preparing change retention", rel)
 				}
 			}
@@ -287,7 +288,7 @@ func makeManifestAccessibleContext(ctx context.Context, rootPath string, manifes
 			}
 			continue
 		}
-		mode := info.Mode().Perm()
+		mode := fs.FileMode(fsmode.Perm(info))
 		physical := mode
 		switch {
 		case info.IsDir():
@@ -308,7 +309,7 @@ func makeManifestAccessibleContext(ctx context.Context, rootPath string, manifes
 			}
 			afterIdentity, identityErr := fsidentity.FromInfo(after)
 			if identityErr != nil || afterIdentity != identity ||
-				after.Mode().Type() != info.Mode().Type() || after.Mode().Perm() != physical {
+				after.Mode().Type() != info.Mode().Type() || !fsmode.Matches(after, uint32(physical)) {
 				return nil, errors.Join(fmt.Errorf("workspace path %q changed while preparing change retention", rel), access.restore())
 			}
 		}
@@ -330,7 +331,7 @@ func openAccessibleTreeRoot(rootPath string) (
 	if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
 		return "", nil, fsidentity.Identity{}, 0, 0, false, fmt.Errorf("retained tree root is not a directory")
 	}
-	original := info.Mode().Perm()
+	original := fs.FileMode(fsmode.Perm(info))
 	physical := original | 0o700
 	widened := physical != original
 	if widened {
@@ -338,7 +339,7 @@ func openAccessibleTreeRoot(rootPath string) (
 			return "", nil, fsidentity.Identity{}, 0, 0, false, err
 		}
 		afterIdentity, after, statErr := fsidentity.Lstat(abs)
-		if statErr != nil || afterIdentity != rootIdentity || !after.IsDir() || after.Mode().Perm() != physical {
+		if statErr != nil || afterIdentity != rootIdentity || !after.IsDir() || !fsmode.Matches(after, uint32(physical)) {
 			return "", nil, fsidentity.Identity{}, 0, 0, false, errors.Join(
 				fmt.Errorf("retained tree root changed while preparing change retention"), statErr,
 				restoreTreeRootMode(abs, rootIdentity, original, true),
@@ -376,7 +377,7 @@ func restoreTreeRootMode(rootPath string, identity fsidentity.Identity, mode fs.
 	if currentIdentity != identity || !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
 		return fmt.Errorf("retained tree root changed while restoring change retention permissions")
 	}
-	if info.Mode().Perm() == mode {
+	if fsmode.Matches(info, uint32(mode)) {
 		return nil
 	}
 	return os.Chmod(rootPath, mode)
@@ -428,12 +429,12 @@ func (a *treeAccess) restoreWithSync(syncData func(*os.File) error) error {
 			return nil
 		}
 		if syncData == nil {
-			if info.Mode().Perm() != a.original[rel] {
+			if !fsmode.Matches(info, uint32(a.original[rel])) {
 				return a.root.Chmod(rel, a.original[rel])
 			}
 			return nil
 		}
-		file, err := a.root.Open(rel)
+		file, err := openRetainedSyncFile(a.root, rel, info)
 		if err != nil {
 			return err
 		}
@@ -442,7 +443,7 @@ func (a *treeAccess) restoreWithSync(syncData func(*os.File) error) error {
 			return errors.Join(fmt.Errorf("workspace path %q changed while syncing retained data", rel), err, file.Close())
 		}
 		var modeErr error
-		if info.Mode().Perm() != a.original[rel] {
+		if !fsmode.Matches(info, uint32(a.original[rel])) {
 			modeErr = file.Chmod(a.original[rel])
 		}
 		return errors.Join(modeErr, syncData(file), file.Close())
@@ -558,6 +559,9 @@ func RemoveTree(rootPath string) error {
 			fmt.Errorf("retained tree root changed before removal"),
 			identityErr, access.restore(),
 		)
+	}
+	if err := releaseTreeForRemoval(access, rootPath); err != nil {
+		return errors.Join(err, access.restore())
 	}
 	removeErr := os.RemoveAll(rootPath)
 	if removeErr != nil {

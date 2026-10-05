@@ -210,12 +210,27 @@ func TestGCCachePreviewReportsRunnerPolicies(t *testing.T) {
 func TestGCChangesSkipsDeletedWorkspaceWithoutFailing(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(root, "data"), []byte("data"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || strings.HasSuffix(r.URL.Path, "/snapshot/diff") {
+		if r.Method != http.MethodPost {
 			http.NotFound(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/snapshot/diff") {
+			var req proto.SnapshotDiffRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Error(err)
+			}
+			missing := make([]string, 0, len(req.Blobs))
+			for _, blob := range req.Blobs {
+				missing = append(missing, blob.SHA256)
+			}
+			json.NewEncoder(w).Encode(proto.SnapshotDiffResponse{Missing: missing})
 			return
 		}
 		io.Copy(io.Discard, r.Body)
@@ -223,7 +238,7 @@ func TestGCChangesSkipsDeletedWorkspaceWithoutFailing(t *testing.T) {
 		json.NewEncoder(w).Encode(proto.Workspace{ID: strings.TrimPrefix(r.URL.Path, "/v0/workspaces/")})
 	}))
 	defer server.Close()
-	if _, err := client.CreateWorkspace(client.RunOptions{PeerURL: server.URL, Root: root, IncludeAll: true}, "gone"); err != nil {
+	if _, err := client.CreateWorkspace(client.RunOptions{PeerURL: server.URL, Root: root}, "gone"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.RemoveAll(root); err != nil {

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -17,20 +18,36 @@ import (
 // lock. Reuse never certifies live destination files. Every access still opens
 // the guarded storage and reads the bounded regular record in full. Exact-byte
 // comparison detects in-place edits even when size and timestamps are restored.
+// The comparison runs as the record is read, so a match keeps no second copy.
 // No global cache, timestamp shortcut, or durability barrier is involved.
 type checkpointReadCache struct {
 	record *checkpointRecord
 }
 
 func (c *TransferCheckpoint) read(root *os.Root, name string) (*checkpointRecord, error) {
-	raw, err := readTransferRecordBytes(root, name)
+	var known *checkpointRecord
+	if c.cache != nil {
+		known = c.cache.record
+	}
+	if known == nil {
+		known = c.Reuse.get(c.StatePath)
+	}
+	var knownRaw []byte
+	if known != nil {
+		knownRaw = known.raw
+	}
+	raw, same, err := readTransferRecordMatching(root, name, knownRaw)
 	if err != nil {
 		return nil, err
 	}
-	if c.cache != nil && c.cache.record != nil && bytes.Equal(c.cache.record.raw, raw) {
-		return c.cache.record, c.validateRelationship(c.cache.record.state)
+	if same {
+		if err := c.validateRelationship(known.state); err != nil {
+			return nil, err
+		}
+		c.remember(known)
+		return known, nil
 	}
-	if record := c.Reuse.get(c.StatePath); record != nil && bytes.Equal(record.raw, raw) {
+	if record := c.Reuse.get(c.StatePath); record != nil && record != known && bytes.Equal(record.raw, raw) {
 		if err := c.validateRelationship(record.state); err != nil {
 			return nil, err
 		}
@@ -50,16 +67,78 @@ func (c *TransferCheckpoint) read(root *os.Root, name string) (*checkpointRecord
 	return record, nil
 }
 
+// A matching read compares the record in chunks of this size, from buffers
+// pooled so that a read that matches allocates nothing in proportion to it.
+const recordReadChunk = 64 << 10
+
+var recordReadBuffers = sync.Pool{New: func() any { b := make([]byte, recordReadChunk); return &b }}
+
+// readTransferRecordMatching reads name as readTransferRecordBytes does: a
+// regular file, in full, within the same limit. It compares the bytes with
+// known while reading. When the file holds exactly known, it returns true and
+// keeps no copy. Otherwise it returns the file's bytes: the prefix that matched
+// (equal to known's, so taken from it) and the rest as read.
+func readTransferRecordMatching(root *os.Root, name string, known []byte) ([]byte, bool, error) {
+	if known == nil {
+		raw, err := readTransferRecordBytes(root, name)
+		return raw, false, err
+	}
+	f, err := openTransferRecord(root, name)
+	if err != nil {
+		return nil, false, err
+	}
+	defer f.Close()
+	r := io.LimitReader(f, MaxBundleMetadataBytes+1)
+	pooled := recordReadBuffers.Get().(*[]byte)
+	defer recordReadBuffers.Put(pooled)
+	buf := *pooled
+	for matched := 0; ; {
+		n, err := r.Read(buf)
+		if n > 0 && (n > len(known)-matched || !bytes.Equal(buf[:n], known[matched:matched+n])) {
+			if err != nil && err != io.EOF {
+				return nil, false, err
+			}
+			rest, err := io.ReadAll(r)
+			if err != nil {
+				return nil, false, err
+			}
+			if matched+n+len(rest) > MaxBundleMetadataBytes {
+				return nil, false, fmt.Errorf("transfer state exceeds size limit")
+			}
+			raw := make([]byte, 0, matched+n+len(rest))
+			return append(append(append(raw, known[:matched]...), buf[:n]...), rest...), false, nil
+		}
+		matched += n
+		if err == io.EOF {
+			if matched == len(known) {
+				return nil, true, nil
+			}
+			return bytes.Clone(known[:matched]), false, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+	}
+}
+
 // validatedRecord applies every check read performs on a decoded record.
 func (c *TransferCheckpoint) validatedRecord(raw []byte, state checkpointState) (*checkpointRecord, error) {
+	return c.checkedRecord(raw, state, false)
+}
+
+// checkedRecord is validatedRecord, skipping the manifest validation when the
+// caller has already done it. The cheap relationship checks still come first.
+func (c *TransferCheckpoint) checkedRecord(raw []byte, state checkpointState, manifestValidated bool) (*checkpointRecord, error) {
 	if err := c.validateRelationship(state); err != nil {
 		return nil, err
 	}
 	if _, err := hex.DecodeString(state.InitialRoot); err != nil || len(state.InitialRoot) != 64 {
 		return nil, fmt.Errorf("invalid checkpoint creation digest")
 	}
-	if err := validateCheckpointManifest(state.Manifest); err != nil {
-		return nil, err
+	if !manifestValidated {
+		if err := validateCheckpointManifest(state.Manifest); err != nil {
+			return nil, err
+		}
 	}
 	record := &checkpointRecord{state: state, raw: raw}
 	if state.Revision == 0 {
@@ -99,6 +178,12 @@ func (r *checkpointRecord) rootHash() string {
 	r.once.Do(func() { r.root = r.state.Manifest.RootHash() })
 	return r.root
 }
+
+// sourceBase borrows the manifest validatedRecord checked and shares the
+// record's identity, so every handle that reads these exact bytes shares one hash.
+func (r *checkpointRecord) sourceBase() *SourceBase {
+	return &SourceBase{manifest: r.state.Manifest, validate: func() error { return nil }, rootHash: r.rootHash}
+}
 func (r *checkpointRecord) export() CheckpointVersion { return r.state.export() }
 func (r *checkpointRecord) revision() uint64          { return r.state.Revision }
 func (r *checkpointRecord) delta(ctx context.Context, source proto.Manifest, limit int64) (proto.ChangeBundle, error) {
@@ -110,7 +195,8 @@ func (r *checkpointRecord) validateBase(ctx context.Context, bundle proto.Change
 
 // An existing session only needs to validate the creation relationship. Keep
 // the storage guard through that check without reopening and exporting it.
-func (c *TransferCheckpoint) checkInitialized(initial proto.Manifest) error {
+// The creation snapshot's validation and identity are reused when retained.
+func (c *TransferCheckpoint) checkInitialized(initial *SourceBase) error {
 	destination, storage, name, err := c.open(c.StatePath)
 	if err != nil {
 		return err
@@ -121,10 +207,10 @@ func (c *TransferCheckpoint) checkInitialized(initial proto.Manifest) error {
 	if err != nil {
 		return err
 	}
-	if err := validateCheckpointManifest(initial); err != nil {
+	if err := initial.validate(); err != nil {
 		return err
 	}
-	if record.state.InitialRoot != initial.RootHash() {
+	if record.state.InitialRoot != initial.rootHash() {
 		return fmt.Errorf("checkpoint creation snapshot does not match")
 	}
 	return verifyTransferPaths(destination, storage)

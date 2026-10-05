@@ -22,6 +22,23 @@ import (
 	"github.com/lydakis/errand/internal/termui"
 )
 
+func TestServeLogReportsDroppedLifecycleEvents(t *testing.T) {
+	for _, tty := range []bool{false, true} {
+		var out bytes.Buffer
+		con := termui.New(io.Discard, &out, termui.Options{ErrTTY: tty})
+		logger := serveLog{e: con.Err}
+		logger.job(daemon.JobLogEvent{Kind: daemon.JobLogDropped, Dropped: 42})
+		text := termui.StripANSI(out.String())
+		if tty {
+			if !strings.Contains(text, "dropped 42 job lifecycle log events") {
+				t.Fatalf("terminal overflow warning: %q", text)
+			}
+		} else if !strings.Contains(text, "level=warning") || !strings.Contains(text, "dropped=42") {
+			t.Fatalf("service overflow warning: %q", text)
+		}
+	}
+}
+
 func TestTyposAndMissingSeparatorsGetOneLineFixes(t *testing.T) {
 	for _, tc := range []struct {
 		args []string

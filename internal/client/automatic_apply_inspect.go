@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
+	"github.com/lydakis/errand/internal/filelock"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -83,9 +83,12 @@ func automaticApplyWorkerActive(peerURL, jobID string) (bool, error) {
 	defer f.Close()
 	// Shared inspection locks are distinguishable from an exclusive worker
 	// lease, so a starting worker waits for readers rather than exiting.
-	err = syscall.Flock(int(f.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
-	if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+	err = filelock.TryRLock(f)
+	if errors.Is(err, filelock.ErrLocked) {
 		return true, nil
+	}
+	if err == nil {
+		err = filelock.Unlock(f)
 	}
 	return false, err
 }

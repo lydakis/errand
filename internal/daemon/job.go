@@ -480,7 +480,10 @@ func (j *Job) launch(d *Daemon) error {
 		return fmt.Errorf("consuming queued marker: %w", err)
 	}
 	jobEnv = append(jobEnv, scope.env())
-	executable, err := resolveExecutable(j.Spec.Argv[0], envValue(jobEnv, "PATH"), workdir)
+	executable, err := resolveExecutable(j.Spec.Argv[0], envValue(jobEnv, "PATH"), workdir, jobPATHEXT(jobEnv))
+	if err == nil {
+		err = checkCommandLine(executable, j.Spec.Argv[1:])
+	}
 	if err != nil {
 		logw.Close()
 		return err
@@ -489,7 +492,7 @@ func (j *Job) launch(d *Daemon) error {
 	cmd.Args[0] = j.Spec.Argv[0]
 	cmd.Dir = workdir
 	cmd.Env = jobEnv
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	scope.prepare(cmd)
 	execution := proto.ExecutionContext{Argv: j.Spec.Argv}
 	if _, declaredPATH := j.Spec.Env["PATH"]; !declaredPATH {
 		execution.Path = cmd.Path
@@ -532,6 +535,12 @@ func (j *Job) launch(d *Daemon) error {
 	var scopePersistenceErr error
 	err = cmd.Start()
 	if err == nil {
+		if err = scope.adopt(cmd); err != nil {
+			j.event("process-scope-setup-failed", err.Error())
+			_ = cmd.Wait()
+		}
+	}
+	if err == nil {
 		startedAt = time.Now()
 		if sharedWorkspace {
 			scope.group, scopeCaptureErr = captureProcessGroup(cmd.Process.Pid)
@@ -548,6 +557,7 @@ func (j *Job) launch(d *Daemon) error {
 	}
 	j.mu.Unlock()
 	if err != nil {
+		scope.close()
 		closePipes()
 		logw.Close()
 		return sanitizeProcessStartError(err)
@@ -556,7 +566,7 @@ func (j *Job) launch(d *Daemon) error {
 		// The command started, but cannot safely outlive this daemon without a
 		// durable process identity. Stop it and still follow the normal wait path.
 		j.event("process-scope-setup-failed", scopeSetupErr.Error())
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		_, _ = scope.signal(cmd.Process.Pid, syscall.SIGKILL)
 	}
 	stdoutW.Close()
 	stderrW.Close()
@@ -622,9 +632,9 @@ func (j *Job) launch(d *Daemon) error {
 			res.ExitCode = &code
 		} else if ee, ok := waitErr.(*exec.ExitError); ok {
 			ws := ee.Sys().(syscall.WaitStatus)
-			if ws.Signaled() {
-				res.Signal = ws.Signal().String()
-				res.SignalNum = int(ws.Signal())
+			if sig, signaled := scope.exitSignal(ws); signaled {
+				res.Signal = sig.String()
+				res.SignalNum = int(sig)
 			} else {
 				code := ws.ExitStatus()
 				res.ExitCode = &code
@@ -810,20 +820,18 @@ func waitForPipeCopies(readers []*os.File, errs <-chan error, timeout time.Durat
 }
 
 func envValue(env []string, key string) string {
-	prefix := key + "="
 	for i := len(env) - 1; i >= 0; i-- {
-		if strings.HasPrefix(env[i], prefix) {
-			return strings.TrimPrefix(env[i], prefix)
+		name, value, ok := strings.Cut(env[i], "=")
+		if ok && envNameEqual(name, key) {
+			return value
 		}
 	}
 	return ""
 }
 
-func resolveExecutable(name, pathEnv, workdir string) (string, error) {
-	check := func(candidate string) (string, bool) {
-		return candidate, executableFile(candidate)
-	}
-	if strings.ContainsRune(name, filepath.Separator) {
+func resolveExecutable(name, pathEnv, workdir, pathext string) (string, error) {
+	check := executableFinder(pathext)
+	if hasPathSeparator(name) {
 		candidate := name
 		if !filepath.IsAbs(candidate) {
 			candidate = filepath.Join(workdir, candidate)
@@ -863,7 +871,7 @@ func (j *Job) cancelledBeforeStart() *proto.Result {
 // variables. Nothing ambient is forwarded from the caller.
 func (j *Job) buildEnv() []string {
 	var env []string
-	for _, key := range []string{"PATH", "HOME", "USER", "LOGNAME", "LANG", "TMPDIR"} {
+	for _, key := range baseEnvNames {
 		if v, ok := os.LookupEnv(key); ok {
 			env = append(env, key+"="+v)
 		}
@@ -877,6 +885,14 @@ func (j *Job) buildEnv() []string {
 		env = append(env, fmt.Sprintf("ERRAND_GIT_DIRTY=%v", j.Spec.GitDirty))
 	}
 	return env
+}
+
+// signalJobProcesses signals the job leader and every process in its scope.
+func signalJobProcesses(scope *processScope, leader int, sig syscall.Signal) (exited bool, err error) {
+	if scope == nil {
+		return false, fmt.Errorf("job process scope is unavailable")
+	}
+	return scope.signal(leader, sig)
 }
 
 // terminate kills the whole process group, recording why.
@@ -908,20 +924,12 @@ func (j *Job) terminate(reason string, sig syscall.Signal) error {
 		j.killSignal = sig
 	}
 	j.mu.Unlock()
-	groupErr := syscall.Kill(-cmd.Process.Pid, sig)
-	processExited := groupErr == syscall.ESRCH
-	if processExited {
-		groupErr = nil
-	}
-	var scopeErr error
-	if scope != nil {
-		scopeErr = scope.signalEscaped(sig, cmd.Process.Pid)
-	}
+	processExited, signalErr := signalJobProcesses(scope, cmd.Process.Pid, sig)
 	if processExited {
 		j.requestChangeCollectionCancellation(reason)
 	}
 	j.event("terminated", reason)
-	return errors.Join(groupErr, scopeErr)
+	return signalErr
 }
 
 // Signal forwards a signal to the job's process group.
@@ -946,19 +954,11 @@ func (j *Job) Signal(sig syscall.Signal) error {
 		return fmt.Errorf("job %s is not running", j.ID)
 	}
 	j.event("signal", sig.String())
-	groupErr := syscall.Kill(-cmd.Process.Pid, sig)
-	processExited := groupErr == syscall.ESRCH
-	if processExited {
-		groupErr = nil
-	}
-	var scopeErr error
-	if scope != nil {
-		scopeErr = scope.signalEscaped(sig, cmd.Process.Pid)
-	}
+	processExited, signalErr := signalJobProcesses(scope, cmd.Process.Pid, sig)
 	if processExited {
 		j.requestChangeCollectionCancellation(sig.String())
 	}
-	return errors.Join(groupErr, scopeErr)
+	return signalErr
 }
 
 func (j *Job) requestChangeCollectionCancellation(reason string) bool {

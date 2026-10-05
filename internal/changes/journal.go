@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lydakis/errand/internal/durable"
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -798,7 +799,7 @@ func rollbackMetadataApplyItemAtRoot(ctx context.Context, root *os.Root, item ap
 	if err != nil {
 		return err
 	}
-	return errors.Join(dir.Sync(), dir.Close())
+	return errors.Join(durable.Sync(dir), dir.Close())
 }
 
 func quarantineInstalledChange(root *os.Root, changePath, quarantine string, changeParent *os.File) (bool, error) {
@@ -823,7 +824,7 @@ func quarantineInstalledChange(root *os.Root, changePath, quarantine string, cha
 		}
 		return false, err
 	}
-	return true, errors.Join(changeParent.Sync(), quarantineDir.Sync())
+	return true, errors.Join(durable.Sync(changeParent), durable.Sync(quarantineDir))
 }
 
 func renameApplyPathToDirectoryNoReplace(root *os.Root, from, to string, toDir *os.File) error {
@@ -837,7 +838,7 @@ func renameApplyPathToDirectoryNoReplace(root *os.Root, from, to string, toDir *
 	); err != nil {
 		return err
 	}
-	return errors.Join(fromDir.Sync(), toDir.Sync())
+	return errors.Join(durable.Sync(fromDir), durable.Sync(toDir))
 }
 
 func renameApplyPathNoReplace(root *os.Root, from, to string) error {
@@ -856,7 +857,7 @@ func renameApplyPathNoReplace(root *os.Root, from, to string) error {
 	); err != nil {
 		return err
 	}
-	return errors.Join(fromDir.Sync(), toDir.Sync())
+	return errors.Join(durable.Sync(fromDir), durable.Sync(toDir))
 }
 
 func renameNoReplacePreservingDirectoryMode(

@@ -14,6 +14,7 @@ const (
 	JobLogQueued   JobLogKind = "queued"
 	JobLogStarted  JobLogKind = "started"
 	JobLogFinished JobLogKind = "finished"
+	JobLogDropped  JobLogKind = "dropped"
 )
 
 // JobLogEvent is what `errand serve` prints for each job lifecycle moment.
@@ -27,6 +28,7 @@ type JobLogEvent struct {
 	Argv       []string
 	QueueAhead int
 	Result     *proto.Result
+	Dropped    uint64 // aggregated lifecycle events discarded while output stalled
 }
 
 // logJob queues a lifecycle event for Config.JobLog without waiting on it.
@@ -53,22 +55,33 @@ func (d *Daemon) logQueuedLocked(j *Job, ahead int) {
 func newJobLogEvent(kind JobLogKind, j *Job, res *proto.Result) JobLogEvent {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	return JobLogEvent{
+	event := JobLogEvent{
 		Kind: kind, Time: time.Now(), ID: j.ID, Owner: admissionOwner(j.Admission),
-		Project: j.Admission.Project, Argv: append([]string(nil), j.Spec.Argv...), Result: res,
+		Project: j.Admission.Project, Result: res,
 	}
+	if kind == JobLogStarted {
+		event.Argv = append([]string(nil), j.Spec.Argv...)
+	}
+	return event
 }
 
 // jobLogCloseWait bounds how long Close waits on a stalled JobLog.
 const jobLogCloseWait = 2 * time.Second
 
+const (
+	maxPendingJobLogEvents = 1024
+	maxPendingJobLogBytes  = 4 << 20
+)
+
 // jobLogQueue delivers events to one consumer, in order, from its own
-// goroutine. It never drops an event and never makes the caller wait; while
-// the consumer is stalled, events wait in memory. Each job adds at most
-// three, so job throughput bounds the growth.
+// goroutine without making jobs wait for output. Pending events are bounded
+// by count and retained payload size; overflow is reported when output resumes.
+// The consumer holds at most one bounded batch in addition to the pending batch.
 type jobLogQueue struct {
 	mu      sync.Mutex
 	pending []JobLogEvent
+	bytes   int64
+	dropped uint64
 	wake    chan struct{}
 	closing chan struct{}
 	done    chan struct{}
@@ -81,8 +94,14 @@ func newJobLogQueue(deliver func(JobLogEvent)) *jobLogQueue {
 }
 
 func (q *jobLogQueue) push(event JobLogEvent) {
+	size := jobLogEventBytes(event)
 	q.mu.Lock()
-	q.pending = append(q.pending, event)
+	if len(q.pending) >= maxPendingJobLogEvents || size > maxPendingJobLogBytes-q.bytes {
+		q.dropped++
+	} else {
+		q.pending = append(q.pending, event)
+		q.bytes += size
+	}
 	q.mu.Unlock()
 	select {
 	case q.wake <- struct{}{}:
@@ -90,36 +109,63 @@ func (q *jobLogQueue) push(event JobLogEvent) {
 	}
 }
 
-func (q *jobLogQueue) take() []JobLogEvent {
+// Include string/slice payloads and fixed allowances for event/result metadata.
+// Counting bytes as well as events prevents large argv from filling a large queue.
+func jobLogEventBytes(e JobLogEvent) int64 {
+	size := int64(256 + len(e.ID) + len(e.Owner) + len(e.Project) + 16*len(e.Argv))
+	for _, arg := range e.Argv {
+		size += int64(len(arg))
+	}
+	if r := e.Result; r != nil {
+		size += int64(512 + len(r.State) + len(r.Signal) + len(r.StartError) + len(r.TransactionError) + len(r.LimitExceeded))
+		if c := r.Changes; c != nil {
+			size += int64(128 + len(c.BundleRoot) + 16*len(c.Paths))
+			for _, path := range c.Paths {
+				size += int64(len(path))
+			}
+		}
+	}
+	return size
+}
+
+func (q *jobLogQueue) take() ([]JobLogEvent, uint64) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	batch := q.pending
+	dropped := q.dropped
 	q.pending = nil
-	return batch
+	q.bytes, q.dropped = 0, 0
+	return batch, dropped
 }
 
 func (q *jobLogQueue) run(deliver func(JobLogEvent)) {
 	defer close(q.done)
-	for {
-		batch := q.take()
-		for _, event := range batch {
+	deliverBatch := func(batch []JobLogEvent, dropped uint64) {
+		for i, event := range batch {
 			deliver(event)
+			batch[i] = JobLogEvent{} // release payloads as each event finishes
 		}
-		if len(batch) > 0 {
+		if dropped != 0 {
+			deliver(JobLogEvent{Kind: JobLogDropped, Time: time.Now(), Dropped: dropped})
+		}
+	}
+	for {
+		batch, dropped := q.take()
+		deliverBatch(batch, dropped)
+		if len(batch) > 0 || dropped != 0 {
 			continue
 		}
 		select {
 		case <-q.wake:
 		case <-q.closing:
-			for _, event := range q.take() {
-				deliver(event)
-			}
+			batch, dropped := q.take()
+			deliverBatch(batch, dropped)
 			return
 		}
 	}
 }
 
-// close delivers every event pushed before it, waiting at most wait for a
+// close delivers retained events and overflow counts, waiting at most wait for a
 // consumer that has stalled so shutdown can't hang on it.
 func (q *jobLogQueue) close(wait time.Duration) {
 	close(q.closing)

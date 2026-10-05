@@ -1118,8 +1118,14 @@ caller supplies all checkpoint, staged, and in-flight manifests whose bodies mus
 stay, under the same serialization as retention and reconstruction. Malformed
 manifests, missing bodies, and size mismatches stop pruning before any deletion.
 Pruning does not hash pinned content; retention and reconstruction verify hashes
-when reusing bodies. Accounting includes abandoned insertion bytes, which count
-against capacity until explicitly pruned, but excludes them from blob counts.
+when reusing bodies. Accounting includes abandoned insertion bytes but excludes
+them from blob counts; retention never budgets them. Retention budgets from a
+usage record of published bytes and looks up only the bodies it needs. The
+record is removed before the store changes and written again only after the
+change is durable, so it is exact whenever it exists. Without one (a new store,
+an interrupted retention, or a prune), retention scans the store, reclaims
+insertion files and records the total
+([blob retention](WATCH_BLOB_RETAIN.md)).
 Unreferenced bodies and interrupted insertion files can be reclaimed; referenced
 bodies have no TTL or
 automatic size eviction. Retain bodies before publishing the checkpoint that
@@ -1168,3 +1174,12 @@ unpublished upload directories. Failed upload cleanup stays inventoried and bloc
 new uploads to that workspace until startup retries it. GC stops on cancellation,
 including while waiting for a workspace gate. Push retries retain the original immutable request after
 an uncertain outcome, while completed receipts replay without reapplying files.
+## Lifecycle log buffering
+
+Runner lifecycle logging runs on its own goroutine so slow log output does not
+delay job starts, runtime limits, or result publication. Each pending batch is
+limited to 1,024 events and 4 MiB of retained payloads; the consumer may hold one
+additional bounded batch. Retained events keep their order. If output stalls
+past those limits, the runner discards excess lifecycle events and emits an
+aggregated warning when output resumes. Job receipts remain independent of
+this diagnostic log.

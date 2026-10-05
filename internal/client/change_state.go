@@ -11,11 +11,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	changeops "github.com/lydakis/errand/internal/changes"
+	"github.com/lydakis/errand/internal/durable"
+	"github.com/lydakis/errand/internal/filelock"
 	"github.com/lydakis/errand/internal/fsidentity"
+	"github.com/lydakis/errand/internal/fsowner"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -543,14 +545,14 @@ func acquireChangeFileLockContext(ctx context.Context, f *os.File) (func(), erro
 			f.Close()
 			return nil, err
 		}
-		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		err := filelock.TryLock(f)
 		if err == nil {
 			return func() {
-				_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+				_ = filelock.Unlock(f)
 				_ = f.Close()
 			}, nil
 		}
-		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
+		if !errors.Is(err, filelock.ErrLocked) {
 			f.Close()
 			return nil, err
 		}
@@ -570,15 +572,15 @@ func tryAcquireLocalChangeLock(name string) (func(), bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := filelock.TryLock(f); err != nil {
 		f.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+		if errors.Is(err, filelock.ErrLocked) {
 			return nil, false, nil
 		}
 		return nil, false, err
 	}
 	return func() {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = filelock.Unlock(f)
 		_ = f.Close()
 	}, true, nil
 }
@@ -595,15 +597,15 @@ func tryAcquireExistingLocalChangeLock(name string) (func(), bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := filelock.TryLock(f); err != nil {
 		f.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+		if errors.Is(err, filelock.ErrLocked) {
 			return nil, false, nil
 		}
 		return nil, false, err
 	}
 	return func() {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = filelock.Unlock(f)
 		_ = f.Close()
 	}, true, nil
 }
@@ -617,25 +619,25 @@ func tryAcquireLocalChangeLease(name string) (func(), bool, error) {
 	// probe. Give a descheduled inspector time to close without busy-waiting.
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		err := filelock.TryLock(f)
 		if err == nil {
 			break
 		}
-		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
+		if !errors.Is(err, filelock.ErrLocked) {
 			f.Close()
 			return nil, false, err
 		}
 		// Exclusive contention means another worker owns the job. Shared
 		// contention is only a read-only inspection; let it finish and retry.
-		err = syscall.Flock(int(f.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+		err = filelock.TryRLock(f)
 		if err != nil {
 			f.Close()
-			if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+			if errors.Is(err, filelock.ErrLocked) {
 				return nil, false, nil
 			}
 			return nil, false, err
 		}
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = filelock.Unlock(f)
 		if time.Now().After(deadline) {
 			f.Close()
 			return nil, false, context.DeadlineExceeded
@@ -645,7 +647,7 @@ func tryAcquireLocalChangeLease(name string) (func(), bool, error) {
 	return func() {
 		// Keep the inode stable: an inspector or a starting worker may already
 		// have this file open. Unlinking would split ownership across inodes.
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = filelock.Unlock(f)
 		_ = f.Close()
 	}, true, nil
 }
@@ -738,11 +740,11 @@ func ensurePrivateLocalDirectoryWithChmod(
 	if dirIdentity != pathIdentity {
 		return fmt.Errorf("local state directory %q changed while it was being validated", path)
 	}
-	stat, ok := dirInfo.Sys().(*syscall.Stat_t)
-	if !ok {
-		return fmt.Errorf("local state directory ownership is unavailable for %q", path)
+	owned, err := fsowner.OwnedByCurrentUser(dir)
+	if err != nil {
+		return fmt.Errorf("local state directory ownership is unavailable for %q: %w", path, err)
 	}
-	if int(stat.Uid) != os.Geteuid() {
+	if !owned {
 		return fmt.Errorf("local state directory %q is not owned by the current user", path)
 	}
 
@@ -871,5 +873,5 @@ func syncLocalDirectory(path string) error {
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return durable.Sync(dir)
 }

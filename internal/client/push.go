@@ -84,6 +84,11 @@ func PushChanges(opts PushOptions) (proto.PushResult, error) {
 	} else {
 		origin, err = readWorkspaceOrigin(dir)
 	}
+	var earlier *EarlierTransferStateError
+	if errors.As(err, &earlier) {
+		earlier.Workspace = ws.Name
+		return result, err
+	}
 	if err != nil {
 		return result, fmt.Errorf("push requires this workspace's originating checkout: %w", err)
 	}
@@ -142,7 +147,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	var sourceState *manifeststate.Snapshot
 	var preparedDelta *changeops.SnapshotDelta
 	if opts.watchState != nil && opts.watchState.watcher != nil {
-		sourceState, prep.gitInfo, prep.selection, prep.guard, prep.err = opts.watchState.watcher.PrepareSnapshot(builder)
+		sourceState, prep.selection, prep.guard, prep.err = opts.watchState.watcher.PrepareSnapshot(builder)
 		prep.stage = "preparing watched source"
 	} else {
 		prep = prepareSnapshotWithBuilder(origin.Root, opts.IncludeAll, ws.Selection.Caches, builder)

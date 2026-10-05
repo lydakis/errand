@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/lydakis/errand/internal/proto"
@@ -213,9 +212,9 @@ func TestExtractRestoresFileModeMaskedByUmask(t *testing.T) {
 	m := proto.Manifest{Entries: []proto.ManifestEntry{e}}
 	buf := tarOf(t, map[string]string{"tool": "hello"})
 	dest := t.TempDir()
-	oldUmask := syscall.Umask(0o077)
+	restore := setUmask(t, 0o077)
 	err := Extract(buf, dest, m, 1<<20)
-	syscall.Umask(oldUmask)
+	restore()
 	if err != nil {
 		t.Fatal(err)
 	}

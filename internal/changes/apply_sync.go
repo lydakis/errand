@@ -48,7 +48,7 @@ func synchronizeApplyBackup(root *os.Root, journal applyJournal, item applyJourn
 		return err
 	}
 	if before.Mode().IsRegular() {
-		file, err := openSearchSourceFile(root, backup)
+		file, err := openApplyBackupFile(root, backup, before)
 		if err != nil {
 			return err
 		}

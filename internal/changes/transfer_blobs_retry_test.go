@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -15,13 +16,19 @@ import (
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
+// assertTransferBlobsComplete also checks that a usage record, when present,
+// counts exactly the published bodies.
 func assertTransferBlobsComplete(t *testing.T, directory string) {
 	t.Helper()
 	entries, err := os.ReadDir(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
+	var published int64
 	for _, entry := range entries {
+		if entry.Name() == transferBlobUsageName {
+			continue
+		}
 		body, err := os.ReadFile(filepath.Join(directory, entry.Name()))
 		if err != nil {
 			t.Fatal(err)
@@ -30,7 +37,29 @@ func assertTransferBlobsComplete(t *testing.T, directory string) {
 		if entry.Name() != hex.EncodeToString(hash[:]) {
 			t.Fatalf("unpublished or invalid body %q", entry.Name())
 		}
+		published += int64(len(body))
 	}
+	if recorded, ok := transferBlobUsageFile(t, filepath.Join(directory, transferBlobUsageName)); ok && recorded != published {
+		t.Fatalf("usage record = %d bytes, published = %d", recorded, published)
+	}
+}
+
+// transferBlobUsageFile reads a usage record, reporting false if name is absent
+// or is not one.
+func transferBlobUsageFile(t *testing.T, name string) (int64, bool) {
+	t.Helper()
+	raw, err := os.ReadFile(name)
+	if os.IsNotExist(err) {
+		return 0, false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var usage transferBlobUsage
+	if json.Unmarshal(raw, &usage) != nil || usage.Bytes == nil {
+		return 0, false
+	}
+	return *usage.Bytes, true
 }
 
 type cancelTransferBlobReader struct {

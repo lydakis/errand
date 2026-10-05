@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -82,7 +84,31 @@ func validateSourcePath(name string) error {
 	return nil
 }
 
+// SourceBase is the source a checkpoint starts from or a delta expands against.
+// It retains its checkpoint validation and wire identity, each computed once from
+// its own entries, which are never handed out without a copy, so neither result
+// can describe other content. It is immutable and may be shared across requests.
+type SourceBase struct {
+	manifest proto.Manifest
+	validate func() error
+	rootHash func() string
+}
+
+// NewSourceBase copies m. It is validated and hashed only when first needed.
+func NewSourceBase(m proto.Manifest) *SourceBase {
+	m = cloneSourceManifest(m)
+	return &SourceBase{manifest: m, validate: sync.OnceValue(func() error { return validateCheckpointManifest(m) }), rootHash: sync.OnceValue(m.RootHash)}
+}
+
+// Manifest returns a copy.
+func (b *SourceBase) Manifest() proto.Manifest { return cloneSourceManifest(b.manifest) }
+
 func ExpandTransferSource(ctx context.Context, base proto.Manifest, delta proto.ChangeBundle, sourceRoot string, maxBytes int64) (PreparedTransferSource, error) {
+	return ExpandTransferSourceBase(ctx, NewSourceBase(base), delta, sourceRoot, maxBytes)
+}
+
+// ExpandTransferSourceBase reuses the identity base retains.
+func ExpandTransferSourceBase(ctx context.Context, base *SourceBase, delta proto.ChangeBundle, sourceRoot string, maxBytes int64) (PreparedTransferSource, error) {
 	state, err := expandSourceSnapshot(ctx, base, delta, sourceRoot, maxBytes)
 	if err != nil {
 		return PreparedTransferSource{}, err
@@ -117,7 +143,19 @@ func (s *TransferSession) StagePreparedFromBlobs(ctx context.Context, id string,
 	if !p.valid {
 		return "", proto.ChangeBundle{}, fmt.Errorf("transfer source was not prepared")
 	}
-	return s.stage(ctx, id, s.retainedSource(), proto.Manifest{}, &p)
+	var lookup fslink.Lookup
+	if fslink.NativeTypes {
+		lookup = func(name string) (proto.ManifestEntry, bool) {
+			if entry, ok := p.snapshot.Lookup(name); ok {
+				return entry, true
+			}
+			// Inspect only the first indexed descendant for implicit directories.
+			found := false
+			_ = p.snapshot.Subtree(ctx, name, func(proto.ManifestEntry) bool { found = true; return false })
+			return proto.ManifestEntry{Path: name, Type: proto.EntryDir}, found
+		}
+	}
+	return s.stage(ctx, id, s.retainedSource(lookup), proto.Manifest{}, &p)
 }
 
 func (p PreparedTransferSource) validateStageLimits(ctx context.Context, s *TransferSession) error {

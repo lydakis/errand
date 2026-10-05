@@ -89,6 +89,10 @@ func (r *workspaceRecord) retainedBytes() int64 {
 	const stringHeader = int64(unsafe.Sizeof(""))
 	n := int64(len(r.Where) + len(r.ID) + len(r.Name) + len(r.Project) + len(r.CacheProjectID) + len(r.Selection.Prefix) + len(r.CacheLeaseID) + len(r.Owner))
 	n += int64(cap(r.Manifest.Entries)) * int64(unsafe.Sizeof(proto.ManifestEntry{}))
+	if r.creation != nil {
+		// Its own copy of the entries array; the strings are shared.
+		n += int64(len(r.Manifest.Entries)) * int64(unsafe.Sizeof(proto.ManifestEntry{}))
+	}
 	for _, e := range r.Manifest.Entries {
 		n += int64(len(e.Path) + len(e.Type) + len(e.SHA256) + len(e.Target))
 	}

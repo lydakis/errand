@@ -18,7 +18,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/relpath"
 )
 
 // ContentMismatchError reports file bytes that disagree with the manifest.
@@ -108,7 +110,7 @@ func ValidateSortedContext(ctx context.Context, m proto.Manifest) error {
 				return err
 			}
 		}
-		for parent := path.Dir(e.Path); parent != "." && parent != "/"; parent = path.Dir(parent) {
+		for parent := relpath.Dir(e.Path); parent != "." && parent != "/"; parent = relpath.Dir(parent) {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
@@ -161,15 +163,15 @@ func validateEntry(e proto.ManifestEntry) error {
 }
 
 func checkRelPath(p string) error {
-	if p == "" || strings.HasPrefix(p, "/") || path.Clean(p) != p ||
+	if p == "" || strings.HasPrefix(p, "/") || !relpath.IsClean(p) ||
 		p == ".." || strings.HasPrefix(p, "../") || strings.Contains(p, "\x00") {
 		return fmt.Errorf("archive: unsafe path %q", p)
 	}
-	return nil
+	return checkPlatformPath(p)
 }
 
 func checkSymlinkTarget(link, target string) error {
-	if target == "" || strings.HasPrefix(target, "/") {
+	if target == "" || strings.HasPrefix(target, "/") || !platformSymlinkTarget(target) {
 		return fmt.Errorf("archive: symlink %q has unsafe target %q", link, target)
 	}
 	resolved := path.Clean(path.Join(path.Dir(link), target))
@@ -180,7 +182,9 @@ func checkSymlinkTarget(link, target string) error {
 }
 
 type ExtractOptions struct {
-	ResolveMissing func(dest string, entry proto.ManifestEntry) (bool, error)
+	// Complete source metadata identifies directory links in partial uploads.
+	SymlinkManifest *proto.Manifest
+	ResolveMissing  func(dest string, entry proto.ManifestEntry) (bool, error)
 }
 
 var ErrCacheMiss = errors.New("snapshot cache miss")
@@ -300,6 +304,8 @@ func ExtractWith(r io.Reader, dest string, m proto.Manifest, maxBytes int64, opt
 			ErrCacheMiss, len(cacheMisses), cacheMisses[0])
 	}
 	// Symlinks last: no file write can ever traverse one of our links.
+	var linkLookup fslink.Lookup
+	var linkRoot *os.Root
 	for _, e := range m.Entries {
 		if e.Type != proto.EntrySymlink {
 			continue
@@ -307,6 +313,26 @@ func ExtractWith(r io.Reader, dest string, m proto.Manifest, maxBytes int64, opt
 		abs := filepath.Join(dest, filepath.FromSlash(e.Path))
 		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 			return err
+		}
+		if fslink.NativeTypes {
+			if linkLookup == nil {
+				metadata := m
+				if opts.SymlinkManifest != nil {
+					metadata = *opts.SymlinkManifest
+				}
+				linkLookup = fslink.ManifestLookup(metadata)
+				var err error
+				linkRoot, err = os.OpenRoot(dest)
+				if err != nil {
+					return err
+				}
+				defer linkRoot.Close()
+			}
+			directory := fslink.IsDirectory(e, linkLookup)
+			if err := fslink.Create(linkRoot, e.Target, filepath.FromSlash(e.Path), directory); err != nil {
+				return err
+			}
+			continue
 		}
 		if err := os.Symlink(e.Target, abs); err != nil {
 			return err

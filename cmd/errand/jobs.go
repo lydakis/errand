@@ -145,6 +145,12 @@ func cmdKillTo(args []string, stdout, stderr io.Writer) int {
 	alreadyDone := func(err error) bool {
 		status, _, ok := client.RemoteMessage(err)
 		if ok && status == http.StatusConflict {
+			// A conflict may be a signal or process-scope failure. Probe only
+			// this rejection path; successful signals need no extra request.
+			details, probeErr := client.GetJobDetails(peerURL, jobID)
+			if probeErr != nil || details.Result == nil {
+				return false
+			}
 			if !output.quiet {
 				e.Say(termui.OK, e.ID(shown)+" had already finished")
 			}

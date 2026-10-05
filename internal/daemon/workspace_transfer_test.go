@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	changeops "github.com/lydakis/errand/internal/changes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	changeops "github.com/lydakis/errand/internal/changes"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"

@@ -187,7 +187,6 @@ func TestGitWatchEvidenceCoversRepositoryConfigFromSubdirectoryRoot(t *testing.T
 		t.Fatal(err)
 	}
 	writeFile(t, root, "other", "other")
-	writeFile(t, root, "dirty", "dirty")
 	w := &Watch{root: root, identity: info, Changed: make(chan struct{}, 1)}
 	guard := assertPreparedMatchesFull(t, w, b)
 	dir := t.TempDir()
@@ -210,8 +209,7 @@ type absentConfigCase struct {
 
 // assertCreatedConfigDetected checks that an unchanged absent config file keeps
 // edits incremental, and that creating it to ignore an untracked file forces
-// full selection. Another untracked file keeps the repository dirty, so its
-// status does not change.
+// full selection.
 func assertCreatedConfigDetected(t *testing.T, cases []absentConfigCase) {
 	t.Helper()
 	for _, tc := range cases {
@@ -227,7 +225,6 @@ func assertCreatedConfigDetected(t *testing.T, cases []absentConfigCase) {
 				}
 				w = &Watch{root: root, identity: info, Changed: make(chan struct{}, 1)}
 			}
-			writeFile(t, w.root, "dirty", "dirty")
 			guard := assertPreparedMatchesFull(t, w, b)
 			if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
 				t.Fatal("Git selection captured no evidence")
@@ -344,7 +341,6 @@ func TestGitWatchEvidenceFallsBackForBranchConditionalIncludes(t *testing.T) {
 	writeFile(t, dir, "excludes", "untracked\n")
 	writeFile(t, dir, "feature.gitconfig", "[core]\n\texcludesFile = "+filepath.Join(dir, "excludes")+"\n")
 	git("config", "includeIf.onbranch:feature.path", filepath.Join(dir, "feature.gitconfig"))
-	writeFile(t, w.root, "dirty", "dirty")
 	assertPreparedMatchesFull(t, w, b)
 	git("checkout", "--quiet", "-b", "feature")
 	writeFile(t, w.root, "untracked", "edited")
@@ -370,7 +366,7 @@ func TestGitWatchEvidenceFollowsSymlinkedIndex(t *testing.T) {
 	}
 	writeFile(t, w.root, "value", "edited")
 	assertIncremental(t, w, b, "value")
-	git("add", "-f", "secret") // the untracked file keeps the repository dirty
+	git("add", "-f", "secret")
 	if info, err := os.Lstat(index); err != nil || info.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("git add replaced the index link: %v", err)
 	}
@@ -421,7 +417,6 @@ func prepareLinkedWorktreeFixture(t *testing.T) (*Watch, *Builder, string, strin
 	git("worktree", "add", "--quiet", "-b", "two", two)
 	writeFile(t, one, "secret", "private")
 	writeFile(t, two, "secret", "private")
-	writeFile(t, one, "dirty", "dirty") // untracked whichever index Git reads
 	info, err := os.Lstat(one)
 	if err != nil {
 		t.Fatal(err)
@@ -602,7 +597,6 @@ func TestGitWatchEvidenceRecordsSystemConfigUnlessDisabled(t *testing.T) {
 		t.Setenv("GIT_CONFIG_SYSTEM", target)
 		t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 		w, b, _ := prepareGitWatchFixture(t)
-		writeFile(t, w.root, "dirty", "dirty")
 		guard := assertPreparedMatchesFull(t, w, b)
 		if w.prepared.evidence == nil || w.prepared.evidence.git == nil {
 			t.Fatal("Git selection captured no evidence")
@@ -724,7 +718,7 @@ func TestStandardGitConfigPathsMatchGit(t *testing.T) {
 
 // Git's origin listing omits a repository config with no entries, so capture
 // records its path directly. Adding an excludes file there later must reach
-// the evidence even while the repository stays dirty.
+// the evidence.
 func TestGitWatchEvidenceRecordsRepositoryConfigWithoutEntries(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -739,7 +733,6 @@ func TestGitWatchEvidenceRecordsRepositoryConfigWithoutEntries(t *testing.T) {
 			if err := tc.setup(config); err != nil {
 				t.Fatal(err)
 			}
-			writeFile(t, w.root, "value", "dirty")
 			assertPreparedMatchesFull(t, w, b)
 			excludes := filepath.Join(t.TempDir(), "excludes")
 			writeFile(t, filepath.Dir(excludes), "excludes", "untracked\n")
@@ -759,7 +752,6 @@ func TestGitWatchEvidenceRejectsIgnoreFileCreatedDuringCapture(t *testing.T) {
 	w, b, _ := prepareGitWatchFixture(t)
 	writeFile(t, w.root, ".git/info/exclude", "sub/.gitignore\n")
 	writeFile(t, w.root, "sub/extra", "extra")
-	writeFile(t, w.root, "value", "dirty")
 	t.Cleanup(func() { testHookBeforeDirectoryStamps = nil })
 	testHookBeforeDirectoryStamps = func() {
 		testHookBeforeDirectoryStamps = nil

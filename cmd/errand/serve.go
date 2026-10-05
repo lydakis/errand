@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 	"unicode"
@@ -72,11 +73,22 @@ func (l serveLog) ready(listen, auth, socket, socketUse, state string, slots, qu
 }
 
 func (l serveLog) job(event daemon.JobLogEvent) {
+	if event.Kind == daemon.JobLogDropped {
+		if l.e.Interactive() {
+			l.e.Warnf("dropped %d job lifecycle log events while log output was blocked; job receipts are retained", event.Dropped)
+		} else {
+			l.kv("warning", "job lifecycle log events dropped", "dropped", fmt.Sprint(event.Dropped))
+		}
+		return
+	}
 	who := event.Owner
 	if i := strings.IndexByte(who, '@'); i > 0 {
 		who = who[:i]
 	}
-	command := termui.ShellQuote(event.Argv)
+	command := ""
+	if event.Kind == daemon.JobLogStarted {
+		command = termui.ShellQuote(event.Argv)
+	}
 	if !l.e.Interactive() {
 		fields := []string{"job", event.ID}
 		switch event.Kind {
@@ -211,10 +223,21 @@ func cmdServeTo(args []string, stdout, stderr io.Writer) int {
 	listen := fs.String("listen", "", `listen address ("tailnet:7443" resolves the tailnet IP; "none" disables TCP)`)
 	stateDir := fs.String("state-dir", "", "receipt and job state directory")
 	insecure := fs.Bool("insecure-no-auth", false, "DANGEROUS: skip all authorization (tests only)")
+	logFile := fs.String("log-file", "", "append the runner log to this file instead of stderr")
 	var allowUsers stringList
 	fs.Var(&allowUsers, "allow-user", "tailnet login allowed to use this runner (repeatable)")
 	if ok, code := parseFlags(fs, args, "serve", stdout, e); !ok {
 		return code
+	}
+	if *logFile != "" {
+		f, err := os.OpenFile(*logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+		if err != nil {
+			return failWith(e, 1, err, errorScope{})
+		}
+		useServiceLog(f)
+		con = newConsole(f, f)
+		e = con.Err
+		logger = serveLog{e: e}
 	}
 	// The daemon's own diagnostics go through the standard logger; keep them
 	// in the same shape as ours.
@@ -340,4 +363,24 @@ func (w serveStdLog) Write(p []byte) (int, error) {
 		w.l.kv("info", msg)
 	}
 	return len(p), nil
+}
+
+// retiredStdio keeps replaced standard files reachable. A collected *os.File
+// closes its handle, and once a Windows runner detaches its console, that
+// handle value can belong to an unrelated object.
+var retiredStdio []*os.File
+
+// useServiceLog sends everything the runner writes to f, the log a service
+// manager gives it.
+func useServiceLog(f *os.File) {
+	retiredStdio = append(retiredStdio, os.Stdout, os.Stderr)
+	os.Stdout, os.Stderr = f, f
+	log.SetOutput(f)
+	// The runtime writes fatal errors to the process's own stderr, which
+	// a service may not have; keep them in the log too.
+	if err := debug.SetCrashOutput(f, debug.CrashOptions{}); err != nil {
+		log.Printf("errand serve: crash output stays on stderr: %v", err)
+	}
+	logServiceStop()
+	detachServiceConsole(f)
 }

@@ -14,7 +14,6 @@ import (
 
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/proto"
-	"golang.org/x/sys/unix"
 )
 
 // TransferTarget records one immutable apply request in private receiver state.
@@ -285,11 +284,10 @@ func transferStorageOutsideWorkspace(storage *os.Root, workspace fsidentity.Iden
 		if id == workspace {
 			return fmt.Errorf("transfer state must be outside the destination workspace")
 		}
-		fd, err := unix.Openat(int(current.Fd()), "..", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+		parent, err := openParentDirectory(current)
 		if err != nil {
 			return err
 		}
-		parent := os.NewFile(uintptr(fd), "transfer state ancestor")
 		parentInfo, err := parent.Stat()
 		if err != nil {
 			parent.Close()
@@ -378,14 +376,7 @@ func readTransferRecord(root *os.Root, name string, record any) error {
 }
 
 func readTransferRecordBytes(root *os.Root, name string) ([]byte, error) {
-	info, err := root.Lstat(name)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("transfer state is not a regular file")
-	}
-	f, err := root.Open(name)
+	f, err := openTransferRecord(root, name)
 	if err != nil {
 		return nil, err
 	}
@@ -398,6 +389,17 @@ func readTransferRecordBytes(root *os.Root, name string) ([]byte, error) {
 		return nil, fmt.Errorf("transfer state exceeds size limit")
 	}
 	return raw, nil
+}
+
+func openTransferRecord(root *os.Root, name string) (*os.File, error) {
+	info, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("transfer state is not a regular file")
+	}
+	return root.Open(name)
 }
 
 func writeTransferState(root *os.Root, name string, state transferApplyState) error {

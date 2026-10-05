@@ -200,12 +200,12 @@ func TestJobLogQueueKeepsOrderAndBoundsClose(t *testing.T) {
 	release := make(chan struct{})
 	var got []string
 	q := newJobLogQueue(func(e JobLogEvent) { <-release; got = append(got, e.ID) })
-	for i := range 5000 {
+	for i := range 500 {
 		q.push(JobLogEvent{ID: fmt.Sprint(i)})
 	}
 	close(release)
 	q.close(5 * time.Second)
-	if len(got) != 5000 || got[0] != "0" || got[4999] != "4999" {
+	if len(got) != 500 || got[0] != "0" || got[499] != "499" {
 		t.Fatalf("delivered %d events, first %v", len(got), got[:min(3, len(got))])
 	}
 
@@ -217,5 +217,91 @@ func TestJobLogQueueKeepsOrderAndBoundsClose(t *testing.T) {
 	stuck.close(50 * time.Millisecond)
 	if time.Since(started) > time.Second {
 		t.Fatal("close waited on a stalled consumer")
+	}
+}
+
+func TestJobLogQueueBoundsCountAndPayloadAndReportsOverflow(t *testing.T) {
+	for _, test := range []struct {
+		name             string
+		event            JobLogEvent
+		pushes, retained int
+	}{
+		{"event count", JobLogEvent{}, maxPendingJobLogEvents + 100, maxPendingJobLogEvents},
+		{"large argv", JobLogEvent{Argv: []string{strings.Repeat("x", 512<<10)}}, 32, 7},
+		{"large result", JobLogEvent{Result: &proto.Result{Changes: &proto.ChangeSummary{Paths: []string{strings.Repeat("x", 512<<10)}}}}, 32, 7},
+		{"oversized event", JobLogEvent{Argv: []string{strings.Repeat("x", maxPendingJobLogBytes)}}, 1, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			entered, release := make(chan struct{}), make(chan struct{})
+			var events []JobLogEvent
+			q := newJobLogQueue(func(event JobLogEvent) {
+				if event.ID == "inflight" {
+					close(entered)
+					<-release
+				}
+				events = append(events, event)
+			})
+			var finish sync.Once
+			cleanup := func() { finish.Do(func() { close(release); q.close(time.Second) }) }
+			defer cleanup()
+			q.push(JobLogEvent{ID: "inflight"})
+			<-entered
+			pushed := make(chan struct{})
+			go func() {
+				defer close(pushed)
+				for i := range test.pushes {
+					event := test.event
+					event.ID = fmt.Sprint(i)
+					q.push(event)
+				}
+			}()
+			select {
+			case <-pushed:
+			case <-time.After(time.Second):
+				t.Fatal("producer waited for blocked log output")
+			}
+			q.mu.Lock()
+			retained, bytes, dropped := len(q.pending), q.bytes, q.dropped
+			q.mu.Unlock()
+			if retained != test.retained || bytes > maxPendingJobLogBytes || dropped != uint64(test.pushes-test.retained) {
+				t.Fatalf("retained=%d bytes=%d dropped=%d", retained, bytes, dropped)
+			}
+			cleanup()
+			select {
+			case <-q.done:
+			default:
+				t.Fatal("logger did not drain after unblocking")
+			}
+			if len(events) != retained+2 || events[len(events)-1].Kind != JobLogDropped || events[len(events)-1].Dropped != dropped {
+				t.Fatalf("overflow delivery: %+v", events)
+			}
+			for i, event := range events[1 : len(events)-1] {
+				if event.ID != fmt.Sprint(i) {
+					t.Fatalf("retained event %d delivered out of order: %s", i, event.ID)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkBlockedJobLogOverflow(b *testing.B) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	q := newJobLogQueue(func(event JobLogEvent) {
+		if event.ID == "inflight" {
+			close(entered)
+			<-release
+		}
+	})
+	b.Cleanup(func() { close(release); q.close(time.Second) })
+	q.push(JobLogEvent{ID: "inflight"})
+	<-entered
+	event := JobLogEvent{ID: "job", Argv: []string{"command", "argument"}}
+	for range maxPendingJobLogEvents {
+		q.push(event)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		q.push(event)
 	}
 }

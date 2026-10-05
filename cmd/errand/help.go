@@ -233,10 +233,11 @@ var helpPages = map[string]commandHelp{
 	"serve": {
 		summary: "Run the runner in the foreground. errand setup installs it as a service instead.",
 		usage:   []string{"errand serve [options]"},
-		order:   []string{"config", "listen", "state-dir", "allow-user", "insecure-no-auth"},
+		order:   []string{"config", "listen", "state-dir", "log-file", "allow-user", "insecure-no-auth"},
 		text: map[string]string{
 			"config": "Runner config path", "listen": `Listen address ("tailnet:7443" uses the tailnet IP; "none" disables TCP)`,
 			"state-dir": "Where job records live", "allow-user": "Give this tailnet login full runner access (repeatable)",
+			"log-file":         "Append runner output to this file instead of stderr",
 			"insecure-no-auth": "Skip all authorization (tests only; dangerous)",
 		},
 	},
