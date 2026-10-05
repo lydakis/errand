@@ -284,8 +284,8 @@ selectors fail locally rather than being guessed as network hosts.
 
 A runner with `[[cloud.offers]]` is a cloud peer: when `--where` matches none
 of the caller's runners but matches an offer, the client asks it for a lease.
-It acquires a machine from Lambda or through provider commands, waits until
-that machine answers as an errand runner whose measured facts match, and hands
+It acquires a machine through provider commands, waits until that
+machine answers as an errand runner whose measured facts match, and hands
 back how to reach it. The client reaches the lease as a peer named
 `<cloud peer>-<lease id suffix>` and submits to it directly, so the cloud peer
 is a capacity broker, not a relay, and the no-relaying rule above holds. The

@@ -35,25 +35,18 @@ type Provider interface {
 
 // ReleaseSpec names one way of releasing machines.
 type ReleaseSpec struct {
-	Command []string       `json:"command,omitempty"`
-	Lambda  *LambdaRelease `json:"lambda,omitempty"`
-}
-
-type LambdaRelease struct {
-	APIKeyFile string `json:"api_key_file"`
+	Command []string `json:"command,omitempty"`
 }
 
 func (s ReleaseSpec) equal(o ReleaseSpec) bool {
-	return slices.Equal(s.Command, o.Command) && (s.Lambda == nil) == (o.Lambda == nil) && (s.Lambda == nil || *s.Lambda == *o.Lambda)
+	return slices.Equal(s.Command, o.Command)
 }
 
 // provider makes a provider that releases as s says.
 func (s ReleaseSpec) provider() (Provider, error) {
 	switch {
-	case len(s.Command) > 0 && s.Lambda == nil:
+	case len(s.Command) > 0:
 		return CommandProvider{ReleaseCommand: s.Command}, nil
-	case len(s.Command) == 0 && s.Lambda != nil && s.Lambda.APIKeyFile != "":
-		return &LambdaProvider{APIKeyFile: s.Lambda.APIKeyFile}, nil
 	}
 	return nil, errors.New("no way to release its machines is set")
 }
