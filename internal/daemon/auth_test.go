@@ -788,3 +788,28 @@ func TestInfoShowsOffersOnlyWithLeaseIDs(t *testing.T) {
 		}
 	}
 }
+
+// A web page cannot make a caller's browser lease a machine.
+func TestLeaseAcquireRefusesBrowserRequests(t *testing.T) {
+	d := &Daemon{broker: &cloud.Broker{}}
+	id := Identity{Login: "someone@github", Actions: map[string]bool{proto.ActionLease: true, proto.ActionSubmit: true}}
+	for _, tc := range []struct{ contentType, origin string }{
+		{"text/plain", ""},
+		{"", ""},
+		{"application/x-www-form-urlencoded", ""},
+		{"application/json", "https://attacker.example"},
+	} {
+		r := httptest.NewRequest(http.MethodPost, "/v0/leases", strings.NewReader(`{"where":"gpu"}`))
+		if tc.contentType != "" {
+			r.Header.Set("Content-Type", tc.contentType)
+		}
+		if tc.origin != "" {
+			r.Header.Set("Origin", tc.origin)
+		}
+		w := httptest.NewRecorder()
+		d.handleLeaseAcquire(w, r, id)
+		if w.Code != http.StatusUnsupportedMediaType {
+			t.Errorf("%+v: %d %s", tc, w.Code, w.Body.String())
+		}
+	}
+}

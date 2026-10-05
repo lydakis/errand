@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 
 	"github.com/lydakis/errand/internal/cloud"
@@ -44,6 +45,14 @@ func (d *Daemon) handleLeaseAcquire(w http.ResponseWriter, r *http.Request, id I
 		return
 	}
 	if !d.requireBroker(w) {
+		return
+	}
+	// Leasing spends money, so a web page the caller happens to visit must
+	// not be able to ask for it: browsers send Origin with cross-site
+	// requests, and cannot send a JSON content type without a CORS preflight
+	// this runner never approves.
+	if mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mediaType != "application/json" || r.Header.Get("Origin") != "" {
+		httpError(w, http.StatusUnsupportedMediaType, "lease requests must be application/json and not come from a browser")
 		return
 	}
 	var req proto.LeaseRequest

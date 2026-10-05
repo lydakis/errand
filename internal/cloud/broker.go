@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -413,11 +414,24 @@ func (b *Broker) Release(owner, id string) (proto.Lease, error) {
 		b.mu.Unlock()
 		return proto.Lease{}, &Error{http.StatusNotFound, "no such lease"}
 	}
+	// The release is acknowledged only once it is recorded, so a restart
+	// cannot turn it back into a usable lease.
+	requestRelease := func(note string) error {
+		was, progress := l.State, slices.Clone(l.Progress)
+		l.State = proto.LeaseReleasing
+		l.addProgress(note)
+		if err := b.persist(&l.record); err != nil {
+			l.State, l.Progress = was, progress
+			return &Error{http.StatusInternalServerError, "recording the release: " + err.Error()}
+		}
+		return nil
+	}
 	switch l.State {
 	case proto.LeaseLaunching:
-		l.State = proto.LeaseReleasing
-		l.addProgress("release requested while launching")
-		_ = b.persist(&l.record)
+		if err := requestRelease("release requested while launching"); err != nil {
+			b.mu.Unlock()
+			return proto.Lease{}, err
+		}
 		// launch stops on the canceled context, then releases with any
 		// provider state acquire printed before it stopped.
 		l.cancelLaunch()
@@ -425,9 +439,10 @@ func (b *Broker) Release(owner, id string) (proto.Lease, error) {
 		b.mu.Unlock()
 		return v, nil
 	case proto.LeaseReady:
-		l.State = proto.LeaseReleasing
-		l.addProgress("release requested")
-		_ = b.persist(&l.record)
+		if err := requestRelease("release requested"); err != nil {
+			b.mu.Unlock()
+			return proto.Lease{}, err
+		}
 		if !b.closed {
 			b.wg.Add(1)
 			go func() {
@@ -511,42 +526,61 @@ func (b *Broker) reapOnce() {
 	for _, l := range releasing {
 		b.release(l)
 	}
+	// Probes run together, so one slow or lost machine cannot hold back the
+	// idle check, or the hard stop, of the others.
+	var probes sync.WaitGroup
 	for _, l := range ready {
 		b.mu.Lock()
+		expired := !time.Now().Before(l.ExpiresAt)
 		target := *l.Target
 		b.mu.Unlock()
-		ctx, cancel := context.WithTimeout(b.ctx, 5*time.Second)
-		info, err := b.cfg.Probe(ctx, target, "")
-		cancel()
-		now := time.Now()
-		b.mu.Lock()
-		if l.State != proto.LeaseReady {
-			b.mu.Unlock()
+		if expired {
+			b.endReady(l, nil, nil)
 			continue
 		}
-		offer := b.offers[l.Offer]
-		// An unreachable machine does not count as busy, so a lost box ends
-		// after one idle window instead of running until its hard stop.
-		if err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0 {
-			l.LastBusy = now
-		}
-		l.IdleUntil = l.LastBusy.Add(offer.IdleTimeout)
-		reason := ""
-		switch {
-		case !now.Before(l.ExpiresAt):
-			reason = fmt.Sprintf("max lifetime of %s reached", offer.MaxLifetime)
-		case !now.Before(l.IdleUntil):
-			reason = fmt.Sprintf("idle for %s", offer.IdleTimeout)
-		}
-		if reason != "" {
-			l.State = proto.LeaseReleasing
-			l.addProgress("releasing: " + reason)
-		}
-		_ = b.persist(&l.record)
+		probes.Add(1)
+		go func() {
+			defer probes.Done()
+			ctx, cancel := context.WithTimeout(b.ctx, 5*time.Second)
+			info, err := b.cfg.Probe(ctx, target, "")
+			cancel()
+			b.endReady(l, &info, err)
+		}()
+	}
+	probes.Wait()
+}
+
+// endReady applies one idle check to a ready lease, releasing it once it is
+// idle or out of lifetime. A nil info skips the probe result.
+func (b *Broker) endReady(l *lease, info *proto.Info, probeErr error) {
+	now := time.Now()
+	b.mu.Lock()
+	if l.State != proto.LeaseReady {
 		b.mu.Unlock()
-		if reason != "" {
-			b.release(l)
-		}
+		return
+	}
+	offer := b.offers[l.Offer]
+	// An unreachable machine does not count as busy, so a lost box ends
+	// after one idle window instead of running until its hard stop.
+	if info != nil && probeErr == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0 {
+		l.LastBusy = now
+	}
+	l.IdleUntil = l.LastBusy.Add(offer.IdleTimeout)
+	reason := ""
+	switch {
+	case !now.Before(l.ExpiresAt):
+		reason = fmt.Sprintf("max lifetime of %s reached", offer.MaxLifetime)
+	case !now.Before(l.IdleUntil):
+		reason = fmt.Sprintf("idle for %s", offer.IdleTimeout)
+	}
+	if reason != "" {
+		l.State = proto.LeaseReleasing
+		l.addProgress("releasing: " + reason)
+	}
+	_ = b.persist(&l.record)
+	b.mu.Unlock()
+	if reason != "" {
+		b.release(l)
 	}
 }
 

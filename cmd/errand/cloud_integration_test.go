@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -98,7 +100,19 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 		return output.String(), err
 	}
 
-	out, err := cli("--where", "gpu=h100", "--no-apply", "--", "/bin/cat", "input.txt")
+	// A run that cannot start locally rents nothing.
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := strconv.Itoa(busy.Addr().(*net.TCPAddr).Port)
+	out, err := cli("--where", "gpu=h100", "--no-apply", "-L", port+":3000", "--", "/bin/cat", "input.txt")
+	busy.Close()
+	if err == nil || strings.Contains(out, "leasing") || strings.Contains(out, "booting") {
+		t.Fatalf("run with a busy local port: %v\n%s", err, out)
+	}
+
+	out, err = cli("--where", "gpu=h100", "--no-apply", "--", "/bin/cat", "input.txt")
 	if err != nil {
 		t.Fatalf("first run: %v\n%s", err, out)
 	}
@@ -126,6 +140,33 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	if out, err = cli("leases"); err != nil || !regexp.MustCompile(name[1]+`\s+cloud\s+h100\s+ready`).MatchString(out) {
 		t.Fatalf("leases: %v\n%s", err, out)
 	}
+	// The cloud peer ends the lease on its own (idle, lifetime) while its
+	// machine still answers: the run must not go to the ended lease.
+	leases, _ := config.LoadLeases()
+	req, _ := http.NewRequest(http.MethodDelete, brokerServer.URL+"/v0/leases/"+leases[name[1]].ID, nil)
+	if resp, err := http.DefaultClient.Do(req); err != nil {
+		t.Fatal(err)
+	} else {
+		resp.Body.Close()
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		if data, _ := os.ReadFile(releaseLog); bytes.Contains(data, []byte(leases[name[1]].ID)) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("release command did not run")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	out, err = cli("--where", "gpu=h100", "--no-apply", "--", "/bin/cat", "input.txt")
+	if err != nil || strings.Contains(out, "selected "+name[1]) || !strings.Contains(out, "leasing h100") {
+		t.Fatalf("run after the lease ended: %v\n%s", err, out)
+	}
+	name = regexp.MustCompile(`lease (cloud-[0-9a-z]{4}) ready`).FindStringSubmatch(out)
+	if name == nil {
+		t.Fatalf("no new lease:\n%s", out)
+	}
+
 	// The wildcard never rents, and a capability no offer has fails plainly.
 	if out, err = cli("--where", "gpus>=8", "--no-apply", "--", "/bin/true"); err == nil || !strings.Contains(out, "no runner matches") {
 		t.Fatalf("unmatched: %v\n%s", err, out)

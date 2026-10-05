@@ -411,3 +411,76 @@ func TestReaperForgetsOldEndedLeases(t *testing.T) {
 		t.Fatalf("old ended lease still recorded: %v", err)
 	}
 }
+
+// A release is acknowledged only once it is recorded; otherwise a restart
+// would bring the lease back as ready after the client was told it ended.
+func TestReleaseNotAcknowledgedUnlessRecorded(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.IdlePoll = time.Hour
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	record := filepath.Join(h.cfg.StateDir, "leases", l.ID+".json")
+	saved, err := os.ReadFile(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(record); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(record, "blocked"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	var refused *Error
+	if _, err := b.Release("george", l.ID); !errors.As(err, &refused) || refused.Status != http.StatusInternalServerError {
+		t.Fatalf("unrecorded release: %v", err)
+	}
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady || strings.Contains(strings.Join(got.Progress, "\n"), "release requested") || h.releases() != "" {
+		t.Fatalf("lease changed by an unrecorded release: %+v, releases %q", got, h.releases())
+	}
+	os.RemoveAll(record)
+	if err := os.WriteFile(record, saved, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Release("george", l.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+}
+
+// The hard stop does not wait on a probe, so a machine that hangs probes
+// still ends at its max lifetime.
+func TestExpiredLeaseReleasesWithoutProbe(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.IdlePoll = time.Hour
+	var hang atomic.Bool
+	probe := h.cfg.Probe
+	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, where string) (proto.Info, error) {
+		if hang.Load() {
+			<-ctx.Done()
+			return proto.Info{}, ctx.Err()
+		}
+		return probe(ctx, target, where)
+	}
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	hang.Store(true)
+	b.mu.Lock()
+	b.leases[l.ID].ExpiresAt = time.Now().Add(-time.Second)
+	b.mu.Unlock()
+	start := time.Now()
+	b.reapOnce()
+	if took := time.Since(start); took > 2*time.Second {
+		t.Fatalf("expired lease waited %s on a probe", took)
+	}
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReleased {
+		t.Fatalf("expired lease %+v", got)
+	}
+}

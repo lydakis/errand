@@ -19,9 +19,10 @@ acquire)
 	while IFS= read -r url; do
 		[ -n "$url" ] || continue
 		slot="$claims/$(printf '%s' "$url" | cksum | cut -d' ' -f1)"
-		# mkdir is atomic, so two leases never claim the same machine.
-		if mkdir "$slot" 2>/dev/null; then
-			printf '%s\n' "$ERRAND_LEASE_ID" >"$slot/lease"
+		# A symlink naming the lease is created atomically, together with
+		# its owner, so two leases never claim the same machine and no claim
+		# is ever left without the lease that release looks for.
+		if ln -s "$ERRAND_LEASE_ID" "$slot" 2>/dev/null; then
 			echo "claimed $url" >&2
 			printf '{"url":"%s","slot":"%s"}\n' "$url" "$slot"
 			exit 0
@@ -34,9 +35,9 @@ release)
 	# Release must be safe to repeat and must work when acquire was cut
 	# short, so find the claim by lease ID rather than trusting the state.
 	for slot in "$claims"/*; do
-		[ -f "$slot/lease" ] || continue
-		if [ "$(cat "$slot/lease")" = "$ERRAND_LEASE_ID" ]; then
-			rm -rf "$slot"
+		[ -L "$slot" ] || continue
+		if [ "$(readlink "$slot")" = "$ERRAND_LEASE_ID" ]; then
+			rm -f "$slot"
 			echo "released $slot" >&2
 		fi
 	done

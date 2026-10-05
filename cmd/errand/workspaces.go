@@ -97,7 +97,13 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "errand:", resolveErr)
 			return 1
 		}
-		creationChoices, err = runChoices(effective, settings.url != "", stderr)
+		var lease func() (placementChoice, error)
+		creationChoices, lease, err = runChoices(effective, settings.url != "", stderr)
+		if err == nil && lease != nil {
+			var c placementChoice
+			c, err = lease()
+			creationChoices = []placementChoice{c}
+		}
 		if err != nil {
 			fmt.Fprintln(stderr, "errand:", err)
 			return 1
@@ -114,7 +120,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 	switch verb {
 	case "create":
 		var chosen placementChoice
-		configurePlacement(&opts, creationChoices, stderr, func(c placementChoice) { chosen = c })
+		configurePlacement(&opts, creationChoices, nil, stderr, func(c placementChoice) { chosen = c })
 		w, err := client.CreateWorkspace(opts, fs.Arg(0))
 		url, label = chosen.URL, chosen.Name
 

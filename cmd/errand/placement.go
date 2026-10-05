@@ -123,6 +123,9 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 				}
 				if offer, ok := matchingOffer(q, info.Offers); ok {
 					c := e.Candidates[i]
+					if !e.WhereMayLease {
+						return result, fmt.Errorf("no runner matches %q (%s); %s could lease %s, but a workspace's where never rents a machine: pass --where %q to lease", e.Where, strings.Join(exclusions, "; "), terminalSafeField(c.Name), terminalSafeField(describeOffer(offer)), e.Where)
+					}
 					target := client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
 					result.Lease = &leaseOption{Broker: placementChoice{RunCandidate: c, Info: *info, Target: target}, Offer: offer}
 					return result, nil
@@ -142,39 +145,56 @@ func announcePlacement(w io.Writer, c placementChoice, where string) {
 	fmt.Fprintf(w, "errand: selected %s for %s (%d/%d slots, %d staging, %d queued)\n", terminalSafeField(c.Name), terminalSafeField(where), i.StartingJobs+i.RunningJobs, i.MaxJobs, i.StagingJobs, i.QueuedJobs)
 }
 
-func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placementChoice, error) {
+// runChoices places a run. When only a lease fits, it returns no choices and
+// a lease function instead, so the caller can rent the machine as late as
+// possible.
+func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placementChoice, func() (placementChoice, error), error) {
 	if e.Where != "" {
 		selection, err := chooseRunners(context.Background(), e, client.ProbeWhereInfo)
-		// Ended leases are forgotten rather than reported as unreachable.
-		forgotten := forgetEndedLeases(selection.Probed)
-		selection.Excluded = slices.DeleteFunc(selection.Excluded, func(x placementExclusion) bool { return forgotten[x.Peer] })
+		// Ended leases are forgotten rather than reported as unreachable. An
+		// ended lease's machine may still answer, so placement runs again
+		// without them.
+		if forgotten := forgetEndedLeases(selection.Probed); len(forgotten) > 0 {
+			e.Candidates = slices.DeleteFunc(slices.Clone(e.Candidates), func(c config.RunCandidate) bool { return forgotten[c.Name] })
+			selection, err = chooseRunners(context.Background(), e, client.ProbeWhereInfo)
+		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		selection.printExcluded(stderr)
-		if selection.Lease != nil {
-			choice, err := leaseRunner(*selection.Lease, e.Where, stderr)
-			if err != nil {
-				return nil, err
-			}
-			return []placementChoice{choice}, nil
+		if option := selection.Lease; option != nil {
+			return nil, func() (placementChoice, error) { return leaseRunner(*option, e.Where, stderr) }, nil
 		}
-		return selection.Choices, nil
+		return selection.Choices, nil, nil
 	}
 	c := placementChoice{RunCandidate: config.RunCandidate{Name: e.Peer, URL: e.URL, RemoteCommand: e.RemoteCommand, RemoteSocket: e.RemoteSocket}, Target: e.URL}
 	// Raw SSH URLs must retain their identity for handle and change-state lookups.
 	if !rawURL {
 		c.Target = client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
 	}
-	return []placementChoice{c}, nil
+	return []placementChoice{c}, nil, nil
 }
 
-func configurePlacement(opts *client.RunOptions, choices []placementChoice, stderr io.Writer, selected func(placementChoice)) {
+// configurePlacement hands the choices to a run. A lease is acquired only
+// once the run's local preparation has succeeded.
+func configurePlacement(opts *client.RunOptions, choices []placementChoice, lease func() (placementChoice, error), stderr io.Writer, selected func(placementChoice)) {
 	byTarget := make(map[client.RunTarget]placementChoice, len(choices))
-	for _, c := range choices {
+	add := func(c placementChoice) client.RunTarget {
 		target := client.RunTarget{PeerURL: c.Target, PeerName: c.Name}
-		opts.Candidates = append(opts.Candidates, target)
 		byTarget[target] = c
+		return target
+	}
+	for _, c := range choices {
+		opts.Candidates = append(opts.Candidates, add(c))
+	}
+	if lease != nil {
+		opts.Resolve = func() ([]client.RunTarget, error) {
+			c, err := lease()
+			if err != nil {
+				return nil, err
+			}
+			return []client.RunTarget{add(c)}, nil
+		}
 	}
 	where := opts.Where
 	opts.OnSelected = func(target client.RunTarget) {
