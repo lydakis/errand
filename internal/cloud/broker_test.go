@@ -431,6 +431,31 @@ func TestReleaseWhileLaunchingStopsAcquire(t *testing.T) {
 	}
 }
 
+// A child the acquire command left behind can hold its stderr open; the
+// release still goes ahead once the command is stopped.
+func TestReleaseWhileLaunchingOutlivesStderrHolder(t *testing.T) {
+	h := newHarness(t, "echo booting >&2\nsleep 30 &\nexec sleep 30\n")
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitProgress(t, b, l.ID, "booting")
+	start := time.Now()
+	if _, err := b.Release("george", l.ID); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if got, _ := b.Get("george", l.ID); got.State == proto.LeaseReleased {
+			break
+		}
+		if time.Since(start) > 15*time.Second {
+			t.Fatal("release waited on the acquire command's stderr")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func TestFailedLaunchesAreReleased(t *testing.T) {
 	h := newHarness(t, "echo 'out of capacity' >&2\nexit 3\n")
 	b := h.start(t)
@@ -906,5 +931,18 @@ func TestAcquireTakesCheapestMatchingOffer(t *testing.T) {
 	l, err := b.Acquire("george", "", "gpu", "", proto.NewULID())
 	if err != nil || l.Offer != "cheap" {
 		t.Fatalf("leased %q: %v", l.Offer, err)
+	}
+}
+
+func waitProgress(t *testing.T, b *Broker, id, line string) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		if l, _ := b.Get("george", id); slices.Contains(l.Progress, line) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("progress never showed %q", line)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
