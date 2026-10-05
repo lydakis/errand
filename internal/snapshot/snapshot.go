@@ -940,8 +940,15 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if err != nil {
 				return fmt.Errorf("snapshot: %s vanished during pack: %w", e.Path, sourceReadError(err))
 			}
-			if !fi.Mode().IsRegular() || fi.Size() != e.Size || !fsmode.Matches(fi, expectedMode) {
+			if !fi.Mode().IsRegular() {
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
+			}
+			// A regular file whose bytes or mode changed needs only rereading.
+			changed := func() error {
+				return fileChangedf(filepath.Join(root, filepath.FromSlash(e.Path)), "snapshot: %s changed during pack; retry", e.Path)
+			}
+			if fi.Size() != e.Size || !fsmode.Matches(fi, expectedMode) {
+				return changed()
 			}
 			f, err := rootFS.Open(e.Path)
 			if err != nil {
@@ -951,9 +958,13 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if err != nil {
 				return errors.Join(err, f.Close())
 			}
-			if !opened.Mode().IsRegular() || opened.Size() != e.Size || !fsmode.Matches(opened, expectedMode) {
+			if !opened.Mode().IsRegular() {
 				f.Close()
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
+			}
+			if opened.Size() != e.Size || !fsmode.Matches(opened, expectedMode) {
+				f.Close()
+				return changed()
 			}
 			h := sha256.New()
 			var dest io.Writer = h
@@ -984,10 +995,12 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if statErr != nil {
 				return statErr
 			}
-			if n != e.Size || hex.EncodeToString(h.Sum(nil)) != e.SHA256 ||
-				extraN != 0 || extraErr != io.EOF || !closed.Mode().IsRegular() ||
-				closed.Size() != e.Size || !fsmode.Matches(closed, expectedMode) {
+			if !closed.Mode().IsRegular() {
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
+			}
+			if n != e.Size || hex.EncodeToString(h.Sum(nil)) != e.SHA256 ||
+				extraN != 0 || extraErr != io.EOF || closed.Size() != e.Size || !fsmode.Matches(closed, expectedMode) {
+				return changed()
 			}
 		}
 	}
@@ -1022,7 +1035,10 @@ func hashFileSizedContext(ctx context.Context, path string, size int64, mode fs.
 		return "", statErr
 	}
 	if n != size || after.Size() != size || after.Mode() != mode {
-		return "", sourceChangedf("snapshot: %s changed during hashing; retry", path)
+		if !after.Mode().IsRegular() {
+			return "", sourceChangedf("snapshot: %s changed during hashing; retry", path)
+		}
+		return "", fileChangedf(path, "snapshot: %s changed during hashing; retry", path)
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
