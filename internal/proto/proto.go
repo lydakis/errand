@@ -77,6 +77,13 @@ func (m Manifest) RootHash() string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// ManifestRootHash returns the RootHash of the manifest whose JSON, as
+// AppendManifestJSON writes it, is encoded.
+func ManifestRootHash(encoded []byte) string {
+	sum := sha256.Sum256(encoded)
+	return hex.EncodeToString(sum[:])
+}
+
 // SelectionPolicy freezes the ignore rules and explicit artifact paths used
 // for retention. Artifacts never expand the input snapshot. Submitted manifest
 // paths remain eligible so their modification or deletion is always observable.

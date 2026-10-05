@@ -416,47 +416,49 @@ func verifyTransferPaths(paths ...*applyDestination) error {
 }
 
 func writeVerifiedTransferRecord(destination, storage *applyDestination, name string, record any) error {
-	_, err := writeVerifiedTransferRecordRaw(destination, storage, name, record)
-	return err
+	return writeVerifiedTransfer(destination, storage, name, func() ([]byte, error) { return json.Marshal(record) })
 }
 
-// writeVerifiedTransferRecordRaw also returns the exact bytes published.
-func writeVerifiedTransferRecordRaw(destination, storage *applyDestination, name string, record any) ([]byte, error) {
+// writeVerifiedTransfer encodes a record once its storage is verified and
+// publishes exactly those bytes.
+func writeVerifiedTransfer(destination, storage *applyDestination, name string, encode func() ([]byte, error)) error {
 	if err := verifyTransferPaths(destination, storage); err != nil {
-		return nil, err
+		return err
 	}
-	raw, err := writeTransferRecordRaw(storage.root, name, record)
+	raw, err := encode()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return raw, verifyTransferPaths(destination, storage)
+	if err := writeTransferBytes(storage.root, name, raw); err != nil {
+		return err
+	}
+	return verifyTransferPaths(destination, storage)
 }
 
 func writeTransferRecord(root *os.Root, name string, record any) error {
-	_, err := writeTransferRecordRaw(root, name, record)
-	return err
-}
-
-func writeTransferRecordRaw(root *os.Root, name string, record any) ([]byte, error) {
 	raw, err := json.Marshal(record)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	return writeTransferBytes(root, name, raw)
+}
+
+func writeTransferBytes(root *os.Root, name string, raw []byte) error {
 	if len(raw) > MaxBundleMetadataBytes {
-		return nil, fmt.Errorf("transfer state exceeds size limit")
+		return fmt.Errorf("transfer state exceeds size limit")
 	}
 	tmpName := ".transfer-" + proto.NewULID()
 	f, err := root.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer root.Remove(tmpName)
 	_, writeErr := f.Write(raw)
 	if err := errors.Join(writeErr, f.Sync(), f.Close()); err != nil {
-		return nil, err
+		return err
 	}
 	if err := root.Rename(tmpName, name); err != nil {
-		return nil, err
+		return err
 	}
-	return raw, syncApplyRootDirectory(root, ".")
+	return syncApplyRootDirectory(root, ".")
 }
