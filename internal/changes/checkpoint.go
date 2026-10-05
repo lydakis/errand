@@ -387,7 +387,7 @@ func (c *TransferCheckpoint) save(destination, storage *applyDestination, name s
 		return nil
 	}
 	state.Manifest = cloneSourceManifest(state.Manifest) // own it, as a decoded record would
-	if record, err := c.checkedRecord(raw, state); err == nil {
+	if record, err := c.checkedRecord(raw, state, true); err == nil {
 		// The next delta expands against this record and needs its identity.
 		// Hash it now, after the install, rather than before the next save's
 		// files can appear.

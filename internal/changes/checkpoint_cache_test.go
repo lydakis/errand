@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -114,6 +115,23 @@ func TestCheckpointAdvanceRetainsRecordIdentity(t *testing.T) {
 	}
 	if !reflect.DeepEqual(decoded.state, checkpoint.cache.record.state) || decoded.rootHash() != version.Manifest.RootHash() {
 		t.Fatal("retained record differs from the published one")
+	}
+}
+
+// A decoded record of another relationship is refused for that before its
+// manifest, however large or malformed, is validated.
+func TestCheckpointRecordChecksRelationshipBeforeManifest(t *testing.T) {
+	checkpoint := checkpointFor(t, transferTarget(t, t.TempDir()))
+	unsorted := proto.Manifest{Entries: []proto.ManifestEntry{
+		{Path: "b", Type: proto.EntryDir, Mode: 0o755}, {Path: "a", Type: proto.EntryDir, Mode: 0o755}}}
+	state := checkpointState{Version: 1, Owner: "another owner", SourceID: checkpoint.SourceID, RootID: checkpoint.RootID,
+		InitialRoot: unsorted.RootHash(), CheckpointVersion: CheckpointVersion{Manifest: unsorted}}
+	if _, err := checkpoint.validatedRecord(nil, state); err == nil || !strings.Contains(err.Error(), "relationship") {
+		t.Fatalf("got %v, want the relationship refusal", err)
+	}
+	state.Owner = checkpoint.Owner
+	if _, err := checkpoint.validatedRecord(nil, state); err == nil || strings.Contains(err.Error(), "relationship") {
+		t.Fatalf("got %v, want the manifest refusal", err)
 	}
 }
 

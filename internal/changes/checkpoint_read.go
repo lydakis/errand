@@ -123,20 +123,22 @@ func readTransferRecordMatching(root *os.Root, name string, known []byte) ([]byt
 
 // validatedRecord applies every check read performs on a decoded record.
 func (c *TransferCheckpoint) validatedRecord(raw []byte, state checkpointState) (*checkpointRecord, error) {
-	if err := validateCheckpointManifest(state.Manifest); err != nil {
-		return nil, err
-	}
-	return c.checkedRecord(raw, state)
+	return c.checkedRecord(raw, state, false)
 }
 
-// checkedRecord applies the checks of validatedRecord other than validating
-// the manifest, for a state whose manifest the caller has already validated.
-func (c *TransferCheckpoint) checkedRecord(raw []byte, state checkpointState) (*checkpointRecord, error) {
+// checkedRecord is validatedRecord, skipping the manifest validation when the
+// caller has already done it. The cheap relationship checks still come first.
+func (c *TransferCheckpoint) checkedRecord(raw []byte, state checkpointState, manifestValidated bool) (*checkpointRecord, error) {
 	if err := c.validateRelationship(state); err != nil {
 		return nil, err
 	}
 	if _, err := hex.DecodeString(state.InitialRoot); err != nil || len(state.InitialRoot) != 64 {
 		return nil, fmt.Errorf("invalid checkpoint creation digest")
+	}
+	if !manifestValidated {
+		if err := validateCheckpointManifest(state.Manifest); err != nil {
+			return nil, err
+		}
 	}
 	record := &checkpointRecord{state: state, raw: raw}
 	if state.Revision == 0 {
