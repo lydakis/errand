@@ -316,6 +316,36 @@ func TestLeaseAdmitsOwnersOtherDevices(t *testing.T) {
 	}
 }
 
+// Releasing a lease does not wait for a device's admission still talking
+// to the machine.
+func TestReleaseCancelsAdmission(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	admitting := make(chan struct{})
+	h.cfg.AdmitKeys = func(ctx context.Context, _ proto.LeaseTarget, _ string, _ []string) error {
+		close(admitting)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "ssh-ed25519 bWFj errand", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 bWluaQ== errand"); err != nil {
+		t.Fatal(err)
+	}
+	<-admitting
+	start := time.Now()
+	if _, err := b.Release("george", l.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+	if waited := time.Since(start); waited > 5*time.Second {
+		t.Fatalf("release waited %s for the admission", waited)
+	}
+}
+
 func TestLeaseLifecycle(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	b := h.start(t)

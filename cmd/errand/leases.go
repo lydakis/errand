@@ -108,7 +108,8 @@ func admitLeaseKeys(ctx context.Context, t proto.LeaseTarget, identity string, k
 	if _, err := leaseTargetPeer(t, identity); err != nil {
 		return err
 	}
-	const script = `umask 077 && mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && while IFS= read -r key; do grep -qxF "$key" ~/.ssh/authorized_keys || printf '%s\n' "$key" >> ~/.ssh/authorized_keys || exit 1; done`
+	// A last line without its newline would swallow the first added key.
+	const script = `umask 077 && mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && { [ ! -s ~/.ssh/authorized_keys ] || [ -z "$(tail -c 1 ~/.ssh/authorized_keys)" ] || echo >> ~/.ssh/authorized_keys; } && while IFS= read -r key; do grep -qxF "$key" ~/.ssh/authorized_keys || printf '%s\n' "$key" >> ~/.ssh/authorized_keys || exit 1; done`
 	return client.RunSSH(ctx, t.SSH, script, strings.NewReader(strings.Join(keys, "\n")+"\n"))
 }
 
@@ -174,43 +175,37 @@ func leasePeerNamed(cfg config.Client, name string) (leasePeer, bool, error) {
 	if err != nil {
 		return leasePeer{}, false, fmt.Errorf("asking %s for your leases: %w", broker, err)
 	}
-	var found []leasePeer
-	for _, lp := range leasePeersOf(cfg, broker, info) {
-		if strings.HasSuffix(strings.ToLower(lp.Lease.ID), suffix) {
-			found = append(found, lp)
+	// The name is matched against every ready lease, including ones this
+	// device is not let into yet, so it never stands for one of two.
+	var match *proto.Lease
+	for i, l := range info.Leases {
+		if l.State != proto.LeaseReady || !proto.ValidULID(l.ID) || !strings.HasSuffix(strings.ToLower(l.ID), suffix) {
+			continue
 		}
-	}
-	if len(found) == 0 {
-		// One of the owner's other devices may have asked for it: this one
-		// is let in by naming it.
-		if lp, ok, err := admitThisDevice(cfg, broker, target, suffix, info); ok || err != nil {
-			return lp, ok, err
+		if match != nil {
+			return leasePeer{}, false, fmt.Errorf("more than one lease on %s ends in %s; use a longer name", broker, suffix)
 		}
+		match = &info.Leases[i]
 	}
-	switch len(found) {
-	case 0:
+	if match == nil {
 		return leasePeer{}, false, fmt.Errorf("%s has no ready lease of yours whose ID ends in %s; see errand leases", broker, suffix)
-	case 1:
-		return found[0], true, nil
 	}
-	return leasePeer{}, false, fmt.Errorf("more than one lease on %s ends in %s; use a longer name", broker, suffix)
+	for _, lp := range leasePeersOf(cfg, broker, info) {
+		if lp.Lease.ID == match.ID {
+			return lp, true, nil
+		}
+	}
+	if _, publicKey := clientLeaseIdentity(); admits(*match, publicKey) {
+		return leasePeer{}, false, fmt.Errorf("lease %s has an unusable target", match.ID)
+	}
+	// One of the owner's other devices asked for it: this one is let in by
+	// naming it.
+	return admitThisDevice(cfg, broker, target, match.ID, info)
 }
 
-// admitThisDevice asks a cloud peer to let this device into the one ready
-// lease of the owner's whose ID ends in suffix, and waits until it has.
-func admitThisDevice(cfg config.Client, broker, target, suffix string, info proto.Info) (leasePeer, bool, error) {
-	var id string
-	for _, l := range info.Leases {
-		if l.State == proto.LeaseReady && strings.HasSuffix(strings.ToLower(l.ID), suffix) {
-			if id != "" {
-				return leasePeer{}, false, nil // ambiguous; reported as such
-			}
-			id = l.ID
-		}
-	}
-	if id == "" {
-		return leasePeer{}, false, nil
-	}
+// admitThisDevice asks a cloud peer to let this device into the owner's
+// ready lease id, and waits until it has.
+func admitThisDevice(cfg config.Client, broker, target, id string, info proto.Info) (leasePeer, bool, error) {
 	keyFile, err := leaseKeyFile()
 	if err != nil {
 		return leasePeer{}, false, err

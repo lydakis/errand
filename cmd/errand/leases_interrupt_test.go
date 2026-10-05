@@ -79,6 +79,10 @@ func TestLeasePeerNames(t *testing.T) {
 		return proto.Lease{ID: id, Offer: "h100", State: proto.LeaseReady, Target: &proto.LeaseTarget{SSH: ssh, HostKey: hostKey}}
 	}
 	other := proto.Lease{ID: d, Offer: "h100", State: proto.LeaseReady, SSHKeys: []string{"ssh-ed25519 bWluaQ== errand"}, Target: &proto.LeaseTarget{SSH: "ubuntu@203.0.113.9", HostKey: hostKey}}
+	// Two leases share an ending, and this device is let into only one.
+	e, f := "01JZ0000000000000000AEE11A", "01JZ0000000000000000BEE11A"
+	otherF := other
+	otherF.ID = f
 	var admitted atomic.Value
 	admitted.Store("")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -101,6 +105,9 @@ func TestLeasePeerNames(t *testing.T) {
 			// Leased from another of the owner's devices, whose key this
 			// one does not have.
 			other,
+			ready(e, "ubuntu@203.0.113.10"), otherF,
+			// Not a lease ID; a peer must not get it printed.
+			ready("\x1b]0;owned\a000000000000000BAD", "ubuntu@203.0.113.11"),
 		}})
 	}))
 	defer srv.Close()
@@ -113,13 +120,13 @@ func TestLeasePeerNames(t *testing.T) {
 	// The shortest ending that is not taken by another lease or a
 	// configured peer; a launching lease, or one for another client's key,
 	// is not a peer here.
-	if want := []string{"cloud-0a7f3a", "cloud-b7f3a"}; !slices.Equal(names, want) {
+	if want := []string{"cloud-0a7f3a", "cloud-b7f3a", "cloud-aee11a"}; !slices.Equal(names, want) {
 		t.Fatalf("names %q, want %q", names, want)
 	}
 	if peer, ok, err := findLeasePeer(cfg, "cloud-b7f3a"); err != nil || !ok || peer.SSH != "ubuntu@203.0.113.8" {
 		t.Fatalf("found %+v %v %v", peer, ok, err)
 	}
-	for name, want := range map[string]string{"cloud-7f3a": "more than one lease", "cloud-00cc": "no ready lease of yours"} {
+	for name, want := range map[string]string{"cloud-7f3a": "more than one lease", "cloud-00cc": "no ready lease of yours", "cloud-ee11a": "more than one lease", "cloud-0bad": "no ready lease of yours"} {
 		if _, _, err := findLeasePeer(cfg, name); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %v", name, err)
 		}
@@ -278,6 +285,15 @@ func TestAdmitLeaseKeysAppendsEachKeyOnce(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(home, ".ssh", "authorized_keys"))
 	if err != nil || string(got) != mac+"\n"+mini+"\n" {
 		t.Fatalf("authorized_keys %q %v", got, err)
+	}
+	// A hand-edited file whose last line has no newline keeps that line.
+	const air = "ssh-ed25519 YWly errand"
+	os.WriteFile(filepath.Join(home, ".ssh", "authorized_keys"), []byte(mac), 0o600)
+	if err := admitLeaseKeys(context.Background(), target, "", []string{air}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(home, ".ssh", "authorized_keys")); string(got) != mac+"\n"+air+"\n" {
+		t.Fatalf("authorized_keys %q", got)
 	}
 	if info, err := os.Stat(filepath.Join(home, ".ssh", "authorized_keys")); err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %v %v", info.Mode(), err)

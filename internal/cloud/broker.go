@@ -741,10 +741,17 @@ func (b *Broker) watch(l *lease) {
 func (b *Broker) admitPending(l *lease, r record) {
 	keys := slices.Clone(r.PendingKeys)
 	if r.Target.SSH != "" {
-		ctx, cancel := context.WithTimeout(b.ctx, admitTimeout)
+		ctx, cancel, ok := b.readyCall(l, r, admitTimeout)
+		if !ok {
+			cancel()
+			return
+		}
 		err := b.cfg.AdmitKeys(ctx, *r.Target, r.Identity, keys)
 		cancel()
 		if err != nil {
+			if b.stopped(l) {
+				return // released meanwhile; nothing to retry
+			}
 			b.note(l, "adding another device's SSH key failed, retrying: "+err.Error())
 			return
 		}
@@ -782,17 +789,30 @@ func (r *record) releaseReason(now time.Time, busy bool) string {
 	return ""
 }
 
+// readyCall bounds a worker's call to a ready lease's machine by timeout and
+// the lease's hard stop, and lets a release cancel it rather than wait for
+// it. ok is false when the lease is no longer ready.
+func (b *Broker) readyCall(l *lease, r record, timeout time.Duration) (ctx context.Context, cancel context.CancelFunc, ok bool) {
+	ctx, cancel = context.WithDeadline(b.ctx, earlier(time.Now().Add(timeout), r.ExpiresAt))
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	l.stop = cancel
+	return ctx, cancel, l.State == proto.LeaseReady
+}
+
+// stopped reports whether a lease is no longer ready.
+func (b *Broker) stopped(l *lease) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return l.State != proto.LeaseReady
+}
+
 // busy reports whether the machine has work, asking no later than the
 // lease's hard stop.
 func (b *Broker) busy(l *lease, r record) bool {
-	ctx, cancel := context.WithDeadline(b.ctx, earlier(time.Now().Add(5*time.Second), r.ExpiresAt))
+	ctx, cancel, ok := b.readyCall(l, r, 5*time.Second)
 	defer cancel()
-	// A release request cancels the probe rather than wait for it.
-	b.mu.Lock()
-	l.stop = cancel
-	stopped := l.State != proto.LeaseReady
-	b.mu.Unlock()
-	if stopped {
+	if !ok {
 		return false
 	}
 	info, err := b.cfg.Probe(ctx, *r.Target, r.Identity, "")
