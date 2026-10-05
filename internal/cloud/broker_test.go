@@ -960,15 +960,16 @@ func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 // withdraws, the cloud peer restarts, and the lease ends only when the other
 // withdraws.
 func TestWithdrawalsSurviveRestart(t *testing.T) {
-	h := newHarness(t, okAcquire)
+	h := newHarness(t, "sleep 0.3\n"+okAcquire)
 	h.cfg.Offers[0].IdleTimeout = time.Hour
 	b := h.start(t)
 	first, second := proto.NewULID(), proto.NewULID()
 	l, _ := b.Acquire("george", "", "gpu", "", first)
-	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	// Both runs are handed the lease while it launches.
 	if _, err := b.Acquire("george", "", "gpu", "", second); err != nil {
 		t.Fatal(err)
 	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	if w, err := b.Withdraw("george", first); err != nil || !w.Shared {
 		t.Fatalf("first withdrawal: %+v %v", w, err)
 	}
@@ -985,6 +986,32 @@ func TestWithdrawalsSurviveRestart(t *testing.T) {
 		t.Fatalf("last withdrawal: %+v %v", w, err)
 	}
 	waitState(t, b2, "george", l.ID, proto.LeaseReleased)
+}
+
+// Runs whose jobs start and end between two idle checks never withdraw.
+// Handing the ready lease to a later run counts as use, so they do not pile
+// up as holders and turn later runs away; the latest run can still withdraw,
+// which leaves the lease to the idle rule.
+func TestReadyLeaseReuseKeepsNoStaleHolders(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.Offers[0].IdleTimeout = time.Hour
+	b := h.start(t)
+	l, _ := b.Acquire("george", "", "gpu", "", proto.NewULID())
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	var last string
+	for i := range maxHolders + 2 {
+		last = proto.NewULID()
+		if _, err := b.Acquire("george", "", "gpu", "", last); err != nil {
+			t.Fatalf("reuse %d: %v", i, err)
+		}
+	}
+	if w, err := b.Withdraw("george", last); err != nil || !w.Shared {
+		t.Fatalf("withdrawal: %+v %v", w, err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
+		t.Fatalf("a reused lease ended when its latest run withdrew: %+v", got)
+	}
 }
 
 // A lease takes a bounded number of runs waiting to use it.

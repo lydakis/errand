@@ -63,7 +63,8 @@ The cloud peer releases the lease once no run it was given still holds it; a
 ready lease is released at its next check unless a job is running on it. Once
 a job is admitted, or may have been because its answer was lost, the lease is
 left to the idle rule below. Being given to a run counts as use, so a reused
-lease starts a full idle window.
+ready lease starts a full idle window and is from then left to the idle rule
+too.
 
 ## Leases
 

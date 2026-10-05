@@ -281,18 +281,21 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 			return l.handed(), nil
 		}
 	}
-	// A lease handed to another request is held by that request too, and
-	// being handed out counts as use, so the request gets a full idle window
-	// to submit its work.
+	// A launching lease handed to another request is held by that request
+	// too. Handing out a ready lease counts as use: the request gets a full
+	// idle window to submit its work, and from then only the idle and
+	// lifetime rules end the lease. Earlier requests whose jobs ran between
+	// two idle checks never withdraw, so holders could otherwise pile up;
+	// only the latest is kept, so it can still ask again or withdraw.
 	share := func(l *lease) (proto.Lease, error) {
-		if !l.Used && len(l.Holders) >= maxHolders {
+		if !l.Used && l.State == proto.LeaseLaunching && len(l.Holders) >= maxHolders {
 			return proto.Lease{}, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease %s already has %d runs waiting to use it", l.ID, maxHolders)}
 		}
 		err := b.applyLocked(l, func(r *record) bool {
-			if r.State == proto.LeaseReady {
-				r.LastBusy = time.Now()
-			}
-			if !r.Used {
+			switch {
+			case r.State == proto.LeaseReady:
+				r.LastBusy, r.Used, r.Holders = time.Now(), true, []string{requestID}
+			case !r.Used:
 				r.Holders = append(slices.Clone(r.Holders), requestID)
 			}
 			r.admit(sshKey)
