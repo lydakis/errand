@@ -30,7 +30,14 @@ receipt confirms success, and applied files hold the job's contents; those
 checks run outside the timer. Each row reports median, p95, minimum and
 maximum, the client's CPU per command (the watch process's CPU per save), and
 the daemon's CPU when it is isolated. Jobs run cold first, then warm, so cold
-and warm are separate rows.
+and warm are separate rows. Jobs other than `apply` pass `--no-apply`, so a
+personal `apply_on_success` does not change them, and fixture commits do not
+sign.
+
+A burst ends at the first silence longer than twice the slowest push seen so
+far: the slowest single save, the wait for the burst's first receipt, or the
+longest gap between its receipts, and at least one second. A push that lands
+after that fails the run instead of being left out of the row.
 
 Visible times on a configured peer need `--observe PEER=SSH_HOST[:STATE_DIR]`:
 a small Python poller runs on the runner over SSH and reads the workspace's

@@ -90,7 +90,9 @@ def write_fixture(root, files, nonce):
         directory.mkdir(exist_ok=True)
         (directory / f"file-{i:06d}.txt").write_text(f"{nonce} file {i}\n")
     (root / "edit.txt").write_text(f"{nonce} before\n")
-    git = ["git", "-C", str(root), "-c", "user.email=bench@example.invalid", "-c", "user.name=bench"]
+    # Signing would ask for the user's key, or fail without it.
+    git = ["git", "-C", str(root), "-c", "user.email=bench@example.invalid", "-c", "user.name=bench",
+           "-c", "commit.gpgsign=false"]
     subprocess.run([*git, "init", "-q"], check=True)
     subprocess.run([*git, "add", "-A"], check=True)
     subprocess.run([*git, "commit", "-qm", "fixture"], check=True)
@@ -181,6 +183,29 @@ class Lines:
         self.process.stdin.write(line + "\n")
         self.process.stdin.flush()
 
+    def stop(self, timeout):
+        """Interrupt the process; return its exit code, or None if it had to be killed."""
+        self.process.send_signal(signal.SIGINT)
+        try:
+            code = self.process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait()
+            code = None
+        self.reader.join(timeout=5)
+        return code
+
+    def remaining(self):
+        """Lines that arrived but were never read."""
+        out = []
+        while True:
+            try:
+                _, line = self.lines.get_nowait()
+            except queue.Empty:
+                return out
+            if line is not None:
+                out.append(line)
+
 
 def observer_command(target, workspace, timeout):
     """Return the poller command for the runner's copy of edit.txt; SSH_HOST None runs it here."""
@@ -202,6 +227,34 @@ def observer(target, workspace, temp, env, timeout):
     return lines
 
 
+def applied(line):
+    try:
+        return json.loads(line).get("status") == "applied"
+    except ValueError:
+        return False
+
+
+def burst_receipts(receipt, started, quiet):
+    """Read a burst's receipts; return the last one's stamp and how many arrived.
+
+    The watch pushes a burst back to back, so the next receipt can take as long
+    as a push. The burst has converged at the first silence longer than `quiet`,
+    which grows to twice the wait for the first receipt and twice the longest
+    gap between receipts.
+    """
+    stamp, _ = receipt()
+    count, quiet = 1, max(quiet, 2 * (stamp - started))
+    while True:
+        try:
+            following, _ = receipt(quiet)
+        except NoOutput:
+            return stamp, count
+        quiet = max(quiet, 2 * (following - stamp))
+        stamp, count = following, count + 1
+        if count > BURST_EDITS:
+            raise ValueError("a save burst produced more receipts than saves")
+
+
 def measure_saves(loop, peer, files, samples, seed, temp, record, target):
     repo = temp / f"saves-{peer}-{files}"
     write_fixture(repo, files, f"{seed}:saves")
@@ -209,11 +262,12 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
     row, stdout, _ = loop.run(repo, "workspaces", "create", "--on", peer, "--json", name)
     record("workspace-create", 0, row)
     workspace = json.loads(stdout)["id"]
-    watch = poller = cleanup = None
-    code, log = 0, temp / f"watch-{name}.log"
+    watch = poller = cleanup = burst = None
+    code, late, log = 0, 0, temp / f"watch-{name}.log"
     try:
         if target:
             poller = observer(target, workspace, temp, loop.env, loop.timeout)
+        daemon = cpu_seconds(loop.daemon.pid)[0] if loop.daemon else None
         started = time.monotonic()
         with log.open("w") as stderr:
             watch = Lines([loop.binary, "push", "--on", peer, "--workspace", name, "--apply", "--json", "--watch"],
@@ -227,7 +281,11 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
             return stamp, row
 
         stamp, _ = receipt()
-        record("watch-start", 0, dict(wall_ms=(stamp - started) * 1000))
+        result = dict(wall_ms=(stamp - started) * 1000, client_cpu_ms=cpu_seconds(watch.process.pid)[0] * 1000)
+        if loop.daemon:
+            result["daemon_cpu_ms"] = (cpu_seconds(loop.daemon.pid)[0] - daemon) * 1000
+        record("watch-start", 0, result)
+        slowest = 0
         for sample in range(samples):
             time.sleep(SAVE_PAUSE_SECONDS)
             body = f"{seed} save {sample}"
@@ -241,6 +299,7 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
             if row["status"] != "applied":
                 raise ValueError("a save produced no transfer")
             result = dict(wall_ms=(stamp - started) * 1000)
+            slowest = max(slowest, stamp - started)
             if poller:
                 seen, status = poller.next(loop.timeout)
                 if status != "seen":
@@ -255,6 +314,8 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
         last = f"{seed} burst {BURST_EDITS - 1}"
         if poller:
             poller.send(last)
+        client = cpu_seconds(watch.process.pid)[0]
+        daemon = cpu_seconds(loop.daemon.pid)[0] if loop.daemon else None
         started = time.monotonic()
         for edit in range(BURST_EDITS):
             (repo / "edit.txt").write_text(f"{seed} burst {edit}\n")
@@ -265,33 +326,39 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
             if status != "seen":
                 raise ValueError("the runner's copy never showed the last save of the burst")
             result["visible_ms"] = (seen - started) * 1000
-        # The watch coalesces the burst; its last receipt is the first one followed by a quiet second.
-        stamp, _ = receipt()
-        receipts = 1
-        while True:
-            try:
-                stamp, _ = receipt(1)
-                receipts += 1
-            except NoOutput:
-                break
-            if receipts > BURST_EDITS:
-                raise ValueError("a save burst produced more receipts than saves")
-        record("burst", 0, dict(wall_ms=(stamp - started) * 1000, receipts=receipts, **result))
+        # The watch coalesces the burst into back-to-back pushes; wait out at
+        # least twice the slowest single save before calling it finished.
+        stamp, receipts = burst_receipts(receipt, started, max(1, 2 * slowest))
+        result.update(wall_ms=(stamp - started) * 1000, receipts=receipts,
+                      client_cpu_ms=(cpu_seconds(watch.process.pid)[0] - client) * 1000)
+        if loop.daemon:
+            result["daemon_cpu_ms"] = (cpu_seconds(loop.daemon.pid)[0] - daemon) * 1000
+        burst = result
     finally:
         if watch:
-            watch.process.send_signal(signal.SIGINT)  # Ctrl-C finishes the in-flight push and exits
-            code = watch.process.wait(timeout=loop.timeout)
+            code = watch.stop(loop.timeout)  # Ctrl-C finishes the in-flight push and exits
+            # A push that lands after the burst was measured means it had not converged.
+            late = sum(applied(line) for line in watch.remaining())
         if poller:
             poller.process.stdin.close()
-            poller.process.wait(timeout=60)
+            try:
+                poller.process.wait(timeout=60)
+            except subprocess.TimeoutExpired:
+                poller.process.kill()
+                poller.process.wait()
         try:
             loop.run(repo, "workspaces", "rm", "--on", peer, name)
         except ValueError as error:
             cleanup = error  # reported below unless an earlier failure is already propagating
+    if code is None:
+        raise ValueError(f"watch did not stop within {loop.timeout} s and was killed: {log.read_text()[-2000:]}")
     if code:
         raise ValueError(f"watch exited {code}: {log.read_text()[-2000:]}")
     if cleanup:
         raise cleanup
+    if late:
+        raise ValueError(f"{late} push(es) finished after the burst was measured; it had not converged")
+    record("burst", 0, burst)
 
 
 def measure(loop, peer, files, samples, save_samples, nonce, temp, record, target):
@@ -299,7 +366,7 @@ def measure(loop, peer, files, samples, save_samples, nonce, temp, record, targe
     seed = f"{nonce}:{peer}:{files}"
     measure_saves(loop, peer, files, save_samples, seed, temp, record, target)
     write_fixture(repo, files, seed)
-    on = ["--on", peer]
+    on = ["--on", peer, "--no-apply"]  # a personal apply_on_success must not reach jobs that do not apply
 
     def expect_out(body):
         if (repo / "out.txt").read_text().strip() != body:
@@ -325,7 +392,8 @@ def measure(loop, peer, files, samples, save_samples, nonce, temp, record, targe
         loop.verify(repo, job)
         record("first-output", sample, row)
 
-        row, job = loop.job(repo, *on, "--apply", "--", "sh", "-c", f"echo a{sample} > out.txt", scenario="cached")
+        row, job = loop.job(repo, "--on", peer, "--apply", "--", "sh", "-c", f"echo a{sample} > out.txt",
+                            scenario="cached")
         loop.verify(repo, job)
         expect_out(f"a{sample}")
         record("apply", sample, row)

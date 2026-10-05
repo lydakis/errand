@@ -181,7 +181,8 @@ def measure(args, storage, socket_dir, report):
             if args.selection == "git":
                 (root / ".errandignore").unlink()
                 (root / ".gitignore").write_text("ignored/\n")
-                git = ["git", "-C", str(root), "-c", "user.name=bench", "-c", "user.email=bench@example.invalid"]
+                git = ["git", "-C", str(root), "-c", "user.name=bench", "-c", "user.email=bench@example.invalid",
+                       "-c", "commit.gpgsign=false"]
                 subprocess.run([*git, "init", "-q"], check=True, capture_output=True)
                 if args.git_tracking != "none":
                     tracked = ["."] if args.git_tracking == "all" else [

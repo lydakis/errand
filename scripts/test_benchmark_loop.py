@@ -3,8 +3,9 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
-from benchmark_loop import Lines, Loop, observer_command, summarize
+from benchmark_loop import Lines, Loop, NoOutput, burst_receipts, observer_command, summarize, write_fixture
 
 
 class LoopRunTest(unittest.TestCase):
@@ -25,6 +26,16 @@ class LoopRunTest(unittest.TestCase):
                               (("-c", "sleep 5"), "timed out")]:
             with self.subTest(args=args), self.assertRaisesRegex(ValueError, message):
                 self.loop.run(self.cwd, *args, marker="ready")
+
+
+class LinesTest(unittest.TestCase):
+    def test_stop_kills_a_process_that_ignores_ctrl_c(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            lines = Lines(["sh", "-c", "trap '' INT; echo up; sleep 30"], cwd, dict(os.environ))
+            self.assertEqual(lines.next(10)[1], "up")
+            self.assertIsNone(lines.stop(0.5))
+            self.assertIsNotNone(lines.process.poll())
+            self.assertEqual(lines.remaining(), [])
 
 
 class ObserverTest(unittest.TestCase):
@@ -53,6 +64,39 @@ class ObserverTest(unittest.TestCase):
             finally:
                 poller.process.stdin.close()
                 poller.process.wait(timeout=10)
+
+
+class FixtureTest(unittest.TestCase):
+    def test_commit_ignores_the_users_signing_setup(self):
+        with tempfile.TemporaryDirectory() as home:
+            # Signing with a program that always fails, as a locked key would.
+            Path(home, ".gitconfig").write_text("[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = false\n")
+            with mock.patch.dict(os.environ, HOME=home, XDG_CONFIG_HOME=home, GIT_CONFIG_NOSYSTEM="1"):
+                write_fixture(Path(home, "repo"), 3, "n")
+            log = subprocess.run(["git", "-C", str(Path(home, "repo")), "log", "--oneline"],
+                                 capture_output=True, text=True, check=True)
+            self.assertEqual(len(log.stdout.splitlines()), 1)
+
+
+class BurstTest(unittest.TestCase):
+    @staticmethod
+    def receipts(stamps):
+        """Return receipts arriving at `stamps`, timed out the way the watch reader is."""
+        stamps, now = list(stamps), [0.0]
+
+        def receipt(timeout=600):
+            if not stamps or stamps[0] - now[0] > timeout:
+                raise NoOutput("quiet")
+            now[0] = stamps.pop(0)
+            return now[0], {}
+        return receipt
+
+    def test_waits_through_gaps_as_long_as_the_pushes(self):
+        # Pushes of about 1.5 s: a fixed one-second silence would stop after the first.
+        self.assertEqual(burst_receipts(self.receipts([1.5, 3.0, 4.6]), 0, 1), (4.6, 3))
+
+    def test_stops_at_a_silence_longer_than_twice_the_slowest_push(self):
+        self.assertEqual(burst_receipts(self.receipts([0.3, 0.6, 2.0]), 0, 1), (0.6, 2))
 
 
 class SummaryTest(unittest.TestCase):
