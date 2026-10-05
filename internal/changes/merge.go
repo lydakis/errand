@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/lydakis/errand/internal/fslink"
+	"github.com/lydakis/errand/internal/limitbuf"
 	"github.com/lydakis/errand/internal/nowindow"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -37,23 +38,6 @@ type mergeTree struct {
 }
 
 type treeDelta map[string]bool
-
-type truncatingBuffer struct {
-	bytes.Buffer
-	remaining int
-}
-
-func (w *truncatingBuffer) Write(p []byte) (int, error) {
-	written := len(p)
-	if len(p) > w.remaining {
-		p = p[:w.remaining]
-	}
-	if len(p) != 0 {
-		_, _ = w.Buffer.Write(p)
-		w.remaining -= len(p)
-	}
-	return written, nil
-}
 
 func mergeChangeRoots(
 	ctx context.Context,
@@ -422,7 +406,7 @@ func mergeRegularFile(
 	)
 	nowindow.Hide(cmd)
 	cmd.Stdout = out
-	stderr := truncatingBuffer{remaining: 32 << 10}
+	stderr := limitbuf.Buffer{Limit: 32 << 10}
 	cmd.Stderr = &stderr
 	runErr := cmd.Run()
 	outputInfo, statErr := out.Stat()
