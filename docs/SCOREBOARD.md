@@ -30,9 +30,10 @@ receipt confirms success, and applied files hold the job's contents; those
 checks run outside the timer. Each row reports median, p95, minimum and
 maximum, the client's CPU per command (the watch process's CPU per save), and
 the daemon's CPU when it is isolated. Jobs run cold first, then warm, so cold
-and warm are separate rows. Jobs other than `apply` pass `--no-apply`, so a
-personal `apply_on_success` does not change them, and fixture commits do not
-sign.
+and warm are separate rows. Configured peers run with a client config holding
+only their entries from the user's, so personal environment, forwards, caches,
+artifacts and `apply_on_success` do not change the timed commands, and fixture
+commits ignore the user's Git configuration.
 
 A burst ends at the first silence longer than twice the slowest push seen so
 far: the slowest single save, the wait for the burst's first receipt, or the

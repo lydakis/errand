@@ -181,15 +181,16 @@ def measure(args, storage, socket_dir, report):
             if args.selection == "git":
                 (root / ".errandignore").unlink()
                 (root / ".gitignore").write_text("ignored/\n")
-                git = ["git", "-C", str(root), "-c", "user.name=bench", "-c", "user.email=bench@example.invalid",
-                       "-c", "commit.gpgsign=false"]
-                subprocess.run([*git, "init", "-q"], check=True, capture_output=True)
+                git = ["git", "-C", str(root), "-c", "user.name=bench", "-c", "user.email=bench@example.invalid"]
+                # The user's Git configuration must not sign, ignore or hook the fixture.
+                fixture = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+                subprocess.run([*git, "init", "-q"], check=True, capture_output=True, env=fixture)
                 if args.git_tracking != "none":
                     tracked = ["."] if args.git_tracking == "all" else [
                         ".gitignore", "edit.txt", *sorted(p.name for p in root.glob("package-*") if int(p.name.split("-")[1]) % 2 == 0),
                         *sorted(p.name for p in root.glob("victim-*"))]
-                    subprocess.run([*git, "add", "--", *tracked], check=True, capture_output=True)
-                    subprocess.run([*git, "commit", "-q", "-m", "fixture"], check=True, capture_output=True)
+                    subprocess.run([*git, "add", "--", *tracked], check=True, capture_output=True, env=fixture)
+                    subprocess.run([*git, "commit", "-q", "-m", "fixture"], check=True, capture_output=True, env=fixture)
             (root / "ignored").mkdir()
             # Creation and the watch's first scan grow with the workspace (over two
             # minutes and 25 s at 100K files on a Linux host); slower disks need more.

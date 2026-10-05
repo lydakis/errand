@@ -45,6 +45,7 @@ import sys
 import tempfile
 import threading
 import time
+import tomllib
 import uuid
 
 from benchmark import checked_json, parse_transfer, positive, successful_receipt
@@ -90,12 +91,36 @@ def write_fixture(root, files, nonce):
         directory.mkdir(exist_ok=True)
         (directory / f"file-{i:06d}.txt").write_text(f"{nonce} file {i}\n")
     (root / "edit.txt").write_text(f"{nonce} before\n")
-    # Signing would ask for the user's key, or fail without it.
-    git = ["git", "-C", str(root), "-c", "user.email=bench@example.invalid", "-c", "user.name=bench",
-           "-c", "commit.gpgsign=false"]
-    subprocess.run([*git, "init", "-q"], check=True)
-    subprocess.run([*git, "add", "-A"], check=True)
-    subprocess.run([*git, "commit", "-qm", "fixture"], check=True)
+    # The user's Git configuration must not sign, ignore or hook the fixture.
+    env = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    git = ["git", "-C", str(root), "-c", "user.email=bench@example.invalid", "-c", "user.name=bench"]
+    subprocess.run([*git, "init", "-q"], check=True, env=env)
+    subprocess.run([*git, "add", "-A"], check=True, env=env)
+    subprocess.run([*git, "commit", "-qm", "fixture"], check=True, env=env)
+
+
+def peer_config(source, target, names):
+    """Write a client config holding only the named peers from the personal one.
+
+    Everything else in it (environment, forwards, caches, artifacts, apply on
+    success) would change what the timed commands do.
+    """
+    peers = tomllib.loads(source.read_text()).get("peers", {}) if source.exists() else {}
+    lines = []
+    for name in names:
+        if name not in peers:
+            raise ValueError(f"peer {name} is not configured in {source}")
+        lines.append(f"[peers.{json.dumps(name)}]")
+        lines += [f"{key} = {json.dumps(value)}" for key, value in peers[name].items()]
+    target.parent.mkdir(parents=True)
+    target.write_text("\n".join(lines) + "\n")
+
+
+def kill_group(process):
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 class Loop:
@@ -107,9 +132,10 @@ class Loop:
         client = children_cpu()
         daemon = cpu_seconds(self.daemon.pid)[0] if self.daemon else None
         started = time.monotonic()
+        # Its own process group, so a timeout also ends an SSH transport holding the pipes.
         process = subprocess.Popen([self.binary, *args], cwd=cwd, env=self.env, text=True,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        watchdog = threading.Timer(self.timeout, process.kill)
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        watchdog = threading.Timer(self.timeout, kill_group, [process])
         watchdog.start()
         first, lines = None, []
         try:
@@ -158,7 +184,7 @@ class Lines:
 
     def __init__(self, argv, cwd, env, stdin=None, stderr=subprocess.DEVNULL):
         self.process = subprocess.Popen(argv, cwd=cwd, env=env, text=True, stdin=stdin,
-                                        stdout=subprocess.PIPE, stderr=stderr)
+                                        stdout=subprocess.PIPE, stderr=stderr, start_new_session=True)
         self.lines = queue.Queue()
         self.reader = threading.Thread(target=self.read, daemon=True)
         self.reader.start()
@@ -189,7 +215,7 @@ class Lines:
         try:
             code = self.process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            self.process.kill()
+            kill_group(self.process)
             self.process.wait()
             code = None
         self.reader.join(timeout=5)
@@ -344,7 +370,7 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
             try:
                 poller.process.wait(timeout=60)
             except subprocess.TimeoutExpired:
-                poller.process.kill()
+                kill_group(poller.process)
                 poller.process.wait()
         try:
             loop.run(repo, "workspaces", "rm", "--on", peer, name)
@@ -366,7 +392,7 @@ def measure(loop, peer, files, samples, save_samples, nonce, temp, record, targe
     seed = f"{nonce}:{peer}:{files}"
     measure_saves(loop, peer, files, save_samples, seed, temp, record, target)
     write_fixture(repo, files, seed)
-    on = ["--on", peer, "--no-apply"]  # a personal apply_on_success must not reach jobs that do not apply
+    on = ["--on", peer]
 
     def expect_out(body):
         if (repo / "out.txt").read_text().strip() != body:
@@ -392,8 +418,7 @@ def measure(loop, peer, files, samples, save_samples, nonce, temp, record, targe
         loop.verify(repo, job)
         record("first-output", sample, row)
 
-        row, job = loop.job(repo, "--on", peer, "--apply", "--", "sh", "-c", f"echo a{sample} > out.txt",
-                            scenario="cached")
+        row, job = loop.job(repo, *on, "--apply", "--", "sh", "-c", f"echo a{sample} > out.txt", scenario="cached")
         loop.verify(repo, job)
         expect_out(f"a{sample}")
         record("apply", sample, row)
@@ -500,17 +525,20 @@ def main():
         # A socket path must stay short, so the temporary tree lives in the system temp directory.
         with tempfile.TemporaryDirectory(prefix="errand-loop-") as directory:
             temp = Path(directory).resolve()
-            # Isolate local receipt and apply state; configured peers keep the user's config.
-            env = dict(os.environ, XDG_STATE_HOME=str(temp / "state"))
+            # Isolate local receipt and apply state, and the client config: configured
+            # peers keep only their own entries from the user's config.
+            env = dict(os.environ, XDG_STATE_HOME=str(temp / "state"), XDG_CONFIG_HOME=str(temp / "config"))
             peers = args.on
             if args.isolated:
-                env["XDG_CONFIG_HOME"] = str(temp / "config")
                 (temp / "sockets").mkdir()
                 with (output / "daemon.log").open("w") as log:
                     daemon = start_daemon(binary, env, temp, temp / "sockets", log)
                 report["daemon_filesystem"] = filesystem_facts(temp)
                 peers = ["local"]
                 targets = {"local": (None, str(temp / "daemon"))}
+            else:
+                personal = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "errand" / "config.toml"
+                peer_config(personal, temp / "config" / "errand" / "config.toml", peers)
             report["client_version"] = subprocess.check_output([binary, "version"], env=env, text=True).strip()
             loop = Loop(binary, env, args.timeout, daemon)
             for peer in peers:

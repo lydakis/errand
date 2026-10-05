@@ -2,10 +2,13 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
+import tomllib
 import unittest
 from unittest import mock
 
-from benchmark_loop import Lines, Loop, NoOutput, burst_receipts, observer_command, summarize, write_fixture
+from benchmark_loop import (Lines, Loop, NoOutput, burst_receipts, observer_command, peer_config, summarize,
+                            write_fixture)
 
 
 class LoopRunTest(unittest.TestCase):
@@ -26,6 +29,13 @@ class LoopRunTest(unittest.TestCase):
                               (("-c", "sleep 5"), "timed out")]:
             with self.subTest(args=args), self.assertRaisesRegex(ValueError, message):
                 self.loop.run(self.cwd, *args, marker="ready")
+
+    def test_timeout_ends_children_that_hold_the_pipes(self):
+        # Like an SSH transport outliving the client it serves.
+        started = time.monotonic()
+        with self.assertRaisesRegex(ValueError, "timed out"):
+            self.loop.run(self.cwd, "-c", "sleep 30 & sleep 30")
+        self.assertLess(time.monotonic() - started, 10)
 
 
 class LinesTest(unittest.TestCase):
@@ -67,15 +77,36 @@ class ObserverTest(unittest.TestCase):
 
 
 class FixtureTest(unittest.TestCase):
-    def test_commit_ignores_the_users_signing_setup(self):
+    def test_commit_ignores_the_users_git_configuration(self):
         with tempfile.TemporaryDirectory() as home:
+            hooks = Path(home, "hooks")
+            hooks.mkdir()
+            (hooks / "pre-commit").write_text("#!/bin/sh\nexit 1\n")
+            (hooks / "pre-commit").chmod(0o755)
+            Path(home, "ignore").write_text("*.txt\n")
             # Signing with a program that always fails, as a locked key would.
-            Path(home, ".gitconfig").write_text("[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = false\n")
+            Path(home, ".gitconfig").write_text(f"[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = false\n"
+                                                f"[core]\n\texcludesFile = {home}/ignore\n\thooksPath = {hooks}\n")
             with mock.patch.dict(os.environ, HOME=home, XDG_CONFIG_HOME=home, GIT_CONFIG_NOSYSTEM="1"):
                 write_fixture(Path(home, "repo"), 3, "n")
-            log = subprocess.run(["git", "-C", str(Path(home, "repo")), "log", "--oneline"],
-                                 capture_output=True, text=True, check=True)
-            self.assertEqual(len(log.stdout.splitlines()), 1)
+            tracked = subprocess.run(["git", "-C", str(Path(home, "repo")), "ls-files"],
+                                     capture_output=True, text=True, check=True)
+            self.assertEqual(len(tracked.stdout.splitlines()), 4)
+
+
+class PeerConfigTest(unittest.TestCase):
+    def test_keeps_only_the_selected_peers(self):
+        with tempfile.TemporaryDirectory() as root:
+            personal = Path(root, "config.toml")
+            personal.write_text('apply_on_success = true\n[env]\npass = ["UNSET_FOR_TEST"]\n'
+                                '[session]\nforward = ["8080"]\n[peers.cabal]\nurl = "http://cabal:7443"\n'
+                                '[peers."mac mini"]\nssh = "mini"\nremote_command = "/opt/errand"\n')
+            target = Path(root, "scratch", "errand", "config.toml")
+            peer_config(personal, target, ["mac mini"])
+            self.assertEqual(tomllib.loads(target.read_text()),
+                             {"peers": {"mac mini": {"ssh": "mini", "remote_command": "/opt/errand"}}})
+            with self.assertRaisesRegex(ValueError, "not configured"):
+                peer_config(personal, Path(root, "other", "config.toml"), ["absent"])
 
 
 class BurstTest(unittest.TestCase):
