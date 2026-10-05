@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"os"
-	"sync/atomic"
+	"sync"
 	"time"
 )
 
@@ -75,7 +75,46 @@ type admittedJobController struct {
 	remote        chan struct{}
 	forwarded     chan error
 	done          chan struct{}
-	delivered     atomic.Bool // the runner accepted a forwarded SIGINT or force-kill
+	escalation    escalation
+}
+
+// Escalation levels: each Ctrl-C asks for more than the one before.
+const (
+	escalateNone = iota
+	escalateSIGINT
+	escalateForceKill
+)
+
+// escalation records the strongest stop the user asked for and the strongest
+// the runner confirmed. Only the latest request matters: a confirmed SIGINT
+// says nothing about a force-kill sent after it.
+type escalation struct {
+	mu        sync.Mutex
+	requested int
+	confirmed int
+}
+
+func (e *escalation) request(level int) {
+	e.mu.Lock()
+	e.requested = max(e.requested, level)
+	e.mu.Unlock()
+}
+
+func (e *escalation) confirm(level int) {
+	e.mu.Lock()
+	e.confirmed = max(e.confirmed, level)
+	e.mu.Unlock()
+}
+
+// unconfirmed returns the requested level the runner has not confirmed, or
+// escalateNone.
+func (e *escalation) unconfirmed() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.confirmed >= e.requested {
+		return escalateNone
+	}
+	return e.requested
 }
 
 func newAdmittedJobController(target interruptTarget) *admittedJobController {
@@ -159,6 +198,7 @@ firstSignal:
 	}
 
 	close(c.remote)
+	c.escalation.request(escalateSIGINT)
 	c.target.report("forwarding SIGINT to %s (Ctrl-C again to force-kill)", c.target.handle)
 	forwardCtx, cancelForward := context.WithCancel(ctx)
 	defer cancelForward()
@@ -170,7 +210,7 @@ firstSignal:
 			true,
 		)
 		if err == nil {
-			c.delivered.Store(true) // never cleared: a later failure can't undo a delivery
+			c.escalation.confirm(escalateSIGINT)
 		}
 		c.forwarded <- err
 		if err != nil && ctx.Err() == nil {
@@ -184,6 +224,7 @@ firstSignal:
 	case <-sigCh:
 	}
 	cancelForward()
+	c.escalation.request(escalateForceKill)
 	c.target.report("force-killing %s", c.target.handle)
 	// Further Ctrl-Cs must recover their normal local behavior even if the
 	// force-kill control request loses contact with the peer.
@@ -197,7 +238,7 @@ firstSignal:
 		false,
 	)
 	if err == nil {
-		c.delivered.Store(true)
+		c.escalation.confirm(escalateForceKill)
 	} else if ctx.Err() == nil {
 		c.target.report("force-kill failed: %v; process may still be running; handle %s", err, c.target.handle)
 	}
@@ -206,13 +247,11 @@ firstSignal:
 // reportUnconfirmedInterrupt runs when following stops before the job's end.
 // A Ctrl-C the runner never accepted must not read as a stopped job.
 func (c *admittedJobController) reportUnconfirmedInterrupt() {
-	select {
-	case <-c.remote:
-	default:
-		return
-	}
-	if !c.delivered.Load() {
+	switch c.escalation.unconfirmed() {
+	case escalateSIGINT:
 		c.target.report("Ctrl-C was not confirmed by the runner; stop the job with: errand kill %s", c.target.handle)
+	case escalateForceKill:
+		c.target.report("force-kill was not confirmed by the runner; the process may still be running; retry with: errand kill --force %s", c.target.handle)
 	}
 }
 

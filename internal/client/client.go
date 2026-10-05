@@ -390,6 +390,11 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 	if detached {
 		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted), false
 	}
+	outputLost := false
+	if terminal, ok := terminalWithoutLogs(err); ok {
+		reportStreamFailure(opts.Stderr, err, handle)
+		final, err, outputLost = terminal, nil, true
+	}
 	if err != nil {
 		if _, workerErr := ensureAutomaticApplyWorker(opts, jobID, automaticWorkerStarted); workerErr != nil {
 			errf("automatic workspace change application could not continue: %v", workerErr)
@@ -409,7 +414,16 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		return signalExit("interrupt", 2), false
 	}
 	forwarding.Close()
-	return finishTerminalChanges(opts, jobID, handle, final), false
+	return withLostOutput(finishTerminalChanges(opts, jobID, handle, final), outputLost), false
+}
+
+// withLostOutput applies the two-layer exit rule to output that never
+// arrived: it fails a successful transaction without hiding a remote failure.
+func withLostOutput(code int, lost bool) int {
+	if lost && code == 0 {
+		return ExitTransaction
+	}
+	return code
 }
 
 func reportAdmissionState(status proto.JobStatus, stderr io.Writer) {
@@ -603,6 +617,11 @@ func attachWithDetachNotifications(
 	if detached {
 		return controller.completeDetach(ctx)
 	}
+	outputLost := false
+	if terminal, ok := terminalWithoutLogs(err); ok {
+		reportStreamFailure(opts.Stderr, err, handle)
+		final, err, outputLost = terminal, nil, true
+	}
 	if err != nil {
 		reportStreamFailure(opts.Stderr, err, handle)
 		controller.reportUnconfirmedInterrupt()
@@ -616,7 +635,7 @@ func attachWithDetachNotifications(
 		return signalExit("interrupt", 2)
 	}
 	forwarding.Close()
-	return finishTerminalChanges(runOpts, opts.JobID, handle, final)
+	return withLostOutput(finishTerminalChanges(runOpts, opts.JobID, handle, final), outputLost)
 }
 
 func finishTerminalChanges(opts RunOptions, jobID, handle string, final proto.JobStatus) int {
@@ -1139,6 +1158,18 @@ func stalledStream(ctx context.Context, peerURL, jobID string, quiet time.Durati
 	return &RunnerUnavailableError{For: quiet, Err: streamErr}
 }
 
+// terminalWithoutLogs returns the job's terminal status when following
+// stopped only because its output could not be replayed. The caller then
+// finishes like any terminal job, keeping the remote exit code, and treats
+// the missing output as a secondary transaction failure.
+func terminalWithoutLogs(err error) (proto.JobStatus, bool) {
+	var stalled *LogStreamStalledError
+	if errors.As(err, &stalled) && stalled.Status != nil && stalled.Status.Result != nil {
+		return *stalled.Status, true
+	}
+	return proto.JobStatus{}, false
+}
+
 // reportStreamFailure explains a follower that stopped before the job's
 // terminal status arrived. When the runner went quiet nothing is known about
 // the job, so the message says so rather than calling it a failure.
@@ -1149,6 +1180,10 @@ func reportStreamFailure(stderr io.Writer, err error, handle string) {
 	case errors.As(err, &unavailable):
 		fmt.Fprintf(stderr, "errand: lost contact with the runner for %s (%s)\n", seconds(unavailable.For), unavailable.reason())
 		fmt.Fprintln(stderr, "errand: job state unknown; it may still be running there")
+	case errors.As(err, &stalled) && stalled.Status != nil && stalled.Status.Result != nil:
+		fmt.Fprintf(stderr, "errand: the job finished, but its output could not be replayed for %s (%v)\n", seconds(stalled.For), stalled.Err)
+		fmt.Fprintf(stderr, "errand: see the full output with: errand attach %s\n", handle)
+		return
 	case errors.As(err, &stalled):
 		fmt.Fprintf(stderr, "errand: the runner answers, but the job's log stream kept failing for %s (%v)\n", seconds(stalled.For), stalled.Err)
 		if stalled.Status != nil {
@@ -1199,7 +1234,7 @@ func streamContext(
 		if quiet := now.Sub(failingSince); quiet >= runnerContactWindow {
 			if terminalReplay {
 				// The job's outcome is already known; only its logs are missing.
-				return proto.JobStatus{}, fmt.Errorf("terminal log replay failed for %s: %w", seconds(quiet), err)
+				return proto.JobStatus{}, &LogStreamStalledError{For: quiet, Err: err, Status: &initial}
 			}
 			return proto.JobStatus{}, stalledStream(ctx, opts.PeerURL, jobID, quiet, err)
 		}

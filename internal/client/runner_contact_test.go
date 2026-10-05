@@ -178,9 +178,9 @@ func TestTerminalReplayOutageIsNotUnknownState(t *testing.T) {
 	_, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL}, "job", proto.JobStatus{
 		ID: "job", State: proto.StateExited, Result: &proto.Result{ExitCode: &code},
 	})
-	var unavailable *RunnerUnavailableError
-	if err == nil || errors.As(err, &unavailable) || !strings.Contains(err.Error(), "terminal log replay") {
-		t.Fatalf("terminal replay outage error = %v", err)
+	status, ok := terminalWithoutLogs(err)
+	if !ok || status.State != proto.StateExited {
+		t.Fatalf("terminal replay outage error = %v, want the known terminal status", err)
 	}
 }
 
@@ -340,5 +340,72 @@ func TestStalledStreamWithUnknownJobSaysWhy(t *testing.T) {
 	var stalled *LogStreamStalledError
 	if !errors.As(err, &stalled) || stalled.Status != nil || !IsNotFound(stalled.StatusErr) {
 		t.Fatalf("stalled stream error = %#v", err)
+	}
+}
+
+// A job that finished while its log could not be replayed keeps its own exit
+// code; the missing output only fails an otherwise successful run.
+func TestStalledStreamKeepsTheJobsExitCode(t *testing.T) {
+	for _, tc := range []struct {
+		remote, want int
+	}{{7, 7}, {0, ExitTransaction}} {
+		t.Run(fmt.Sprint(tc.remote), func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			shortRunnerContact(t, 100*time.Millisecond, 200*time.Millisecond)
+			jobID := proto.NewULID()
+			code := tc.remote
+			var finished atomic.Bool
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs/"+jobID:
+					status := proto.JobStatus{ID: jobID, State: proto.StateRunning}
+					if finished.Load() {
+						status = proto.JobStatus{ID: jobID, State: proto.StateExited, Result: &proto.Result{
+							State: proto.StateExited, Started: true, ExitCode: &code,
+							ChangesOK: true, CleanupOK: true, LogsComplete: true,
+						}}
+					}
+					json.NewEncoder(w).Encode(status)
+				case strings.HasSuffix(r.URL.Path, "/logs"):
+					finished.Store(true) // the job ends while its log can't be read
+					http.Error(w, "busy", http.StatusServiceUnavailable)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+
+			var stderr bytes.Buffer
+			got := attachWithDetachNotifications(AttachOptions{
+				PeerURL: server.URL, PeerName: "cabal", JobID: jobID, Stdout: io.Discard, Stderr: &stderr,
+			}, make(chan os.Signal, 2), testInterruptNotifications(), nil)
+			if got != tc.want {
+				t.Fatalf("attach exit = %d, want %d; stderr:\n%s", got, tc.want, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), "the job finished, but its output could not be replayed") {
+				t.Fatalf("stderr does not explain the missing output:\n%s", stderr.String())
+			}
+		})
+	}
+}
+
+func TestEscalationReportsOnlyTheLatestUnconfirmedRequest(t *testing.T) {
+	var e escalation
+	if e.unconfirmed() != escalateNone {
+		t.Fatal("nothing requested, yet something is unconfirmed")
+	}
+	e.request(escalateSIGINT)
+	e.confirm(escalateSIGINT)
+	if e.unconfirmed() != escalateNone {
+		t.Fatal("confirmed SIGINT reported as unconfirmed")
+	}
+	e.request(escalateForceKill)
+	if e.unconfirmed() != escalateForceKill {
+		t.Fatal("a confirmed SIGINT hid an unconfirmed force-kill")
+	}
+	e.confirm(escalateForceKill)
+	e.confirm(escalateSIGINT) // a late SIGINT confirmation cannot lower it
+	if e.unconfirmed() != escalateNone {
+		t.Fatal("confirmed force-kill reported as unconfirmed")
 	}
 }
