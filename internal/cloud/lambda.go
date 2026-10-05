@@ -302,39 +302,52 @@ func keyID(key string) string {
 }
 
 // readSecret reads a one-line credential from a file only this user can read.
+// readSecret reads a one-line secret from the file at path. Its errors name
+// the file by what it holds, never by path: they reach logs and clients, and
+// the path is in the cloud peer's own configuration.
 func readSecret(path, what string) (string, error) {
+	fail := func(problem string, err error) (string, error) {
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			err = pathErr.Err
+		}
+		if err != nil {
+			return "", fmt.Errorf("%s file: %s: %w", what, problem, err)
+		}
+		return "", fmt.Errorf("%s file %s", what, problem)
+	}
 	// Opening a FIFO would block until something writes to it, so the type
 	// is checked before opening, and again on what was opened.
 	if info, err := os.Stat(path); err != nil {
-		return "", fmt.Errorf("reading %s: %w", what, err)
+		return fail("reading", err)
 	} else if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("%s file %s is not a regular file", what, path)
+		return fail("is not a regular file", nil)
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", what, err)
+		return fail("reading", err)
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", what, err)
+		return fail("reading", err)
 	}
 	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("%s file %s is not a regular file", what, path)
+		return fail("is not a regular file", nil)
 	}
 	if owned, err := fsowner.OwnedByCurrentUser(f); err != nil || !owned {
-		return "", fmt.Errorf("%s file %s must be owned by the user errand runs as", what, path)
+		return fail("must be owned by the user errand runs as", nil)
 	}
 	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
-		return "", fmt.Errorf("%s file %s is readable by other users; run chmod 600 %s", what, path, path)
+		return fail("is readable by other users; chmod 600 it", nil)
 	}
 	data, err := io.ReadAll(io.LimitReader(f, 64<<10))
 	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", what, err)
+		return fail("reading", err)
 	}
 	secret := strings.TrimSpace(string(data))
 	if secret == "" || strings.ContainsAny(secret, "\r\n") {
-		return "", fmt.Errorf("%s file %s must hold one line", what, path)
+		return fail("must hold one line", nil)
 	}
 	return secret, nil
 }
