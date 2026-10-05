@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -69,18 +70,12 @@ type record struct {
 	proto.Lease
 	Owner string `json:"owner"`
 	Login string `json:"login,omitempty"` // admitted by the machine
-	// RequestID names the request that made the lease, so a client that
-	// lost the answer can ask again and get the same lease.
-	RequestID string `json:"request_id,omitempty"`
-	// Requests are the requests this lease was handed that may still want
-	// it. An interrupted run withdraws its own, and the lease ends once none
-	// is left. Kept means withdrawals no longer end it and only the idle
-	// rule does: a job has run on it, or more than maxRequests asked.
-	Requests []string `json:"requests,omitempty"`
-	Kept     bool     `json:"kept,omitempty"`
-	// Unwanted marks a ready lease whose last request was withdrawn: it is
-	// released at the next check unless a job is running on it.
-	Unwanted bool `json:"unwanted,omitempty"`
+	// Holders are the requests this lease was handed that have not
+	// withdrawn. Used records that the machine was seen with work; from then
+	// on holders no longer matter and only the idle and lifetime rules end
+	// the lease (see "Lease guarantees" in docs/DESIGN.md).
+	Holders []string `json:"holders,omitempty"`
+	Used    bool     `json:"used,omitempty"`
 	// Release and IdleTimeout are fixed when the lease is made, so the lease
 	// ends the way it was made whatever later happens to its offer.
 	Release       ReleaseSpec     `json:"release"`
@@ -261,26 +256,30 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	if b.closed {
 		return proto.Lease{}, &Error{http.StatusServiceUnavailable, "cloud broker is shutting down"}
 	}
+	if requestID == "" {
+		requestID = proto.NewULID()
+	}
 	var launching *lease
 	active := 0
+	// A request asked again, after its answer was lost, gets the same lease.
 	for _, l := range b.sorted() {
-		if l.Owner == owner && l.heldBy(requestID) {
+		if l.Owner == owner && slices.Contains(l.Holders, requestID) {
 			return l.handed(), nil
 		}
 	}
-	// A lease handed to another request is held by that request too.
+	// A lease handed to another request is held by that request too, and
+	// being handed out counts as use, so the request gets a full idle window
+	// to submit its work.
 	share := func(l *lease) (proto.Lease, error) {
+		if !l.Used && len(l.Holders) >= maxHolders {
+			return proto.Lease{}, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease %s already has %d runs waiting to use it", l.ID, maxHolders)}
+		}
 		err := b.applyLocked(l, func(r *record) bool {
-			// Being handed out counts as use, so the new request gets a
-			// full idle window to submit its work.
-			r.Unwanted = false
 			if r.State == proto.LeaseReady {
 				r.LastBusy = time.Now()
 			}
-			if len(r.Requests) >= maxRequests {
-				r.Kept = true
-			} else {
-				r.Requests = append(slices.Clone(r.Requests), requestID)
+			if !r.Used {
+				r.Holders = append(slices.Clone(r.Holders), requestID)
 			}
 			return true
 		}, true)
@@ -330,7 +329,7 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	}
 	now := time.Now()
 	l := &lease{wake: make(chan struct{}, 1), record: record{
-		Owner: owner, Login: login, RequestID: requestID, Requests: []string{requestID}, Release: offer.Provider.ReleaseSpec(), IdleTimeout: offer.IdleTimeout,
+		Owner: owner, Login: login, Holders: []string{requestID}, Release: offer.Provider.ReleaseSpec(), IdleTimeout: offer.IdleTimeout,
 		Lease: proto.Lease{ID: proto.NewULID(), Offer: offer.Name, Where: where, SSHKey: sshKey, State: proto.LeaseLaunching, CreatedAt: now, ExpiresAt: now.Add(offer.MaxLifetime)},
 	}}
 	l.addProgress("launching " + offer.Name)
@@ -338,6 +337,7 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	if err := b.persist(&l.record); err != nil {
 		return proto.Lease{}, &Error{http.StatusInternalServerError, "recording lease: " + err.Error()}
 	}
+	log.Printf("lease %s (%s): launching for where %q", l.ID, l.Offer, where)
 	b.leases[l.ID] = l
 	b.start(l)
 	return l.view(), nil
@@ -395,41 +395,33 @@ func (b *Broker) end(owner, id, note string) (proto.Lease, error) {
 	return l.view(), nil
 }
 
-// Withdraw is the client's answer to an interrupted run: the request no
-// longer wants the lease it was handed. The lease ends once no request
-// wants it, unless it is Kept; a ready one is released at the next check
-// unless a job is running on it then. The answer is marked Shared if the
-// lease stays for other runs.
+// Withdraw is a run's answer when it admitted no job on the lease it was
+// handed: it no longer holds the lease. A lease nobody holds and no job
+// has used ends: at once while launching, and at the next check when
+// ready, unless a job is running on it then. The answer is marked Shared
+// if the lease stays.
 func (b *Broker) Withdraw(owner, requestID string) (proto.Lease, error) {
 	b.mu.Lock()
 	var l *lease
 	for _, c := range b.leases {
-		if c.Owner == owner && (c.RequestID == requestID || c.heldBy(requestID)) {
+		if c.Owner == owner && requestID != "" && slices.Contains(c.Holders, requestID) {
 			l = c
 		}
 	}
 	b.mu.Unlock()
-	if l == nil || requestID == "" {
-		return proto.Lease{}, &Error{http.StatusNotFound, "no lease was handed to that request"}
+	if l == nil {
+		return proto.Lease{}, &Error{http.StatusNotFound, "no lease is held by that request"}
 	}
-	kept := true
 	err := b.update(l, func(r *record) bool {
-		i := slices.Index(r.Requests, requestID)
+		i := slices.Index(r.Holders, requestID)
 		if i < 0 {
 			return false
 		}
-		r.Requests = slices.Delete(slices.Clone(r.Requests), i, i+1)
-		if len(r.Requests) > 0 || r.Kept {
-			return true
-		}
-		switch r.State {
-		case proto.LeaseLaunching:
+		r.Holders = slices.Delete(slices.Clone(r.Holders), i, i+1)
+		if r.unheld() && r.State == proto.LeaseLaunching {
 			r.State = proto.LeaseReleasing
 			r.addProgress("release requested while launching")
-		case proto.LeaseReady:
-			r.Unwanted = true
 		}
-		kept = false
 		return true
 	})
 	if err != nil {
@@ -445,7 +437,7 @@ func (b *Broker) Withdraw(owner, requestID string) (proto.Lease, error) {
 	default:
 	}
 	view := l.view()
-	view.Shared = kept && l.Active()
+	view.Shared = !l.unheld() && l.Active()
 	return view, nil
 }
 
@@ -482,6 +474,9 @@ func (b *Broker) applyLocked(l *lease, change func(*record) bool, strict bool) e
 	}
 	err := b.persist(&next)
 	if err == nil || !strict {
+		if next.State != l.State && len(next.Progress) > 0 {
+			log.Printf("lease %s (%s): %s: %s", l.ID, l.Offer, next.State, next.Progress[len(next.Progress)-1])
+		}
 		l.record = next
 	}
 	return err
@@ -501,6 +496,7 @@ func canMove(from, to string) bool {
 // note shows a line to clients following the lease.
 func (b *Broker) note(l *lease, line string) {
 	b.advance(l, func(r *record) bool {
+		log.Printf("lease %s (%s): %s", r.ID, r.Offer, line)
 		r.addProgress(line)
 		return true
 	})
@@ -669,8 +665,8 @@ func (b *Broker) watch(l *lease) {
 				if !busy {
 					return false
 				}
-				// In use, so no longer unwanted: from here the idle rule decides.
-				r.LastBusy, r.Unwanted, r.Kept = now, false, true
+				// Used: from here only the idle and lifetime rules end it.
+				r.LastBusy, r.Used, r.Holders = now, true, nil
 				return true
 			}
 			r.State = proto.LeaseReleasing
@@ -699,7 +695,7 @@ func (r *record) releaseReason(now time.Time, busy bool) string {
 		return fmt.Sprintf("max lifetime of %s reached", r.ExpiresAt.Sub(r.CreatedAt).Round(time.Second))
 	case busy:
 		return ""
-	case r.Unwanted:
+	case r.unheld():
 		return "every run that asked for it gave it up"
 	case !now.Before(r.LastBusy.Add(r.IdleTimeout)):
 		return fmt.Sprintf("idle for %s", r.IdleTimeout)
@@ -889,17 +885,17 @@ func (r *record) addProgress(line string) {
 	r.Progress = append(r.Progress, line)
 }
 
-const maxRequests = 32
+// maxHolders bounds the runs waiting to use one lease.
+const maxHolders = 32
 
-func (l *lease) heldBy(requestID string) bool {
-	return requestID != "" && slices.Contains(l.Requests, requestID)
-}
+// unheld reports whether no run holds the lease and no job has used it.
+func (r *record) unheld() bool { return !r.Used && len(r.Holders) == 0 }
 
-// handed is the lease as an answer to a request: Shared when another
-// request holds it too.
+// handed is the lease as an answer to a request: Shared when it does not
+// end with this request's withdrawal.
 func (l *lease) handed() proto.Lease {
 	v := l.view()
-	v.Shared = len(l.Requests) > 1 || l.Kept
+	v.Shared = len(l.Holders) > 1 || l.Used
 	return v
 }
 

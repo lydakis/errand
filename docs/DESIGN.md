@@ -284,13 +284,22 @@ selectors fail locally rather than being guessed as network hosts.
 
 A runner with `[[cloud.offers]]` is a cloud peer: when `--where` matches none
 of the caller's runners but matches an offer, the client asks it for a lease.
-It acquires a machine through configured provider commands, waits until that
-machine answers as an errand runner whose measured facts match, and hands back
-how to reach it. The client records the lease as a peer named
+It acquires a machine from Lambda or through provider commands, waits until
+that machine answers as an errand runner whose measured facts match, and hands
+back how to reach it. The client reaches the lease as a peer named
 `<cloud peer>-<lease id suffix>` and submits to it directly, so the cloud peer
-is a capacity broker, not a relay, and the no-relaying rule above holds.
-Leases are owned like jobs, persisted before acquisition, and released when
-idle, past their maximum lifetime, or on request. See [cloud peers](CLOUD.md).
+is a capacity broker, not a relay, and the no-relaying rule above holds. The
+cloud peer keeps the only lease record. See [cloud peers](CLOUD.md).
+
+#### Lease guarantees
+
+1. A lease is recorded, with how to release its machine, before anything is acquired; only its own worker calls the provider.
+2. A lease ends only when its owner releases it or loses `submit`, when every run handed it withdraws before any job used it, after `idle_timeout` with no work and no new run handed it, at `max_lifetime`, or when its launch fails or a restart interrupts it.
+3. A run holds the lease from hand-out until it settles: it withdraws if it admitted no job there; otherwise it keeps holding until a job is seen on the machine, after which holders no longer matter.
+4. Every automatic release is decided against the lease record when the release is recorded, never against an earlier observation.
+5. A run handed a ready lease may use it for at least `idle_timeout` unless its owner releases it or `max_lifetime` passes. Nothing on the machine survives the lease.
+6. A lease counts as released only once the provider confirms the machine is gone; until then the release is retried.
+7. So, while the cloud peer runs, no machine bills past `max_lifetime` plus the time to confirm its release. If the cloud peer is gone for good, nothing ends its machines: there is no spending cap.
 
 ## Execution backends and isolation — separate axes
 

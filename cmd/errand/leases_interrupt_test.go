@@ -32,7 +32,7 @@ func TestLeaseInterruptedDuringRequestIsWithdrawn(t *testing.T) {
 	}{
 		{proto.LeaseLaunching, proto.LeaseReleasing, "released lease " + id, false},
 		{proto.LeaseReady, proto.LeaseReady, "will be released unless a job is running on it", false},
-		{proto.LeaseLaunching, proto.LeaseLaunching, "still held by another run", true},
+		{proto.LeaseLaunching, proto.LeaseLaunching, "held by another run or was used by a job", true},
 	} {
 		var requested, withdrawn atomic.Value
 		requested.Store("")
@@ -178,5 +178,29 @@ func TestLeasedRunWithdrawsOnlyWhenNothingWasAdmitted(t *testing.T) {
 				t.Fatalf("requested %q, withdrawn %q\n%s", requested.Load(), withdrawn.Load(), stderr.String())
 			}
 		})
+	}
+}
+
+// errand leases rm takes a bare lease ID and finds the cloud peer holding it.
+func TestLeaseIDFindsItsCloudPeer(t *testing.T) {
+	id := proto.NewULID()
+	lease := proto.Lease{ID: id, Offer: "a10", State: proto.LeaseReady}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v0/info":
+			json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, Leases: []proto.Lease{lease}})
+		case "/v0/leases":
+			json.NewEncoder(w).Encode([]proto.Lease{lease})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	cfg := config.Client{Peers: map[string]config.Peer{"cloud": {URL: srv.URL}}}
+	if name, err := leaseOwnerPeer(cfg, id); err != nil || name != "cloud" {
+		t.Fatalf("found %q %v", name, err)
+	}
+	if _, err := leaseOwnerPeer(cfg, proto.NewULID()); err == nil {
+		t.Fatal("found a lease no cloud peer has")
 	}
 }

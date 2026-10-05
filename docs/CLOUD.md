@@ -58,8 +58,11 @@ lease starts a full idle window.
 ```sh
 errand leases                    # your leases on every cloud peer
 errand leases --json
-errand leases rm cabal-7f3a      # release now
+errand leases rm cabal-7f3a      # release now; a full lease ID works too
 ```
+
+The cloud peer logs each lease's launch, readiness, release and any failed
+release attempts.
 
 The cloud peer releases a ready lease when its runner has had no staging,
 starting, running or queued jobs for the offer's `idle_timeout`, or when the

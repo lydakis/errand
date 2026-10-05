@@ -282,7 +282,7 @@ func withdrawLease(broker placementChoice, requestID, id string) string {
 	case err != nil:
 		return fmt.Sprintf("withdrawing lease %s failed: %v (errand leases rm --on %s %s releases it)", id, err, broker.Name, id)
 	case lease.Shared:
-		return fmt.Sprintf("lease %s is still held by another run, so it stays until idle", id)
+		return fmt.Sprintf("lease %s is held by another run or was used by a job, so it stays until idle", id)
 	case lease.State == proto.LeaseReady:
 		return fmt.Sprintf("lease %s will be released unless a job is running on it", id)
 	}
@@ -538,6 +538,25 @@ func leaseBrokers(cfg config.Client, on string, stderr io.Writer) ([]leaseBroker
 
 // releaseLeases accepts lease peer names (cloud-7f3a), or lease IDs with
 // --on.
+// leaseOwnerPeer finds the cloud peer that made the lease with this ID.
+func leaseOwnerPeer(cfg config.Client, id string) (string, error) {
+	brokers, _ := leaseBrokers(cfg, "", io.Discard)
+	for _, b := range brokers {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		leases, err := client.ListLeases(ctx, b.target)
+		cancel()
+		if err != nil {
+			continue
+		}
+		for _, l := range leases {
+			if l.ID == id {
+				return b.name, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no cloud peer that answered has a lease of yours with this ID; pass --on CLOUD")
+}
+
 func releaseLeases(cfg config.Client, on string, names []string, stdout, stderr io.Writer) int {
 	code := 0
 	for _, arg := range names {
@@ -556,9 +575,12 @@ func releaseLeases(cfg config.Client, on string, names []string, stdout, stderr 
 				continue
 			}
 		} else if on == "" {
-			fmt.Fprintf(stderr, "errand leases rm: pass --on CLOUD with lease ID %s\n", arg)
-			code = 2
-			continue
+			var err error
+			if broker, err = leaseOwnerPeer(cfg, id); err != nil {
+				fmt.Fprintf(stderr, "errand leases rm: %s: %v\n", arg, err)
+				code = 1
+				continue
+			}
 		}
 		target, err := configuredPeerURL(cfg, broker)
 		if err != nil {
