@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lydakis/errand/internal/limitbuf"
 	"github.com/lydakis/errand/internal/nowindow"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -100,9 +101,8 @@ func (p CommandProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 	cmd.Env = append(os.Environ(), "ERRAND_LEASE_ID="+req.LeaseID, "ERRAND_OFFER="+req.Offer, "ERRAND_LEASE_WHERE="+req.Where, "ERRAND_LEASE_LOGIN="+req.Login, "ERRAND_LEASE_SSH_KEY="+req.SSHKey)
 	cmd.WaitDelay = 5 * time.Second
 	nowindow.Hide(cmd)
-	var stdout limitedBuffer
-	stdout.limit = maxAcquireOutput
-	cmd.Stdout = &stdout
+	stdout := &limitbuf.Buffer{Limit: maxAcquireOutput}
+	cmd.Stdout = stdout
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return Machine{}, err
@@ -126,7 +126,7 @@ func (p CommandProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 	if err != nil {
 		return Machine{}, fmt.Errorf("acquire command failed: %v", err)
 	}
-	if stdout.overflow {
+	if stdout.Truncated() {
 		return Machine{}, fmt.Errorf("acquire printed more than %d bytes", maxAcquireOutput)
 	}
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
@@ -154,9 +154,8 @@ func (p CommandProvider) Release(ctx context.Context, req ReleaseRequest) error 
 	cmd.Env = append(os.Environ(), "ERRAND_LEASE_ID="+req.LeaseID, "ERRAND_OFFER="+req.Offer, "ERRAND_LEASE_STATE="+string(req.State))
 	cmd.WaitDelay = 5 * time.Second
 	nowindow.Hide(cmd)
-	var output limitedBuffer
-	output.limit = 4096
-	cmd.Stdout, cmd.Stderr = &output, &output
+	output := &limitbuf.Buffer{Limit: 4096}
+	cmd.Stdout, cmd.Stderr = output, output
 	if err := cmd.Run(); err != nil {
 		detail := strings.TrimSpace(output.String())
 		if i := strings.LastIndexByte(detail, '\n'); i >= 0 {
