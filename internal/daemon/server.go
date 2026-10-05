@@ -83,10 +83,14 @@ type Config struct {
 	// waiting capacity; zero disables queueing.
 	MaxJobs   int
 	MaxQueued int
+
+	// GPUProbe lists this machine's GPUs; nil asks nvidia-smi.
+	GPUProbe func(context.Context) []proto.GPU
 }
 
 type Daemon struct {
 	placementSlots chan struct{}
+	gpus           gpuCache
 	workspaces     *workspaceStore
 	namedCaches    *namedcache.Store
 	cfg            Config
@@ -178,6 +182,10 @@ func New(cfg Config) (*Daemon, error) {
 		identity: identity, selfUID: currentUID(),
 		writeAdmissionReceipt: (*Job).writeJSON,
 		writeProcessScope:     replaceJSONDurable,
+	}
+	d.gpus.probe = cfg.GPUProbe
+	if d.gpus.probe == nil {
+		d.gpus.probe = probeNVIDIA
 	}
 	if err := d.lockStateDir(); err != nil {
 		return nil, err
@@ -825,7 +833,7 @@ func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 }
 
 func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) {
-	facts := measureFacts()
+	facts := d.measureFacts()
 	if where := r.URL.Query().Get("where"); where != "" {
 		q, err := placement.Parse(where)
 		if err != nil {
@@ -1082,7 +1090,7 @@ admissionCheck:
 		NodeID: id.NodeID, NodeName: id.Node,
 		RemoteAddr: r.RemoteAddr, Method: id.Method,
 		LocalUID: int64(id.LocalUID), LocalUser: id.LocalUser,
-		Project: project, ProjectTruncated: projectTruncated, Facts: measureFacts(),
+		Project: project, ProjectTruncated: projectTruncated, Facts: d.measureFacts(),
 	}
 	j.state = proto.StateStaging
 	if err = d.writeAdmissionReceipt(j, "spec.json", proto.NewReceiptSpec(spec)); err == nil {

@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/lydakis/errand/internal/placement"
 )
 
 func writePeers(w io.Writer, rows []peerRow) {
@@ -15,7 +17,7 @@ func writePeers(w io.Writer, rows []peerRow) {
 		if row.Default {
 			isDefault = "yes"
 		}
-		var slots, queue, staging, system, capabilities, runnerVersion string
+		var slots, queue, staging, system, capabilities, gpus, runnerVersion string
 		if info := row.Info; info != nil {
 			runnerVersion = info.Version
 			slots = fmt.Sprintf("%d/%d", info.StartingJobs+info.RunningJobs, info.MaxJobs)
@@ -37,10 +39,13 @@ func writePeers(w io.Writer, rows []peerRow) {
 			if len(tools) != 0 {
 				capabilities = strings.Join(tools, ",")
 			}
+			if len(info.Facts.GPUs) != 0 {
+				gpus = placement.DescribeGPUs(info.Facts.GPUs)
+			}
 		}
-		values = append(values, []string{row.Name, isDefault, row.Status, runnerVersion, slots, queue, staging, system, capabilities, row.Detail})
+		values = append(values, []string{row.Name, isDefault, row.Status, runnerVersion, slots, queue, staging, system, capabilities, gpus, row.Detail})
 	}
-	writeNonemptyColumns(w, []string{"NAME", "DEFAULT", "STATUS", "VERSION", "SLOTS", "QUEUE", "STAGING", "SYSTEM", "CAPABILITIES", "DETAIL"}, values)
+	writeNonemptyColumns(w, []string{"NAME", "DEFAULT", "STATUS", "VERSION", "SLOTS", "QUEUE", "STAGING", "SYSTEM", "CAPABILITIES", "GPUS", "DETAIL"}, values)
 }
 
 func writeNonemptyColumns(w io.Writer, headers []string, rows [][]string) {
