@@ -121,7 +121,7 @@ Callers need the `lease` action in the errand capability, separate from
 `submit` because leases can cost money. Leasing also needs `submit`, since the
 leased machine admits the caller for every action. `allow_users` grants every
 action. A caller whose `submit` is taken away is no longer shown where its
-leases are, and they end the next time it asks the cloud peer about them.
+leases are, and they end at its next request to the cloud peer.
 Until then the machine still admits it, at most until `idle_timeout` or
 `max_lifetime`.
 
