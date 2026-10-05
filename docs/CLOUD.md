@@ -21,7 +21,7 @@ The lease is then a peer named after the cloud peer and the end of the lease
 ID. While it exists, `--on cabal-7f3a`, job handles such as
 `cabal-7f3a/01K...`, `ps`, `attach`, `fetch`, `-L`, persistent workspaces and
 named caches all work as they do with any runner. The next `--where gpu=h100`
-selects it directly.
+asks the cloud peer again, which hands you the same lease.
 
 Your machine keeps no record of its leases. The cloud peer lists your active
 leases, with how to reach them, whenever errand asks it, so a name like

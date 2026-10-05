@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -50,13 +49,9 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 		return placementSelection{}, err
 	}
 	candidates := e.Candidates
+	// A ready lease of yours is not a candidate here: it is reused by asking
+	// its cloud peer, which hands it to this run like a new lease.
 	probed := probeCandidates(ctx, candidates, e.Where, q, probe)
-	// Machines leased from a cloud peer that answered are runners of yours
-	// too; it lists them, and they are probed next.
-	if leases := leaseCandidates(candidates, probed); len(leases) > 0 {
-		candidates = append(slices.Clone(candidates), leases...)
-		probed = append(probed, probeCandidates(ctx, leases, e.Where, q, probe)...)
-	}
 	var eligible []placementChoice
 	var exclusions []string
 	result := placementSelection{Probed: map[string]proto.Info{}}
@@ -83,11 +78,8 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 		// cheapest matching offer competes with the others' on price, and
 		// equal ones are tried in random order. How busy a cloud peer's own
 		// runner is does not matter; the job runs on the rented machine.
-		// Only configured peers supply machines: a leased runner that
-		// offers some itself would rent a machine nobody watches once its
-		// own lease ends.
 		if !matched && !q.Any() {
-			for i, p := range probed[:len(e.Candidates)] {
+			for i, p := range probed {
 				if p.info == nil {
 					continue
 				}
@@ -168,24 +160,6 @@ func probeCandidates(ctx context.Context, candidates []config.RunCandidate, wher
 		}(&out[i], c)
 	}
 	wg.Wait()
-	return out
-}
-
-// leaseCandidates lists the ready leases the probed cloud peers reported.
-func leaseCandidates(candidates []config.RunCandidate, probed []candidateProbe) []config.RunCandidate {
-	cfg, err := config.LoadClient()
-	if err != nil {
-		return nil
-	}
-	var out []config.RunCandidate
-	for i, p := range probed {
-		if p.info == nil {
-			continue
-		}
-		for _, lp := range leasePeersOf(cfg, candidates[i].Name, *p.info) {
-			out = append(out, leaseCandidate(lp))
-		}
-	}
 	return out
 }
 
