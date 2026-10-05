@@ -833,6 +833,23 @@ echo '{"url":"http://box:7443"}'
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 }
 
+// Acquire's stdout is bounded: one that prints more is a failed launch,
+// however the output reaches errand.
+func TestAcquireRefusesOversizedOutput(t *testing.T) {
+	h := newHarness(t, `head -c 100000 /dev/zero | tr '\0' x
+echo
+echo '{"url":"http://box:7443"}'
+`)
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := waitState(t, b, "george", l.ID, proto.LeaseFailed); !strings.Contains(got.Error, "more than 16384 bytes") {
+		t.Fatalf("lease %+v", got)
+	}
+}
+
 // Lease guarantees 4 and 5: an idle probe takes time, and a request may be
 // handed the lease while it runs. The probe's answer cannot then release the
 // lease: the reason to release is checked against the record as it is when
