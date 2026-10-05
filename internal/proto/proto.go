@@ -471,6 +471,14 @@ type Facts struct {
 	KVM        bool              `json:"kvm"`
 	Tools      map[string]string `json:"tools,omitempty"`       // name -> resolved path
 	ToolErrors map[string]string `json:"tool_errors,omitempty"` // requested tools that could not be attested
+	GPUs       []GPU             `json:"gpus,omitempty"`
+}
+
+// GPU is one device as the driver reports it. MemoryMiB is zero when the
+// driver reports none, as on unified-memory systems such as the GB10.
+type GPU struct {
+	Name      string `json:"name"`
+	MemoryMiB int    `json:"memory_mib,omitempty"`
 }
 
 type Info struct {

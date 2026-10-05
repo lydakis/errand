@@ -95,7 +95,7 @@ func TestWhereLocalRequiresPersonalOptIn(t *testing.T) {
 }
 
 func TestWhereRejectsInvalidAndAmbiguousSettings(t *testing.T) {
-	for _, project := range []string{"[run]\nwhere=''", "[run]\nwhere='gpu'", "[run]\nwhere='*'\npeer='linux'"} {
+	for _, project := range []string{"[run]\nwhere=''", "[run]\nwhere='tpu'", "[run]\nwhere='*'\npeer='linux'"} {
 		root := runFixture(t, personalPeers, project)
 		if _, err := ResolveRun(root, RunOverrides{}); err == nil {
 			t.Fatalf("accepted %s", project)
