@@ -158,33 +158,33 @@ func TestWorkspaceWhereNeverLeases(t *testing.T) {
 	}
 }
 
-// Every reachable cloud peer offering a match is a supplier. The cheapest
-// offer comes first, priced before unpriced, and equal offers are tried in
-// random order. The cloud peers' own load does not matter.
-// A leased runner is a runner of yours, not a supplier: if it offers
-// machines itself, it does not rent one, since nothing would end that lease
-// once its own did.
-func TestLeasedRunnersSupplyNoLeases(t *testing.T) {
+// Lease guarantee 5: a ready lease of yours that matches is reused by asking
+// its cloud peer, which hands it to the run, never by running on it
+// directly; nothing would then keep it from going idle under the run.
+func TestReadyLeasesAreReusedThroughTheirCloudPeer(t *testing.T) {
 	writeClientConfig(t, "[peers.cloud]\nurl = \"http://cloud:7443\"\n")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	h100 := proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 81920}}}
+	var probed []string
 	probe := func(_ context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
+		probed = append(probed, target)
 		info := proto.Info{Placement: true, MaxJobs: 1, Facts: proto.Facts{OS: "linux"}}
 		if target == "http://cloud:7443" {
-			info.Offers = []proto.Offer{{Name: "a10", Facts: proto.Facts{OS: "linux"}}}
-			info.Leases = []proto.Lease{{ID: proto.NewULID(), Offer: "a10", State: proto.LeaseReady, Target: &proto.LeaseTarget{URL: "http://box:7443"}}}
-		} else {
 			info.Offers = []proto.Offer{{Name: "h100", Facts: h100}}
+			info.Leases = []proto.Lease{{ID: proto.NewULID(), Offer: "h100", State: proto.LeaseReady, Target: &proto.LeaseTarget{URL: "http://box:7443"}, Facts: &h100}}
 		}
 		return info, nil
 	}
 	e := config.EffectiveRun{Where: "gpu=h100", WhereMayLease: true, Candidates: []config.RunCandidate{{Name: "cloud", URL: "http://cloud:7443"}}}
 	s, err := chooseRunners(context.Background(), e, probe)
-	if err == nil || len(s.Leases) != 0 || len(s.Probed) != 2 {
-		t.Fatalf("leased from a leased runner: %v %+v", err, s)
+	if err != nil || len(s.Choices) != 0 || len(s.Leases) != 1 || s.Leases[0].Broker.Name != "cloud" || len(probed) != 1 {
+		t.Fatalf("selection %v %+v, probed %q", err, s, probed)
 	}
 }
 
+// Every reachable cloud peer offering a match is a supplier. The cheapest
+// offer comes first, priced before unpriced, and equal offers are tried in
+// random order. The cloud peers' own load does not matter.
 func TestLeaseSuppliersRankedByOffer(t *testing.T) {
 	gpu := proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 81920}}}
 	offers := map[string][]proto.Offer{}
