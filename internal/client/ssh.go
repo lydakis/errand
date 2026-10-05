@@ -316,34 +316,37 @@ func (c *stdioConn) Read(p []byte) (int, error) {
 	if n > 0 {
 		c.read.Store(true)
 	}
-	if err != nil && n == 0 && !c.read.Load() && !c.isClosed() {
-		// ssh closes its output as it exits. Exit status 255 before the
-		// remote side said anything is ssh's own failure to connect.
+	if err != nil && n == 0 {
+		return 0, c.failed(err)
+	}
+	return n, err
+}
+
+// failed explains an error on ssh's pipes by how ssh ended, since ssh closes
+// them as it exits. Exit status 255 before the remote side said anything is
+// ssh's own failure to connect, whichever pipe noticed first.
+func (c *stdioConn) failed(err error) error {
+	early := !c.read.Load() && !c.isClosed()
+	if early {
 		select {
 		case <-c.exit:
 		case <-time.After(time.Second):
 		}
-		var exitErr *exec.ExitError
-		c.mu.Lock()
-		exit, aborted := c.exitErr, c.aborted
-		c.mu.Unlock()
-		if aborted != nil {
-			return 0, aborted
-		}
-		if errors.As(exit, &exitErr) && exitErr.ExitCode() == 255 {
-			return 0, &UnreachableError{Addr: c.host, Reason: "ssh could not connect to " + c.host, Err: exit}
-		}
 	}
-	if err != nil && n == 0 {
-		c.mu.Lock()
-		exit := c.exitErr
-		done := c.done
-		c.mu.Unlock()
-		if done && exit != nil {
-			return 0, fmt.Errorf("ssh to %s ended: %w", c.host, exit)
-		}
+	c.mu.Lock()
+	exit, aborted, done := c.exitErr, c.aborted, c.done
+	c.mu.Unlock()
+	if aborted != nil {
+		return aborted
 	}
-	return n, err
+	var exitErr *exec.ExitError
+	if early && errors.As(exit, &exitErr) && exitErr.ExitCode() == 255 {
+		return &UnreachableError{Addr: c.host, Reason: "ssh could not connect to " + c.host, Err: exit}
+	}
+	if done && exit != nil {
+		return fmt.Errorf("ssh to %s ended: %w", c.host, exit)
+	}
+	return err
 }
 
 func (c *stdioConn) isClosed() bool {
@@ -355,15 +358,7 @@ func (c *stdioConn) isClosed() bool {
 func (c *stdioConn) Write(p []byte) (int, error) {
 	n, err := c.w.Write(p)
 	if err != nil {
-		c.mu.Lock()
-		exit, aborted := c.exitErr, c.aborted
-		c.mu.Unlock()
-		if aborted != nil {
-			return n, aborted
-		}
-		if exit != nil {
-			return n, fmt.Errorf("ssh to %s ended: %w", c.host, exit)
-		}
+		return n, c.failed(err)
 	}
 	return n, err
 }
