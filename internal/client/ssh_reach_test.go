@@ -25,6 +25,33 @@ func TestSSHConnectFailureIsUnreachable(t *testing.T) {
 	}
 }
 
+// ssh that fails to connect is unreachable however the connection notices:
+// a request written after ssh already exited fails on the write.
+func TestSSHConnectFailureIsUnreachableOnWrite(t *testing.T) {
+	bin := t.TempDir()
+	script := "#!/bin/sh\nexit 255\n"
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	conn, err := dialSSH(context.Background(), "gone", "true")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	<-conn.(*stdioConn).exit
+	for range 100 { // until the closed pipe shows
+		if _, err = conn.Write(make([]byte, 64<<10)); err != nil {
+			break
+		}
+	}
+	if !IsUnreachable(err) || err.Error() != "unreachable: ssh could not connect to gone" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestSSHToTailscaleOfflineNodeFailsFast(t *testing.T) {
 	fakeReach(t, 5*time.Second, []tailnet.Peer{{HostName: "cabal", LastSeen: time.Now().Add(-2 * time.Hour), IPs: []string{"100.64.0.5"}}})
 	bin := t.TempDir()
