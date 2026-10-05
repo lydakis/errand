@@ -98,7 +98,7 @@ func cmdRun(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: required local variables are unset: %q\n", effective.MissingEnvironment())
 		return client.ExitTransaction
 	}
-	choices, err := runChoices(effective, overrides.URL != "", os.Stderr)
+	choices, lease, err := runChoices(effective, overrides.URL != "", os.Stderr)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "errand:", err)
 		return client.ExitTransaction
@@ -111,7 +111,7 @@ func cmdRun(args []string) int {
 		Project: effective.Project, IncludeAll: *includeAll, NoSnapshot: effective.NoSnapshot,
 		Detach: *detach, ApplyOnSuccess: effective.ApplyOnSuccess, Forwards: forwards,
 	}
-	configurePlacement(&opts, choices, os.Stderr, func(c placementChoice) {
+	configurePlacement(&opts, choices, lease, os.Stderr, func(c placementChoice) {
 		if effective.Where == "" {
 			warnRunnerVersion(c.Target, c.Name)
 		}

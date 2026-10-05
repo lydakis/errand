@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -17,5 +18,17 @@ func TestWorkspaceListingRejectsIgnoredServerFilter(t *testing.T) {
 	defer server.Close()
 	if _, err := ListWorkspace(server.URL, proto.NewULID(), false); err == nil || !strings.Contains(err.Error(), "did not honor") {
 		t.Fatalf("accepted unrelated jobs: %v", err)
+	}
+}
+
+// A workspace whose snapshot cannot be prepared rents no machine.
+func TestCreateWorkspaceResolvesAfterSnapshot(t *testing.T) {
+	resolved := false
+	opts := RunOptions{Where: "gpu", Root: filepath.Join(t.TempDir(), "missing"), Resolve: func() ([]RunTarget, error) {
+		resolved = true
+		return nil, nil
+	}}
+	if _, err := CreateWorkspace(opts, "train"); err == nil || resolved {
+		t.Fatalf("err %v, resolved %v", err, resolved)
 	}
 }

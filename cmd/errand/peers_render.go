@@ -17,7 +17,7 @@ func writePeers(w io.Writer, rows []peerRow) {
 		if row.Default {
 			isDefault = "yes"
 		}
-		var slots, queue, staging, system, capabilities, gpus, runnerVersion string
+		var slots, queue, staging, system, capabilities, gpus, offers, runnerVersion string
 		if info := row.Info; info != nil {
 			runnerVersion = info.Version
 			slots = fmt.Sprintf("%d/%d", info.StartingJobs+info.RunningJobs, info.MaxJobs)
@@ -42,10 +42,19 @@ func writePeers(w io.Writer, rows []peerRow) {
 			if len(info.Facts.GPUs) != 0 {
 				gpus = placement.DescribeGPUs(info.Facts.GPUs)
 			}
+			var offerNames []string
+			for _, o := range info.Offers {
+				offerNames = append(offerNames, describeOffer(o))
+			}
+			offers = strings.Join(offerNames, ",")
 		}
-		values = append(values, []string{row.Name, isDefault, row.Status, runnerVersion, slots, queue, staging, system, capabilities, gpus, row.Detail})
+		detail := row.Detail
+		if row.Lease != "" {
+			detail = strings.TrimSuffix("lease: "+row.Lease+"; "+detail, "; ")
+		}
+		values = append(values, []string{row.Name, isDefault, row.Status, runnerVersion, slots, queue, staging, system, capabilities, gpus, offers, detail})
 	}
-	writeNonemptyColumns(w, []string{"NAME", "DEFAULT", "STATUS", "VERSION", "SLOTS", "QUEUE", "STAGING", "SYSTEM", "CAPABILITIES", "GPUS", "DETAIL"}, values)
+	writeNonemptyColumns(w, []string{"NAME", "DEFAULT", "STATUS", "VERSION", "SLOTS", "QUEUE", "STAGING", "SYSTEM", "CAPABILITIES", "GPUS", "OFFERS", "DETAIL"}, values)
 }
 
 func writeNonemptyColumns(w io.Writer, headers []string, rows [][]string) {

@@ -23,6 +23,12 @@ type Requirements struct {
 	VRAMGiB  int
 }
 
+// Any reports whether the selector is the bare wildcard, which accepts every
+// eligible runner and must never cause capacity to be rented.
+func (q Requirements) Any() bool {
+	return q.OS == "" && q.Arch == "" && q.CPUs == 0 && !q.KVM && len(q.Tools) == 0 && !q.GPU
+}
+
 func Parse(s string) (Requirements, error) {
 	var q Requirements
 	if s == "*" {

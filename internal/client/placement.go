@@ -18,7 +18,11 @@ func placementRejection(err error) bool {
 type placementRefusal struct{ error }
 
 // RunTarget separates submission identity from display metadata owned by the CLI.
-type RunTarget struct{ PeerURL, PeerName string }
+// Claim, when set, is the run's hold on a machine resolved for it alone.
+type RunTarget struct {
+	PeerURL, PeerName string
+	Claim             *Claim
+}
 
 // Only callers which proved a pre-admission rejection may request another
 // candidate. An uncertain submission must retain its original peer and handle.
@@ -27,9 +31,16 @@ func tryCandidates[T any](opts RunOptions, attempt func(RunOptions) (T, bool)) T
 	if len(targets) == 0 {
 		targets = []RunTarget{{PeerURL: opts.PeerURL, PeerName: opts.PeerName}}
 	}
+	// A target whose attempt never settled its claim, or that was never
+	// tried, admitted nothing.
+	defer func() {
+		for _, target := range targets {
+			target.Claim.settle(notAdmitted)
+		}
+	}()
 	var result T
 	for _, target := range targets {
-		opts.PeerURL, opts.PeerName = target.PeerURL, target.PeerName
+		opts.PeerURL, opts.PeerName, opts.claim = target.PeerURL, target.PeerName, target.Claim
 		if opts.OnSelected != nil {
 			opts.OnSelected(target)
 		}

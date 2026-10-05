@@ -107,12 +107,16 @@ func localChangeClientID() (string, error) {
 }
 
 type localChangeState struct {
-	WorkspaceID        string              `json:"workspace_id,omitempty"`
-	JobID              string              `json:"job_id"`
-	PeerURL            string              `json:"peer_url"`
-	SSHTarget          string              `json:"ssh_target,omitempty"`
-	SSHRemoteCommand   string              `json:"ssh_remote_command,omitempty"`
-	SSHRemoteSocket    string              `json:"ssh_remote_socket,omitempty"`
+	WorkspaceID      string `json:"workspace_id,omitempty"`
+	JobID            string `json:"job_id"`
+	PeerURL          string `json:"peer_url"`
+	SSHTarget        string `json:"ssh_target,omitempty"`
+	SSHRemoteCommand string `json:"ssh_remote_command,omitempty"`
+	SSHRemoteSocket  string `json:"ssh_remote_socket,omitempty"`
+	// SSHHostKey and SSHIdentities let a later process reach a leased
+	// machine as this one did.
+	SSHHostKey         string              `json:"ssh_host_key,omitempty"`
+	SSHIdentities      []string            `json:"ssh_identities,omitempty"`
 	Root               string              `json:"root"`
 	RootID             fsidentity.Identity `json:"root_identity"`
 	ManifestRoot       string              `json:"manifest_root"`

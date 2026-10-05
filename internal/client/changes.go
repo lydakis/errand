@@ -39,6 +39,9 @@ func initializeChangeState(ctx context.Context, opts *RunOptions, jobID, manifes
 		SSHTarget: ssh.target, SSHRemoteCommand: ssh.command, SSHRemoteSocket: ssh.socket,
 		ManifestRoot: manifestRoot, ApplyOnSuccess: opts.ApplyOnSuccess,
 	}
+	if trust, ok := sshTrustFor(ssh.target); ok {
+		state.SSHHostKey, state.SSHIdentities = trust.hostKey, trust.identities
+	}
 	if opts.ApplyOnSuccess {
 		state.AutomaticApply = automaticApplyPending
 	}

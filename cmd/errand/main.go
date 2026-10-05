@@ -65,6 +65,7 @@ Run options:
 Commands:
   errand peers                   List, add, remove, or discover runners
   errand workspaces              Create, list, or remove persistent workspaces
+  errand leases                  List or release machines leased from cloud peers
   errand ps                      List jobs
   errand status HANDLE           Inspect a job and its results
   errand attach HANDLE           Follow a job's logs
@@ -110,6 +111,8 @@ func runCLI(args []string) int {
 		return cmdPeers(args[1:])
 	case "workspaces":
 		return cmdWorkspaces(args[1:])
+	case "leases":
+		return cmdLeases(args[1:], os.Stdout, os.Stderr)
 	case "config":
 		return cmdConfig(args[1:])
 	case "access":
@@ -450,7 +453,7 @@ var errNoUsablePeers = errors.New("no usable peers configured; check ~/.config/e
 // results, report peer-specific failures, and fail the command if any selected
 // peer could not be read.
 func readFleet[T any](rawURL, on string, stderr io.Writer, query func(string) (T, error)) (fleetRead[T], error) {
-	targets, warnings, err := peerTargets(rawURL, on)
+	targets, warnings, err := fleetTargets(rawURL, on)
 	if err != nil {
 		return fleetRead[T]{}, err
 	}
@@ -519,6 +522,32 @@ func peerTargets(rawURL, on string) ([]peerTarget, []error, error) {
 	return targets, warnings, nil
 }
 
+// fleetTargets is peerTargets plus, unless narrowed, the machines the
+// caller leased, which their cloud peers list when asked.
+func fleetTargets(rawURL, on string) ([]peerTarget, []error, error) {
+	targets, warnings, err := peerTargets(rawURL, on)
+	if err != nil || rawURL != "" || on != "" {
+		return targets, warnings, err
+	}
+	cfg, err := config.LoadClient()
+	if err != nil {
+		return targets, warnings, nil
+	}
+	infos := queryPeerTargets(targets, func(url string) (proto.Info, error) {
+		return client.ProbeInfo(context.Background(), url, 2*time.Second)
+	})
+	for _, r := range infos {
+		if r.err != nil {
+			continue // the fleet read reports it
+		}
+		for _, lp := range leasePeersOf(cfg, r.target.name, r.value) {
+			c := leaseCandidate(lp)
+			targets = append(targets, peerTarget{name: lp.Name, url: client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)})
+		}
+	}
+	return targets, warnings, nil
+}
+
 func cmdPs(args []string) int {
 	return cmdPsTo(args, os.Stdout, os.Stderr)
 }
@@ -572,7 +601,7 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	for _, record := range local {
 		byPeer[record.PeerURL] = append(byPeer[record.PeerURL], record)
 	}
-	targets, warnings, err := peerTargets(*rawURL, *on)
+	targets, warnings, err := fleetTargets(*rawURL, *on)
 	if err != nil {
 		fmt.Fprintln(stderr, "errand:", err)
 		return 1
@@ -715,7 +744,13 @@ func cmdServe(args []string) int {
 			log.Fatalf("errand serve: %v", err)
 		}
 	}
+	broker, err := fileCfg.Cloud.Broker()
+	if err != nil {
+		log.Fatalf("errand serve: %v", err)
+	}
+	broker.Probe = probeLeaseTarget
 	d, err := daemon.New(daemon.Config{
+		Cloud:              broker,
 		ChangeStorage:      client.ChangeStorageStats,
 		DisableSSH:         fileCfg.Transport == config.TransportTailscale,
 		LocalOnly:          fileCfg.Transport == config.TransportLocal,

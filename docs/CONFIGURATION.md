@@ -77,6 +77,9 @@ Combined GPU terms count the GPUs that satisfy all of them, so
 such as the GB10 report no VRAM size and never satisfy `vram>=N`. GPUs from
 other vendors are not detected yet.
 
+When no runner of yours matches but a [cloud peer](CLOUD.md) offers a machine
+that does, `--where` leases one instead of failing.
+
 For workspace defaults or a selected profile:
 
 ```toml

@@ -139,3 +139,20 @@ func TestDoctorWhereKeepsSSHDisplayURL(t *testing.T) {
 		t.Fatalf("code=%d out=%s err=%s", code, &out, &errOut)
 	}
 }
+
+// A workspace's where may pick your runners, but renting spends your money,
+// so only your own config, a profile you chose or --where may lease.
+func TestWorkspaceWhereNeverLeases(t *testing.T) {
+	broker := func(_ context.Context, _, _ string, _ time.Duration) (proto.Info, error) {
+		return proto.Info{Placement: true, MaxJobs: 1, Facts: proto.Facts{OS: "linux"}, Offers: []proto.Offer{{Name: "h100", Facts: proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 81920}}}}}}, nil
+	}
+	e := config.EffectiveRun{Where: "gpu", Candidates: []config.RunCandidate{{Name: "cloud", URL: "cloud"}}}
+	selection, err := chooseRunners(context.Background(), e, broker)
+	if err == nil || selection.Lease != nil || !strings.Contains(err.Error(), "pass --where \"gpu\" to lease") {
+		t.Fatalf("workspace where: %v %+v", err, selection.Lease)
+	}
+	e.WhereMayLease = true
+	if selection, err := chooseRunners(context.Background(), e, broker); err != nil || selection.Lease == nil {
+		t.Fatalf("--where: %v %+v", err, selection.Lease)
+	}
+}
