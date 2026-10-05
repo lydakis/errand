@@ -801,6 +801,8 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 	dir := t.TempDir()
 	acquire := filepath.Join(dir, "acquire.sh")
 	os.WriteFile(acquire, []byte("#!/bin/sh\necho '{\"url\":\"http://box:7443\"}'\n"), 0o700)
+	release := filepath.Join(dir, "release.sh")
+	os.WriteFile(release, []byte("#!/bin/sh\n"), 0o700)
 	gpu := []proto.GPU{{Name: "NVIDIA H100 80GB HBM3", MemoryMiB: 81559}}
 	var actions atomic.Pointer[[]string]
 	socket := fakeWhoisSocketHandler(t, func(w http.ResponseWriter, _ *http.Request) {
@@ -815,7 +817,7 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 		})
 	}, nil)
 	d, err := New(Config{StateDir: t.TempDir(), TailscaledSocket: socket, Version: "test", GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: &cloud.Config{
-		Offers:    []cloud.Offer{{Name: "x", Facts: proto.Facts{GPUs: gpu}, Provider: cloud.CommandProvider{AcquireCommand: []string{acquire}, ReleaseCommand: []string{"/bin/true"}}, IdleTimeout: time.Hour, MaxLifetime: time.Hour}},
+		Offers:    []cloud.Offer{{Name: "x", Facts: proto.Facts{GPUs: gpu}, Provider: cloud.CommandProvider{AcquireCommand: []string{acquire}, ReleaseCommand: []string{release}}, IdleTimeout: time.Hour, MaxLifetime: time.Hour}},
 		AdmitKeys: func(context.Context, proto.LeaseTarget, string, []string) error { return nil },
 		Probe: func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) {
 			return proto.Info{Facts: proto.Facts{GPUs: gpu}}, nil
@@ -847,8 +849,10 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 		}
 		for deadline := time.Now().Add(5 * time.Second); ; {
 			_, got := info(proto.ActionSubmit, proto.ActionLease)
-			if len(got.Leases) == 1 && got.Leases[0].State == proto.LeaseReady && got.Leases[0].Target != nil {
-				return lease
+			for _, l := range got.Leases {
+				if l.ID == lease.ID && l.State == proto.LeaseReady && l.Target != nil {
+					return lease
+				}
 			}
 			if time.Now().After(deadline) {
 				t.Fatalf("lease never ready: %+v", got.Leases)
