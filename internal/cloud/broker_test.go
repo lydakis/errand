@@ -343,3 +343,71 @@ func TestRestartRefusesChangedProvider(t *testing.T) {
 		t.Fatalf("lease after restart: %+v", got)
 	}
 }
+
+// max_lifetime is a hard stop even for a launch that never finishes.
+func TestLaunchStopsAtMaxLifetime(t *testing.T) {
+	h := newHarness(t, "exec sleep 30\n")
+	h.cfg.Offers[0].MaxLifetime = 200 * time.Millisecond
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ended := waitState(t, b, "george", l.ID, proto.LeaseFailed)
+	if !strings.Contains(ended.Error, "within 200ms") || !strings.Contains(h.releases(), l.ID) {
+		t.Fatalf("lease %+v, releases %q", ended, h.releases())
+	}
+}
+
+// A restart releases a lease whose record still says launching, so a lease
+// whose ready state could not be recorded is released, never handed out.
+func TestLeaseNotReadyUnlessRecorded(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	probe := h.cfg.Probe
+	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, where string) (proto.Info, error) {
+		// Put a directory where the only lease's record goes, so every later
+		// write of the record fails, root or not.
+		records, _ := filepath.Glob(filepath.Join(h.cfg.StateDir, "leases", "*.json"))
+		for _, record := range records {
+			if err := os.Remove(record); err == nil {
+				os.MkdirAll(filepath.Join(record, "blocked"), 0700)
+			}
+		}
+		return probe(ctx, target, where)
+	}
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ended := waitState(t, b, "george", l.ID, proto.LeaseFailed)
+	if ended.Target != nil || ended.ReadyAt != (time.Time{}) || !strings.Contains(ended.Error, "recording the ready lease") || !strings.Contains(h.releases(), l.ID) {
+		t.Fatalf("lease %+v, releases %q", ended, h.releases())
+	}
+}
+
+// Ended leases are forgotten after a week by a running broker too, so its
+// lease list does not grow without bound.
+func TestReaperForgetsOldEndedLeases(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	if _, err := b.Release("george", l.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+	b.mu.Lock()
+	b.leases[l.ID].ReleasedAt = time.Now().Add(-endedLeaseHistory - time.Minute)
+	b.mu.Unlock()
+	b.reapOnce()
+	if _, ok := b.Get("george", l.ID); ok {
+		t.Fatal("old ended lease still listed")
+	}
+	if _, err := os.Stat(filepath.Join(h.cfg.StateDir, "leases", l.ID+".json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("old ended lease still recorded: %v", err)
+	}
+}

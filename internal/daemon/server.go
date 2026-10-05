@@ -866,11 +866,12 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 
 	var offers []proto.Offer
 	var leases []string
-	if d.broker != nil {
+	// Offers come only with the caller's active lease IDs: clients take
+	// offers plus a list as the whole truth and forget lease peers missing
+	// from it, which a caller without the lease action must not do.
+	if d.broker != nil && id.Allowed(proto.ActionLease) {
 		offers = d.broker.Offers()
-		if id.Allowed(proto.ActionLease) {
-			leases = d.broker.ActiveIDs(leaseOwner(id))
-		}
+		leases = d.broker.ActiveIDs(leaseOwner(id))
 	}
 	d.mu.Lock()
 	o := d.occupancyLocked()

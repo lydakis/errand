@@ -14,7 +14,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/lydakis/errand/internal/cloud"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -756,6 +758,33 @@ func TestLeaseAcquireNeedsSubmit(t *testing.T) {
 		d.handleLeaseAcquire(w, httptest.NewRequest(http.MethodPost, "/v0/leases", strings.NewReader(`{}`)), Identity{Login: "someone@github", Actions: tc.actions})
 		if w.Code != tc.want {
 			t.Errorf("actions %v: %d %q, want %d", tc.actions, w.Code, w.Body.String(), tc.want)
+		}
+	}
+}
+
+// Clients forget lease peers a cloud peer with offers does not list, so a
+// caller that cannot see its lease IDs must not see offers either.
+func TestInfoShowsOffersOnlyWithLeaseIDs(t *testing.T) {
+	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: "test", GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: &cloud.Config{
+		Offers: []cloud.Offer{{Name: "x", Provider: cloud.CommandProvider{AcquireCommand: []string{"/bin/false"}, ReleaseCommand: []string{"/bin/true"}}, IdleTimeout: time.Minute, MaxLifetime: time.Minute}},
+		Probe:  func(context.Context, proto.LeaseTarget, string) (proto.Info, error) { return proto.Info{}, nil },
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	for _, tc := range []struct {
+		actions map[string]bool
+		offers  int
+	}{
+		{map[string]bool{proto.ActionSubmit: true}, 0},
+		{map[string]bool{proto.ActionSubmit: true, proto.ActionLease: true}, 1},
+	} {
+		w := httptest.NewRecorder()
+		d.handleInfo(w, httptest.NewRequest(http.MethodGet, "/v0/info", nil), Identity{Login: "someone@github", Actions: tc.actions})
+		var info proto.Info
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || len(info.Offers) != tc.offers {
+			t.Errorf("actions %v: %v, %d offers, want %d", tc.actions, err, len(info.Offers), tc.offers)
 		}
 	}
 }

@@ -279,7 +279,9 @@ func (b *Broker) Acquire(owner, login, where string) (proto.Lease, error) {
 	if err := b.persist(&l.record); err != nil {
 		return proto.Lease{}, &Error{http.StatusInternalServerError, "recording lease: " + err.Error()}
 	}
-	ctx, cancel := context.WithTimeout(b.ctx, b.cfg.AcquireTimeout)
+	// The hard stop holds while launching too: a launch still running at the
+	// lease's max lifetime is canceled and released.
+	ctx, cancel := context.WithTimeout(b.ctx, b.launchLimit(*offer))
 	l.cancelLaunch, l.launching = cancel, true
 	b.leases[l.ID] = l
 	b.wg.Add(1)
@@ -303,7 +305,7 @@ func (b *Broker) launch(ctx context.Context, l *lease, offer Offer, login string
 	})
 	if ctx.Err() != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			err = fmt.Errorf("acquire did not finish within %s", b.cfg.AcquireTimeout)
+			err = fmt.Errorf("acquire did not finish within %s", b.launchLimit(offer))
 		} else {
 			err = fmt.Errorf("acquire canceled")
 		}
@@ -312,9 +314,13 @@ func (b *Broker) launch(ctx context.Context, l *lease, offer Offer, login string
 	if err == nil {
 		b.mu.Lock()
 		l.ProviderState = machine.State
-		_ = b.persist(&l.record)
+		err = b.persist(&l.record)
 		b.mu.Unlock()
-		err = checkTarget(target)
+		if err != nil {
+			err = fmt.Errorf("recording the machine: %w", err)
+		} else {
+			err = checkTarget(target)
+		}
 	}
 	var facts proto.Facts
 	if err == nil {
@@ -343,6 +349,15 @@ func (b *Broker) launch(ctx context.Context, l *lease, offer Offer, login string
 		l.LastBusy = now
 		l.IdleUntil = now.Add(offer.IdleTimeout)
 		l.addProgress(fmt.Sprintf("ready after %s", now.Sub(l.CreatedAt).Round(time.Second)))
+		// A restart releases a lease recorded as launching, so the lease is
+		// ready only once the record says so.
+		if perr := b.persist(&l.record); perr != nil {
+			l.State = proto.LeaseReleasing
+			l.Target, l.Facts = nil, nil
+			l.ReadyAt, l.IdleUntil = time.Time{}, time.Time{}
+			l.Error = "recording the ready lease: " + perr.Error()
+			l.addProgress("launch failed: " + l.Error)
+		}
 	}
 	_ = b.persist(&l.record)
 	l.launching = false
@@ -351,6 +366,11 @@ func (b *Broker) launch(ctx context.Context, l *lease, offer Offer, login string
 	if release {
 		b.release(l)
 	}
+}
+
+// launchLimit is how long a launch of offer may take.
+func (b *Broker) launchLimit(offer Offer) time.Duration {
+	return min(b.cfg.AcquireTimeout, offer.MaxLifetime)
 }
 
 // waitReady polls until the machine runs errand and its measured facts
@@ -377,7 +397,7 @@ func (b *Broker) waitReady(ctx context.Context, l *lease, target proto.LeaseTarg
 		select {
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return proto.Facts{}, fmt.Errorf("machine was not ready within %s (%s)", b.cfg.AcquireTimeout, last)
+				return proto.Facts{}, fmt.Errorf("machine was not ready within %s (%s)", b.launchLimit(b.offers[l.Offer]), last)
 			}
 			return proto.Facts{}, fmt.Errorf("launch canceled")
 		case <-time.After(b.cfg.ReadyPoll):
@@ -475,8 +495,12 @@ func (b *Broker) reap() {
 func (b *Broker) reapOnce() {
 	b.mu.Lock()
 	var ready, releasing []*lease
-	for _, l := range b.leases {
+	for id, l := range b.leases {
 		switch {
+		case (l.State == proto.LeaseReleased || l.State == proto.LeaseFailed) && time.Since(l.ReleasedAt) > endedLeaseHistory:
+			if err := os.Remove(filepath.Join(b.dir, id+".json")); err == nil || errors.Is(err, os.ErrNotExist) {
+				delete(b.leases, id)
+			}
 		case l.State == proto.LeaseReady:
 			ready = append(ready, l)
 		case l.State == proto.LeaseReleasing && !l.releasing && !l.launching:

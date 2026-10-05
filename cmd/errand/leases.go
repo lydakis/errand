@@ -30,6 +30,8 @@ type leaseOption struct {
 
 var leasePollInterval = time.Second
 
+const leaseRequestTimeout = 30 * time.Second
+
 // matchingOffer returns the first offer whose declared facts satisfy q.
 func matchingOffer(q placement.Requirements, offers []proto.Offer) (proto.Offer, bool) {
 	for _, o := range offers {
@@ -88,9 +90,17 @@ func leaseRunner(opt leaseOption, where string, stderr io.Writer) (placementChoi
 	broker := opt.Broker
 	brokerName := terminalSafeField(broker.Name)
 	fmt.Fprintf(stderr, "errand: no runner of yours matches %s; leasing %s from %s\n", terminalSafeField(where), terminalSafeField(describeOffer(opt.Offer)), brokerName)
-	lease, err := client.AcquireLease(ctx, broker.Target, where)
+	// Ctrl-C does not cut the request short: the cloud peer may already be
+	// launching, and only its answer names the lease to release. The loop
+	// below releases a launching lease once it sees the interrupt.
+	acquireCtx, cancelAcquire := context.WithTimeout(context.WithoutCancel(ctx), leaseRequestTimeout)
+	lease, err := client.AcquireLease(acquireCtx, broker.Target, where)
+	cancelAcquire()
 	if err != nil {
 		return placementChoice{}, fmt.Errorf("leasing from %s: %w", broker.Name, err)
+	}
+	if ctx.Err() != nil && lease.State != proto.LeaseLaunching {
+		return placementChoice{}, fmt.Errorf("interrupted; lease %s is %s", lease.ID, lease.State)
 	}
 	shown := 0
 	if lease.State == proto.LeaseReady {

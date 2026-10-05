@@ -164,6 +164,7 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 				if selection.Lease != nil {
 					// Doctor never rents a machine; it reports what a run would do.
 					report.Checks = append(report.Checks, doctorCheck{Name: "placement", Status: "ok", Detail: fmt.Sprintf("No runner of yours matches %s; a run would lease %s from %s.", effective.Where, describeOffer(selection.Lease.Offer), selection.Lease.Broker.Name)})
+					report.Checks = append(report.Checks, doctorApplyChecks()...)
 					return finishDoctorReport(stdout, stderr, report, *asJSON)
 				}
 				chosen := selection.Choices[0]
