@@ -22,6 +22,7 @@ import (
 	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/pathpolicy"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/relpath"
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
@@ -52,7 +53,7 @@ const (
 )
 
 func validatePath(value string) error {
-	if value == "" || strings.HasPrefix(value, "/") || path.Clean(value) != value ||
+	if value == "" || strings.HasPrefix(value, "/") || !relpath.IsClean(value) ||
 		value == "." || value == ".." || strings.HasPrefix(value, "../") || strings.ContainsRune(value, '\x00') {
 		return fmt.Errorf("unsafe change path %q", value)
 	}
@@ -63,7 +64,7 @@ func validatePath(value string) error {
 }
 
 func pathContainsGitMetadata(value string) bool {
-	for _, component := range strings.Split(filepath.ToSlash(value), "/") {
+	for component := range strings.SplitSeq(filepath.ToSlash(value), "/") {
 		if strings.EqualFold(component, ".git") {
 			return true
 		}

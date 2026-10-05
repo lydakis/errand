@@ -20,6 +20,7 @@ import (
 
 	"github.com/lydakis/errand/internal/fslink"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/relpath"
 )
 
 // ContentMismatchError reports file bytes that disagree with the manifest.
@@ -109,7 +110,7 @@ func ValidateSortedContext(ctx context.Context, m proto.Manifest) error {
 				return err
 			}
 		}
-		for parent := path.Dir(e.Path); parent != "." && parent != "/"; parent = path.Dir(parent) {
+		for parent := relpath.Dir(e.Path); parent != "." && parent != "/"; parent = relpath.Dir(parent) {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
@@ -162,7 +163,7 @@ func validateEntry(e proto.ManifestEntry) error {
 }
 
 func checkRelPath(p string) error {
-	if p == "" || strings.HasPrefix(p, "/") || path.Clean(p) != p ||
+	if p == "" || strings.HasPrefix(p, "/") || !relpath.IsClean(p) ||
 		p == ".." || strings.HasPrefix(p, "../") || strings.Contains(p, "\x00") {
 		return fmt.Errorf("archive: unsafe path %q", p)
 	}

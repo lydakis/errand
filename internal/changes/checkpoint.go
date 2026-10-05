@@ -18,6 +18,7 @@ import (
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/manifest"
 	"github.com/lydakis/errand/internal/proto"
+	"github.com/lydakis/errand/internal/relpath"
 )
 
 var ErrCheckpointChanged = errors.New("transfer checkpoint changed; prepare a new transfer")
@@ -268,7 +269,11 @@ func mergeAcceptedSourceContext(ctx context.Context, base proto.Manifest, bundle
 	}
 	replaced := func(name string) bool {
 		accepted := metadata[name]
-		for current := name; current != "."; current = path.Dir(current) {
+		dir := path.Dir
+		if relpath.IsClean(name) {
+			dir = relpath.Dir // and so are its ancestors
+		}
+		for current := name; current != "."; current = dir(current) {
 			// A separately selected metadata conflict affects only that entry.
 			// Installed child roots still contribute their accepted source values.
 			if conflicts[current] && (current == name || !bundleHasMetadataPath(bundle, current)) {
