@@ -11,13 +11,14 @@ import (
 
 // measureFacts reports what this runner can actually do right now —
 // measured, not claimed. KVM is "openable by this user", not "exists".
-func measureFacts() proto.Facts {
+func (d *Daemon) measureFacts() proto.Facts {
 	f := proto.Facts{
 		ObservedAt: time.Now(),
 		OS:         runtime.GOOS,
 		Arch:       runtime.GOARCH,
 		NumCPU:     runtime.NumCPU(),
 		Tools:      map[string]string{},
+		GPUs:       d.gpus.measure(),
 	}
 	if kvm, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0); err == nil {
 		kvm.Close()

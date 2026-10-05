@@ -28,6 +28,7 @@ import (
 
 	"github.com/lydakis/errand/internal/archive"
 	changeops "github.com/lydakis/errand/internal/changes"
+	"github.com/lydakis/errand/internal/cloud"
 	"github.com/lydakis/errand/internal/durable"
 	"github.com/lydakis/errand/internal/filelock"
 	"github.com/lydakis/errand/internal/logio"
@@ -83,10 +84,19 @@ type Config struct {
 	// waiting capacity; zero disables queueing.
 	MaxJobs   int
 	MaxQueued int
+
+	// GPUProbe lists this machine's GPUs; nil asks nvidia-smi.
+	GPUProbe func(context.Context) []proto.GPU
+
+	// Cloud makes this runner a cloud peer that leases machines. Its
+	// StateDir is set from the runner's.
+	Cloud *cloud.Config
 }
 
 type Daemon struct {
 	placementSlots chan struct{}
+	gpus           gpuCache
+	broker         *cloud.Broker // nil unless offers are configured
 	workspaces     *workspaceStore
 	namedCaches    *namedcache.Store
 	cfg            Config
@@ -179,6 +189,10 @@ func New(cfg Config) (*Daemon, error) {
 		writeAdmissionReceipt: (*Job).writeJSON,
 		writeProcessScope:     replaceJSONDurable,
 	}
+	d.gpus.probe = cfg.GPUProbe
+	if d.gpus.probe == nil {
+		d.gpus.probe = probeNVIDIA
+	}
 	if err := d.lockStateDir(); err != nil {
 		return nil, err
 	}
@@ -212,6 +226,14 @@ func New(cfg Config) (*Daemon, error) {
 	if err := d.recoverNamedCaches(); err != nil {
 		_ = d.Close()
 		return nil, err
+	}
+	if cfg.Cloud != nil {
+		brokerCfg := *cfg.Cloud
+		brokerCfg.StateDir = cfg.StateDir
+		if d.broker, err = cloud.New(brokerCfg); err != nil {
+			_ = d.Close()
+			return nil, fmt.Errorf("starting cloud broker: %w", err)
+		}
 	}
 	if !cfg.CacheDisabled {
 		cache, err := newBlobCache(filepath.Join(cfg.StateDir, "cache", "blobs"), cfg.CacheMaxBytes, cfg.CacheTTL)
@@ -259,6 +281,9 @@ var stateLockWait = func() time.Duration {
 // Close releases the process-wide ownership of the daemon state directory.
 func (d *Daemon) Close() error {
 	d.closeOnce.Do(func() {
+		if d.broker != nil {
+			d.broker.Close()
+		}
 		if d.workspaces != nil {
 			_ = d.workspaces.root.Close()
 		}
@@ -718,6 +743,10 @@ func (d *Daemon) Handler() http.Handler {
 	mux.HandleFunc("GET /v0/workspaces/{id}", d.auth(proto.ActionReadOwn, d.handleWorkspaceGet))
 	mux.HandleFunc("DELETE /v0/workspaces/{id}", d.auth(proto.ActionGCJobs, d.handleWorkspaceRemove))
 	mux.HandleFunc("GET /v0/info", d.auth("", d.handleInfo))
+	mux.HandleFunc("POST /v0/leases", d.auth(proto.ActionLease, d.handleLeaseAcquire))
+	mux.HandleFunc("GET /v0/leases", d.auth(proto.ActionLease, d.handleLeaseList))
+	mux.HandleFunc("GET /v0/leases/{id}", d.auth(proto.ActionLease, d.handleLeaseGet))
+	mux.HandleFunc("DELETE /v0/leases/{id}", d.auth(proto.ActionLease, d.handleLeaseRelease))
 	mux.HandleFunc("POST /v0/setup/quiesce", d.auth("", d.handleSetupQuiesce))
 	mux.HandleFunc("DELETE /v0/setup/quiesce", d.auth("", d.handleSetupQuiesceRelease))
 	mux.HandleFunc("GET /v0/jobs", d.auth(proto.ActionReadOwn, d.handleList))
@@ -824,8 +853,8 @@ func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 	}
 }
 
-func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) {
-	facts := measureFacts()
+func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity) {
+	facts := d.measureFacts()
 	if where := r.URL.Query().Get("where"); where != "" {
 		q, err := placement.Parse(where)
 		if err != nil {
@@ -835,6 +864,14 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) 
 		facts = d.measurePlacementFacts(r.Context(), q, (&Job{}).buildEnv())
 	}
 
+	var offers []proto.Offer
+	var leases []string
+	if d.broker != nil {
+		offers = d.broker.Offers()
+		if id.Allowed(proto.ActionLease) {
+			leases = d.broker.ActiveIDs(leaseOwner(id))
+		}
+	}
 	d.mu.Lock()
 	o := d.occupancyLocked()
 	busy := d.capacityFullLocked() || d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil)
@@ -853,6 +890,8 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) 
 		MaxJobs:      d.cfg.MaxJobs,
 		MaxQueued:    d.cfg.MaxQueued,
 		Facts:        facts,
+		Offers:       offers,
+		Leases:       leases,
 	})
 }
 
@@ -1082,7 +1121,7 @@ admissionCheck:
 		NodeID: id.NodeID, NodeName: id.Node,
 		RemoteAddr: r.RemoteAddr, Method: id.Method,
 		LocalUID: int64(id.LocalUID), LocalUser: id.LocalUser,
-		Project: project, ProjectTruncated: projectTruncated, Facts: measureFacts(),
+		Project: project, ProjectTruncated: projectTruncated, Facts: d.measureFacts(),
 	}
 	j.state = proto.StateStaging
 	if err = d.writeAdmissionReceipt(j, "spec.json", proto.NewReceiptSpec(spec)); err == nil {

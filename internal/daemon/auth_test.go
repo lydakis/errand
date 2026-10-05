@@ -740,3 +740,22 @@ func TestTailscaleOnlyKeepsLocalControlButDisablesSSHJobs(t *testing.T) {
 		}
 	}
 }
+
+// A leased runner admits its requester for every action, so lease alone does
+// not let a caller rent one.
+func TestLeaseAcquireNeedsSubmit(t *testing.T) {
+	d := &Daemon{}
+	for _, tc := range []struct {
+		actions map[string]bool
+		want    int
+	}{
+		{map[string]bool{proto.ActionLease: true}, http.StatusForbidden},
+		{map[string]bool{proto.ActionLease: true, proto.ActionSubmit: true}, http.StatusNotFound}, // past the check; no offers here
+	} {
+		w := httptest.NewRecorder()
+		d.handleLeaseAcquire(w, httptest.NewRequest(http.MethodPost, "/v0/leases", strings.NewReader(`{}`)), Identity{Login: "someone@github", Actions: tc.actions})
+		if w.Code != tc.want {
+			t.Errorf("actions %v: %d %q, want %d", tc.actions, w.Code, w.Body.String(), tc.want)
+		}
+	}
+}

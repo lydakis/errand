@@ -65,6 +65,7 @@ Run options:
 Commands:
   errand peers                   List, add, remove, or discover runners
   errand workspaces              Create, list, or remove persistent workspaces
+  errand leases                  List or release machines leased from cloud peers
   errand ps                      List jobs
   errand status HANDLE           Inspect a job and its results
   errand attach HANDLE           Follow a job's logs
@@ -110,6 +111,8 @@ func runCLI(args []string) int {
 		return cmdPeers(args[1:])
 	case "workspaces":
 		return cmdWorkspaces(args[1:])
+	case "leases":
+		return cmdLeases(args[1:], os.Stdout, os.Stderr)
 	case "config":
 		return cmdConfig(args[1:])
 	case "access":
@@ -683,7 +686,15 @@ func cmdServe(args []string) int {
 			log.Fatalf("errand serve: %v", err)
 		}
 	}
+	broker, err := fileCfg.Cloud.Broker()
+	if err != nil {
+		log.Fatalf("errand serve: %v", err)
+	}
+	if broker != nil {
+		broker.Probe = probeLeaseTarget
+	}
 	d, err := daemon.New(daemon.Config{
+		Cloud:              broker,
 		ChangeStorage:      client.ChangeStorageStats,
 		DisableSSH:         fileCfg.Transport == config.TransportTailscale,
 		LocalOnly:          fileCfg.Transport == config.TransportLocal,

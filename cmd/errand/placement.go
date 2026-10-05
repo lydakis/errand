@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -30,6 +31,11 @@ type placementExclusion struct {
 type placementSelection struct {
 	Choices  []placementChoice
 	Excluded []placementExclusion
+	// Lease is set instead of Choices when no runner of the caller's matches
+	// the requirements but a cloud peer offers a machine that does.
+	Lease *leaseOption
+	// Probed holds every candidate that answered, by name.
+	Probed map[string]proto.Info
 }
 
 func (s placementSelection) printExcluded(w io.Writer) {
@@ -47,6 +53,10 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 	defer cancel()
 	choices := make([]placementChoice, len(e.Candidates))
 	reasons := make([]string, len(e.Candidates))
+	infos := make([]*proto.Info, len(e.Candidates))
+	// matched records runners whose facts match even when they are full: a
+	// busy runner of your own never causes a lease.
+	matched := make([]bool, len(e.Candidates))
 	var wg sync.WaitGroup
 	// Bound transport/process fan-out while all probes share one deadline.
 	slots := make(chan struct{}, 8)
@@ -67,6 +77,9 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 				reasons[i] = err.Error()
 				return
 			}
+			infos[i] = &info
+			missing := q.Missing(info.Facts)
+			matched[i] = info.Placement && len(missing) == 0
 			switch {
 			case !info.Placement:
 				reasons[i] = "runner does not support requirement validation; upgrade it"
@@ -75,7 +88,7 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 			case info.MaxJobs <= 0 || info.MaxQueued < 0 || info.RunningJobs < 0 || info.StartingJobs < 0 || info.StagingJobs < 0 || info.QueuedJobs < 0:
 				reasons[i] = "invalid capacity report"
 			default:
-				if missing := q.Missing(info.Facts); len(missing) > 0 {
+				if len(missing) > 0 {
 					reasons[i] = strings.Join(missing, "; ")
 					return
 				}
@@ -86,7 +99,12 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 	wg.Wait()
 	var eligible []placementChoice
 	var exclusions []string
-	var result placementSelection
+	result := placementSelection{Probed: map[string]proto.Info{}}
+	for i, info := range infos {
+		if info != nil {
+			result.Probed[e.Candidates[i].Name] = *info
+		}
+	}
 	for i, c := range choices {
 		if reasons[i] != "" {
 			result.Excluded = append(result.Excluded, placementExclusion{Peer: e.Candidates[i].Name, Reason: reasons[i]})
@@ -96,6 +114,21 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 		eligible = append(eligible, c)
 	}
 	if len(eligible) == 0 {
+		// Renting is only for capabilities none of your runners has, and
+		// never for the bare wildcard.
+		if !slices.Contains(matched, true) && !q.Any() {
+			for i, info := range infos {
+				if info == nil {
+					continue
+				}
+				if offer, ok := matchingOffer(q, info.Offers); ok {
+					c := e.Candidates[i]
+					target := client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
+					result.Lease = &leaseOption{Broker: placementChoice{RunCandidate: c, Info: *info, Target: target}, Offer: offer}
+					return result, nil
+				}
+			}
+		}
 		return result, fmt.Errorf("no runner matches %q: %s", e.Where, strings.Join(exclusions, "; "))
 	}
 	rand.Shuffle(len(eligible), func(i, j int) { eligible[i], eligible[j] = eligible[j], eligible[i] })
@@ -112,10 +145,21 @@ func announcePlacement(w io.Writer, c placementChoice, where string) {
 func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placementChoice, error) {
 	if e.Where != "" {
 		selection, err := chooseRunners(context.Background(), e, client.ProbeWhereInfo)
-		if err == nil {
-			selection.printExcluded(stderr)
+		// Ended leases are forgotten rather than reported as unreachable.
+		forgotten := forgetEndedLeases(selection.Probed)
+		selection.Excluded = slices.DeleteFunc(selection.Excluded, func(x placementExclusion) bool { return forgotten[x.Peer] })
+		if err != nil {
+			return nil, err
 		}
-		return selection.Choices, err
+		selection.printExcluded(stderr)
+		if selection.Lease != nil {
+			choice, err := leaseRunner(*selection.Lease, e.Where, stderr)
+			if err != nil {
+				return nil, err
+			}
+			return []placementChoice{choice}, nil
+		}
+		return selection.Choices, nil
 	}
 	c := placementChoice{RunCandidate: config.RunCandidate{Name: e.Peer, URL: e.URL, RemoteCommand: e.RemoteCommand, RemoteSocket: e.RemoteSocket}, Target: e.URL}
 	// Raw SSH URLs must retain their identity for handle and change-state lookups.

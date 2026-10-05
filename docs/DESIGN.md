@@ -157,8 +157,8 @@ errand --on cabal -- nix flake check  # named peer (personal alias)
 errand --where kvm,arch=amd64 -- ...      # facts-based selection among peers
 ```
 
-Facts (arch, OS, CPU count, /dev/kvm, and installed tools) are measured
-with `observed_at` timestamps. Memory, disk, GPU and tool-version
+Facts (arch, OS, CPU count, /dev/kvm, installed tools, and NVIDIA GPUs) are
+measured with `observed_at` timestamps. Memory, disk and tool-version
 requirements are not part of the current selector. Client-side they are
 selection hints; **the daemon revalidates them as requirements at
 admission** against the actual job user — `/dev/kvm` must be openable, a
@@ -235,7 +235,7 @@ required:
 
 The capability carries an **action schema from day one** (not a boolean):
 `submit`, `read-own`, `kill-own`, `forward-own`, `manage-caches`, `gc-own`,
-and later `read-all`.
+`lease` (cloud peers, below), and later `read-all`.
 Matching grants are additive; errand merges capability objects
 deliberately (union of actions). A nonempty exact `deny_users` login match is
 checked first and refuses authorization even when `allow_users` also matches.
@@ -279,6 +279,18 @@ on another initiator, or an explicit `--url`. A raw URL retains its scheme and
 port in the handle. A bare ULID resolves through `--on`, `--url`, or the
 configured default peer. Unknown aliases and conflicting `--on`/`--url`
 selectors fail locally rather than being guessed as network hosts.
+
+### Cloud peers (amendment, 2026-10-04)
+
+A runner with `[[cloud.offers]]` is a cloud peer: when `--where` matches none
+of the caller's runners but matches an offer, the client asks it for a lease.
+It acquires a machine through configured provider commands, waits until that
+machine answers as an errand runner whose measured facts match, and hands back
+how to reach it. The client records the lease as a peer named
+`<cloud peer>-<lease id suffix>` and submits to it directly, so the cloud peer
+is a capacity broker, not a relay, and the no-relaying rule above holds.
+Leases are owned like jobs, persisted before acquisition, and released when
+idle, past their maximum lifetime, or on request. See [cloud peers](CLOUD.md).
 
 ## Execution backends and isolation — separate axes
 
@@ -978,7 +990,7 @@ queueing, and startup latency.
 - Container and Nix backends need a concrete workload that justifies managing
   execution environments and their lifecycle. Named caches already work with
   the host backend independently of containers.
-- Resource reservations and richer requirements, such as memory, GPUs, or tool
+- Resource reservations and richer requirements, such as memory or tool
   versions, should follow workloads that job-slot balancing cannot serve.
   The current CPU predicate describes machine capacity; it does not reserve cores.
 - Privilege separation between the daemon and workers remains future work.

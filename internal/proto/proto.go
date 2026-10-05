@@ -27,6 +27,9 @@ const (
 	ActionForwardOwn = "forward-own"
 	ActionCaches     = "manage-caches"
 	ActionGCJobs     = "gc-own"
+	// ActionLease acquires and releases cloud capacity. It is separate from
+	// submit because a lease can cost money.
+	ActionLease = "lease"
 
 	ErrorCodeSnapshotCacheMiss = "snapshot_cache_miss"
 
@@ -464,6 +467,14 @@ type Facts struct {
 	KVM        bool              `json:"kvm"`
 	Tools      map[string]string `json:"tools,omitempty"`       // name -> resolved path
 	ToolErrors map[string]string `json:"tool_errors,omitempty"` // requested tools that could not be attested
+	GPUs       []GPU             `json:"gpus,omitempty"`
+}
+
+// GPU is one device as the driver reports it. MemoryMiB is zero when the
+// driver reports none, as on unified-memory systems such as the GB10.
+type GPU struct {
+	Name      string `json:"name"`
+	MemoryMiB int    `json:"memory_mib,omitempty"`
 }
 
 type Info struct {
@@ -482,6 +493,65 @@ type Info struct {
 	MaxJobs      int   `json:"max_jobs"`
 	MaxQueued    int   `json:"max_queued"`
 	Facts        Facts `json:"facts"`
+	// Offers are machine shapes this runner can lease on demand. Leases lists
+	// the caller's unreleased lease IDs so clients can forget ended ones.
+	Offers []Offer  `json:"offers,omitempty"`
+	Leases []string `json:"leases,omitempty"`
+}
+
+// Offer is a machine shape a cloud peer can acquire. Its facts are declared
+// in configuration; a leased machine's measured facts must still match.
+type Offer struct {
+	Name           string  `json:"name"`
+	Facts          Facts   `json:"facts"`
+	PricePerHour   float64 `json:"price_per_hour,omitempty"` // USD, as configured
+	IdleTimeoutSec int64   `json:"idle_timeout_sec"`
+	MaxLifetimeSec int64   `json:"max_lifetime_sec"`
+}
+
+const (
+	LeaseLaunching = "launching"
+	LeaseReady     = "ready"
+	LeaseReleasing = "releasing"
+	LeaseReleased  = "released"
+	LeaseFailed    = "failed"
+)
+
+type LeaseRequest struct {
+	Where string `json:"where"`
+}
+
+// LeaseTarget says how to reach a leased runner, with the same fields and
+// rules as a remote personal peer entry. Local sockets are not accepted: a
+// cloud peer must not be able to point a client at its own machine.
+type LeaseTarget struct {
+	URL           string `json:"url,omitempty"`
+	SSH           string `json:"ssh,omitempty"`
+	RemoteCommand string `json:"remote_command,omitempty"`
+	RemoteSocket  string `json:"remote_socket,omitempty"`
+}
+
+type Lease struct {
+	ID         string       `json:"id"`
+	Offer      string       `json:"offer"`
+	Where      string       `json:"where"`
+	State      string       `json:"state"`
+	Target     *LeaseTarget `json:"target,omitempty"`
+	Facts      *Facts       `json:"facts,omitempty"` // measured once ready
+	Progress   []string     `json:"progress,omitempty"`
+	Error      string       `json:"error,omitempty"`
+	CreatedAt  time.Time    `json:"created_at"`
+	ReadyAt    time.Time    `json:"ready_at,omitzero"`
+	ReleasedAt time.Time    `json:"released_at,omitzero"`
+	// ExpiresAt is the hard stop from the offer's max lifetime. IdleUntil
+	// is when an idle ready lease will be released unless work arrives.
+	ExpiresAt time.Time `json:"expires_at"`
+	IdleUntil time.Time `json:"idle_until,omitzero"`
+}
+
+// Active reports whether the lease may still hold a machine.
+func (l Lease) Active() bool {
+	return l.State == LeaseLaunching || l.State == LeaseReady || l.State == LeaseReleasing
 }
 
 type Event struct {

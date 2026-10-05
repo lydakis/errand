@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -22,7 +23,21 @@ type peerRow struct {
 	Default bool        `json:"default"`
 	Status  string      `json:"status"`
 	Detail  string      `json:"detail,omitempty"`
+	Lease   string      `json:"lease,omitempty"` // "OFFER from CLOUD" for a leased machine
 	Info    *proto.Info `json:"info,omitempty"`
+}
+
+// forgetEndedLeaseRows drops leases their cloud peer no longer reports, so
+// a released machine is not listed as unreachable.
+func forgetEndedLeaseRows(rows []peerRow) []peerRow {
+	probed := map[string]proto.Info{}
+	for _, row := range rows {
+		if row.Info != nil {
+			probed[row.Name] = *row.Info
+		}
+	}
+	forgotten := forgetEndedLeases(probed)
+	return slices.DeleteFunc(rows, func(row peerRow) bool { return forgotten[row.Name] })
 }
 
 func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
@@ -77,6 +92,7 @@ func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 		}(i, target)
 	}
 	wg.Wait()
+	rows = forgetEndedLeaseRows(rows)
 	if *jsonOutput {
 		if code := writeJSONRows(stdout, stderr, rows); code != 0 {
 			return code
@@ -127,6 +143,9 @@ func peerListTargets(on, rawURL string, deps peersDeps) ([]peerRow, []string, er
 	targets := make([]string, len(names))
 	for i, name := range names {
 		rows[i] = peerRow{Name: name, Target: peerURLOf(cfg.Peers[name]), Default: name == cfg.DefaultPeer}
+		if rec, ok := cfg.Leases[name]; ok {
+			rows[i].Lease = fmt.Sprintf("%s from %s", rec.Offer, rec.Broker)
+		}
 		target, err := configuredPeerURL(cfg, name)
 		if err != nil {
 			rows[i].Status = "misconfigured"

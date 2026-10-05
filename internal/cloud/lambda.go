@@ -1,0 +1,325 @@
+package cloud
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"runtime"
+	"slices"
+	"strings"
+	"time"
+	"unicode"
+
+	"github.com/lydakis/errand/internal/fsowner"
+	"github.com/lydakis/errand/internal/proto"
+)
+
+// LambdaProvider rents Lambda Cloud instances. It launches one, installs
+// errand on it over SSH, joins it to the tailnet with a tagged auth key and
+// terminates it on release. See docs/CLOUD.md.
+//
+// Lambda's launch request cannot be retried safely: a launch whose answer is
+// lost may still have created a billed instance. So the provider keeps one
+// rule, which TestLambdaReleaseAfterAnyStop checks at every step acquire can
+// stop at: release finds and terminates every instance that may belong to
+// the lease. To make that possible, acquire saves lambdaState before each
+// launch attempt goes out, names the instance after the lease, and takes the
+// state back only when Lambda refused every attempt.
+type LambdaProvider struct {
+	APIKeyFile           string
+	InstanceType         string
+	Regions              []string // preference order; empty means any with capacity
+	FileSystems          []string
+	SSHKeyName           string // registered with Lambda
+	SSHPrivateKeyFile    string // its private half, used once to install errand
+	User                 string // login on the instance; Lambda images use ubuntu
+	TailscaleAuthKeyFile string
+	ErrandBinary         string   // a linux build for Arch
+	Arch                 string   // the instance's architecture, amd64 or arm64
+	AllowUsers           []string // tailnet logins admitted besides the caller
+
+	// Tests replace these.
+	BaseURL    string
+	HTTP       *http.Client
+	SSH        func(ctx context.Context, args []string, stdin io.Reader) ([]byte, error)
+	HostKey    func(ctx context.Context) (private, public string, err error)
+	Now        func() time.Time
+	Poll       time.Duration
+	LaunchGap  time.Duration
+	RequestGap time.Duration
+	SendSlack  time.Duration
+	Pacing     *lambdaPacing // defaults to the one all Lambda offers share
+}
+
+// lambdaState is what release needs to find a lease's instance. Acquire
+// saves it before the first launch attempt and adds to it as it learns more;
+// no saved state means no launch request ever went out.
+type lambdaState struct {
+	// Sent is when the latest launch attempt went out, give or take
+	// lambdaSendSlack. An instance it created may take a while to be listed,
+	// so until lambdaLaunchSettle after it, not finding one proves nothing.
+	Sent time.Time `json:"sent"`
+	// KeyID fingerprints the API key that launched. Another key may belong
+	// to another account, which does not list the instance.
+	KeyID      string `json:"key_id"`
+	Region     string `json:"region"`
+	InstanceID string `json:"instance_id,omitempty"` // once Lambda answered
+	proto.LeaseTarget
+}
+
+// lambdaLaunchSettle bounds how long a launched instance may go unlisted.
+const lambdaLaunchSettle = 10 * time.Minute
+
+// LeaseHostname is the instance and tailnet name of a lease's machine, so
+// release can find it even when the launch's answer was lost.
+func LeaseHostname(leaseID string) string {
+	return "errand-" + strings.ToLower(leaseID)
+}
+
+func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machine, error) {
+	// A request over SSH or the local socket has no tailnet login, so the
+	// machine would admit no one; refuse before paying for it.
+	if req.Login == "" && len(p.allowUsers()) == 0 {
+		return Machine{}, errors.New("this lease request has no tailnet login to admit (it came over SSH or the local socket); ask over the tailnet, or set allow_users on the offer")
+	}
+	key, err := readSecret(p.APIKeyFile, "Lambda API key")
+	if err != nil {
+		return Machine{}, err
+	}
+	authKey, err := readSecret(p.TailscaleAuthKeyFile, "Tailscale auth key")
+	if err != nil {
+		return Machine{}, err
+	}
+	// Everything the install needs is checked before paying for a machine.
+	public, err := p.checkInstall(ctx)
+	if err != nil {
+		return Machine{}, err
+	}
+	if err := p.checkSSHKeyName(ctx, key, public); err != nil {
+		return Machine{}, err
+	}
+	region, price, err := p.pickRegion(ctx, key)
+	if err != nil {
+		return Machine{}, err
+	}
+	req.Progress(fmt.Sprintf("launching %s in %s ($%.2f/h)", p.InstanceType, region, float64(price)/100))
+	name := LeaseHostname(req.LeaseID)
+	// The instance boots with a host key made here, so the one SSH
+	// connection that carries the auth key can verify whom it talks to.
+	hostPrivate, hostPublic, err := p.hostKey()(ctx)
+	if err != nil {
+		return Machine{}, fmt.Errorf("making the machine's SSH host key: %w", err)
+	}
+	launch := map[string]any{
+		"region_name":        region,
+		"instance_type_name": p.InstanceType,
+		"ssh_key_names":      []string{p.SSHKeyName},
+		"name":               name,
+		"user_data":          hostKeyCloudConfig(hostPrivate, hostPublic),
+	}
+	if len(p.FileSystems) > 0 {
+		launch["file_system_names"] = p.FileSystems
+	}
+	var launched struct {
+		Data struct {
+			InstanceIDs []string `json:"instance_ids"`
+		} `json:"data"`
+	}
+	state := lambdaState{KeyID: keyID(key), Region: region}
+	// Nothing is sent unless its state is saved first.
+	sending := func() error {
+		state.Sent = p.now()
+		return saveState(req, state)
+	}
+	if err := p.launch(ctx, key, launch, &launched, sending); err != nil {
+		// Only a launch Lambda refused, or one that never went out, is known
+		// to have created nothing. Any other failure leaves the state saved,
+		// and release looks for the instance.
+		var api *lambdaAPIError
+		if errors.As(err, &api) && api.Status/100 == 4 || errors.Is(err, errNotSent) {
+			_ = req.Save(nil) // if this fails, release only looks for nothing
+		}
+		return Machine{}, fmt.Errorf("launching %s: %w", p.InstanceType, err)
+	}
+	if len(launched.Data.InstanceIDs) != 1 {
+		return Machine{}, fmt.Errorf("Lambda launched %d instances, want 1", len(launched.Data.InstanceIDs))
+	}
+	state.InstanceID = launched.Data.InstanceIDs[0]
+	if err := saveState(req, state); err != nil {
+		return Machine{}, err
+	}
+
+	ip, err := p.waitActive(ctx, key, state.InstanceID, req.Progress)
+	if err != nil {
+		return Machine{}, err
+	}
+	req.Progress("instance is up at " + ip + "; installing errand")
+	if err := p.install(ctx, ip, hostPublic, name, authKey, req.Login); err != nil {
+		return Machine{}, err
+	}
+	state.LeaseTarget = proto.LeaseTarget{URL: "http://" + name + ":7443"}
+	if err := saveState(req, state); err != nil {
+		return Machine{}, err
+	}
+	data, _ := json.Marshal(state)
+	return Machine{Target: state.LeaseTarget, State: data}, nil
+}
+
+func saveState(req AcquireRequest, state lambdaState) error {
+	data, _ := json.Marshal(state)
+	if err := req.Save(data); err != nil {
+		return fmt.Errorf("recording the lease's Lambda state: %w", err)
+	}
+	return nil
+}
+
+// Release terminates every instance that may belong to the lease: the one
+// whose ID was saved and any named for the lease, which covers a launch
+// whose answer was lost. It succeeds only once none is left, or when not
+// finding one is proof that none exists.
+func (p *LambdaProvider) Release(ctx context.Context, req ReleaseRequest) error {
+	if len(req.State) == 0 {
+		return nil // no launch request ever went out
+	}
+	var state lambdaState
+	if err := json.Unmarshal(req.State, &state); err != nil || state.Sent.IsZero() {
+		return fmt.Errorf("lease %s has unreadable Lambda state %s; terminate %s in the Lambda console if it exists", req.LeaseID, req.State, LeaseHostname(req.LeaseID))
+	}
+	key, err := readSecret(p.APIKeyFile, "Lambda API key")
+	if err != nil {
+		return err
+	}
+	instances, err := p.instances(ctx, key)
+	if err != nil {
+		return err
+	}
+	name := LeaseHostname(req.LeaseID)
+	var ids []string
+	ended := false
+	for _, in := range instances {
+		if in.ID != state.InstanceID && in.Name != name {
+			continue
+		}
+		if lambdaGone(in.Status) {
+			ended = true
+		} else {
+			ids = append(ids, in.ID)
+		}
+	}
+	if len(ids) == 0 {
+		switch {
+		case ended:
+			return nil
+		case p.now().Sub(state.Sent) < lambdaLaunchSettle:
+			return fmt.Errorf("no instance named %s yet; checking again in case its launch is still registering", name)
+		case state.KeyID != keyID(key):
+			return fmt.Errorf("the Lambda API key changed since %s was launched and this key does not see it; restore the old key in api_key_file, or terminate %s in the Lambda console", name, name)
+		}
+		return nil
+	}
+	var out struct {
+		Data struct {
+			Terminated []lambdaInstance `json:"terminated_instances"`
+		} `json:"data"`
+	}
+	if err := p.call(ctx, key, http.MethodPost, "/instance-operations/terminate", map[string]any{"instance_ids": ids}, &out); err != nil {
+		return fmt.Errorf("terminating %s: %w", strings.Join(ids, ", "), err)
+	}
+	// Only the instances Lambda lists as terminated are confirmed; release
+	// fails, and is retried, until every one is.
+	missing := slices.DeleteFunc(ids, func(id string) bool {
+		return slices.ContainsFunc(out.Data.Terminated, func(in lambdaInstance) bool { return in.ID == id })
+	})
+	if len(missing) > 0 {
+		return fmt.Errorf("Lambda did not confirm terminating %s; trying again", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func (p *LambdaProvider) now() time.Time {
+	if p.Now != nil {
+		return p.Now().UTC()
+	}
+	return time.Now().UTC()
+}
+
+// allowUsers is AllowUsers without entries that are only blanks or control
+// characters, which can never match a tailnet login.
+func (p *LambdaProvider) allowUsers() []string {
+	var users []string
+	for _, u := range p.AllowUsers {
+		if strings.TrimFunc(u, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) != "" {
+			users = append(users, u)
+		}
+	}
+	return users
+}
+
+// keyID fingerprints an API key without revealing it.
+func keyID(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:8])
+}
+
+// readSecret reads a one-line credential from a file only this user can read.
+func readSecret(path, what string) (string, error) {
+	// Opening a FIFO would block until something writes to it, so the type
+	// is checked before opening, and again on what was opened.
+	if info, err := os.Stat(path); err != nil {
+		return "", fmt.Errorf("reading %s: %w", what, err)
+	} else if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%s file %s is not a regular file", what, path)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", what, err)
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", what, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%s file %s is not a regular file", what, path)
+	}
+	if owned, err := fsowner.OwnedByCurrentUser(f); err != nil || !owned {
+		return "", fmt.Errorf("%s file %s must be owned by the user errand runs as", what, path)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+		return "", fmt.Errorf("%s file %s is readable by other users; run chmod 600 %s", what, path, path)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, 64<<10))
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", what, err)
+	}
+	secret := strings.TrimSpace(string(data))
+	if secret == "" || strings.ContainsAny(secret, "\r\n") {
+		return "", fmt.Errorf("%s file %s must hold one line", what, path)
+	}
+	return secret, nil
+}
+
+func lastLine(out []byte) string {
+	s := strings.TrimSpace(string(out))
+	if i := strings.LastIndexByte(s, '\n'); i >= 0 {
+		s = s[i+1:]
+	}
+	return s
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
+}
+
+var _ Provider = (*LambdaProvider)(nil)

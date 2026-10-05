@@ -56,6 +56,10 @@ type Client struct {
 	DefaultPeer    string                       `toml:"default_peer,omitempty"`
 	ApplyOnSuccess *bool                        `toml:"apply_on_success,omitempty"`
 	Peers          map[string]Peer              `toml:"peers,omitempty"`
+
+	// Leases are machines leased from cloud peers, merged into Peers by
+	// LoadClient under names configured peers do not use.
+	Leases map[string]LeaseRecord `toml:"-"`
 }
 
 // Directory resolves the shared client and runner configuration directory.
@@ -108,6 +112,27 @@ func LoadClient() (Client, error) {
 	path := filepath.Join(configDir, "config.toml")
 	if _, err := tomlconfig.DecodeFile(path, &c); err != nil && !os.IsNotExist(err) {
 		return c, fmt.Errorf("%s: %w", path, err)
+	}
+	// An unusable state directory hides leases rather than breaking every
+	// command; errand leases reports it.
+	var leases map[string]LeaseRecord
+	if path, err := leasesPath(); err == nil {
+		if leases, err = readLeases(path); err != nil {
+			return c, err
+		}
+	}
+	for name, rec := range leases {
+		if _, configured := c.Peers[name]; configured {
+			continue
+		}
+		if c.Peers == nil {
+			c.Peers = map[string]Peer{}
+		}
+		if c.Leases == nil {
+			c.Leases = map[string]LeaseRecord{}
+		}
+		c.Peers[name] = LeasePeer(rec.Target)
+		c.Leases[name] = rec
 	}
 	return c, nil
 }
@@ -189,6 +214,7 @@ type Daemon struct {
 	Socket           string      `toml:"socket"`
 	Cache            DaemonCache `toml:"cache"`
 	NamedCache       DaemonCache `toml:"named_cache"`
+	Cloud            DaemonCloud `toml:"cloud"`
 
 	// MaxJobs defaults to 1. MaxQueued defaults to 8; zero disables queueing.
 	MaxJobs   int `toml:"max_jobs"`
@@ -277,6 +303,9 @@ func LoadDaemon(path string) (Daemon, error) {
 	}
 	if d.MaxQueued < 0 {
 		return d, fmt.Errorf("max_queued must not be negative")
+	}
+	if _, err := d.Cloud.Broker(); err != nil {
+		return d, err
 	}
 	return d, nil
 }
