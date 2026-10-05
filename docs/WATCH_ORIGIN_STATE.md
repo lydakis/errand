@@ -53,18 +53,20 @@ checkout is present.
 ## Workspaces created by an earlier errand
 
 There is no migration. An `origin.json` with an embedded `initial` manifest
-and no `initial_root` gets its own error, which prints the recovery for that
-workspace:
+and no `initial_root` gets its own error, which names the checkout and a
+preview of the recovery:
 
 ```
-errand: workspace api was created by an earlier errand, and this version cannot read its local transfer state; recreate it from its checkout with: errand workspaces rm --on mini 01M… && errand workspaces create --on mini api && rm -r '…/workspace-transfers/…-01M…'
+errand: workspace api was created by an earlier errand, and this version cannot use its local transfer state.
+Recreate it from /Users/me/src/api. This shows what recreating deletes on the runner and how to keep it, and removes nothing:
+  errand workspaces recreate --on mini api
 ```
 
-`push` and `push --watch` fill in the workspace name and the `--on`, `--url`
-or `--profile` they were given. `fetch --apply` and `gc changes` print `NAME`
-and `PEER` placeholders. An origin that lacks `initial_root` without an
-embedded manifest is still reported as an invalid workspace origin. Recovery
-skips earlier-format relationships, as it skips damaged ones.
+`push` and `push --watch` fill in the workspace name and the peer as given.
+`fetch --apply` fills in the peer and prints the workspace ID, and `gc changes`
+prints the recorded peer URL and workspace ID; `recreate` accepts both. An
+origin that lacks `initial_root` without an embedded manifest is still
+reported as an invalid workspace origin.
 
 Push cannot recover by itself. Only `workspaces create` records a
 relationship, because it holds the creation manifest and bodies that job
@@ -73,30 +75,44 @@ as missing would not help. Rebuilding it for the existing runner workspace
 would mean converting the old record or fetching the manifest from the
 runner, which is a migration.
 
-What the printed recovery does:
+### Interrupted applies
 
-- `workspaces rm` removes the runner workspace at once: its working tree,
-  creation snapshot and remote transfer state. GC has nothing left to collect.
-  Job receipts and retained results keep their normal retention. It refuses
-  while jobs are active. Files that jobs generated in the persistent tree,
-  such as build outputs, are lost; named caches are not.
-- `workspaces create` uploads the checkout as the new creation snapshot,
-  negotiating with the runner's shared body cache. Creation flags such as
-  `--artifact` or `--cache` must be repeated if they were used originally.
-- `rm -r` drops any pending `push.json`. That records a push to the removed
-  workspace, and the checkout still holds its source, so nothing is lost.
-  Without this step, `gc changes` reports the directory as failed on every run
-  and never collects it.
-- Jobs of the old workspace can no longer be applied with `fetch --apply`.
-  `fetch --output` still exports their retained results.
+Recovery reads only the checkout path and identity, workspace ID and peer,
+which both formats share. It therefore still runs for earlier-format
+relationships. A `fetch --apply` the earlier errand left interrupted finishes
+when the recreate preview runs, or earlier when another transfer into that
+checkout recovers its applies (applying a job's results there, or pushing
+another workspace from it). The upgrade never waits for the
+previous version, and later transfers on the checkout no longer report an
+apply transaction with no matching local state.
 
-Not covered: a `fetch --apply` into the checkout that was interrupted and not
-yet recovered by the earlier errand. Its apply transaction stays in the
-checkout, this version cannot recover it through the unreadable
-relationship, and later transfers on that checkout report an apply
-transaction with no matching local state. Let the earlier errand finish any
-interrupted application (its next push or `fetch --apply` there does) before
-upgrading.
+### Recreating
+
+Recreation deletes state the user may want, so the recovery is a preview
+first. `errand workspaces recreate --on mini api`:
+
+1. Refuses while jobs hold the workspace.
+2. Finishes any interrupted apply into the checkout that created it, and
+   refuses if that checkout has moved.
+3. Shows the size of the working tree it would delete, including files jobs
+   left there; the workspace's retained jobs, and that this version cannot
+   apply them (`fetch --output` still exports them, before and after); and
+   the commands that capture the tree's changes and artifacts first:
+   `errand --on mini --workspace api --no-apply -- true`, then
+   `fetch --output` of that job. Ignored files that are not artifacts are not
+   captured and are rebuilt by the next job. Named caches are kept.
+4. Removes nothing and prints the same command with `--yes`.
+
+With `--yes` it selects the new snapshot from the checkout first, so a local
+refusal leaves the workspace in place. It then removes the runner workspace,
+recovers again under the checkout lock and discards the earlier relationship,
+and creates the workspace with the same name, project, artifacts and caches.
+Creation flags no longer need repeating, and no state directory is removed by
+hand. If creation fails after removal, the error prints the `workspaces
+create` command with those settings.
+
+For a workspace whose relationship is current, recreation keeps the old
+relationship: its jobs can still be applied with `fetch --apply`.
 
 ## Results, 10K files, Linux
 
@@ -125,9 +141,19 @@ Raw reports: [benchmarks/2026-09-26-origin-state-linux.json](benchmarks/2026-09-
 - `TestWorkspaceOriginRecognizesEmbeddedManifestFormat` writes an origin in
   the earlier format and checks the recovery text, from the reader and from
   push, and that an origin missing only `initial_root` stays generic damage.
-- `TestPushPrintsRunnableRecoveryForEarlierTransferState` checks the exact
-  command printed by push, watch and a profile push, runs it, and then pushes
-  and collects cleanly.
+- `TestEarlierTransferStateFinishesInterruptedApply` leaves an apply marked
+  applying in an earlier-format relationship and checks that recovery
+  finishes it and leaves no apply transaction in the checkout.
+- `TestRecreateEarlierWorkspaceShowsLossesBeforeRemoving` checks the command
+  printed by push, watch, a profile push, a URL push, `fetch --apply` and
+  `gc changes`; that the preview names the losses and changes nothing; that
+  the suggested capture exports the artifact; and that `--yes` keeps the
+  artifacts, deletes the runner-only file, discards the earlier state, keeps
+  old results exportable, and then pushes and collects cleanly.
+- `TestRecreateKeepsCurrentJobsApplicable` applies an old job after
+  recreating a current workspace.
+- `TestRecreateRefusesBeforeRemoving` checks the busy refusal and that a
+  snapshot the checkout refuses leaves the workspace in place.
 - `TestWorkspaceOriginFollowsDurableCreationManifest` checks that no origin is
   written when the manifest write fails, and that a directory interrupted
   before its origin is collected.

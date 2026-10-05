@@ -72,6 +72,10 @@ func cmdFetchTo(args []string, out, stderr io.Writer) int {
 		PeerURL: peerURL, JobID: jobID, Apply: *apply, MaterializeConflicts: *conflicts,
 		Path: changePath, CallerDir: callerDir, OutputDir: *output, Stats: &stats,
 	})
+	var earlier *client.EarlierTransferStateError
+	if errors.As(err, &earlier) && label != peerURL {
+		earlier.Peer = label
+	}
 	action := "staged"
 	if *apply {
 		action = "applied"

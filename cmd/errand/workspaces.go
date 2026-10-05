@@ -23,8 +23,11 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 		verb = args[0]
 		args = args[1:]
 	}
+	if verb == "recreate" {
+		return cmdWorkspaceRecreate(args, out, stderr)
+	}
 	if verb != "list" && verb != "create" && verb != "rm" {
-		fmt.Fprintln(stderr, "errand workspaces: expected create, list, or rm")
+		fmt.Fprintln(stderr, "errand workspaces: expected create, list, recreate, or rm")
 		return 2
 	}
 	fs := flag.NewFlagSet("errand workspaces "+verb, flag.ContinueOnError)

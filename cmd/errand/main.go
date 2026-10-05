@@ -64,7 +64,7 @@ Run options:
 
 Commands:
   errand peers                   List, add, remove, or discover runners
-  errand workspaces              Create, list, or remove persistent workspaces
+  errand workspaces              Create, list, recreate, or remove persistent workspaces
   errand ps                      List jobs
   errand status HANDLE           Inspect a job and its results
   errand attach HANDLE           Follow a job's logs

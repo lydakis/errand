@@ -46,7 +46,7 @@ func readWorkspaceOrigin(dir string) (workspaceOrigin, error) {
 	case !proto.ValidULID(o.WorkspaceID) || o.RootID.IsZero() || !filepath.IsAbs(o.Root) || o.PeerURL == "":
 		err = fmt.Errorf("invalid workspace origin")
 	case o.InitialRoot == "" && record.Embedded != nil:
-		err = &EarlierTransferStateError{Dir: dir, WorkspaceID: o.WorkspaceID}
+		err = &EarlierTransferStateError{Dir: dir, WorkspaceID: o.WorkspaceID, Root: o.Root, URL: o.PeerURL}
 	case !validLocalManifestRoot(o.InitialRoot):
 		err = fmt.Errorf("invalid workspace origin")
 	}
@@ -55,27 +55,27 @@ func readWorkspaceOrigin(dir string) (workspaceOrigin, error) {
 
 // EarlierTransferStateError reports a relationship recorded by an earlier
 // errand, whose origin embedded the creation manifest. It is never migrated:
-// the workspace is recreated instead. Callers that resolved the workspace
-// name, peer or profile fill them in so the printed command runs as shown.
+// the workspace is recreated instead. The reader fills the workspace ID,
+// checkout and peer URL; callers that resolved the workspace name or a
+// configured peer name fill those in so the printed command reads as typed.
 type EarlierTransferStateError struct {
-	Dir, WorkspaceID, Workspace string
-	Peer, URL, Profile          string
+	Dir, WorkspaceID, Workspace, Root string
+	Peer, URL                         string
 }
 
 func (e *EarlierTransferStateError) Error() string {
-	peer := "--on PEER"
-	if e.URL != "" {
-		peer = "--url " + shellQuote(e.URL)
-	} else if e.Peer != "" {
+	return fmt.Sprintf("workspace %s was created by an earlier errand, and this version cannot use its local transfer state.\n"+
+		"Recreate it from %s. This shows what recreating deletes on the runner and how to keep it, and removes nothing:\n"+
+		"  %s", cmp.Or(e.Workspace, e.WorkspaceID), e.Root, e.recreateCommand())
+}
+
+// recreateCommand previews the recreation; adding --yes performs it.
+func (e *EarlierTransferStateError) recreateCommand() string {
+	peer := "--url " + shellQuote(e.URL)
+	if e.Peer != "" {
 		peer = "--on " + e.Peer
 	}
-	create := peer
-	if e.Profile != "" {
-		create += " --profile " + shellQuote(e.Profile)
-	}
-	return fmt.Sprintf("workspace %s was created by an earlier errand, and this version cannot read its local transfer state; "+
-		"recreate it from its checkout with: errand workspaces rm %s %s && errand workspaces create %s %s && rm -r %s",
-		cmp.Or(e.Workspace, e.WorkspaceID), peer, e.WorkspaceID, create, cmp.Or(e.Workspace, "NAME"), shellQuote(e.Dir))
+	return fmt.Sprintf("errand workspaces recreate %s %s", peer, cmp.Or(e.Workspace, e.WorkspaceID))
 }
 
 // initial reads the creation manifest. The root check binds it to this origin,
@@ -199,9 +199,13 @@ func recoverWorkspaceTransfers(ctx context.Context, root string) error {
 		if os.IsNotExist(err) {
 			continue
 		}
-		if err != nil {
+		// An unknown origin must not block an unrelated checkout. Recovery
+		// reads only fields both formats share, so an apply an earlier errand
+		// left interrupted still finishes, and recreation never discards it.
+		var earlier *EarlierTransferStateError
+		if err != nil && !errors.As(err, &earlier) {
 			continue
-		} // An unknown origin must not block an unrelated checkout.
+		}
 		if !sameLocalRoot(o.Root, root) {
 			continue
 		}

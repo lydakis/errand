@@ -124,12 +124,12 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 	return 0
 }
 
-// The recovery command for a workspace recorded by an earlier errand repeats
-// this push's peer and profile, so it recreates the same workspace.
+// The recovery command for a workspace recorded by an earlier errand names
+// the peer as this command was given it.
 func nameEarlierStateRecovery(err error, settings runConfigFlags, peer string) {
 	var earlier *client.EarlierTransferStateError
-	if errors.As(err, &earlier) {
-		earlier.URL, earlier.Peer, earlier.Profile = settings.url, peer, settings.profile
+	if errors.As(err, &earlier) && settings.url == "" && peer != "" {
+		earlier.Peer = peer
 	}
 }
 

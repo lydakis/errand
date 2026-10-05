@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/fsidentity"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -185,18 +186,20 @@ func TestWorkspaceOriginRecognizesEmbeddedManifestFormat(t *testing.T) {
 	}
 	_, err = readWorkspaceOrigin(dir)
 	var earlier *EarlierTransferStateError
-	if !errors.As(err, &earlier) || earlier.Dir != dir || earlier.WorkspaceID != id {
+	if !errors.As(err, &earlier) || earlier.Dir != dir || earlier.WorkspaceID != id || earlier.Root != root || earlier.URL != o.PeerURL {
 		t.Fatalf("embedded-manifest origin: %v", err)
 	}
-	recovery := "errand workspaces rm --on PEER " + id + " && errand workspaces create --on PEER NAME && rm -r " + shellQuote(dir)
-	if !strings.Contains(err.Error(), "created by an earlier errand") || !strings.Contains(err.Error(), recovery) {
+	// Without a workspace or peer name, the command still runs as printed.
+	recovery := "Recreate it from " + root + ". This shows what recreating deletes on the runner and how to keep it, and removes nothing:\n" +
+		"  errand workspaces recreate --url 'http://runner' " + id
+	if !strings.Contains(err.Error(), "created by an earlier errand") || !strings.HasSuffix(err.Error(), recovery) {
 		t.Fatalf("recovery not named: %v", err)
 	}
 	// Push knows the workspace name and reaches the origin without the runner.
 	ws := proto.Workspace{ID: id, Name: "api"}
 	_, err = PushChanges(PushOptions{PeerURL: "http://runner", Workspace: ws.Name, Root: root, workspace: &ws})
 	if !errors.As(err, &earlier) || !strings.Contains(err.Error(), "workspace api was created by an earlier errand") ||
-		!strings.Contains(err.Error(), "errand workspaces create --on PEER api") {
+		!strings.HasSuffix(err.Error(), "errand workspaces recreate --url 'http://runner' api") {
 		t.Fatalf("push: %v", err)
 	}
 	if err := recoverWorkspaceApplications(root); err != nil {
@@ -218,6 +221,78 @@ func TestWorkspaceOriginRecognizesEmbeddedManifestFormat(t *testing.T) {
 	}{o.Root, o.RootID, o.WorkspaceID, o.PeerURL})
 	if _, err := readWorkspaceOrigin(dir); errors.As(err, &earlier) || err == nil || !strings.Contains(err.Error(), "invalid workspace origin") {
 		t.Fatalf("damaged origin: %v", err)
+	}
+}
+
+// An apply an earlier errand left interrupted must not wait for a version
+// that is no longer installed: recovery needs only the fields both origin
+// formats share, so the first transfer on the checkout finishes it.
+func TestEarlierTransferStateFinishesInterruptedApply(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	const id = "01M2280R0T4152A3BSV4C2976R"
+	root, dir, initial := recordTestWorkspaceOrigin(t, id, map[string]string{"value": "initial\n"})
+	o, err := readWorkspaceOrigin(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := t.TempDir()
+	if err := os.WriteFile(filepath.Join(remote, "value"), []byte("from job\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	prep := prepareSnapshot(remote, true, false)
+	if prep.err != nil {
+		t.Fatal(prep.err)
+	}
+	session := o.session(dir)
+	attemptID := proto.NewULID()
+	staged, delta, err := session.Stage(t.Context(), attemptID, remote, prep.manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Interrupt the application after it is marked applying, before any
+	// receiver change, as a crash of the earlier errand would leave it.
+	if err := session.Blobs().Retain(t.Context(), filepath.Join(staged, "remote"), delta.RemoteManifest); err != nil {
+		t.Fatal(err)
+	}
+	attempt, err := session.Attempt(attemptID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt.Applying = true
+	raw, err := json.Marshal(attempt)
+	if err == nil {
+		err = os.WriteFile(filepath.Join(staged, "attempt.json"), raw, 0600)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err = json.Marshal(struct {
+		Root        string              `json:"root"`
+		RootID      fsidentity.Identity `json:"root_identity"`
+		WorkspaceID string              `json:"workspace_id"`
+		PeerURL     string              `json:"peer_url"`
+		Initial     proto.Manifest      `json:"initial"`
+	}{o.Root, o.RootID, o.WorkspaceID, o.PeerURL, initial})
+	if err == nil {
+		err = os.WriteFile(filepath.Join(dir, "origin.json"), raw, 0600)
+	}
+	if err == nil {
+		err = os.Remove(filepath.Join(dir, "initial.json"))
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := recoverWorkspaceApplications(root); err != nil {
+		t.Fatal(err)
+	}
+	if body, err := os.ReadFile(filepath.Join(root, "value")); err != nil || string(body) != "from job\n" {
+		t.Fatalf("interrupted apply not finished: %q %v", body, err)
+	}
+	if attempt, err := session.Attempt(attemptID); err != nil || !attempt.Done {
+		t.Fatalf("attempt: %+v %v", attempt, err)
+	}
+	if pending, err := changeops.WorkspaceHasApplyTransactions(root); err != nil || pending {
+		t.Fatalf("apply transaction left in checkout: %v %v", pending, err)
 	}
 }
 

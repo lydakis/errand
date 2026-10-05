@@ -435,8 +435,18 @@ absolute paths or tool configuration. See [named caches](NAMED_CACHES.md).
 `df` includes persistent workspace storage. Job and cache GC never collect the
 persistent tree. `workspaces rm` explicitly removes an idle workspace and its
 creation snapshot, leaving existing job receipts and retained results available
-under their normal retention rules. Listing, creation, and removal accept
+under their normal retention rules. Listing, creation, recreation, and removal accept
 `--json`; all accept `--on` or `--url` and work with local, SSH, and tailnet peers.
+
+`workspaces recreate NAME` replaces an idle workspace with a fresh one of the
+same name, project, artifacts, and caches, created from the checkout that
+created it. Without `--yes` it only previews: it shows the size of the working
+tree it would delete, which earlier jobs keep their retained results, and the
+commands that capture the tree's changes first. Ignored files that are not
+artifacts, such as installed dependencies, are deleted and rebuilt by the next
+job. Before anything is removed it refuses a workspace in use, finishes any
+interrupted apply into the checkout, and selects the new snapshot, so a
+refused snapshot leaves the workspace in place.
 
 `df --verbose` (`-v`) breaks workspace storage into working files, the creation
 base, transfer data, and metadata. Named caches and job storage are listed separately, so

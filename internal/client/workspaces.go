@@ -94,13 +94,27 @@ func RemoveWorkspace(peerURL, name string) error {
 }
 
 func CreateWorkspace(opts RunOptions, name string) (proto.Workspace, error) {
-	var result proto.Workspace
+	prepared, err := prepareWorkspace(opts, name)
+	if err != nil {
+		return proto.Workspace{}, err
+	}
+	return prepared.create(opts)
+}
+
+// preparedWorkspace is a creation request whose local snapshot is already
+// selected, so recreation refuses on local problems before removing anything.
+type preparedWorkspace struct {
+	prep    snapshotPreparation
+	request proto.Workspace
+}
+
+func prepareWorkspace(opts RunOptions, name string) (preparedWorkspace, error) {
 	if err := proto.ValidateWorkspaceName(name); err != nil {
-		return result, err
+		return preparedWorkspace{}, err
 	}
 	prep := prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot, opts.Caches...)
 	if prep.err != nil {
-		return result, fmt.Errorf("%s: %w", prep.stage, prep.err)
+		return preparedWorkspace{}, fmt.Errorf("%s: %w", prep.stage, prep.err)
 	}
 	selection := prep.selection
 	selection.Artifacts = opts.Artifacts
@@ -110,11 +124,15 @@ func CreateWorkspace(opts RunOptions, name string) (proto.Workspace, error) {
 		var err error
 		request.CacheProjectID, err = cacheProjectID(opts.Root)
 		if err != nil {
-			return result, err
+			return preparedWorkspace{}, err
 		}
 	}
+	return preparedWorkspace{prep, request}, nil
+}
+
+func (p preparedWorkspace) create(opts RunOptions) (proto.Workspace, error) {
 	resultWithError := tryCandidates(opts, func(attempt RunOptions) (workspaceCreation, bool) {
-		w, err := createPreparedWorkspace(attempt, prep, request)
+		w, err := createPreparedWorkspace(attempt, p.prep, p.request)
 		return workspaceCreation{w, err}, placementRejection(err)
 	})
 	return resultWithError.workspace, resultWithError.err
