@@ -169,7 +169,9 @@ firstSignal:
 			map[string]string{"signal": "SIGINT"},
 			true,
 		)
-		c.delivered.Store(err == nil)
+		if err == nil {
+			c.delivered.Store(true) // never cleared: a later failure can't undo a delivery
+		}
 		c.forwarded <- err
 		if err != nil && ctx.Err() == nil {
 			c.target.report("forwarding SIGINT failed: %v", err)
