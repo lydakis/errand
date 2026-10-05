@@ -3,8 +3,12 @@ package config
 import (
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/lydakis/errand/internal/cloud"
 	"github.com/lydakis/errand/internal/proto"
@@ -19,19 +23,32 @@ type DaemonCloud struct {
 }
 
 type CloudOffer struct {
-	Name        string   `toml:"name"`
-	OS          string   `toml:"os"`
-	Arch        string   `toml:"arch"`
-	CPUs        int      `toml:"cpus"`
-	Tools       []string `toml:"tools"`
-	GPU         string   `toml:"gpu"`            // model name as the driver reports it, e.g. "H100 80GB"
-	GPUs        int      `toml:"gpus"`           // defaults to 1 when gpu or vram is set
-	VRAM        int      `toml:"vram"`           // GiB per GPU
-	Price       float64  `toml:"price_per_hour"` // USD, shown to callers
-	Acquire     []string `toml:"acquire"`
-	Release     []string `toml:"release"`
-	IdleTimeout string   `toml:"idle_timeout"` // default 20m
-	MaxLifetime string   `toml:"max_lifetime"` // default 12h
+	Name        string       `toml:"name"`
+	OS          string       `toml:"os"`
+	Arch        string       `toml:"arch"`
+	CPUs        int          `toml:"cpus"`
+	Tools       []string     `toml:"tools"`
+	GPU         string       `toml:"gpu"`            // model name as the driver reports it, e.g. "H100 80GB"
+	GPUs        int          `toml:"gpus"`           // defaults to 1 when gpu or vram is set
+	VRAM        int          `toml:"vram"`           // GiB per GPU
+	Price       float64      `toml:"price_per_hour"` // USD, shown to callers
+	Acquire     []string     `toml:"acquire"`
+	Release     []string     `toml:"release"`
+	Lambda      *LambdaOffer `toml:"lambda"`
+	IdleTimeout string       `toml:"idle_timeout"` // default 20m
+	MaxLifetime string       `toml:"max_lifetime"` // default 12h
+}
+
+// LambdaOffer rents Lambda Cloud instances instead of running commands.
+type LambdaOffer struct {
+	InstanceType         string   `toml:"instance_type"`
+	Regions              []string `toml:"regions"`
+	FileSystems          []string `toml:"file_systems"`
+	APIKeyFile           string   `toml:"api_key_file"`
+	User                 string   `toml:"user"`
+	TailscaleAuthKeyFile string   `toml:"tailscale_auth_key_file"`
+	ErrandBinary         string   `toml:"errand_binary"`
+	AllowUsers           []string `toml:"allow_users"`
 }
 
 const (
@@ -65,6 +82,12 @@ func (c DaemonCloud) Broker() (*cloud.Config, error) {
 			return nil, fmt.Errorf("%s is defined twice", where)
 		}
 		seen[o.Name] = true
+		if o.OS == "" && o.Lambda != nil {
+			o.OS = "linux"
+		}
+		if o.Arch == "" && o.Lambda != nil {
+			o.Arch = "amd64"
+		}
 		if o.OS != "" && o.OS != "linux" && o.OS != "darwin" && o.OS != "windows" {
 			return nil, fmt.Errorf("%s: os must be linux, darwin or windows", where)
 		}
@@ -74,12 +97,25 @@ func (c DaemonCloud) Broker() (*cloud.Config, error) {
 		if o.Price < 0 || math.IsNaN(o.Price) || math.IsInf(o.Price, 0) {
 			return nil, fmt.Errorf("%s: price_per_hour must not be negative", where)
 		}
-		for _, argv := range [][]string{o.Acquire, o.Release} {
-			if len(argv) == 0 || !filepath.IsAbs(argv[0]) {
-				return nil, fmt.Errorf("%s: acquire and release must be commands with an absolute executable path", where)
+		var provider cloud.Provider
+		switch {
+		case o.Lambda != nil && (len(o.Acquire) > 0 || len(o.Release) > 0):
+			return nil, fmt.Errorf("%s: use either acquire and release commands or [cloud.offers.lambda], not both", where)
+		case o.Lambda != nil:
+			if o.OS != "linux" {
+				return nil, fmt.Errorf("%s: Lambda offers run linux", where)
 			}
+			if provider, err = o.Lambda.provider(o.Arch); err != nil {
+				return nil, fmt.Errorf("%s: %w", where, err)
+			}
+		default:
+			for _, argv := range [][]string{o.Acquire, o.Release} {
+				if len(argv) == 0 || !filepath.IsAbs(argv[0]) {
+					return nil, fmt.Errorf("%s: acquire and release must be commands with an absolute executable path", where)
+				}
+			}
+			provider = cloud.CommandProvider{AcquireCommand: o.Acquire, ReleaseCommand: o.Release}
 		}
-		provider := cloud.CommandProvider{AcquireCommand: o.Acquire, ReleaseCommand: o.Release}
 		if o.CPUs < 0 || o.GPUs < 0 || o.VRAM < 0 {
 			return nil, fmt.Errorf("%s: cpus, gpus and vram must not be negative", where)
 		}
@@ -137,4 +173,57 @@ func validateOfferName(name string) error {
 		}
 	}
 	return nil
+}
+
+func (l LambdaOffer) provider(arch string) (*cloud.LambdaProvider, error) {
+	if l.InstanceType == "" {
+		return nil, fmt.Errorf("lambda needs instance_type")
+	}
+	for name, path := range map[string]string{"api_key_file": l.APIKeyFile, "tailscale_auth_key_file": l.TailscaleAuthKeyFile} {
+		if !filepath.IsAbs(path) && (path != "" || name != "tailscale_auth_key_file") {
+			return nil, fmt.Errorf("lambda %s must be an absolute path", name)
+		}
+	}
+	// Without Tailscale the machine admits the SSH key of the client that
+	// asked for it, not tailnet logins.
+	if l.TailscaleAuthKeyFile == "" && len(l.AllowUsers) > 0 {
+		return nil, fmt.Errorf("lambda allow_users names tailnet logins and needs tailscale_auth_key_file")
+	}
+	user := l.User
+	if user == "" {
+		user = "ubuntu"
+	}
+	// A portable Linux login name: a lowercase letter or underscore, then
+	// lowercase letters, digits, - and _, at most 32 in all.
+	if len(user) > 32 || !(user[0] >= 'a' && user[0] <= 'z' || user[0] == '_') {
+		return nil, fmt.Errorf("lambda user %q is not a plain login name", user)
+	}
+	for _, r := range user {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			return nil, fmt.Errorf("lambda user %q is not a plain login name", user)
+		}
+	}
+	for _, u := range l.AllowUsers {
+		if u == "" || strings.ContainsFunc(u, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
+			return nil, fmt.Errorf("lambda allow_users entry %q is not a tailnet login", u)
+		}
+	}
+	binary := l.ErrandBinary
+	if binary == "" {
+		// The broker's own build serves when the machine matches it.
+		if runtime.GOOS != "linux" || runtime.GOARCH != arch {
+			return nil, fmt.Errorf("lambda errand_binary must name a linux/%s errand build (this runner is %s/%s)", arch, runtime.GOOS, runtime.GOARCH)
+		}
+		self, err := os.Executable()
+		if err != nil {
+			return nil, fmt.Errorf("lambda errand_binary: %w", err)
+		}
+		binary = self
+	} else if !filepath.IsAbs(binary) {
+		return nil, fmt.Errorf("lambda errand_binary must be an absolute path")
+	}
+	return &cloud.LambdaProvider{
+		APIKeyFile: l.APIKeyFile, InstanceType: l.InstanceType, Regions: l.Regions, FileSystems: l.FileSystems,
+		User: user, TailscaleAuthKeyFile: l.TailscaleAuthKeyFile, ErrandBinary: binary, Arch: arch, AllowUsers: l.AllowUsers,
+	}, nil
 }

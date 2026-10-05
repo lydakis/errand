@@ -2,9 +2,15 @@ package config
 
 import (
 	"errors"
+	"math"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lydakis/errand/internal/cloud"
 )
 
 func TestCloudOffers(t *testing.T) {
@@ -86,5 +92,91 @@ func TestLeasePeersAreFound(t *testing.T) {
 	}
 	if url, err := c.PeerURL("cloud"); err != nil || url != "http://cloud:7443" || asked != 3 {
 		t.Fatalf("configured peer: %q %v (asked %d)", url, err, asked)
+	}
+}
+
+func TestLambdaOffers(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "errandd.toml")
+	os.WriteFile(path, []byte(`
+[[cloud.offers]]
+name = "h100"
+gpu = "H100 PCIe"
+vram = 80
+price_per_hour = 2.49
+
+[cloud.offers.lambda]
+instance_type = "gpu_1x_h100_pcie"
+regions = ["us-east-1"]
+api_key_file = "/etc/errand/lambda.key"
+tailscale_auth_key_file = "/etc/errand/ts.key"
+errand_binary = "/opt/errand-linux-amd64"
+allow_users = ["broker@example"]
+`), 0600)
+	d, err := LoadDaemon(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := d.Cloud.Broker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := b.Offers[0]
+	p, ok := o.Provider.(*cloud.LambdaProvider)
+	if !ok || p.InstanceType != "gpu_1x_h100_pcie" || p.User != "ubuntu" || p.ErrandBinary != "/opt/errand-linux-amd64" || o.PricePerHour != 2.49 || o.Facts.OS != "linux" || o.Facts.Arch != "amd64" {
+		t.Fatalf("offer %+v provider %+v", o, o.Provider)
+	}
+
+	lambda := LambdaOffer{InstanceType: "t", APIKeyFile: "/a", TailscaleAuthKeyFile: "/t", ErrandBinary: "/e"}
+	for _, tc := range []struct {
+		edit func(*CloudOffer)
+		want string
+	}{
+		{func(o *CloudOffer) { o.Acquire = []string{"/a"} }, "not both"},
+		{func(o *CloudOffer) { o.Lambda.APIKeyFile = "lambda.key" }, "api_key_file must be an absolute path"},
+		{func(o *CloudOffer) { o.Lambda.InstanceType = "" }, "instance_type"},
+		{func(o *CloudOffer) { o.Lambda.User = "root; reboot" }, "plain login name"},
+		{func(o *CloudOffer) { o.Lambda.User = "-" }, "plain login name"},
+		{func(o *CloudOffer) { o.Lambda.User = "9" }, "plain login name"},
+		{func(o *CloudOffer) { o.Lambda.User = strings.Repeat("a", 33) }, "plain login name"},
+		{func(o *CloudOffer) { o.Lambda.AllowUsers = []string{" "} }, "not a tailnet login"},
+		{func(o *CloudOffer) { o.Lambda.AllowUsers = []string{"a@github", ""} }, "not a tailnet login"},
+		{func(o *CloudOffer) { o.Lambda.AllowUsers = []string{"a@github\n"} }, "not a tailnet login"},
+		{func(o *CloudOffer) { o.Lambda.TailscaleAuthKeyFile = "ts.key" }, "tailscale_auth_key_file must be an absolute path"},
+		{func(o *CloudOffer) { o.Lambda.TailscaleAuthKeyFile = ""; o.Lambda.AllowUsers = []string{"a@github"} }, "needs tailscale_auth_key_file"},
+		{func(o *CloudOffer) { o.OS = "windows" }, "Lambda offers run linux"},
+		{func(o *CloudOffer) { o.Lambda.ErrandBinary = ""; o.Arch = "riscv" }, "arch must"},
+		{func(o *CloudOffer) { o.Price = -1 }, "price_per_hour"},
+		{func(o *CloudOffer) { o.Price = math.NaN() }, "price_per_hour"},
+		{func(o *CloudOffer) { o.Price = math.Inf(1) }, "price_per_hour"},
+	} {
+		l := lambda
+		o := CloudOffer{Name: "x", Lambda: &l}
+		tc.edit(&o)
+		if _, err := (DaemonCloud{Offers: []CloudOffer{o}}).Broker(); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v", tc.want, err)
+		}
+	}
+	// Without a Tailscale key, the API key alone is enough.
+	ssh := LambdaOffer{InstanceType: "t", APIKeyFile: "/a", ErrandBinary: "/e"}
+	if b, err := (DaemonCloud{Offers: []CloudOffer{{Name: "x", Lambda: &ssh}}}).Broker(); err != nil {
+		t.Fatal(err)
+	} else if p := b.Offers[0].Provider.(*cloud.LambdaProvider); p.TailscaleAuthKeyFile != "" {
+		t.Fatalf("provider %+v", p)
+	}
+	// Without errand_binary the broker installs itself, which only fits a
+	// machine of its own platform.
+	l := lambda
+	l.ErrandBinary = ""
+	other := "arm64"
+	if runtime.GOARCH == "arm64" {
+		other = "amd64"
+	}
+	if _, err := (DaemonCloud{Offers: []CloudOffer{{Name: "x", Arch: other, Lambda: &l}}}).Broker(); err == nil || !strings.Contains(err.Error(), "errand_binary must name a linux/"+other) {
+		t.Errorf("foreign arch without errand_binary: %v", err)
+	}
+	// Command offers may now declare Windows machines.
+	if _, err := (DaemonCloud{Offers: []CloudOffer{{Name: "win", OS: "windows", Acquire: []string{"/a"}, Release: []string{"/r"}}}}).Broker(); err != nil {
+		t.Errorf("windows offer: %v", err)
 	}
 }

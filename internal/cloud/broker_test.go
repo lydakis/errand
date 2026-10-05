@@ -758,6 +758,20 @@ echo '{"url":"http://box:7443"}'
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 }
 
+// Files a lease record names stay valid whatever directory the runner is
+// later started from.
+func TestStateDirIsAbsolute(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	t.Chdir(h.dir)
+	lambda := &LambdaProvider{InstanceType: "t", APIKeyFile: "/a"}
+	h.cfg.StateDir = "state"
+	h.cfg.Offers = append(h.cfg.Offers, Offer{Name: "lambda", Provider: lambda, IdleTimeout: time.Hour, MaxLifetime: time.Hour})
+	h.start(t)
+	if want := filepath.Join(h.dir, "state", "lambda"); lambda.KeyDir != want {
+		t.Fatalf("key dir %q, want %q", lambda.KeyDir, want)
+	}
+}
+
 // Lease guarantees 4 and 5: an idle probe takes time, and a request may be
 // handed the lease while it runs. The probe's answer cannot then release the
 // lease: the reason to release is checked against the record as it is when
