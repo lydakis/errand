@@ -114,3 +114,15 @@ func (d *Daemon) handleLeaseRelease(w http.ResponseWriter, r *http.Request, id I
 	}
 	writeJSON(w, http.StatusOK, lease)
 }
+
+func (d *Daemon) handleLeaseWithdraw(w http.ResponseWriter, r *http.Request, id Identity) {
+	if !d.requireBroker(w) {
+		return
+	}
+	lease, err := d.broker.Withdraw(leaseOwner(id), r.PathValue("id"))
+	if err != nil {
+		leaseError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, lease)
+}

@@ -340,6 +340,69 @@ func TestIdleAndExpiredLeasesRelease(t *testing.T) {
 	}
 }
 
+// An interrupted run withdraws its request. The lease ends only if that
+// request made it and no other request was handed it, and once ready only
+// if no job is running on it.
+func TestWithdrawEndsOnlyAnUnsharedLease(t *testing.T) {
+	h := newHarness(t, "echo booting >&2\nexec sleep 30\n")
+	h.cfg.MaxLeases = 3
+	b := h.start(t)
+	first, second := proto.NewULID(), proto.NewULID()
+	shared, err := b.Acquire("george", "", "gpu", "", first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l, err := b.Acquire("george", "", "gpu", "", second); err != nil || l.ID != shared.ID || !l.Shared {
+		t.Fatalf("second request: %+v %v", l, err)
+	}
+	if l, err := b.Withdraw("george", first); err != nil || l.State != proto.LeaseLaunching {
+		t.Fatalf("withdrawing a launch another run waits for: %+v %v", l, err)
+	}
+	if _, err := b.Withdraw("someone", second); err == nil {
+		t.Fatal("withdrew another owner's request")
+	}
+	b.Release("george", shared.ID)
+	alone := proto.NewULID()
+	l, err := b.Acquire("george", "", "gpu", "", alone)
+	if err != nil || l.ID == shared.ID {
+		t.Fatalf("new lease: %+v %v", l, err)
+	}
+	if w, err := b.Withdraw("george", alone); err != nil || w.State == proto.LeaseLaunching {
+		t.Fatalf("withdrawing its own launch: %+v %v", w, err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+
+	// Ready: released at the next check, unless in use, after which the
+	// idle rule decides again.
+	for _, running := range []int32{1, 0} {
+		h := newHarness(t, okAcquire)
+		h.machine.running.Store(running)
+		b := h.start(t)
+		request := proto.NewULID()
+		l, err := b.Acquire("george", "", "gpu", "", request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		waitState(t, b, "george", l.ID, proto.LeaseReady)
+		if _, err := b.Withdraw("george", request); err != nil {
+			t.Fatal(err)
+		}
+		if running == 0 {
+			ended := waitState(t, b, "george", l.ID, proto.LeaseReleased)
+			if !strings.Contains(strings.Join(ended.Progress, "\n"), "releasing: the run that asked for it was interrupted") {
+				t.Fatalf("progress %q", ended.Progress)
+			}
+			continue
+		}
+		time.Sleep(100 * time.Millisecond)
+		h.machine.running.Store(0)
+		time.Sleep(100 * time.Millisecond)
+		if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
+			t.Fatalf("a lease in use was released when its request was withdrawn: %+v", got)
+		}
+	}
+}
+
 func TestReleaseWhileLaunchingStopsAcquire(t *testing.T) {
 	h := newHarness(t, "echo booting >&2\nexec sleep 30\n")
 	b := h.start(t)

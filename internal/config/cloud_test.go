@@ -18,6 +18,11 @@ func TestCloudOffers(t *testing.T) {
 	if b, err := (DaemonCloud{}).Broker(); b == nil || len(b.Offers) != 0 || err != nil {
 		t.Fatalf("no offers must mean a broker without offers: %v %v", b, err)
 	}
+	// Removing the last offer while leaving other settings must not stop
+	// the runner, since it still has leases to end.
+	if b, err := (DaemonCloud{MaxLeases: 4, AcquireTimeout: "20m"}).Broker(); b == nil || len(b.Offers) != 0 || err != nil {
+		t.Fatalf("leftover settings without offers: %v %v", b, err)
+	}
 	b, err := DaemonCloud{Offers: []CloudOffer{{Name: "a100x8", OS: "linux", GPU: "A100-SXM4-80GB", GPUs: 8, VRAM: 80, Tools: []string{"docker"},
 		Acquire: []string{"/opt/p", "acquire"}, Release: []string{"/opt/p", "release"}, IdleTimeout: "5m"}}}.Broker()
 	if err != nil {
@@ -49,8 +54,8 @@ func TestCloudOffers(t *testing.T) {
 	if _, err := (DaemonCloud{Offers: []CloudOffer{valid, valid}}).Broker(); err == nil {
 		t.Error("accepted a duplicate offer")
 	}
-	if _, err := (DaemonCloud{MaxLeases: 3}).Broker(); err == nil {
-		t.Error("accepted settings without offers")
+	if _, err := (DaemonCloud{MaxLeases: -1}).Broker(); err == nil {
+		t.Error("accepted a negative max_leases without offers")
 	}
 }
 

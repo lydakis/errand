@@ -21,29 +21,44 @@ import (
 )
 
 // Ctrl-C while the cloud peer is still answering the lease request must
-// release the lease it started, which only its answer names.
-func TestLeaseInterruptedDuringRequestIsReleased(t *testing.T) {
+// withdraw that request once the answer arrives, whatever state the lease
+// is in by then; the cloud peer decides whether anyone else needs it.
+func TestLeaseInterruptedDuringRequestIsWithdrawn(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	id := proto.NewULID()
-	var released atomic.Value
-	released.Store("")
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/v0/leases":
-			syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-			time.Sleep(200 * time.Millisecond) // the interrupt lands before the answer
-			json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "h100", State: proto.LeaseLaunching})
-		case r.Method == http.MethodDelete && r.URL.Path == "/v0/leases/"+id:
-			released.Store(id)
-			json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "h100", State: proto.LeaseReleasing})
-		default:
-			http.NotFound(w, r)
+	for _, tc := range []struct {
+		state, withdrawn, want string
+		shared                 bool
+	}{
+		{proto.LeaseLaunching, proto.LeaseReleasing, "released lease " + id, false},
+		{proto.LeaseReady, proto.LeaseReady, "will be released unless a job is running on it", false},
+		{proto.LeaseLaunching, proto.LeaseLaunching, "also given to another run", true},
+	} {
+		var requested, withdrawn atomic.Value
+		requested.Store("")
+		withdrawn.Store("")
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodPost && r.URL.Path == "/v0/leases":
+				var req proto.LeaseRequest
+				json.NewDecoder(r.Body).Decode(&req)
+				requested.Store(req.RequestID)
+				syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+				time.Sleep(200 * time.Millisecond) // the interrupt lands before the answer
+				json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "h100", State: tc.state, Shared: tc.shared})
+			case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/v0/lease-requests/"):
+				withdrawn.Store(strings.TrimPrefix(r.URL.Path, "/v0/lease-requests/"))
+				json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "h100", State: tc.withdrawn, Shared: tc.shared})
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		opt := leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: "cloud"}, Target: srv.URL}, Offer: proto.Offer{Name: "h100"}}
+		_, err := leaseRunner(opt, "gpu", io.Discard)
+		srv.Close()
+		if err == nil || !strings.Contains(err.Error(), tc.want) || withdrawn.Load() == "" || withdrawn.Load() != requested.Load() {
+			t.Fatalf("%s: err %v, requested %q, withdrawn %q", tc.state, err, requested.Load(), withdrawn.Load())
 		}
-	}))
-	defer srv.Close()
-	opt := leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: "cloud"}, Target: srv.URL}, Offer: proto.Offer{Name: "h100"}}
-	_, err := leaseRunner(opt, "gpu", io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "released lease "+id) || released.Load() != id {
-		t.Fatalf("err %v, released %q", err, released.Load())
 	}
 }
 
@@ -90,6 +105,11 @@ func TestLeasePeerNames(t *testing.T) {
 		if _, _, err := findLeasePeer(cfg, name); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+	// A cloud peer whose offers were removed still lists the leases it
+	// has left.
+	if brokers, code := leaseBrokers(cfg, "cloud", io.Discard); code != 0 || len(brokers) != 1 {
+		t.Fatalf("cloud peer without offers: %v %d", brokers, code)
 	}
 	for _, name := range []string{"cloud", "elsewhere-7f3a", "cloud-xyz", "cloud-il0u"} {
 		if _, ok, err := findLeasePeer(cfg, name); ok || err != nil {

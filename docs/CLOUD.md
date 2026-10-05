@@ -44,7 +44,9 @@ peer still ends them when they go idle or reach their lifetime.
   answers as an errand runner whose measured facts match, and the runner
   rechecks them when the job is admitted.
 
-Ctrl-C while a machine is launching releases the lease.
+Ctrl-C before the job starts withdraws the run's request. The cloud peer
+releases the lease if that request made it and no other run was given it; a
+ready lease is released at its next check unless a job is running on it.
 
 ## Leases
 
@@ -66,7 +68,8 @@ command, or the Lambda API key file. After a restart, the cloud peer keeps
 watching ready leases and releases any launch the restart interrupted. A
 failed release is retried every idle check until it succeeds. Changing or
 removing an offer, or the whole `[cloud]` section, only stops new leases:
-existing ones still end on time and are released the way they were made.
+existing ones still end on time and are released the way they were made, and
+`errand leases` still lists them.
 
 ## Configure a cloud peer
 

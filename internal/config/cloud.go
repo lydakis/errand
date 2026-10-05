@@ -58,14 +58,8 @@ const (
 
 // Broker validates the cloud section. Every runner has a broker: without
 // offers it leases nothing, but it still ends leases made before its offers
-// were removed.
+// were removed, whatever other cloud settings are left.
 func (c DaemonCloud) Broker() (*cloud.Config, error) {
-	if len(c.Offers) == 0 {
-		if c.MaxLeases != 0 || c.AcquireTimeout != "" {
-			return nil, fmt.Errorf("cloud: settings need at least one [[cloud.offers]] entry")
-		}
-		return &cloud.Config{}, nil
-	}
 	out := &cloud.Config{MaxLeases: c.MaxLeases}
 	if c.MaxLeases < 0 {
 		return nil, fmt.Errorf("cloud: max_leases must not be negative")
@@ -73,6 +67,9 @@ func (c DaemonCloud) Broker() (*cloud.Config, error) {
 	var err error
 	if out.AcquireTimeout, err = positiveDuration("cloud acquire_timeout", c.AcquireTimeout, 15*time.Minute); err != nil {
 		return nil, err
+	}
+	if len(c.Offers) == 0 {
+		return &cloud.Config{}, nil
 	}
 	seen := map[string]bool{}
 	for i, o := range c.Offers {

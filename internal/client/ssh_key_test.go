@@ -44,6 +44,12 @@ func TestEnsureSSHKey(t *testing.T) {
 	if again, err := EnsureSSHKey(context.Background(), path, "errand"); err != nil || again != publics[0] {
 		t.Fatalf("existing key not reused: %q %v", again, err)
 	}
+	// A process stopped between placing the two halves leaves only the
+	// private key; the public half is derived from it again.
+	os.Remove(path + ".pub")
+	if again, err := EnsureSSHKey(context.Background(), path, "errand"); err != nil || again != publics[0] {
+		t.Fatalf("public half not restored: %q %v", again, err)
+	}
 	entries, _ := os.ReadDir(filepath.Dir(path))
 	if len(entries) != 2 {
 		t.Fatalf("left behind %v", entries)

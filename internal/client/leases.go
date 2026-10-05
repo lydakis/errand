@@ -20,9 +20,10 @@ const maxLeaseResponseBytes = 1 << 20
 // attempt up to timeout. The answer may be an existing lease of the caller's
 // that already matches. A request whose answer is lost may still have
 // started a lease, so it is sent once more under the same request ID, which
-// returns that lease.
-func AcquireLease(ctx context.Context, peerURL, where, sshKey string, timeout time.Duration) (proto.Lease, error) {
-	body, _ := json.Marshal(proto.LeaseRequest{RequestID: proto.NewULID(), Where: where, SSHKey: sshKey})
+// returns that lease. requestID is a ULID that also names the request to
+// WithdrawLeaseRequest.
+func AcquireLease(ctx context.Context, peerURL, requestID, where, sshKey string, timeout time.Duration) (proto.Lease, error) {
+	body, _ := json.Marshal(proto.LeaseRequest{RequestID: requestID, Where: where, SSHKey: sshKey})
 	endpoint := strings.TrimSuffix(peerURL, "/") + "/v0/leases"
 	var lease proto.Lease
 	var err error
@@ -56,6 +57,15 @@ func ListLeases(ctx context.Context, peerURL string) ([]proto.Lease, error) {
 func ReleaseLease(ctx context.Context, peerURL, id string) (proto.Lease, error) {
 	var lease proto.Lease
 	err := leaseRequest(ctx, http.MethodDelete, strings.TrimSuffix(peerURL, "/")+"/v0/leases/"+url.PathEscape(id), nil, &lease)
+	return lease, err
+}
+
+// WithdrawLeaseRequest tells a cloud peer that the run that sent requestID
+// no longer needs its lease. The cloud peer ends the lease only if that
+// request made it and no other request was handed it.
+func WithdrawLeaseRequest(ctx context.Context, peerURL, requestID string) (proto.Lease, error) {
+	var lease proto.Lease
+	err := leaseRequest(ctx, http.MethodDelete, strings.TrimSuffix(peerURL, "/")+"/v0/lease-requests/"+url.PathEscape(requestID), nil, &lease)
 	return lease, err
 }
 

@@ -8,17 +8,20 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/lydakis/errand/internal/nowindow"
 )
 
 // EnsureSSHKey returns the public half of the ed25519 key at path, making
 // the key with ssh-keygen first if there is none. errand makes keys of its
-// own, without a passphrase, so ssh in batch mode can always use them.
+// own, without a passphrase, so ssh in batch mode can always use them. The
+// private key is the key: it is linked into place whole, and a missing
+// public half is derived from it again.
 func EnsureSSHKey(ctx context.Context, path, comment string) (string, error) {
-	if public, ok := readSSHKey(path); ok {
-		return public, nil
+	if public, err := os.ReadFile(path + ".pub"); err == nil {
+		if _, err := os.Stat(path); err == nil {
+			return strings.TrimSpace(string(public)), nil
+		}
 	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -29,39 +32,47 @@ func EnsureSSHKey(ctx context.Context, path, comment string) (string, error) {
 		return "", err
 	}
 	defer os.RemoveAll(tmp)
-	made := filepath.Join(tmp, "key")
-	cmd := exec.CommandContext(ctx, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", comment, "-f", made)
-	nowindow.Hide(cmd)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("making an SSH key with ssh-keygen: %v %s", err, strings.TrimSpace(string(out)))
-	}
-	// Linking never replaces a key another process made first; the public
-	// half goes last, since a key counts as made once it is there.
-	if err := os.Link(made, path); err != nil && !errors.Is(err, os.ErrExist) {
-		return "", err
-	} else if err == nil {
-		if err := os.Link(made+".pub", path+".pub"); err != nil && !errors.Is(err, os.ErrExist) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		made := filepath.Join(tmp, "key")
+		if _, err := sshKeygen(ctx, "-q", "-t", "ed25519", "-N", "", "-C", comment, "-f", made); err != nil {
+			return "", fmt.Errorf("making an SSH key with ssh-keygen: %v", err)
+		}
+		// Linking never replaces a key another process made first.
+		err := os.Link(made, path)
+		if err == nil {
+			if err := os.Rename(made+".pub", path+".pub"); err != nil {
+				return "", err
+			}
+			public, err := os.ReadFile(path + ".pub")
+			return strings.TrimSpace(string(public)), err
+		}
+		if !errors.Is(err, os.ErrExist) {
 			return "", err
 		}
 	}
-	for deadline := time.Now().Add(5 * time.Second); ; {
-		if public, ok := readSSHKey(path); ok {
-			return public, nil
-		}
-		if time.Now().After(deadline) {
-			return "", fmt.Errorf("SSH key %s has no public half %s.pub; remove it to make a new one", path, path)
-		}
-		time.Sleep(50 * time.Millisecond)
+	// The private key has no public half yet: another process is about to
+	// publish it, or one was stopped before it could.
+	public, err := sshKeygen(ctx, "-y", "-f", path)
+	if err != nil {
+		return "", fmt.Errorf("reading SSH key %s: %v", path, err)
 	}
+	pub := filepath.Join(tmp, "key.pub")
+	if err := os.WriteFile(pub, []byte(public+"\n"), 0o644); err != nil {
+		return "", err
+	}
+	if err := os.Rename(pub, path+".pub"); err != nil {
+		return "", err
+	}
+	return public, nil
 }
 
-func readSSHKey(path string) (string, bool) {
-	public, err := os.ReadFile(path + ".pub")
-	if err != nil {
-		return "", false
+func sshKeygen(ctx context.Context, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "ssh-keygen", args...)
+	nowindow.Hide(cmd)
+	var stdout, stderr strings.Builder
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("%v %s", err, strings.TrimSpace(stderr.String()))
 	}
-	if _, err := os.Stat(path); err != nil {
-		return "", false
-	}
-	return strings.TrimSpace(string(public)), true
+	return strings.TrimSpace(stdout.String()), nil
 }

@@ -549,7 +549,10 @@ type Lease struct {
 	Target *LeaseTarget `json:"target,omitempty"`
 	// SSHKey is the client key a machine reached over SSH admits, so a
 	// client can tell which of its leases it can use itself.
-	SSHKey     string    `json:"ssh_key,omitempty"`
+	SSHKey string `json:"ssh_key,omitempty"`
+	// Shared marks a lease handed to more than one request, which the
+	// request that made it can no longer withdraw.
+	Shared     bool      `json:"shared,omitempty"`
 	Facts      *Facts    `json:"facts,omitempty"` // measured once ready
 	Progress   []string  `json:"progress,omitempty"`
 	Error      string    `json:"error,omitempty"`

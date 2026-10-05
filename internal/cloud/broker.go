@@ -72,6 +72,9 @@ type record struct {
 	// RequestID names the request that made the lease, so a client that
 	// lost the answer can ask again and get the same lease.
 	RequestID string `json:"request_id,omitempty"`
+	// Unwanted marks a ready lease whose request was withdrawn: it is
+	// released at the next check unless a job is running on it.
+	Unwanted bool `json:"unwanted,omitempty"`
 	// Release and IdleTimeout are fixed when the lease is made, so the lease
 	// ends the way it was made whatever later happens to its offer.
 	Release       ReleaseSpec     `json:"release"`
@@ -252,6 +255,21 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 			return l.view(), nil
 		}
 	}
+	// A lease handed to a second request is no longer its first
+	// requester's to withdraw.
+	share := func(l *lease) (proto.Lease, error) {
+		err := b.applyLocked(l, func(r *record) bool {
+			if r.Shared {
+				return false
+			}
+			r.Shared, r.Unwanted = true, false
+			return true
+		}, true)
+		if err != nil {
+			return proto.Lease{}, &Error{http.StatusInternalServerError, "recording the lease: " + err.Error()}
+		}
+		return l.view(), nil
+	}
 	for _, l := range b.sorted() {
 		if l.Active() {
 			active++
@@ -266,13 +284,13 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 		}
 		switch {
 		case l.State == proto.LeaseReady && l.Facts != nil && len(q.Missing(*l.Facts)) == 0:
-			return l.view(), nil
+			return share(l)
 		case l.State == proto.LeaseLaunching && launching == nil && len(q.Missing(b.offers[l.Offer].Facts)) == 0:
 			launching = l
 		}
 	}
 	if launching != nil {
-		return launching.view(), nil
+		return share(launching)
 	}
 	var offer *Offer
 	var reasons []string
@@ -343,6 +361,55 @@ func (b *Broker) Release(owner, id string) (proto.Lease, error) {
 	return l.view(), nil
 }
 
+// Withdraw is the client's answer to an interrupted run: the request that
+// asked for a lease no longer needs it. The lease ends only if that request
+// made it and no other request was handed it; a ready one is released at
+// the next check unless a job is running on it.
+func (b *Broker) Withdraw(owner, requestID string) (proto.Lease, error) {
+	b.mu.Lock()
+	var l *lease
+	for _, c := range b.leases {
+		if requestID != "" && c.Owner == owner && c.RequestID == requestID {
+			l = c
+		}
+	}
+	b.mu.Unlock()
+	if l == nil {
+		return proto.Lease{}, &Error{http.StatusNotFound, "no lease was made for that request"}
+	}
+	err := b.update(l, func(r *record) bool {
+		if r.Shared {
+			return false
+		}
+		switch r.State {
+		case proto.LeaseLaunching:
+			r.State = proto.LeaseReleasing
+			r.addProgress("release requested while launching")
+		case proto.LeaseReady:
+			if r.Unwanted {
+				return false
+			}
+			r.Unwanted = true
+		default:
+			return false
+		}
+		return true
+	})
+	if err != nil {
+		return proto.Lease{}, &Error{http.StatusInternalServerError, "recording the withdrawal: " + err.Error()}
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if l.stop != nil && l.State == proto.LeaseReleasing {
+		l.stop()
+	}
+	select {
+	case l.wake <- struct{}{}:
+	default:
+	}
+	return l.view(), nil
+}
+
 // update is the only way a lease changes. change edits a copy of the record,
 // or returns false to leave it as it is. The copy is written to disk before
 // the lease takes it, so neither callers nor a restart ever see a state the
@@ -362,6 +429,10 @@ func (b *Broker) advance(l *lease, change func(*record) bool) {
 func (b *Broker) apply(l *lease, change func(*record) bool, strict bool) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	return b.applyLocked(l, change, strict)
+}
+
+func (b *Broker) applyLocked(l *lease, change func(*record) bool, strict bool) error {
 	next := l.record
 	next.Progress = slices.Clone(l.Progress)
 	if !change(&next) {
@@ -549,10 +620,13 @@ func (b *Broker) watch(l *lease) {
 		case !now.Before(r.ExpiresAt):
 			reason = fmt.Sprintf("max lifetime of %s reached", r.ExpiresAt.Sub(r.CreatedAt).Round(time.Second))
 		case b.busy(l, r):
+			// In use, so no longer unwanted: from here the idle rule decides.
 			_ = b.update(l, func(r *record) bool {
-				r.LastBusy, r.IdleUntil = now, now.Add(r.IdleTimeout)
+				r.LastBusy, r.IdleUntil, r.Unwanted = now, now.Add(r.IdleTimeout), false
 				return r.State == proto.LeaseReady
 			})
+		case r.Unwanted:
+			reason = "the run that asked for it was interrupted"
 		case !now.Before(r.LastBusy.Add(r.IdleTimeout)):
 			reason = fmt.Sprintf("idle for %s", r.IdleTimeout)
 		}

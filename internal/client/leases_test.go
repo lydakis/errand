@@ -30,7 +30,7 @@ func TestAcquireLeaseRepeatsLostRequest(t *testing.T) {
 		json.NewEncoder(w).Encode(proto.Lease{ID: id, State: proto.LeaseLaunching})
 	}))
 	defer srv.Close()
-	lease, err := AcquireLease(context.Background(), srv.URL, "gpu", "", time.Second)
+	lease, err := AcquireLease(context.Background(), srv.URL, proto.NewULID(), "gpu", "", time.Second)
 	if err != nil || lease.ID != id {
 		t.Fatalf("lease %+v %v", lease, err)
 	}
@@ -45,7 +45,7 @@ func TestAcquireLeaseRepeatsLostRequest(t *testing.T) {
 		http.Error(w, `{"error":"no offer matches"}`, http.StatusPreconditionFailed)
 	}))
 	defer refusing.Close()
-	if _, err := AcquireLease(context.Background(), refusing.URL, "gpu", "", time.Second); err == nil || len(requests) != 1 || strings.Contains(err.Error(), "errand leases lists it") {
+	if _, err := AcquireLease(context.Background(), refusing.URL, proto.NewULID(), "gpu", "", time.Second); err == nil || len(requests) != 1 || strings.Contains(err.Error(), "errand leases lists it") {
 		t.Fatalf("refusal: %v after %d requests", err, len(requests))
 	}
 }
