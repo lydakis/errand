@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"testing"
 )
@@ -22,7 +23,11 @@ func legacyRootHash(m Manifest) string {
 func TestManifestJSONMatchesEncodingJSON(t *testing.T) {
 	strs := []string{"", "a", "dir/file.txt", "quote\"", "back\\slash", "<html>&", "tab\t", "nl\n", "\x00\x1f",
 		"é", "日本", "  ", "bad\xffutf8", "\xed\xa0\x80", "emoji😀", "\x7f"}
-	cases := []Manifest{{}, {Entries: []ManifestEntry{}}}
+	cases := []Manifest{{}, {Entries: []ManifestEntry{}}, {Entries: []ManifestEntry{
+		{Path: "min", Type: EntryFile, Mode: math.MaxUint32, Size: math.MinInt64},
+		{Path: "max", Type: EntryFile, Size: math.MaxInt64, SHA256: "ab"},
+		{Path: "neg", Type: EntryFile, Size: -1, Target: "t"},
+	}}}
 	for _, s := range strs {
 		cases = append(cases, Manifest{Entries: []ManifestEntry{
 			{Path: s, Type: EntryFile, Mode: 0o644, Size: 3, SHA256: s, Target: s},
@@ -52,9 +57,29 @@ func TestManifestJSONMatchesEncodingJSON(t *testing.T) {
 		if !bytes.Equal(got.Bytes(), want) {
 			t.Fatalf("case %d: encoding differs\n got %q\nwant %q", i, got.Bytes(), want)
 		}
-		if m.RootHash() != legacyRootHash(m) {
+		if appended := AppendManifestJSON([]byte("prefix"), m); !bytes.Equal(appended, append([]byte("prefix"), want...)) {
+			t.Fatalf("case %d: appended encoding differs\n got %q\nwant %q", i, appended, want)
+		}
+		checkManifestJSONSize(t, m, want)
+		if m.RootHash() != legacyRootHash(m) || ManifestRootHash(want) != m.RootHash() {
 			t.Fatalf("case %d: root hash differs", i)
 		}
+	}
+}
+
+// The size is exact when no string is escaped, and never more than the output.
+func checkManifestJSONSize(t *testing.T, m Manifest, encoded []byte) {
+	t.Helper()
+	plain := true
+	for _, e := range m.Entries {
+		for _, s := range []string{e.Path, e.Type, e.SHA256, e.Target} {
+			if q, _ := json.Marshal(s); len(q) != len(s)+2 {
+				plain = false
+			}
+		}
+	}
+	if size := ManifestJSONSize(m); size > len(encoded) || plain && size != len(encoded) {
+		t.Fatalf("size %d for %d encoded bytes (unescaped strings: %t)", size, len(encoded), plain)
 	}
 }
 
@@ -76,6 +101,17 @@ func FuzzManifestJSONMatchesEncodingJSON(f *testing.F) {
 		writeManifestJSON(&got, m)
 		if !bytes.Equal(got.Bytes(), want) {
 			t.Fatalf("encoding of %q differs\n got %q\nwant %q", s, got.Bytes(), want)
+		}
+		if appended := AppendManifestJSON(nil, m); !bytes.Equal(appended, want) {
+			t.Fatalf("appended encoding of %q differs\n got %q\nwant %q", s, appended, want)
+		}
+		checkManifestJSONSize(t, m, want)
+		want, err = json.Marshal(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := AppendJSONString([]byte("x"), s); !bytes.Equal(got, append([]byte("x"), want...)) {
+			t.Fatalf("string encoding of %q differs\n got %q\nwant %q", s, got, want)
 		}
 	})
 }

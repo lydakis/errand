@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"unicode/utf8"
 
 	"github.com/lydakis/errand/internal/archive"
@@ -56,6 +57,44 @@ type checkpointState struct {
 	CheckpointVersion
 	LastReceipt string `json:"last_receipt,omitempty"`
 	LastRequest string `json:"last_request,omitempty"`
+}
+
+// encode returns exactly the bytes json.Marshal(s) produces, and the part of
+// them that encodes the manifest. The manifest, nearly all of a checkpoint, is
+// written without reflection.
+func (s checkpointState) encode() (raw, manifest []byte) {
+	// The fields around the manifest take at most 256 bytes besides their
+	// strings, so unless a string is escaped this is the only allocation.
+	around := len(s.Owner) + len(s.SourceID) + len(s.InitialRoot) + len(s.LastReceipt) + len(s.LastRequest)
+	raw = make([]byte, 0, 256+around+proto.ManifestJSONSize(s.Manifest))
+	raw = append(raw, `{"version":`...)
+	raw = strconv.AppendInt(raw, int64(s.Version), 10)
+	raw = append(raw, `,"owner":`...)
+	raw = proto.AppendJSONString(raw, s.Owner)
+	raw = append(raw, `,"source_identity":`...)
+	raw = proto.AppendJSONString(raw, s.SourceID)
+	raw = append(raw, `,"destination_identity":{"device":`...)
+	raw = strconv.AppendUint(raw, s.RootID.Device, 10)
+	raw = append(raw, `,"inode":`...)
+	raw = strconv.AppendUint(raw, s.RootID.Inode, 10)
+	raw = append(raw, `},"initial_root":`...)
+	raw = proto.AppendJSONString(raw, s.InitialRoot)
+	raw = append(raw, `,"revision":`...)
+	raw = strconv.AppendUint(raw, s.Revision, 10)
+	raw = append(raw, `,"manifest":`...)
+	start := len(raw)
+	raw = proto.AppendManifestJSON(raw, s.Manifest)
+	end := len(raw)
+	if s.LastReceipt != "" {
+		raw = append(raw, `,"last_receipt":`...)
+		raw = proto.AppendJSONString(raw, s.LastReceipt)
+	}
+	if s.LastRequest != "" {
+		raw = append(raw, `,"last_request":`...)
+		raw = proto.AppendJSONString(raw, s.LastRequest)
+	}
+	raw = append(raw, '}')
+	return raw, raw[start:end:end]
 }
 
 // Stored in the receipt before checkpoint publication so a crash cannot allow
@@ -374,8 +413,11 @@ func (c *TransferCheckpoint) save(destination, storage *applyDestination, name s
 		*c.cache = checkpointReadCache{}
 	}
 	c.Reuse.forget(c.StatePath)
-	raw, err := writeVerifiedTransferRecordRaw(destination, storage, name, state)
-	if err != nil {
+	var raw, manifestJSON []byte
+	if err := writeVerifiedTransfer(destination, storage, name, func() ([]byte, error) {
+		raw, manifestJSON = state.encode()
+		return raw, nil
+	}); err != nil {
 		return err
 	}
 	// After a complete publication, retain what was written. The next read
@@ -388,10 +430,10 @@ func (c *TransferCheckpoint) save(destination, storage *applyDestination, name s
 	}
 	state.Manifest = cloneSourceManifest(state.Manifest) // own it, as a decoded record would
 	if record, err := c.checkedRecord(raw, state, true); err == nil {
-		// The next delta expands against this record and needs its identity.
-		// Hash it now, after the install, rather than before the next save's
-		// files can appear.
-		record.rootHash()
+		// The next delta expands against this record and needs its identity,
+		// the hash of the manifest bytes just written. Take it now, after the
+		// install, rather than before the next save's files can appear.
+		record.setRootHash(proto.ManifestRootHash(manifestJSON))
 		c.remember(record)
 		c.Reuse.put(c.StatePath, record)
 	}
