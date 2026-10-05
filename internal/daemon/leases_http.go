@@ -77,7 +77,7 @@ func (d *Daemon) handleLeaseAcquire(w http.ResponseWriter, r *http.Request, id I
 		leaseError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, lease)
+	writeLease(w, id, lease)
 }
 
 func (d *Daemon) handleLeaseList(w http.ResponseWriter, _ *http.Request, id Identity) {
@@ -100,7 +100,7 @@ func (d *Daemon) handleLeaseGet(w http.ResponseWriter, r *http.Request, id Ident
 		httpError(w, http.StatusNotFound, "no such lease")
 		return
 	}
-	writeJSON(w, http.StatusOK, leaseView(id, []proto.Lease{lease})[0])
+	writeLease(w, id, lease)
 }
 
 // A leased machine admits its owner for every action, so holding a lease
@@ -110,6 +110,11 @@ func (d *Daemon) checkLeaseAccess(id Identity) {
 	if !id.Allowed(proto.ActionSubmit) {
 		_ = d.broker.EndAll(leaseOwner(id), "its owner may no longer submit jobs on this runner")
 	}
+}
+
+// writeLease answers with one lease, as leaseView shows it to this caller.
+func writeLease(w http.ResponseWriter, id Identity, lease proto.Lease) {
+	writeJSON(w, http.StatusOK, leaseView(id, []proto.Lease{lease})[0])
 }
 
 func leaseView(id Identity, leases []proto.Lease) []proto.Lease {
@@ -131,7 +136,7 @@ func (d *Daemon) handleLeaseRelease(w http.ResponseWriter, r *http.Request, id I
 		leaseError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, lease)
+	writeLease(w, id, lease)
 }
 
 func (d *Daemon) handleLeaseWithdraw(w http.ResponseWriter, r *http.Request, id Identity) {
@@ -143,5 +148,5 @@ func (d *Daemon) handleLeaseWithdraw(w http.ResponseWriter, r *http.Request, id 
 		leaseError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, lease)
+	writeLease(w, id, lease)
 }

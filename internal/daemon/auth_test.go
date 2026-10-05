@@ -871,6 +871,22 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 	}
 	ended(lease, "its owner lost submit")
 
+	// Releasing the lease it no longer holds does not show the target either.
+	lease = ready()
+	actions.Store(&[]string{proto.ActionLease})
+	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/v0/leases/"+lease.ID, nil)
+	res, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var released proto.Lease
+	json.NewDecoder(res.Body).Decode(&released)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || released.ID != lease.ID || released.Target != nil {
+		t.Fatalf("release without submit: %d %+v", res.StatusCode, released)
+	}
+	ended(lease, "its owner released it without submit")
+
 	lease = ready()
 	if code, got := info(proto.ActionReadOwn); code != http.StatusOK || len(got.Leases) != 0 {
 		t.Fatalf("info without lease: %d %+v", code, got.Leases)
