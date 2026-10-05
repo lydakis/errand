@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -10,12 +11,12 @@ import (
 	"time"
 
 	"github.com/lydakis/errand/internal/cloud"
-	"github.com/lydakis/errand/internal/proto"
 )
 
 func TestCloudOffers(t *testing.T) {
-	if b, err := (DaemonCloud{}).Broker(); b != nil || err != nil {
-		t.Fatalf("no offers must mean no broker: %v %v", b, err)
+	// Without offers a runner still ends the leases it made before.
+	if b, err := (DaemonCloud{}).Broker(); b == nil || len(b.Offers) != 0 || err != nil {
+		t.Fatalf("no offers must mean a broker without offers: %v %v", b, err)
 	}
 	b, err := DaemonCloud{Offers: []CloudOffer{{Name: "a100x8", OS: "linux", GPU: "A100-SXM4-80GB", GPUs: 8, VRAM: 80, Tools: []string{"docker"},
 		Acquire: []string{"/opt/p", "acquire"}, Release: []string{"/opt/p", "release"}, IdleTimeout: "5m"}}}.Broker()
@@ -35,6 +36,7 @@ func TestCloudOffers(t *testing.T) {
 		{func(o *CloudOffer) { o.Acquire = []string{"provider.sh"} }, "absolute"},
 		{func(o *CloudOffer) { o.Release = nil }, "absolute"},
 		{func(o *CloudOffer) { o.VRAM = 80 }, "gpu model"},
+		{func(o *CloudOffer) { o.GPU, o.GPUs = "H100", 1<<30 }, "at most 64"},
 		{func(o *CloudOffer) { o.IdleTimeout = "0s" }, "positive duration"},
 		{func(o *CloudOffer) { o.OS = "plan9" }, "os must"},
 	} {
@@ -52,32 +54,39 @@ func TestCloudOffers(t *testing.T) {
 	}
 }
 
-func TestLeaseRecordsBecomePeers(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
+// Names no peer is configured under go to FindLeasePeer, once per process.
+func TestLeasePeersAreFound(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	id := proto.NewULID()
-	rec := LeaseRecord{Broker: "cloud", ID: id, Offer: "h100", Target: proto.LeaseTarget{URL: "http://box:7443"}}
-	suffix := strings.ToLower(id[len(id)-4:])
-	name, err := RecordLease(rec, map[string]Peer{"cloud-" + suffix: {URL: "http://taken:7443"}})
-	if err != nil || name != "cloud-"+strings.ToLower(id[len(id)-5:]) {
-		t.Fatalf("a configured name must not be reused: %q %v", name, err)
+	asked := 0
+	FindLeasePeer = func(c Client, name string) (Peer, bool, error) {
+		asked++
+		switch name {
+		case "cloud-7f3a":
+			return Peer{SSH: "ubuntu@203.0.113.7", RemoteCommand: "/opt/errand"}, true, nil
+		case "cloud-dead":
+			return Peer{}, false, errors.New("cloud has no active lease ending in dead")
+		}
+		return Peer{}, false, nil
 	}
-	if again, _ := RecordLease(rec, nil); again != name {
-		t.Fatalf("recording twice renamed the lease: %q", again)
+	leasePeers.Clear()
+	t.Cleanup(func() { FindLeasePeer = nil; leasePeers.Clear() })
+	c := Client{Peers: map[string]Peer{"cloud": {URL: "http://cloud:7443"}}}
+	for range 2 {
+		if url, err := c.PeerURL("cloud-7f3a"); err != nil || url != "ssh://ubuntu@203.0.113.7" || c.SSHRemoteCommand("cloud-7f3a") != "/opt/errand" {
+			t.Fatalf("lease peer: %q %v", url, err)
+		}
 	}
-	c, err := LoadClient()
-	if err != nil {
-		t.Fatal(err)
+	if asked != 1 {
+		t.Fatalf("asked %d times", asked)
 	}
-	if url, err := c.PeerURL(name); err != nil || url != "http://box:7443" || c.Leases[name].ID != id {
-		t.Fatalf("lease peer: %q %v %+v", url, err, c.Leases)
+	if _, err := c.PeerURL("cloud-dead"); err == nil || !strings.Contains(err.Error(), "no active lease") {
+		t.Fatalf("ended lease: %v", err)
 	}
-	dropped, err := ForgetLeases(func(string, LeaseRecord) bool { return false })
-	if err != nil || len(dropped) != 1 || dropped[0] != name {
-		t.Fatalf("forget: %v %v", dropped, err)
+	if _, err := c.PeerURL("elsewhere"); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("unknown peer: %v", err)
 	}
-	if c, _ := LoadClient(); len(c.Peers) != 0 {
-		t.Fatalf("forgotten lease still a peer: %+v", c.Peers)
+	if url, err := c.PeerURL("cloud"); err != nil || url != "http://cloud:7443" || asked != 3 {
+		t.Fatalf("configured peer: %q %v (asked %d)", url, err, asked)
 	}
 }
 

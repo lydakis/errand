@@ -6,7 +6,8 @@
 #
 # POOL_FILE lists one runner URL per line, such as http://gb10:7443. Each
 # machine must already run errand. A lease claims the first free URL; the
-# claim lives in POOL_FILE.d/ until release. See docs/CLOUD.md.
+# claim lives in POOL_FILE.d/ until release. Release frees the claim but does
+# not stop jobs still running there. See docs/CLOUD.md.
 set -eu
 
 verb=$1

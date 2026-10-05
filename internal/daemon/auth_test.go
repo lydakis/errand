@@ -767,7 +767,7 @@ func TestLeaseAcquireNeedsSubmit(t *testing.T) {
 func TestInfoShowsOffersOnlyWithLeaseIDs(t *testing.T) {
 	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: "test", GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: &cloud.Config{
 		Offers: []cloud.Offer{{Name: "x", Provider: cloud.CommandProvider{AcquireCommand: []string{"/bin/false"}, ReleaseCommand: []string{"/bin/true"}}, IdleTimeout: time.Minute, MaxLifetime: time.Minute}},
-		Probe:  func(context.Context, proto.LeaseTarget, string) (proto.Info, error) { return proto.Info{}, nil },
+		Probe:  func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) { return proto.Info{}, nil },
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -812,25 +812,4 @@ func TestLeaseAcquireRefusesBrowserRequests(t *testing.T) {
 			t.Errorf("%+v: %d %s", tc, w.Code, w.Body.String())
 		}
 	}
-}
-
-// A runner whose cloud section is gone would never release its leases, so
-// it refuses to start until they are released.
-func TestNoBrokerRefusesActiveLeases(t *testing.T) {
-	dir := t.TempDir()
-	id := proto.NewULID()
-	os.MkdirAll(filepath.Join(dir, "leases"), 0o700)
-	os.WriteFile(filepath.Join(dir, "leases", id+".json"), []byte(`{"id":"`+id+`","state":"ready"}`), 0o600)
-	if d, err := New(Config{StateDir: dir, InsecureNoAuth: true, Version: "test"}); err == nil || !strings.Contains(err.Error(), id) {
-		if d != nil {
-			d.Close()
-		}
-		t.Fatalf("started with an active lease and no broker: %v", err)
-	}
-	os.WriteFile(filepath.Join(dir, "leases", id+".json"), []byte(`{"id":"`+id+`","state":"released"}`), 0o600)
-	d, err := New(Config{StateDir: dir, InsecureNoAuth: true, Version: "test"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	d.Close()
 }

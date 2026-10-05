@@ -17,10 +17,20 @@ errand: lease cabal-7f3a ready (linux/amd64, 26 cpu, 1x NVIDIA H100 80GB HBM3 (8
 errand: selected cabal-7f3a for gpu=h100 (0/1 slots, 0 staging, 0 queued)
 ```
 
-The lease is then a peer named after the cloud peer and the lease ID. While it
-exists, `--on cabal-7f3a`, job handles such as `cabal-7f3a/01K...`, `ps`,
-`attach`, `fetch`, `-L`, persistent workspaces and named caches all work as
-they do with any runner. The next `--where gpu=h100` selects it directly.
+The lease is then a peer named after the cloud peer and the end of the lease
+ID. While it exists, `--on cabal-7f3a`, job handles such as
+`cabal-7f3a/01K...`, `ps`, `attach`, `fetch`, `-L`, persistent workspaces and
+named caches all work as they do with any runner. The next `--where gpu=h100`
+selects it directly.
+
+Your machine keeps no record of its leases. The cloud peer lists your active
+leases, with how to reach them, whenever errand asks it, so a name like
+`cabal-7f3a` works from any process and stops working when the lease ends. A
+lease reached over SSH is listed only on the machine whose key it admits. All
+this needs the cloud peer to answer: if you point the name `cabal` at another
+runner, its leases, and job handles such as `cabal-7f3a/01K...`, are no longer
+reachable by name, and `errand leases rm` cannot reach them either. The cloud
+peer still ends them when they go idle or reach their lifetime.
 
 ## When errand leases
 
@@ -51,12 +61,12 @@ cannot reach counts as idle. Persistent workspaces and retained results on a
 leased machine end with the lease, so fetch what you need first.
 
 Leases are recorded in the cloud peer's state directory before anything is
-acquired. After a restart, the cloud peer keeps watching ready leases and
-releases any launch the restart interrupted. A failed release is retried every
-idle check until it succeeds. While leases are active, the cloud peer refuses
-to start if their offer is gone, if its provider or commands changed, or if
-the `[cloud]` section was removed: only what acquired a machine can release
-it.
+acquired, and each record keeps how to release its machine: the release
+command, or the Lambda API key file. After a restart, the cloud peer keeps
+watching ready leases and releases any launch the restart interrupted. A
+failed release is retried every idle check until it succeeds. Changing or
+removing an offer, or the whole `[cloud]` section, only stops new leases:
+existing ones still end on time and are released the way they were made.
 
 ## Configure a cloud peer
 
@@ -190,9 +200,10 @@ machine down from inside does not stop billing, so errand relies on the cloud
 peer: it terminates on release, after `idle_timeout`, and at `max_lifetime`,
 and keeps retrying a failed termination. `max_leases` caps how many instances
 can run at once. If the cloud peer is gone for good, terminate leftovers named
-`errand-*` in the Lambda console. Change `api_key_file` only while no leases are
-active: a different key may belong to another account, so errand keeps retrying
-the release of any lease whose machine the new key cannot see.
+`errand-*` in the Lambda console. Leases keep using the `api_key_file` they
+were made with, so keep that file, and the key in it, until they are released:
+a different key may belong to another account, so errand keeps retrying the
+release of any lease whose machine the key cannot see.
 
 When no listed region has capacity, the lease fails at once with a message
 saying so. errand does not wait for capacity. With `file_systems`, the machine
@@ -218,7 +229,7 @@ shown to the waiting client. Its last stdout line must be a JSON object naming
 how to reach the machine's runner, with the same fields as a remote personal
 peer: `url`, or `ssh` with optional `remote_command` and `remote_socket`.
 Local sockets are refused. Any other fields, such as an instance ID, are kept and passed to
-release. Name the machine after `ERRAND_LEASE_ID` so release can find it even
+release. Stdout is limited to 16 KiB. Name the machine after `ERRAND_LEASE_ID` so release can find it even
 when acquire was interrupted before printing anything. With `ssh`, a
 `host_key` field (`"ssh-ed25519 AAAA..."`) makes errand accept only that host
 key for the machine, which saves a `known_hosts` entry for a machine that just
@@ -237,7 +248,10 @@ you if the cloud peer is gone for good.
 
 [`cloud/static-pool.sh`](cloud/static-pool.sh) is a complete provider that
 leases runners you already have, such as a borrowed GPU box, one owner at a
-time.
+time. Its release frees the claim but does not stop jobs still running on the
+runner, so give its offer a `max_lifetime` longer than any job and release
+leases with work running only when that work may continue next to the next
+owner's.
 
 ## Current limits
 

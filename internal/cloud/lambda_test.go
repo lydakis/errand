@@ -430,8 +430,6 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 // no port, the target pins the host key the machine booted with, and the
 // clients' keys are installed for the login it runs as.
 func TestLambdaAcquireOverSSH(t *testing.T) {
-	state := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", state)
 	p, _, ssh := newLambda(t)
 	p.TailscaleAuthKeyFile = ""
 	id := proto.NewULID()
@@ -458,12 +456,8 @@ func TestLambdaAcquireOverSSH(t *testing.T) {
 		t.Fatalf("authorized-keys %q", got)
 	}
 	// This cloud peer watches the machine with its own key.
-	pins, _ := filepath.Glob(filepath.Join(state, "errand", "ssh", "pins", "*.identity"))
-	if len(pins) != 1 {
-		t.Fatalf("identity pins %q", pins)
-	}
-	if got, _ := os.ReadFile(pins[0]); string(got) != filepath.Join(p.KeyDir, "lambda_ed25519") {
-		t.Fatalf("identity pin %q", got)
+	if machine.Identity != filepath.Join(p.KeyDir, "lambda_ed25519") {
+		t.Fatalf("identity %q", machine.Identity)
 	}
 }
 
@@ -928,8 +922,8 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 			Facts:       proto.Facts{OS: "linux", Arch: "amd64", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 80 << 10}}},
 			IdleTimeout: time.Hour, MaxLifetime: time.Hour,
 		}},
-		Probe: func(ctx context.Context, target proto.LeaseTarget, where string) (proto.Info, error) {
-			return machine.probe(ctx, proto.LeaseTarget{URL: "http://box:7443"}, where)
+		Probe: func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
+			return machine.probe(ctx, proto.LeaseTarget{URL: "http://box:7443"}, identity, where)
 		},
 		ReadyPoll: time.Millisecond,
 		IdlePoll:  time.Hour,
@@ -941,7 +935,7 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 	if offers := b.Offers(); offers[0].PricePerHour != 2.49 {
 		t.Fatalf("offers %+v", offers)
 	}
-	l, err := b.Acquire("george", "george@github", "gpu=h100", "")
+	l, err := b.Acquire("george", "george@github", "gpu=h100", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

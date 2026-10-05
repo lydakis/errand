@@ -33,8 +33,8 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 		if err := json.Unmarshal([]byte(raw), &args); err != nil {
 			t.Fatal(err)
 		}
-		// TestMain gives every process its own state; lease records must
-		// carry over between these CLI runs.
+		// TestMain gives every process its own state; the client's lease
+		// key must carry over between these CLI runs.
 		os.Setenv("XDG_STATE_HOME", os.Getenv("ERRAND_CLOUD_STATE"))
 		os.Exit(runCLI(args))
 	}
@@ -147,23 +147,38 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	if out, err = cli("leases"); err != nil || !regexp.MustCompile(name[1]+`\s+cloud\s+h100\s+ready`).MatchString(out) {
 		t.Fatalf("leases: %v\n%s", err, out)
 	}
+	// Fleet reads include the leased machine.
+	if out, err = cli("ps", "-a"); err != nil || !strings.Contains(out, name[1]) {
+		t.Fatalf("ps: %v\n%s", err, out)
+	}
 	// The cloud peer ends the lease on its own (idle, lifetime) while its
 	// machine still answers: the run must not go to the ended lease.
-	leases, _ := config.LoadLeases()
-	req, _ := http.NewRequest(http.MethodDelete, brokerServer.URL+"/v0/leases/"+leases[name[1]].ID, nil)
+	out, err = cli("leases", "--json")
+	var listed []struct {
+		Peer string `json:"peer"`
+		ID   string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(out), &listed); err != nil || len(listed) != 1 || listed[0].Peer != name[1] {
+		t.Fatalf("leases --json: %v\n%s", err, out)
+	}
+	ended := listed[0].ID
+	req, _ := http.NewRequest(http.MethodDelete, brokerServer.URL+"/v0/leases/"+ended, nil)
 	if resp, err := http.DefaultClient.Do(req); err != nil {
 		t.Fatal(err)
 	} else {
 		resp.Body.Close()
 	}
 	for deadline := time.Now().Add(5 * time.Second); ; {
-		if data, _ := os.ReadFile(releaseLog); bytes.Contains(data, []byte(leases[name[1]].ID)) {
+		if data, _ := os.ReadFile(releaseLog); bytes.Contains(data, []byte(ended)) {
 			break
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("release command did not run")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+	if out, err = cli("--on", name[1], "--no-apply", "--", "/bin/true"); err == nil || !strings.Contains(out, "no ready lease of yours") {
+		t.Fatalf("--on ended lease: %v\n%s", err, out)
 	}
 	out, err = cli("--where", "gpu=h100", "--no-apply", "--", "/bin/cat", "input.txt")
 	if err != nil || strings.Contains(out, "selected "+name[1]) || !strings.Contains(out, "leasing h100") {
@@ -179,23 +194,20 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 		t.Fatalf("unmatched: %v\n%s", err, out)
 	}
 
-	// The lease remembers its cloud peer: it is released there even after
-	// the name points somewhere else.
-	writeClientConfig(t, "[peers.cloud]\nurl='http://127.0.0.1:9'\n")
 	if out, err = cli("leases", "rm", name[1]); err != nil || !strings.Contains(out, name[1]+" released") {
 		t.Fatalf("leases rm: %v\n%s", err, out)
 	}
-	if data, _ := os.ReadFile(releaseLog); len(bytes.TrimSpace(data)) == 0 {
-		t.Fatal("release command did not run")
+	if data, _ := os.ReadFile(releaseLog); bytes.Count(data, []byte("\n")) != 2 {
+		t.Fatalf("releases %q", data)
 	}
-	if leases, _ := config.LoadLeases(); len(leases) != 0 {
-		t.Fatalf("released lease still recorded: %v", leases)
+	if out, err = cli("leases", "rm", name[1]); err == nil || !strings.Contains(out, "no active lease of yours") {
+		t.Fatalf("leases rm twice: %v\n%s", err, out)
 	}
 }
 
 func TestCloudPeerRefusesWildcardLeases(t *testing.T) {
 	brokerCfg := &cloud.Config{Offers: []cloud.Offer{{Name: "x", Provider: cloud.CommandProvider{AcquireCommand: []string{"/bin/false"}, ReleaseCommand: []string{"/bin/true"}}, IdleTimeout: time.Minute, MaxLifetime: time.Minute}},
-		Probe: func(context.Context, proto.LeaseTarget, string) (proto.Info, error) { return proto.Info{}, nil }}
+		Probe: func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) { return proto.Info{}, nil }}
 	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: version, Cloud: brokerCfg})
 	if err != nil {
 		t.Fatal(err)

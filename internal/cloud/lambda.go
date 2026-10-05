@@ -17,7 +17,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/fsowner"
 	"github.com/lydakis/errand/internal/proto"
 )
@@ -182,15 +181,16 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 		// The runner listens on no port; jobs reach it over SSH, as the
 		// login it runs as. This cloud peer watches it with its own key.
 		state.LeaseTarget = proto.LeaseTarget{SSH: p.user() + "@" + ip, HostKey: hostPublic}
-		if err := client.PinSSHIdentity("ssh://"+state.SSH, p.keyFile()); err != nil {
-			return Machine{}, err
-		}
 	}
 	if err := saveState(req, state); err != nil {
 		return Machine{}, err
 	}
 	data, _ := json.Marshal(state)
-	return Machine{Target: state.LeaseTarget, State: data}, nil
+	m := Machine{Target: state.LeaseTarget, State: data}
+	if !tailnet {
+		m.Identity = p.keyFile()
+	}
+	return m, nil
 }
 
 func saveState(req AcquireRequest, state lambdaState) error {
@@ -262,6 +262,10 @@ func (p *LambdaProvider) Release(ctx context.Context, req ReleaseRequest) error 
 		return fmt.Errorf("Lambda did not confirm terminating %s; trying again", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+func (p *LambdaProvider) ReleaseSpec() ReleaseSpec {
+	return ReleaseSpec{Lambda: &LambdaRelease{APIKeyFile: p.APIKeyFile}}
 }
 
 func (p *LambdaProvider) useStateDir(dir string) {

@@ -49,80 +49,44 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 	if err != nil {
 		return placementSelection{}, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	choices := make([]placementChoice, len(e.Candidates))
-	reasons := make([]string, len(e.Candidates))
-	infos := make([]*proto.Info, len(e.Candidates))
-	// matched records runners whose facts match even when they are full: a
-	// busy runner of your own never causes a lease.
-	matched := make([]bool, len(e.Candidates))
-	var wg sync.WaitGroup
-	// Bound transport/process fan-out while all probes share one deadline.
-	slots := make(chan struct{}, 8)
-	for i, c := range e.Candidates {
-		wg.Add(1)
-		go func(i int, c config.RunCandidate) {
-			defer wg.Done()
-			select {
-			case slots <- struct{}{}:
-				defer func() { <-slots }()
-			case <-ctx.Done():
-				reasons[i] = "probe deadline exceeded"
-				return
-			}
-			target := client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
-			info, err := probe(ctx, target, e.Where, 2*time.Second)
-			if err != nil {
-				reasons[i] = err.Error()
-				return
-			}
-			infos[i] = &info
-			missing := q.Missing(info.Facts)
-			matched[i] = info.Placement && len(missing) == 0
-			switch {
-			case !info.Placement:
-				reasons[i] = "runner does not support requirement validation; upgrade it"
-			case info.Busy:
-				reasons[i] = "runner is full or unavailable"
-			case info.MaxJobs <= 0 || info.MaxQueued < 0 || info.RunningJobs < 0 || info.StartingJobs < 0 || info.StagingJobs < 0 || info.QueuedJobs < 0:
-				reasons[i] = "invalid capacity report"
-			default:
-				if len(missing) > 0 {
-					reasons[i] = strings.Join(missing, "; ")
-					return
-				}
-				choices[i] = placementChoice{RunCandidate: c, Info: info, Target: target}
-			}
-		}(i, c)
+	candidates := e.Candidates
+	probed := probeCandidates(ctx, candidates, e.Where, q, probe)
+	// Machines leased from a cloud peer that answered are runners of yours
+	// too; it lists them, and they are probed next.
+	if leases := leaseCandidates(candidates, probed); len(leases) > 0 {
+		candidates = append(slices.Clone(candidates), leases...)
+		probed = append(probed, probeCandidates(ctx, leases, e.Where, q, probe)...)
 	}
-	wg.Wait()
 	var eligible []placementChoice
 	var exclusions []string
 	result := placementSelection{Probed: map[string]proto.Info{}}
-	for i, info := range infos {
-		if info != nil {
-			result.Probed[e.Candidates[i].Name] = *info
+	// matched records runners whose facts match even when they are full: a
+	// busy runner of your own never causes a lease.
+	matched := false
+	for i, p := range probed {
+		name := candidates[i].Name
+		if p.info != nil {
+			result.Probed[name] = *p.info
 		}
-	}
-	for i, c := range choices {
-		if reasons[i] != "" {
-			result.Excluded = append(result.Excluded, placementExclusion{Peer: e.Candidates[i].Name, Reason: reasons[i]})
-			exclusions = append(exclusions, fmt.Sprintf("%s: %s", terminalSafeField(e.Candidates[i].Name), terminalSafeField(reasons[i])))
+		matched = matched || p.matched
+		if p.reason != "" {
+			result.Excluded = append(result.Excluded, placementExclusion{Peer: name, Reason: p.reason})
+			exclusions = append(exclusions, fmt.Sprintf("%s: %s", terminalSafeField(name), terminalSafeField(p.reason)))
 			continue
 		}
-		eligible = append(eligible, c)
+		eligible = append(eligible, p.choice)
 	}
 	if len(eligible) == 0 {
 		// Renting is only for capabilities none of your runners has, and
 		// never for the bare wildcard.
-		if !slices.Contains(matched, true) && !q.Any() {
-			for i, info := range infos {
-				if info == nil {
+		if !matched && !q.Any() {
+			for i, p := range probed {
+				if p.info == nil {
 					continue
 				}
+				info := p.info
 				if offer, ok := matchingOffer(q, info.Offers); ok {
-					c := e.Candidates[i]
+					c := candidates[i]
 					if !e.WhereMayLease {
 						return result, fmt.Errorf("no runner matches %q (%s); %s could lease %s, but a workspace's where never rents a machine: pass --where %q to lease", e.Where, strings.Join(exclusions, "; "), terminalSafeField(c.Name), terminalSafeField(describeOffer(offer)), e.Where)
 					}
@@ -140,6 +104,78 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 	return result, nil
 }
 
+type candidateProbe struct {
+	choice  placementChoice
+	reason  string
+	info    *proto.Info
+	matched bool
+}
+
+// probeCandidates asks each candidate whether it can take the run, all
+// sharing one deadline.
+func probeCandidates(ctx context.Context, candidates []config.RunCandidate, where string, q placement.Requirements, probe placementProbe) []candidateProbe {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	out := make([]candidateProbe, len(candidates))
+	var wg sync.WaitGroup
+	// Bound transport/process fan-out while all probes share one deadline.
+	slots := make(chan struct{}, 8)
+	for i, c := range candidates {
+		wg.Add(1)
+		go func(r *candidateProbe, c config.RunCandidate) {
+			defer wg.Done()
+			select {
+			case slots <- struct{}{}:
+				defer func() { <-slots }()
+			case <-ctx.Done():
+				r.reason = "probe deadline exceeded"
+				return
+			}
+			target := client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
+			info, err := probe(ctx, target, where, 2*time.Second)
+			if err != nil {
+				r.reason = err.Error()
+				return
+			}
+			r.info = &info
+			missing := q.Missing(info.Facts)
+			r.matched = info.Placement && len(missing) == 0
+			switch {
+			case !info.Placement:
+				r.reason = "runner does not support requirement validation; upgrade it"
+			case info.Busy:
+				r.reason = "runner is full or unavailable"
+			case info.MaxJobs <= 0 || info.MaxQueued < 0 || info.RunningJobs < 0 || info.StartingJobs < 0 || info.StagingJobs < 0 || info.QueuedJobs < 0:
+				r.reason = "invalid capacity report"
+			case len(missing) > 0:
+				r.reason = strings.Join(missing, "; ")
+			default:
+				r.choice = placementChoice{RunCandidate: c, Info: info, Target: target}
+			}
+		}(&out[i], c)
+	}
+	wg.Wait()
+	return out
+}
+
+// leaseCandidates lists the ready leases the probed cloud peers reported.
+func leaseCandidates(candidates []config.RunCandidate, probed []candidateProbe) []config.RunCandidate {
+	cfg, err := config.LoadClient()
+	if err != nil {
+		return nil
+	}
+	var out []config.RunCandidate
+	for i, p := range probed {
+		if p.info == nil {
+			continue
+		}
+		for _, lp := range leasePeersOf(cfg, candidates[i].Name, *p.info) {
+			out = append(out, leaseCandidate(lp))
+		}
+	}
+	return out
+}
+
 func announcePlacement(w io.Writer, c placementChoice, where string) {
 	i := c.Info
 	fmt.Fprintf(w, "errand: selected %s for %s (%d/%d slots, %d staging, %d queued)\n", terminalSafeField(c.Name), terminalSafeField(where), i.StartingJobs+i.RunningJobs, i.MaxJobs, i.StagingJobs, i.QueuedJobs)
@@ -151,13 +187,6 @@ func announcePlacement(w io.Writer, c placementChoice, where string) {
 func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placementChoice, func() (placementChoice, error), error) {
 	if e.Where != "" {
 		selection, err := chooseRunners(context.Background(), e, client.ProbeWhereInfo)
-		// Ended leases are forgotten rather than reported as unreachable. An
-		// ended lease's machine may still answer, so placement runs again
-		// without them.
-		if forgotten := forgetEndedLeases(selection.Probed); len(forgotten) > 0 {
-			e.Candidates = slices.DeleteFunc(slices.Clone(e.Candidates), func(c config.RunCandidate) bool { return forgotten[c.Name] })
-			selection, err = chooseRunners(context.Background(), e, client.ProbeWhereInfo)
-		}
 		if err != nil {
 			return nil, nil, err
 		}

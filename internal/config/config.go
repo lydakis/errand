@@ -34,7 +34,8 @@ func (c Client) SSHRemoteCommand(name string) string {
 	if name == "" {
 		name = c.DefaultPeer
 	}
-	return c.Peers[name].RemoteCommand
+	p, _, _ := c.peer(name)
+	return p.RemoteCommand
 }
 
 // SSHRemoteSocket returns the daemon Unix socket for an SSH peer. An empty
@@ -43,7 +44,8 @@ func (c Client) SSHRemoteSocket(name string) string {
 	if name == "" {
 		name = c.DefaultPeer
 	}
-	return c.Peers[name].RemoteSocket
+	p, _, _ := c.peer(name)
+	return p.RemoteSocket
 }
 
 type Client struct {
@@ -56,10 +58,6 @@ type Client struct {
 	DefaultPeer    string                       `toml:"default_peer,omitempty"`
 	ApplyOnSuccess *bool                        `toml:"apply_on_success,omitempty"`
 	Peers          map[string]Peer              `toml:"peers,omitempty"`
-
-	// Leases are machines leased from cloud peers, merged into Peers by
-	// LoadClient under names configured peers do not use.
-	Leases map[string]LeaseRecord `toml:"-"`
 }
 
 // Directory resolves the shared client and runner configuration directory.
@@ -113,27 +111,6 @@ func LoadClient() (Client, error) {
 	if _, err := tomlconfig.DecodeFile(path, &c); err != nil && !os.IsNotExist(err) {
 		return c, fmt.Errorf("%s: %w", path, err)
 	}
-	// An unusable state directory hides leases rather than breaking every
-	// command; errand leases reports it.
-	var leases map[string]LeaseRecord
-	if path, err := leasesPath(); err == nil {
-		if leases, err = readLeases(path); err != nil {
-			return c, err
-		}
-	}
-	for name, rec := range leases {
-		if _, configured := c.Peers[name]; configured {
-			continue
-		}
-		if c.Peers == nil {
-			c.Peers = map[string]Peer{}
-		}
-		if c.Leases == nil {
-			c.Leases = map[string]LeaseRecord{}
-		}
-		c.Peers[name] = LeasePeer(rec.Target)
-		c.Leases[name] = rec
-	}
 	return c, nil
 }
 
@@ -145,7 +122,10 @@ func (c Client) PeerURL(name string) (string, error) {
 	if name == "" {
 		return "", fmt.Errorf("no peer named and no default_peer configured")
 	}
-	p, ok := c.Peers[name]
+	p, ok, err := c.peer(name)
+	if err != nil {
+		return "", fmt.Errorf("peer %q: %w", name, err)
+	}
 	if name == "local" || p.Socket != "" {
 		if p.URL != "" || p.SSH != "" || p.RemoteCommand != "" || p.RemoteSocket != "" {
 			if name == "local" {

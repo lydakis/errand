@@ -227,16 +227,7 @@ func New(cfg Config) (*Daemon, error) {
 		_ = d.Close()
 		return nil, err
 	}
-	if cfg.Cloud == nil {
-		// Without a broker nothing would ever release these machines.
-		if active, err := cloud.ActiveLeases(cfg.StateDir); err != nil || len(active) > 0 {
-			_ = d.Close()
-			if err != nil {
-				return nil, fmt.Errorf("checking for active cloud leases: %w", err)
-			}
-			return nil, fmt.Errorf("leases %s are still active, but this runner has no cloud offers; restore its [cloud] section until they are released", strings.Join(active, ", "))
-		}
-	} else {
+	if cfg.Cloud != nil {
 		brokerCfg := *cfg.Cloud
 		brokerCfg.StateDir = cfg.StateDir
 		if d.broker, err = cloud.New(brokerCfg); err != nil {
@@ -874,13 +865,12 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 	}
 
 	var offers []proto.Offer
-	var leases []string
-	// Offers come only with the caller's active lease IDs: clients take
-	// offers plus a list as the whole truth and forget lease peers missing
-	// from it, which a caller without the lease action must not do.
+	var leases []proto.Lease
+	// Clients reach their leased machines through this list, so it is the
+	// only record of them a client needs.
 	if d.broker != nil && id.Allowed(proto.ActionLease) {
 		offers = d.broker.Offers()
-		leases = d.broker.ActiveIDs(leaseOwner(id))
+		leases = d.broker.Active(leaseOwner(id))
 	}
 	d.mu.Lock()
 	o := d.occupancyLocked()

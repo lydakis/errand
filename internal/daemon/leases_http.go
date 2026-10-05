@@ -62,13 +62,17 @@ func (d *Daemon) handleLeaseAcquire(w http.ResponseWriter, r *http.Request, id I
 		httpError(w, http.StatusBadRequest, "invalid lease request: "+err.Error())
 		return
 	}
+	if !proto.ValidULID(req.RequestID) {
+		httpError(w, http.StatusBadRequest, "lease request needs a request_id ULID")
+		return
+	}
 	// Only a tailnet login means anything to a leased runner; local callers'
 	// account names do not.
 	login := id.Login
 	if id.Local {
 		login = ""
 	}
-	lease, err := d.broker.Acquire(leaseOwner(id), login, req.Where, req.SSHKey)
+	lease, err := d.broker.Acquire(leaseOwner(id), login, req.Where, req.SSHKey, req.RequestID)
 	if err != nil {
 		leaseError(w, err)
 		return

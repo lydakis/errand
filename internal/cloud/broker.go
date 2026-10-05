@@ -5,8 +5,6 @@ package cloud
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,9 +33,10 @@ type Offer struct {
 	MaxLifetime  time.Duration
 }
 
-// ProbeFunc asks a leased runner for its info. A nonempty where asks it to
-// measure those requirements, as --where selection does.
-type ProbeFunc func(ctx context.Context, target proto.LeaseTarget, where string) (proto.Info, error)
+// ProbeFunc asks a leased runner for its info, offering identity (a private
+// key file, or empty) over SSH. A nonempty where asks it to measure those
+// requirements, as --where selection does.
+type ProbeFunc func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error)
 
 type Config struct {
 	StateDir       string // leases are persisted under StateDir/leases
@@ -54,7 +53,7 @@ type Config struct {
 const (
 	maxProgressLines  = 100
 	maxProgressLine   = 300
-	maxAcquireOutput  = 64 << 10
+	maxAcquireOutput  = 16 << 10 // release gets it in one environment variable, which Windows caps at 32K characters
 	endedLeaseHistory = 7 * 24 * time.Hour
 )
 
@@ -68,19 +67,29 @@ func (e *Error) Error() string { return e.Msg }
 
 type record struct {
 	proto.Lease
-	Owner         string          `json:"owner"`
-	Login         string          `json:"login,omitempty"`    // admitted by the machine
-	SSHKey        string          `json:"ssh_key,omitempty"`  // the caller's public key, admitted by the machine
-	Provider      string          `json:"provider,omitempty"` // kind of provider that acquired it
+	Owner string `json:"owner"`
+	Login string `json:"login,omitempty"` // admitted by the machine
+	// RequestID names the request that made the lease, so a client that
+	// lost the answer can ask again and get the same lease.
+	RequestID string `json:"request_id,omitempty"`
+	// Release and IdleTimeout are fixed when the lease is made, so the lease
+	// ends the way it was made whatever later happens to its offer.
+	Release       ReleaseSpec     `json:"release"`
+	IdleTimeout   time.Duration   `json:"idle_timeout"`
 	ProviderState json.RawMessage `json:"provider_state,omitempty"`
-	LastBusy      time.Time       `json:"last_busy,omitzero"`
+	// Identity is the private key file this cloud peer reaches the machine
+	// with, when the provider made one.
+	Identity string    `json:"identity,omitempty"`
+	LastBusy time.Time `json:"last_busy,omitzero"`
 }
 
+// A lease is owned by one worker goroutine, which makes every provider call
+// for it. Everything else only asks for a state change through update and
+// wakes the worker.
 type lease struct {
 	record
-	cancelLaunch context.CancelFunc
-	launching    bool // the launch goroutine still owns the lease
-	releasing    bool // a release command is running
+	stop context.CancelFunc // cancels the running acquire or probe
+	wake chan struct{}
 }
 
 type Broker struct {
@@ -97,10 +106,9 @@ type Broker struct {
 	wg     sync.WaitGroup
 }
 
+// New starts a broker and a worker for every lease it recorded before. With
+// no offers it leases nothing new but still ends the leases it has.
 func New(cfg Config) (*Broker, error) {
-	if len(cfg.Offers) == 0 {
-		return nil, fmt.Errorf("cloud broker needs at least one offer")
-	}
 	if cfg.Probe == nil {
 		return nil, fmt.Errorf("cloud broker needs a runner probe")
 	}
@@ -124,6 +132,9 @@ func New(cfg Config) (*Broker, error) {
 		if o.Name == "" || o.Provider == nil || o.IdleTimeout <= 0 || o.MaxLifetime <= 0 {
 			return nil, fmt.Errorf("cloud offer %q is incomplete", o.Name)
 		}
+		if _, err := o.Provider.ReleaseSpec().provider(); err != nil {
+			return nil, fmt.Errorf("cloud offer %q: %w", o.Name, err)
+		}
 		if _, dup := b.offers[o.Name]; dup {
 			return nil, fmt.Errorf("cloud offer %q is defined twice", o.Name)
 		}
@@ -136,74 +147,45 @@ func New(cfg Config) (*Broker, error) {
 	if err := os.MkdirAll(b.dir, 0700); err != nil {
 		return nil, err
 	}
-	if err := b.recover(); err != nil {
+	records, err := b.load()
+	if err != nil {
 		return nil, err
 	}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
-	b.wg.Add(1)
-	go b.reap()
+	now := time.Now()
+	for _, r := range records {
+		l := &lease{record: r, wake: make(chan struct{}, 1)}
+		switch r.State {
+		case proto.LeaseLaunching:
+			// An acquire cut short by a restart cannot be resumed, and may
+			// already have created a machine.
+			if err := b.update(l, func(r *record) bool {
+				r.State = proto.LeaseReleasing
+				r.Error = "broker restarted while the machine was launching"
+				r.addProgress(r.Error)
+				return true
+			}); err != nil {
+				b.cancel()
+				return nil, fmt.Errorf("recording lease %s: %w", r.ID, err)
+			}
+		case proto.LeaseReady:
+			l.LastBusy = now // a full idle window after a restart
+		}
+		b.leases[r.ID] = l
+	}
+	for _, l := range b.leases {
+		b.start(l)
+	}
 	return b, nil
 }
 
-// providerKind names the kind of provider, which must stay the same for an
-// offer while it has active leases.
-func providerKind(p Provider) string {
-	switch p := p.(type) {
-	case *LambdaProvider:
-		return "lambda"
-	case CommandProvider:
-		return commandKind(p)
-	case *CommandProvider:
-		return commandKind(*p)
-	}
-	return fmt.Sprintf("%T", p)
-}
-
-// commandKind fingerprints a command provider, so leases are never handed to
-// different commands than the ones that acquired them.
-func commandKind(p CommandProvider) string {
-	data, _ := json.Marshal([][]string{p.AcquireCommand, p.ReleaseCommand})
-	sum := sha256.Sum256(data)
-	return "command:" + hex.EncodeToString(sum[:8])
-}
-
-// ActiveLeases lists the leases recorded under stateDir that may still hold
-// a machine, so a runner whose cloud section is gone can refuse to start
-// rather than leave them running.
-func ActiveLeases(stateDir string) ([]string, error) {
-	dir := filepath.Join(stateDir, "leases")
-	entries, err := os.ReadDir(dir)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	} else if err != nil {
-		return nil, err
-	}
-	var ids []string
-	for _, e := range entries {
-		id, ok := strings.CutSuffix(e.Name(), ".json")
-		if !ok || !proto.ValidULID(id) {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
-		if err != nil {
-			return nil, err
-		}
-		var r record
-		if err := json.Unmarshal(data, &r); err != nil || r.State != proto.LeaseReleased && r.State != proto.LeaseFailed {
-			ids = append(ids, id) // an unreadable record may be active
-		}
-	}
-	return ids, nil
-}
-
-// recover reloads persisted leases. A launch cut short by a restart may
-// already have created a machine, so it is released rather than resumed.
-func (b *Broker) recover() error {
+// load reads the recorded leases, dropping ended ones past their history.
+func (b *Broker) load() ([]record, error) {
 	entries, err := os.ReadDir(b.dir)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	now := time.Now()
+	var records []record
 	for _, e := range entries {
 		id, ok := strings.CutSuffix(e.Name(), ".json")
 		if !ok || !proto.ValidULID(id) {
@@ -212,42 +194,19 @@ func (b *Broker) recover() error {
 		path := filepath.Join(b.dir, e.Name())
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		var r record
 		if err := json.Unmarshal(data, &r); err != nil || r.ID != id {
-			return fmt.Errorf("lease record %s is unreadable; inspect or remove it", path)
+			return nil, fmt.Errorf("lease record %s is unreadable; inspect or remove it", path)
 		}
-		switch r.State {
-		case proto.LeaseLaunching:
-			r.State = proto.LeaseReleasing
-			r.Error = "broker restarted while the machine was launching"
-		case proto.LeaseReady:
-			r.LastBusy = now // grant a full idle window after a restart
-		case proto.LeaseReleased, proto.LeaseFailed:
-			if now.Sub(r.ReleasedAt) > endedLeaseHistory {
-				_ = os.Remove(path)
-				continue
-			}
+		if !r.Active() && time.Since(r.ReleasedAt) > endedLeaseHistory {
+			_ = os.Remove(path)
+			continue
 		}
-		// Only the kind of provider that acquired a machine can release it.
-		if r.State != proto.LeaseReleased && r.State != proto.LeaseFailed {
-			offer, ok := b.offers[r.Offer]
-			if !ok {
-				return fmt.Errorf("lease %s is still active on cloud offer %q, which is no longer configured; restore the offer until the lease is released", id, r.Offer)
-			}
-			// Every record names its provider, so one that does not is not
-			// trusted to any provider either.
-			if r.Provider != providerKind(offer.Provider) {
-				return fmt.Errorf("lease %s on cloud offer %q was acquired with other provider settings (%s) than the offer now has (%s); restore them until the lease is released", id, r.Offer, r.Provider, providerKind(offer.Provider))
-			}
-		}
-		b.leases[id] = &lease{record: r}
-		if err := b.persist(&r); err != nil {
-			return err
-		}
+		records = append(records, r)
 	}
-	return nil
+	return records, nil
 }
 
 // Offers describes what this broker can lease.
@@ -259,12 +218,12 @@ func (b *Broker) Offers() []proto.Offer {
 	return out
 }
 
-// Acquire returns the owner's matching ready or launching lease, or starts
-// a new one from the first matching offer. login is the caller's tailnet
-// login, when it has one.
-// sshKey is the caller's SSH public key, or empty; a machine reached over SSH
-// admits only that key.
-func (b *Broker) Acquire(owner, login, where, sshKey string) (proto.Lease, error) {
+// Acquire returns the lease an earlier request with the same requestID
+// made, the owner's matching ready or launching lease, or a new one from the
+// first matching offer. login is the caller's tailnet login, when it has
+// one. sshKey is the caller's SSH public key, or empty; a machine reached
+// over SSH admits only that key.
+func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.Lease, error) {
 	q, err := placement.Parse(where)
 	if err != nil {
 		return proto.Lease{}, &Error{http.StatusBadRequest, err.Error()}
@@ -278,6 +237,9 @@ func (b *Broker) Acquire(owner, login, where, sshKey string) (proto.Lease, error
 	if sshKey != "" && !ValidSSHPublicKey(sshKey) {
 		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
+	if len(b.offers) == 0 {
+		return proto.Lease{}, &Error{http.StatusNotFound, "this runner has no cloud offers"}
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
@@ -286,13 +248,20 @@ func (b *Broker) Acquire(owner, login, where, sshKey string) (proto.Lease, error
 	var launching *lease
 	active := 0
 	for _, l := range b.sorted() {
+		if requestID != "" && l.Owner == owner && l.RequestID == requestID {
+			return l.view(), nil
+		}
+	}
+	for _, l := range b.sorted() {
 		if l.Active() {
 			active++
 		}
-		// The machine admits the login and key it was launched for. The login
-		// can change while the owner (a tailnet user ID) stays the same, and
-		// each machine the owner runs errand from has its own key.
-		if l.Owner != owner || l.Login != login || l.SSHKey != sshKey {
+		// The machine admits the login it was launched for, and over SSH the
+		// key. The login can change while the owner (a tailnet user ID)
+		// stays the same, and each machine the owner runs errand from has
+		// its own key. Until a lease is ready its transport is unknown.
+		reachedBySSH := l.Target == nil || l.Target.SSH != ""
+		if l.Owner != owner || l.Login != login || reachedBySSH && l.SSHKey != sshKey {
 			continue
 		}
 		switch {
@@ -323,117 +292,225 @@ func (b *Broker) Acquire(owner, login, where, sshKey string) (proto.Lease, error
 		return proto.Lease{}, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease limit reached (%d active, max_leases = %d)", active, b.cfg.MaxLeases)}
 	}
 	now := time.Now()
-	l := &lease{record: record{Owner: owner, Login: login, SSHKey: sshKey, Provider: providerKind(offer.Provider), Lease: proto.Lease{
-		ID: proto.NewULID(), Offer: offer.Name, Where: where, State: proto.LeaseLaunching,
-		CreatedAt: now, ExpiresAt: now.Add(offer.MaxLifetime),
-	}}}
+	l := &lease{wake: make(chan struct{}, 1), record: record{
+		Owner: owner, Login: login, RequestID: requestID, Release: offer.Provider.ReleaseSpec(), IdleTimeout: offer.IdleTimeout,
+		Lease: proto.Lease{ID: proto.NewULID(), Offer: offer.Name, Where: where, SSHKey: sshKey, State: proto.LeaseLaunching, CreatedAt: now, ExpiresAt: now.Add(offer.MaxLifetime)},
+	}}
 	l.addProgress("launching " + offer.Name)
-	// Persist before acquiring so a crash cannot forget a machine being paid for.
+	// Recorded before acquiring, so a crash cannot forget a machine being paid for.
 	if err := b.persist(&l.record); err != nil {
 		return proto.Lease{}, &Error{http.StatusInternalServerError, "recording lease: " + err.Error()}
 	}
-	// The hard stop holds while launching too: a launch still running at the
-	// lease's max lifetime is canceled and released.
-	ctx, cancel := context.WithTimeout(b.ctx, b.launchLimit(*offer))
-	l.cancelLaunch, l.launching = cancel, true
 	b.leases[l.ID] = l
-	b.wg.Add(1)
-	go b.launch(ctx, l, *offer)
+	b.start(l)
 	return l.view(), nil
 }
 
-func (b *Broker) launch(ctx context.Context, l *lease, offer Offer) {
+// Release ends an owner's lease. A launching lease stops its acquire first.
+func (b *Broker) Release(owner, id string) (proto.Lease, error) {
+	b.mu.Lock()
+	l, ok := b.leases[id]
+	b.mu.Unlock()
+	if !ok || l.Owner != owner {
+		return proto.Lease{}, &Error{http.StatusNotFound, "no such lease"}
+	}
+	// The release is acknowledged only once it is recorded, so a restart
+	// cannot turn it back into a usable lease.
+	err := b.update(l, func(r *record) bool {
+		switch r.State {
+		case proto.LeaseLaunching:
+			r.addProgress("release requested while launching")
+		case proto.LeaseReady:
+			r.addProgress("release requested")
+		default:
+			return false
+		}
+		r.State = proto.LeaseReleasing
+		return true
+	})
+	if err != nil {
+		return proto.Lease{}, &Error{http.StatusInternalServerError, "recording the release: " + err.Error()}
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if l.stop != nil {
+		l.stop()
+	}
+	select {
+	case l.wake <- struct{}{}:
+	default:
+	}
+	return l.view(), nil
+}
+
+// update is the only way a lease changes. change edits a copy of the record,
+// or returns false to leave it as it is. The copy is written to disk before
+// the lease takes it, so neither callers nor a restart ever see a state the
+// disk does not have.
+func (b *Broker) update(l *lease, change func(*record) bool) error {
+	return b.apply(l, change, true)
+}
+
+// advance is update for a change that goes ahead even if it cannot be
+// recorded. That is safe only where the state on disk already leads to the
+// same end: a lease recorded as launching or releasing is released on the
+// next start either way.
+func (b *Broker) advance(l *lease, change func(*record) bool) {
+	_ = b.apply(l, change, false)
+}
+
+func (b *Broker) apply(l *lease, change func(*record) bool, strict bool) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	next := l.record
+	next.Progress = slices.Clone(l.Progress)
+	if !change(&next) {
+		return nil
+	}
+	if next.ID != l.ID || !canMove(l.State, next.State) {
+		panic(fmt.Sprintf("lease %s: invalid change from %s to %s", l.ID, l.State, next.State))
+	}
+	err := b.persist(&next)
+	if err == nil || !strict {
+		l.record = next
+	}
+	return err
+}
+
+// canMove reports whether a lease may go from one state to another. Leases
+// only move forward, and a launch that never became ready skips ready.
+func canMove(from, to string) bool {
+	next := map[string][]string{
+		proto.LeaseLaunching: {proto.LeaseReady, proto.LeaseReleasing},
+		proto.LeaseReady:     {proto.LeaseReleasing},
+		proto.LeaseReleasing: {proto.LeaseReleased, proto.LeaseFailed},
+	}
+	return from == to || slices.Contains(next[from], to)
+}
+
+// note shows a line to clients following the lease.
+func (b *Broker) note(l *lease, line string) {
+	b.advance(l, func(r *record) bool {
+		r.addProgress(line)
+		return true
+	})
+}
+
+func (b *Broker) start(l *lease) {
+	b.wg.Add(1)
+	go b.work(l)
+}
+
+// work drives one lease through its states until it is forgotten.
+func (b *Broker) work(l *lease) {
 	defer b.wg.Done()
-	defer l.cancelLaunch()
+	for b.ctx.Err() == nil {
+		b.mu.Lock()
+		state := l.State
+		b.mu.Unlock()
+		switch state {
+		case proto.LeaseLaunching:
+			b.launch(l)
+		case proto.LeaseReady:
+			b.watch(l)
+		case proto.LeaseReleasing:
+			b.release(l)
+		default:
+			b.forget(l)
+			return
+		}
+	}
+}
+
+// launch acquires the machine and waits for errand on it. It returns once
+// the lease is ready or releasing, or the broker is closing, so it never
+// acquires twice.
+func (b *Broker) launch(l *lease) {
+	offer := b.offers[l.Offer] // only this process's leases are launching
+	b.mu.Lock()
+	if l.State != proto.LeaseLaunching {
+		b.mu.Unlock()
+		return // released before the acquire started
+	}
+	// The hard stop holds while launching too.
+	deadline := earlier(l.CreatedAt.Add(b.cfg.AcquireTimeout), l.ExpiresAt)
+	ctx, cancel := context.WithDeadline(b.ctx, deadline)
+	l.stop = cancel
+	id, where, login, sshKey := l.ID, l.Where, l.Login, l.SSHKey
+	b.mu.Unlock()
+	defer cancel()
+
 	machine, err := offer.Provider.Acquire(ctx, AcquireRequest{
-		LeaseID: l.ID, Offer: offer.Name, Where: l.Where, Login: l.Login, SSHKey: l.SSHKey,
-		Progress: func(line string) { b.progress(l, line) },
+		LeaseID: id, Offer: offer.Name, Where: where, Login: login, SSHKey: sshKey,
+		Progress: func(line string) { b.note(l, line) },
 		Save: func(state json.RawMessage) error {
-			b.mu.Lock()
-			defer b.mu.Unlock()
-			// Kept in memory even if the write fails, for this process's release.
-			l.ProviderState = state
-			return b.persist(&l.record)
+			return b.update(l, func(r *record) bool {
+				r.ProviderState = state
+				return true
+			})
 		},
 	})
 	if ctx.Err() != nil {
+		err = errors.New("acquire canceled")
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			err = fmt.Errorf("acquire did not finish within %s", b.launchLimit(offer))
-		} else {
-			err = fmt.Errorf("acquire canceled")
+			err = fmt.Errorf("acquire did not finish within %s", deadline.Sub(l.CreatedAt))
 		}
 	}
-	target := machine.Target
 	if err == nil {
-		b.mu.Lock()
-		l.ProviderState = machine.State
-		err = b.persist(&l.record)
-		b.mu.Unlock()
-		if err != nil {
+		if err = b.update(l, func(r *record) bool {
+			r.ProviderState, r.Identity = machine.State, machine.Identity
+			return true
+		}); err != nil {
 			err = fmt.Errorf("recording the machine: %w", err)
 		} else {
-			err = checkTarget(target)
+			err = checkTarget(machine.Target)
 		}
 	}
 	var facts proto.Facts
 	if err == nil {
-		b.progress(l, "waiting for errand on the machine")
-		facts, err = b.waitReady(ctx, l, target)
+		b.note(l, "waiting for errand on the machine")
+		facts, err = b.waitReady(ctx, l, machine)
 	}
-	b.mu.Lock()
-	if b.closed {
-		// Shutdown is not a failure; recovery releases the launch on restart.
-		b.mu.Unlock()
-		return
+	if b.ctx.Err() != nil {
+		return // the record still says launching, so the next start releases it
 	}
-	now := time.Now()
-	switch {
-	case l.State != proto.LeaseLaunching:
-		// Released by its owner while launching.
-	case err != nil:
-		l.State = proto.LeaseReleasing
-		l.Error = err.Error()
-		l.addProgress("launch failed: " + err.Error())
-	default:
-		l.State = proto.LeaseReady
-		l.Target = &target
-		l.Facts = &facts
-		l.ReadyAt = now
-		l.LastBusy = now
-		l.IdleUntil = now.Add(offer.IdleTimeout)
-		l.addProgress(fmt.Sprintf("ready after %s", now.Sub(l.CreatedAt).Round(time.Second)))
+	if err == nil {
 		// A restart releases a lease recorded as launching, so the lease is
 		// ready only once the record says so.
-		if perr := b.persist(&l.record); perr != nil {
-			l.State = proto.LeaseReleasing
-			l.Target, l.Facts = nil, nil
-			l.ReadyAt, l.IdleUntil = time.Time{}, time.Time{}
-			l.Error = "recording the ready lease: " + perr.Error()
-			l.addProgress("launch failed: " + l.Error)
+		if err = b.update(l, func(r *record) bool {
+			if r.State != proto.LeaseLaunching {
+				return false // released while launching
+			}
+			now := time.Now()
+			r.State = proto.LeaseReady
+			r.Target, r.Facts = &machine.Target, &facts
+			r.ReadyAt, r.LastBusy, r.IdleUntil = now, now, now.Add(r.IdleTimeout)
+			r.addProgress(fmt.Sprintf("ready after %s", now.Sub(r.CreatedAt).Round(time.Second)))
+			return true
+		}); err == nil {
+			return
 		}
+		err = fmt.Errorf("recording the ready lease: %w", err)
 	}
-	_ = b.persist(&l.record)
-	l.launching = false
-	release := l.State == proto.LeaseReleasing
-	b.mu.Unlock()
-	if release {
-		b.release(l)
-	}
-}
-
-// launchLimit is how long a launch of offer may take.
-func (b *Broker) launchLimit(offer Offer) time.Duration {
-	return min(b.cfg.AcquireTimeout, offer.MaxLifetime)
+	b.advance(l, func(r *record) bool {
+		if r.State != proto.LeaseLaunching {
+			return false
+		}
+		r.State = proto.LeaseReleasing
+		r.Error = err.Error()
+		r.addProgress("launch failed: " + r.Error)
+		return true
+	})
 }
 
 // waitReady polls until the machine runs errand and its measured facts
 // satisfy the lease's requirements; an offer's facts are only a claim.
-func (b *Broker) waitReady(ctx context.Context, l *lease, target proto.LeaseTarget) (proto.Facts, error) {
+func (b *Broker) waitReady(ctx context.Context, l *lease, m Machine) (proto.Facts, error) {
 	q, _ := placement.Parse(l.Where)
 	last := ""
 	for {
 		probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		info, err := b.cfg.Probe(probeCtx, target, l.Where)
+		info, err := b.cfg.Probe(probeCtx, m.Target, m.Identity, l.Where)
 		cancel()
 		reason := ""
 		if err != nil {
@@ -444,205 +521,154 @@ func (b *Broker) waitReady(ctx context.Context, l *lease, target proto.LeaseTarg
 			return info.Facts, nil
 		}
 		if reason != last {
-			b.progress(l, reason)
+			b.note(l, reason)
 			last = reason
 		}
 		select {
 		case <-ctx.Done():
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return proto.Facts{}, fmt.Errorf("machine was not ready within %s (%s)", b.launchLimit(b.offers[l.Offer]), last)
-			}
-			return proto.Facts{}, fmt.Errorf("launch canceled")
+			return proto.Facts{}, fmt.Errorf("machine was not ready in time (%s)", last)
 		case <-time.After(b.cfg.ReadyPoll):
 		}
 	}
 }
 
-// Release ends an owner's lease. A launching lease stops its acquire first.
-func (b *Broker) Release(owner, id string) (proto.Lease, error) {
-	b.mu.Lock()
-	l, ok := b.leases[id]
-	if !ok || l.Owner != owner {
+// watch releases a ready lease once it is idle or out of lifetime. An
+// unreachable machine does not count as busy, so a lost box ends after one
+// idle window instead of running until its hard stop.
+func (b *Broker) watch(l *lease) {
+	for {
+		b.mu.Lock()
+		r := l.record
 		b.mu.Unlock()
-		return proto.Lease{}, &Error{http.StatusNotFound, "no such lease"}
-	}
-	// The release is acknowledged only once it is recorded, so a restart
-	// cannot turn it back into a usable lease.
-	requestRelease := func(note string) error {
-		was, progress := l.State, slices.Clone(l.Progress)
-		l.State = proto.LeaseReleasing
-		l.addProgress(note)
-		if err := b.persist(&l.record); err != nil {
-			l.State, l.Progress = was, progress
-			return &Error{http.StatusInternalServerError, "recording the release: " + err.Error()}
+		if r.State != proto.LeaseReady {
+			return
 		}
-		return nil
-	}
-	switch l.State {
-	case proto.LeaseLaunching:
-		if err := requestRelease("release requested while launching"); err != nil {
-			b.mu.Unlock()
-			return proto.Lease{}, err
+		now := time.Now()
+		reason := ""
+		switch {
+		case !now.Before(r.ExpiresAt):
+			reason = fmt.Sprintf("max lifetime of %s reached", r.ExpiresAt.Sub(r.CreatedAt).Round(time.Second))
+		case b.busy(l, r):
+			_ = b.update(l, func(r *record) bool {
+				r.LastBusy, r.IdleUntil = now, now.Add(r.IdleTimeout)
+				return r.State == proto.LeaseReady
+			})
+		case !now.Before(r.LastBusy.Add(r.IdleTimeout)):
+			reason = fmt.Sprintf("idle for %s", r.IdleTimeout)
 		}
-		// launch stops on the canceled context, then releases with any
-		// provider state acquire printed before it stopped.
-		l.cancelLaunch()
-		v := l.view()
-		b.mu.Unlock()
-		return v, nil
-	case proto.LeaseReady:
-		if err := requestRelease("release requested"); err != nil {
-			b.mu.Unlock()
-			return proto.Lease{}, err
+		// The machine is destroyed only once the release is recorded;
+		// otherwise a restart would hand out a lease whose machine is gone.
+		if reason != "" && b.update(l, func(r *record) bool {
+			if r.State != proto.LeaseReady {
+				return false
+			}
+			r.State = proto.LeaseReleasing
+			r.addProgress("releasing: " + reason)
+			return true
+		}) == nil {
+			return
 		}
-		if !b.closed {
-			b.wg.Add(1)
-			go func() {
-				defer b.wg.Done()
-				b.release(l)
-			}()
+		wait := b.cfg.IdlePoll
+		if left := time.Until(r.ExpiresAt); left > 0 && left < wait {
+			wait = left
+		}
+		if !b.sleep(l, wait) {
+			return
 		}
 	}
-	v := l.view()
-	b.mu.Unlock()
-	return v, nil
 }
 
+// busy reports whether the machine has work, asking no later than the
+// lease's hard stop.
+func (b *Broker) busy(l *lease, r record) bool {
+	ctx, cancel := context.WithDeadline(b.ctx, earlier(time.Now().Add(5*time.Second), r.ExpiresAt))
+	defer cancel()
+	// A release request cancels the probe rather than wait for it.
+	b.mu.Lock()
+	l.stop = cancel
+	stopped := l.State != proto.LeaseReady
+	b.mu.Unlock()
+	if stopped {
+		return false
+	}
+	info, err := b.cfg.Probe(ctx, *r.Target, r.Identity, "")
+	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0
+}
+
+// release tries once to destroy the machine and records the outcome.
 func (b *Broker) release(l *lease) {
 	b.mu.Lock()
-	if l.releasing || l.launching || l.State != proto.LeaseReleasing || b.closed {
-		b.mu.Unlock()
-		return
-	}
-	l.releasing = true
-	offer := b.offers[l.Offer]
-	state := string(l.ProviderState)
+	r := l.record
 	b.mu.Unlock()
-
-	ctx, cancel := context.WithTimeout(b.ctx, b.cfg.ReleaseTimeout)
-	defer cancel()
-	err := offer.Provider.Release(ctx, ReleaseRequest{LeaseID: l.ID, Offer: l.Offer, State: json.RawMessage(state)})
-
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	l.releasing = false
-	if b.closed {
+	provider, err := b.releaser(r)
+	if err == nil {
+		ctx, cancel := context.WithTimeout(b.ctx, b.cfg.ReleaseTimeout)
+		err = provider.Release(ctx, ReleaseRequest{LeaseID: r.ID, Offer: r.Offer, State: r.ProviderState})
+		cancel()
+	}
+	if b.ctx.Err() != nil {
 		return
 	}
 	if err != nil {
-		l.addProgress(fmt.Sprintf("release failed: %v; retrying", err))
-		_ = b.persist(&l.record)
+		b.note(l, fmt.Sprintf("release failed: %v; retrying", err))
+		b.sleep(l, b.cfg.IdlePoll)
 		return
 	}
-	l.State = proto.LeaseReleased
-	if l.Error != "" {
-		l.State = proto.LeaseFailed
-	}
-	l.ReleasedAt = time.Now()
-	l.IdleUntil = time.Time{}
-	l.addProgress("released")
-	_ = b.persist(&l.record)
+	// Release may run again after a restart, so this need not be recorded.
+	b.advance(l, func(r *record) bool {
+		r.State = proto.LeaseReleased
+		if r.Error != "" {
+			r.State = proto.LeaseFailed
+		}
+		r.ReleasedAt, r.IdleUntil = time.Now(), time.Time{}
+		r.addProgress("released")
+		return true
+	})
 }
 
-// reap releases idle and expired leases and retries failed releases.
-func (b *Broker) reap() {
-	defer b.wg.Done()
-	ticker := time.NewTicker(b.cfg.IdlePoll)
-	defer ticker.Stop()
+// releaser is the provider that releases r's machine: its offer's, while
+// that offer still releases the way r was made, or else one built from the
+// release settings r recorded.
+func (b *Broker) releaser(r record) (Provider, error) {
+	if o, ok := b.offers[r.Offer]; ok && o.Provider.ReleaseSpec().equal(r.Release) {
+		return o.Provider, nil
+	}
+	return r.Release.provider()
+}
+
+// forget drops an ended lease once its history has been kept long enough.
+func (b *Broker) forget(l *lease) {
 	for {
-		b.reapOnce()
+		b.mu.Lock()
+		left := time.Until(l.ReleasedAt.Add(endedLeaseHistory))
+		b.mu.Unlock()
+		if left <= 0 {
+			break
+		}
+		if !b.sleep(l, left) {
+			return
+		}
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := os.Remove(filepath.Join(b.dir, l.ID+".json")); err == nil || errors.Is(err, os.ErrNotExist) {
+		delete(b.leases, l.ID)
+	}
+}
+
+// sleep waits for d, or until the lease is woken. It reports false once the
+// broker is closing.
+func (b *Broker) sleep(l *lease, d time.Duration) bool {
+	if d > 0 {
+		timer := time.NewTimer(d)
+		defer timer.Stop()
 		select {
 		case <-b.ctx.Done():
-			return
-		case <-ticker.C:
+		case <-l.wake:
+		case <-timer.C:
 		}
 	}
-}
-
-func (b *Broker) reapOnce() {
-	b.mu.Lock()
-	var ready, releasing []*lease
-	for id, l := range b.leases {
-		switch {
-		case (l.State == proto.LeaseReleased || l.State == proto.LeaseFailed) && time.Since(l.ReleasedAt) > endedLeaseHistory:
-			if err := os.Remove(filepath.Join(b.dir, id+".json")); err == nil || errors.Is(err, os.ErrNotExist) {
-				delete(b.leases, id)
-			}
-		case l.State == proto.LeaseReady:
-			ready = append(ready, l)
-		case l.State == proto.LeaseReleasing && !l.releasing && !l.launching:
-			releasing = append(releasing, l)
-		}
-	}
-	b.mu.Unlock()
-	for _, l := range releasing {
-		b.release(l)
-	}
-	// Probes run together, so one slow or lost machine cannot hold back the
-	// idle check, or the hard stop, of the others.
-	var probes sync.WaitGroup
-	for _, l := range ready {
-		b.mu.Lock()
-		expired := !time.Now().Before(l.ExpiresAt)
-		target := *l.Target
-		b.mu.Unlock()
-		if expired {
-			b.endReady(l, nil, nil)
-			continue
-		}
-		probes.Add(1)
-		go func() {
-			defer probes.Done()
-			ctx, cancel := context.WithTimeout(b.ctx, 5*time.Second)
-			info, err := b.cfg.Probe(ctx, target, "")
-			cancel()
-			b.endReady(l, &info, err)
-		}()
-	}
-	probes.Wait()
-}
-
-// endReady applies one idle check to a ready lease, releasing it once it is
-// idle or out of lifetime. A nil info skips the probe result.
-func (b *Broker) endReady(l *lease, info *proto.Info, probeErr error) {
-	now := time.Now()
-	b.mu.Lock()
-	if l.State != proto.LeaseReady {
-		b.mu.Unlock()
-		return
-	}
-	offer := b.offers[l.Offer]
-	// An unreachable machine does not count as busy, so a lost box ends
-	// after one idle window instead of running until its hard stop.
-	if info != nil && probeErr == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0 {
-		l.LastBusy = now
-	}
-	l.IdleUntil = l.LastBusy.Add(offer.IdleTimeout)
-	reason := ""
-	switch {
-	case !now.Before(l.ExpiresAt):
-		reason = fmt.Sprintf("max lifetime of %s reached", offer.MaxLifetime)
-	case !now.Before(l.IdleUntil):
-		reason = fmt.Sprintf("idle for %s", offer.IdleTimeout)
-	}
-	if reason == "" {
-		_ = b.persist(&l.record)
-		b.mu.Unlock()
-		return
-	}
-	// The machine is destroyed only once the release is recorded; otherwise
-	// a restart would hand out a lease whose machine is gone. The next idle
-	// check tries again.
-	progress := slices.Clone(l.Progress)
-	l.State = proto.LeaseReleasing
-	l.addProgress("releasing: " + reason)
-	if err := b.persist(&l.record); err != nil {
-		l.State, l.Progress = proto.LeaseReady, progress
-		b.mu.Unlock()
-		return
-	}
-	b.mu.Unlock()
-	b.release(l)
+	return b.ctx.Err() == nil
 }
 
 // Get returns one of the owner's leases.
@@ -669,27 +695,38 @@ func (b *Broker) List(owner string) []proto.Lease {
 	return out
 }
 
-// ActiveIDs lists the owner's leases that may still hold a machine.
-func (b *Broker) ActiveIDs(owner string) []string {
+// Active lists the owner's leases that may still hold a machine, without
+// their progress, newest first. Clients reach their leased machines through
+// this list.
+func (b *Broker) Active(owner string) []proto.Lease {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	var out []string
+	var out []proto.Lease
 	for _, l := range b.sorted() {
 		if l.Owner == owner && l.Active() {
-			out = append(out, l.ID)
+			v := l.Lease
+			v.Progress = nil
+			out = append(out, v)
 		}
 	}
 	return out
 }
 
 // Close stops background work without releasing anything: leases persist
-// and are recovered by the next broker start.
+// and the next broker start picks them up.
 func (b *Broker) Close() {
 	b.mu.Lock()
 	b.closed = true
 	b.mu.Unlock()
 	b.cancel()
 	b.wg.Wait()
+}
+
+func earlier(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
 }
 
 func (b *Broker) sorted() []*lease {
@@ -701,14 +738,7 @@ func (b *Broker) sorted() []*lease {
 	return out
 }
 
-func (b *Broker) progress(l *lease, line string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	l.addProgress(line)
-	_ = b.persist(&l.record)
-}
-
-func (l *lease) addProgress(line string) {
+func (r *record) addProgress(line string) {
 	line = strings.Map(func(r rune) rune {
 		if r < 0x20 || r == 0x7f {
 			return ' '
@@ -718,10 +748,10 @@ func (l *lease) addProgress(line string) {
 	if len(line) > maxProgressLine {
 		line = line[:maxProgressLine]
 	}
-	if len(l.Progress) >= maxProgressLines {
-		l.Progress = append(l.Progress[:0:0], l.Progress[1:]...)
+	if len(r.Progress) >= maxProgressLines {
+		r.Progress = append(r.Progress[:0:0], r.Progress[1:]...)
 	}
-	l.Progress = append(l.Progress, line)
+	r.Progress = append(r.Progress, line)
 }
 
 func (l *lease) view() proto.Lease {

@@ -56,14 +56,15 @@ const (
 	defaultLeaseLifetime = 12 * time.Hour
 )
 
-// Broker validates the cloud section. It returns nil when no offers are
-// configured, so an ordinary runner stays an ordinary runner.
+// Broker validates the cloud section. Every runner has a broker: without
+// offers it leases nothing, but it still ends leases made before its offers
+// were removed.
 func (c DaemonCloud) Broker() (*cloud.Config, error) {
 	if len(c.Offers) == 0 {
 		if c.MaxLeases != 0 || c.AcquireTimeout != "" {
 			return nil, fmt.Errorf("cloud: settings need at least one [[cloud.offers]] entry")
 		}
-		return nil, nil
+		return &cloud.Config{}, nil
 	}
 	out := &cloud.Config{MaxLeases: c.MaxLeases}
 	if c.MaxLeases < 0 {
@@ -120,6 +121,9 @@ func (c DaemonCloud) Broker() (*cloud.Config, error) {
 		}
 		if o.CPUs < 0 || o.GPUs < 0 || o.VRAM < 0 {
 			return nil, fmt.Errorf("%s: cpus, gpus and vram must not be negative", where)
+		}
+		if o.GPUs > 64 {
+			return nil, fmt.Errorf("%s: gpus must be at most 64", where)
 		}
 		facts := proto.Facts{OS: o.OS, Arch: o.Arch, NumCPU: o.CPUs}
 		if len(o.Tools) > 0 {

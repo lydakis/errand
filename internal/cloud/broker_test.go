@@ -25,9 +25,9 @@ type fakeMachine struct {
 	probes  atomic.Int32
 }
 
-func (m *fakeMachine) probe(_ context.Context, target proto.LeaseTarget, _ string) (proto.Info, error) {
+func (m *fakeMachine) probe(_ context.Context, target proto.LeaseTarget, _, _ string) (proto.Info, error) {
 	m.probes.Add(1)
-	if target.URL != "http://box:7443" {
+	if target.URL != "http://box:7443" && target.SSH != "ubuntu@box" {
 		return proto.Info{}, fmt.Errorf("unexpected target %+v", target)
 	}
 	if m.down.Load() {
@@ -96,6 +96,16 @@ func (h *harness) releases() string {
 	return string(data)
 }
 
+// wake makes a lease's worker look at the lease again now.
+func wake(b *Broker, id string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	select {
+	case b.leases[id].wake <- struct{}{}:
+	default:
+	}
+}
+
 func waitState(t *testing.T, b *Broker, owner, id, state string) proto.Lease {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -119,15 +129,15 @@ func waitState(t *testing.T, b *Broker, owner, id, state string) proto.Lease {
 func TestLeaseNotReusedAcrossLogins(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	b := h.start(t)
-	l, err := b.Acquire("42", "old@github", "gpu", "")
+	l, err := b.Acquire("42", "old@github", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitState(t, b, "42", l.ID, proto.LeaseReady)
-	if same, err := b.Acquire("42", "old@github", "gpu", ""); err != nil || same.ID != l.ID {
+	if same, err := b.Acquire("42", "old@github", "gpu", "", ""); err != nil || same.ID != l.ID {
 		t.Fatalf("same login must reuse: %+v %v", same, err)
 	}
-	if renamed, err := b.Acquire("42", "new@github", "gpu", ""); err != nil || renamed.ID == l.ID {
+	if renamed, err := b.Acquire("42", "new@github", "gpu", "", ""); err != nil || renamed.ID == l.ID {
 		t.Fatalf("renamed login must not reuse: %+v %v", renamed, err)
 	}
 }
@@ -135,14 +145,80 @@ func TestLeaseNotReusedAcrossLogins(t *testing.T) {
 // A machine reached over SSH admits only the key of the client that asked
 // for it, so another of the owner's machines gets a lease of its own, and
 // the provider is told which key to admit.
+// A client that lost the answer asks again with the same request ID and
+// gets the lease that request started, not a second machine.
+func TestRepeatedRequestReturnsItsLease(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.MaxLeases = 3
+	b := h.start(t)
+	request := proto.NewULID()
+	l, err := b.Acquire("george", "", "gpu", "", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	b.Release("george", l.ID)
+	if again, err := b.Acquire("george", "", "gpu", "", request); err != nil || again.ID != l.ID {
+		t.Fatalf("repeated request: %+v %v", again, err)
+	}
+	if other, err := b.Acquire("someone", "", "gpu", "", request); err != nil || other.ID == l.ID {
+		t.Fatalf("another owner's request: %+v %v", other, err)
+	}
+}
+
+// A release request does not wait on a probe of the machine.
+func TestReleaseCancelsHangingProbe(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	var hang atomic.Bool
+	probe := h.cfg.Probe
+	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
+		if hang.Load() {
+			<-ctx.Done()
+			return proto.Info{}, ctx.Err()
+		}
+		return probe(ctx, target, identity, where)
+	}
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	hang.Store(true)
+	time.Sleep(50 * time.Millisecond) // the worker is now inside a probe
+	start := time.Now()
+	if _, err := b.Release("george", l.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+	if took := time.Since(start); took > 2*time.Second {
+		t.Fatalf("release waited %s on a probe", took)
+	}
+}
+
+// A machine reached over the tailnet admits the owner whatever key their
+// workstation sent, so its lease is reused from any of them.
+func TestTailnetLeaseReusedAcrossClientKeys(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	b := h.start(t)
+	l, err := b.Acquire("george", "george@github", "gpu", "ssh-ed25519 bWFj errand", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	if same, err := b.Acquire("george", "george@github", "gpu", "ssh-ed25519 bWluaQ== errand", ""); err != nil || same.ID != l.ID {
+		t.Fatalf("an HTTP lease must be reused across keys: %+v %v", same, err)
+	}
+}
+
 func TestLeaseCarriesClientKey(t *testing.T) {
 	h := newHarness(t, `echo "key $ERRAND_LEASE_SSH_KEY" >&2
-echo '{"url":"http://box:7443"}'
+echo '{"ssh":"ubuntu@box"}'
 `)
 	h.cfg.MaxLeases = 3
 	b := h.start(t)
 	const mac, mini = "ssh-ed25519 bWFj errand", "ssh-ed25519 bWluaQ== errand"
-	l, err := b.Acquire("george", "", "gpu", mac)
+	l, err := b.Acquire("george", "", "gpu", mac, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,15 +226,15 @@ echo '{"url":"http://box:7443"}'
 	if !slices.Contains(ready.Progress, "key "+mac) {
 		t.Fatalf("provider was not given the key: %q", ready.Progress)
 	}
-	if same, err := b.Acquire("george", "", "gpu", mac); err != nil || same.ID != l.ID {
+	if same, err := b.Acquire("george", "", "gpu", mac, ""); err != nil || same.ID != l.ID {
 		t.Fatalf("same key must reuse: %+v %v", same, err)
 	}
-	if other, err := b.Acquire("george", "", "gpu", mini); err != nil || other.ID == l.ID {
+	if other, err := b.Acquire("george", "", "gpu", mini, ""); err != nil || other.ID == l.ID {
 		t.Fatalf("another key must not reuse: %+v %v", other, err)
 	}
 	for _, bad := range []string{"AAAA george@mac", mac + "\n" + mini, `command="sh" ` + mac} {
 		var refused *Error
-		if _, err := b.Acquire("george", "", "gpu", bad); !errors.As(err, &refused) || refused.Status != http.StatusBadRequest {
+		if _, err := b.Acquire("george", "", "gpu", bad, ""); !errors.As(err, &refused) || refused.Status != http.StatusBadRequest {
 			t.Errorf("key %q: %v", bad, err)
 		}
 	}
@@ -167,14 +243,14 @@ echo '{"url":"http://box:7443"}'
 func TestLeaseLifecycle(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu=h100", "")
+	l, err := b.Acquire("george", "", "gpu=h100", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if l.State != proto.LeaseLaunching || l.Offer != "h100" {
 		t.Fatalf("lease %+v", l)
 	}
-	again, err := b.Acquire("george", "", "gpu=h100,vram>=80", "")
+	again, err := b.Acquire("george", "", "gpu=h100,vram>=80", "", "")
 	if err != nil || again.ID != l.ID {
 		t.Fatalf("a launching match must be shared: %+v %v", again, err)
 	}
@@ -185,14 +261,14 @@ func TestLeaseLifecycle(t *testing.T) {
 	if !strings.Contains(strings.Join(ready.Progress, "\n"), "creating instance for "+l.ID+" (gpu=h100)") {
 		t.Fatalf("acquire stderr was not relayed: %q", ready.Progress)
 	}
-	if reused, err := b.Acquire("george", "", "gpu", ""); err != nil || reused.ID != l.ID {
+	if reused, err := b.Acquire("george", "", "gpu", "", ""); err != nil || reused.ID != l.ID {
 		t.Fatalf("ready lease must be reused: %+v %v", reused, err)
 	}
 	if _, ok := b.Get("someone-else", l.ID); ok {
 		t.Fatal("leases are private to their owner")
 	}
-	if ids := b.ActiveIDs("george"); len(ids) != 1 || ids[0] != l.ID {
-		t.Fatalf("active ids %v", ids)
+	if active := b.Active("george"); len(active) != 1 || active[0].ID != l.ID || active[0].Target == nil || active[0].Progress != nil {
+		t.Fatalf("active leases %+v", active)
 	}
 	if _, err := b.Release("someone-else", l.ID); err == nil {
 		t.Fatal("released another owner's lease")
@@ -204,8 +280,8 @@ func TestLeaseLifecycle(t *testing.T) {
 	if got := h.releases(); got != l.ID+` h100 {"url":"http://box:7443","instance":"i-123"}`+"\n" {
 		t.Fatalf("release saw %q", got)
 	}
-	if ids := b.ActiveIDs("george"); len(ids) != 0 {
-		t.Fatalf("released lease still active: %v", ids)
+	if active := b.Active("george"); len(active) != 0 {
+		t.Fatalf("released lease still active: %+v", active)
 	}
 }
 
@@ -214,16 +290,16 @@ func TestAcquireRefusals(t *testing.T) {
 	h.cfg.MaxLeases = 1
 	b := h.start(t)
 	for where, status := range map[string]int{"*": http.StatusBadRequest, "nonsense": http.StatusBadRequest, "gpu=a100": http.StatusPreconditionFailed, "gpus>=2": http.StatusPreconditionFailed} {
-		_, err := b.Acquire("george", "", where, "")
+		_, err := b.Acquire("george", "", where, "", "")
 		var e *Error
 		if !errors.As(err, &e) || e.Status != status {
 			t.Errorf("%q: %v", where, err)
 		}
 	}
-	if _, err := b.Acquire("george", "", "gpu", ""); err != nil {
+	if _, err := b.Acquire("george", "", "gpu", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	_, err := b.Acquire("other", "", "gpu", "")
+	_, err := b.Acquire("other", "", "gpu", "", "")
 	var e *Error
 	if !errors.As(err, &e) || e.Status != http.StatusTooManyRequests {
 		t.Fatalf("max_leases: %v", err)
@@ -235,7 +311,7 @@ func TestIdleAndExpiredLeasesRelease(t *testing.T) {
 	h.cfg.Offers[0].IdleTimeout = 150 * time.Millisecond
 	h.machine.running.Store(1)
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "")
+	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +330,7 @@ func TestIdleAndExpiredLeasesRelease(t *testing.T) {
 	h2.cfg.Offers[0].MaxLifetime = 200 * time.Millisecond
 	h2.machine.running.Store(1)
 	b2 := h2.start(t)
-	l2, err := b2.Acquire("george", "", "gpu", "")
+	l2, err := b2.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +343,7 @@ func TestIdleAndExpiredLeasesRelease(t *testing.T) {
 func TestReleaseWhileLaunchingStopsAcquire(t *testing.T) {
 	h := newHarness(t, "echo booting >&2\nexec sleep 30\n")
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "")
+	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +359,7 @@ func TestReleaseWhileLaunchingStopsAcquire(t *testing.T) {
 func TestFailedLaunchesAreReleased(t *testing.T) {
 	h := newHarness(t, "echo 'out of capacity' >&2\nexit 3\n")
 	b := h.start(t)
-	l, _ := b.Acquire("george", "", "gpu", "")
+	l, _ := b.Acquire("george", "", "gpu", "", "")
 	failed := waitState(t, b, "george", l.ID, proto.LeaseFailed)
 	if !strings.Contains(failed.Error, "acquire command failed") || !strings.Contains(h.releases(), l.ID) {
 		t.Fatalf("lease %+v releases %q", failed, h.releases())
@@ -294,7 +370,7 @@ func TestFailedLaunchesAreReleased(t *testing.T) {
 	h2.machine.gpus = nil
 	h2.cfg.AcquireTimeout = 200 * time.Millisecond
 	b2 := h2.start(t)
-	l2, _ := b2.Acquire("george", "", "gpu", "")
+	l2, _ := b2.Acquire("george", "", "gpu", "", "")
 	failed = waitState(t, b2, "george", l2.ID, proto.LeaseFailed)
 	if !strings.Contains(failed.Error, "requires 1 GPU (has none)") {
 		t.Fatalf("lease %+v", failed)
@@ -304,12 +380,12 @@ func TestFailedLaunchesAreReleased(t *testing.T) {
 func TestRestartRecoversLeases(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	b := h.start(t)
-	l, _ := b.Acquire("george", "", "gpu", "")
+	l, _ := b.Acquire("george", "", "gpu", "", "")
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	b.Close()
 
 	// A launch interrupted by a crash is released on the next start.
-	crashed := record{Owner: "george", Provider: providerKind(h.cfg.Offers[0].Provider), Lease: proto.Lease{ID: proto.NewULID(), Offer: "h100", Where: "gpu", State: proto.LeaseLaunching, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}}
+	crashed := record{Owner: "george", Release: h.cfg.Offers[0].Provider.ReleaseSpec(), Lease: proto.Lease{ID: proto.NewULID(), Offer: "h100", Where: "gpu", State: proto.LeaseLaunching, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}}
 	data, _ := json.Marshal(crashed)
 	if err := os.WriteFile(filepath.Join(h.cfg.StateDir, "leases", crashed.ID+".json"), data, 0600); err != nil {
 		t.Fatal(err)
@@ -329,7 +405,7 @@ func TestReleaseRetriesUntilItSucceeds(t *testing.T) {
 	marker := filepath.Join(h.dir, "allow-release")
 	h.cfg.Offers[0].Provider = CommandProvider{AcquireCommand: h.cfg.Offers[0].Provider.(CommandProvider).AcquireCommand, ReleaseCommand: []string{script(t, h.dir, "flaky.sh", fmt.Sprintf("[ -e %q ] || { echo 'api 503' >&2; exit 1; }\necho \"$ERRAND_LEASE_ID\" >> %q\n", marker, h.log))}}
 	b := h.start(t)
-	l, _ := b.Acquire("george", "", "gpu", "")
+	l, _ := b.Acquire("george", "", "gpu", "", "")
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	b.Release("george", l.ID)
 	time.Sleep(100 * time.Millisecond)
@@ -340,49 +416,83 @@ func TestReleaseRetriesUntilItSucceeds(t *testing.T) {
 	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 }
 
-// Only the kind of provider that acquired an active lease can release it, so
-// the broker refuses to start when that offer is gone or changed kind.
-func TestRestartRefusesChangedProvider(t *testing.T) {
+// A lease is released the way it was made, so changing or removing its
+// offer, or every offer, never strands its machine.
+func TestLeaseReleasesAsItWasMade(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	b := h.start(t)
-	l, _ := b.Acquire("george", "", "gpu", "")
+	l, _ := b.Acquire("george", "", "gpu", "", "")
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	b.Close()
 
+	other := script(t, h.dir, "other.sh", fmt.Sprintf("echo other >> %q\n", h.log))
 	changed := h.cfg
 	changed.Offers = slices.Clone(h.cfg.Offers)
-	changed.Offers[0].Provider = &LambdaProvider{}
-	if _, err := New(changed); err == nil || !strings.Contains(err.Error(), "the offer now has (lambda)") {
-		t.Fatalf("changed provider: %v", err)
+	changed.Offers[0].Provider = CommandProvider{AcquireCommand: []string{other}, ReleaseCommand: []string{other}}
+	b2, err := New(changed)
+	if err != nil {
+		t.Fatal(err)
 	}
-	// Other commands might not release what the old ones acquired.
-	command := h.cfg.Offers[0].Provider.(CommandProvider)
-	command.ReleaseCommand = append(slices.Clone(command.ReleaseCommand), "--other")
-	changed.Offers[0].Provider = command
-	if _, err := New(changed); err == nil || !strings.Contains(err.Error(), "other provider settings") {
-		t.Fatalf("changed release command: %v", err)
+	if _, err := b2.Release("george", l.ID); err != nil {
+		t.Fatal(err)
 	}
-	if active, err := ActiveLeases(h.cfg.StateDir); err != nil || !slices.Equal(active, []string{l.ID}) {
-		t.Fatalf("active leases %q %v", active, err)
+	waitState(t, b2, "george", l.ID, proto.LeaseReleased)
+	b2.Close()
+	if got := h.releases(); !strings.HasPrefix(got, l.ID+" h100 ") || strings.Contains(got, "other") {
+		t.Fatalf("released with %q", got)
 	}
-	// A record that does not name its provider is trusted to none.
-	unnamed := record{Owner: "george", Lease: proto.Lease{ID: proto.NewULID(), Offer: "h100", Where: "gpu", State: proto.LeaseReady, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}}
+
+	// With no offers left, a ready lease still ends when it goes idle.
+	h2 := newHarness(t, okAcquire)
+	h2.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	h2.machine.running.Store(1)
+	b3 := h2.start(t)
+	l2, _ := b3.Acquire("george", "", "gpu", "", "")
+	waitState(t, b3, "george", l2.ID, proto.LeaseReady)
+	b3.Close()
+	gone := h2.cfg
+	gone.Offers = nil
+	b4, err := New(gone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(b4.Close)
+	if len(b4.Offers()) != 0 {
+		t.Fatal("offers without configuration")
+	}
+	var refused *Error
+	if _, err := b4.Acquire("george", "", "gpu", "", ""); !errors.As(err, &refused) || refused.Status != http.StatusNotFound {
+		t.Fatalf("leased without offers: %v", err)
+	}
+	h2.machine.running.Store(0)
+	waitState(t, b4, "george", l2.ID, proto.LeaseReleased)
+	if !strings.Contains(h2.releases(), l2.ID) {
+		t.Fatalf("releases %q", h2.releases())
+	}
+}
+
+// A record that says nothing of how to release it keeps saying so rather
+// than being released some other way.
+func TestRecordWithoutReleaseSpec(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	unnamed := record{Owner: "george", Lease: proto.Lease{ID: proto.NewULID(), Offer: "h100", Where: "gpu", State: proto.LeaseReleasing, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}}
 	data, _ := json.Marshal(unnamed)
-	path := filepath.Join(h.cfg.StateDir, "leases", unnamed.ID+".json")
-	os.WriteFile(path, data, 0600)
-	if _, err := New(h.cfg); err == nil || !strings.Contains(err.Error(), "other provider settings ()") {
-		t.Fatalf("record without a provider: %v", err)
+	os.MkdirAll(filepath.Join(h.cfg.StateDir, "leases"), 0700)
+	os.WriteFile(filepath.Join(h.cfg.StateDir, "leases", unnamed.ID+".json"), data, 0600)
+	b := h.start(t)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got, _ := b.Get("george", unnamed.ID)
+		if strings.Contains(strings.Join(got.Progress, "\n"), "no way to release its machines is set") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("lease %+v", got)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
-	os.Remove(path)
-	gone := h.cfg
-	gone.Offers = []Offer{h.cfg.Offers[0]}
-	gone.Offers[0].Name = "a100"
-	if _, err := New(gone); err == nil || !strings.Contains(err.Error(), "no longer configured") {
-		t.Fatalf("removed offer: %v", err)
-	}
-	b2 := h.start(t) // the original configuration still works
-	if got, ok := b2.Get("george", l.ID); !ok || got.State != proto.LeaseReady {
-		t.Fatalf("lease after restart: %+v", got)
+	if h.releases() != "" {
+		t.Fatalf("released with the offer's command: %q", h.releases())
 	}
 }
 
@@ -391,7 +501,7 @@ func TestLaunchStopsAtMaxLifetime(t *testing.T) {
 	h := newHarness(t, "exec sleep 30\n")
 	h.cfg.Offers[0].MaxLifetime = 200 * time.Millisecond
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "")
+	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +516,7 @@ func TestLaunchStopsAtMaxLifetime(t *testing.T) {
 func TestLeaseNotReadyUnlessRecorded(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	probe := h.cfg.Probe
-	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, where string) (proto.Info, error) {
+	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
 		// Put a directory where the only lease's record goes, so every later
 		// write of the record fails, root or not.
 		records, _ := filepath.Glob(filepath.Join(h.cfg.StateDir, "leases", "*.json"))
@@ -415,10 +525,10 @@ func TestLeaseNotReadyUnlessRecorded(t *testing.T) {
 				os.MkdirAll(filepath.Join(record, "blocked"), 0700)
 			}
 		}
-		return probe(ctx, target, where)
+		return probe(ctx, target, identity, where)
 	}
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "")
+	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,10 +540,10 @@ func TestLeaseNotReadyUnlessRecorded(t *testing.T) {
 
 // Ended leases are forgotten after a week by a running broker too, so its
 // lease list does not grow without bound.
-func TestReaperForgetsOldEndedLeases(t *testing.T) {
+func TestOldEndedLeasesAreForgotten(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "")
+	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,9 +555,14 @@ func TestReaperForgetsOldEndedLeases(t *testing.T) {
 	b.mu.Lock()
 	b.leases[l.ID].ReleasedAt = time.Now().Add(-endedLeaseHistory - time.Minute)
 	b.mu.Unlock()
-	b.reapOnce()
-	if _, ok := b.Get("george", l.ID); ok {
-		t.Fatal("old ended lease still listed")
+	wake(b, l.ID)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		if _, ok := b.Get("george", l.ID); !ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("old ended lease still listed")
+		}
 	}
 	if _, err := os.Stat(filepath.Join(h.cfg.StateDir, "leases", l.ID+".json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("old ended lease still recorded: %v", err)
@@ -460,7 +575,7 @@ func TestReleaseNotAcknowledgedUnlessRecorded(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	h.cfg.IdlePoll = time.Hour
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "")
+	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,33 +612,26 @@ func TestReleaseNotAcknowledgedUnlessRecorded(t *testing.T) {
 // still ends at its max lifetime.
 func TestExpiredLeaseReleasesWithoutProbe(t *testing.T) {
 	h := newHarness(t, okAcquire)
-	h.cfg.IdlePoll = time.Hour
+	h.cfg.Offers[0].MaxLifetime = time.Second
 	var hang atomic.Bool
 	probe := h.cfg.Probe
-	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, where string) (proto.Info, error) {
+	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
 		if hang.Load() {
 			<-ctx.Done()
 			return proto.Info{}, ctx.Err()
 		}
-		return probe(ctx, target, where)
+		return probe(ctx, target, identity, where)
 	}
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "")
+	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	hang.Store(true)
-	b.mu.Lock()
-	b.leases[l.ID].ExpiresAt = time.Now().Add(-time.Second)
-	b.mu.Unlock()
-	start := time.Now()
-	b.reapOnce()
-	if took := time.Since(start); took > 2*time.Second {
-		t.Fatalf("expired lease waited %s on a probe", took)
-	}
-	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReleased {
-		t.Fatalf("expired lease %+v", got)
+	released := waitState(t, b, "george", l.ID, proto.LeaseReleased)
+	if late := released.ReleasedAt.Sub(released.ExpiresAt); late > 2*time.Second {
+		t.Fatalf("released %s after the hard stop", late)
 	}
 }
 
@@ -532,7 +640,7 @@ func TestAutomaticReleaseOnlyOnceRecorded(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	h.cfg.IdlePoll = time.Hour
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "")
+	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,14 +652,15 @@ func TestAutomaticReleaseOnlyOnceRecorded(t *testing.T) {
 	b.mu.Lock()
 	b.leases[l.ID].ExpiresAt = time.Now().Add(-time.Second)
 	b.mu.Unlock()
-	b.reapOnce()
+	wake(b, l.ID)
+	time.Sleep(100 * time.Millisecond)
 	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady || h.releases() != "" {
 		t.Fatalf("released without a record: %+v, releases %q", got, h.releases())
 	}
 	os.RemoveAll(record)
 	os.WriteFile(record, saved, 0600)
-	b.reapOnce()
-	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReleased || !strings.Contains(h.releases(), l.ID) {
+	wake(b, l.ID)
+	if got := waitState(t, b, "george", l.ID, proto.LeaseReleased); !strings.Contains(h.releases(), l.ID) {
 		t.Fatalf("expired lease %+v, releases %q", got, h.releases())
 	}
 }
@@ -564,7 +673,7 @@ echo "after the long line" >&2
 echo '{"url":"http://box:7443"}'
 `)
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "")
+	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

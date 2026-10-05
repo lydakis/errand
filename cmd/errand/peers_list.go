@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -27,17 +26,26 @@ type peerRow struct {
 	Info    *proto.Info `json:"info,omitempty"`
 }
 
-// forgetEndedLeaseRows drops leases their cloud peer no longer reports, so
-// a released machine is not listed as unreachable.
-func forgetEndedLeaseRows(rows []peerRow) []peerRow {
-	probed := map[string]proto.Info{}
+// leaseRows lists the ready leases the cloud peers among rows reported,
+// with their transports.
+func leaseRows(rows []peerRow, deps peersDeps) ([]peerRow, []string) {
+	cfg, err := deps.load()
+	if err != nil {
+		return nil, nil
+	}
+	var leases []peerRow
+	var targets []string
 	for _, row := range rows {
-		if row.Info != nil {
-			probed[row.Name] = *row.Info
+		if row.Info == nil {
+			continue
+		}
+		for _, lp := range leasePeersOf(cfg, row.Name, *row.Info) {
+			c := leaseCandidate(lp)
+			leases = append(leases, peerRow{Name: lp.Name, Target: peerURLOf(lp.Peer), Lease: fmt.Sprintf("%s from %s", lp.Lease.Offer, lp.Broker)})
+			targets = append(targets, client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket))
 		}
 	}
-	forgotten := forgetEndedLeases(probed)
-	return slices.DeleteFunc(rows, func(row peerRow) bool { return forgotten[row.Name] })
+	return leases, targets
 }
 
 func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
@@ -66,6 +74,29 @@ func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 		fmt.Fprintf(stderr, "errand peers: %v\n", err)
 		return 1
 	}
+	probePeerRows(rows, targets, deps)
+	if *on == "" && *rawURL == "" {
+		leases, leaseTargets := leaseRows(rows, deps)
+		probePeerRows(leases, leaseTargets, deps)
+		rows = append(rows, leases...)
+	}
+	if *jsonOutput {
+		if code := writeJSONRows(stdout, stderr, rows); code != 0 {
+			return code
+		}
+	} else {
+		writePeers(stdout, rows)
+	}
+	for _, row := range rows {
+		if row.Info == nil {
+			return 1
+		}
+	}
+	return 0
+}
+
+// probePeerRows fills in each row from its peer's info.
+func probePeerRows(rows []peerRow, targets []string, deps peersDeps) {
 	var wg sync.WaitGroup
 	for i, target := range targets {
 		if target == "" { // Misconfigured peers already have a diagnostic row.
@@ -92,20 +123,6 @@ func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
 		}(i, target)
 	}
 	wg.Wait()
-	rows = forgetEndedLeaseRows(rows)
-	if *jsonOutput {
-		if code := writeJSONRows(stdout, stderr, rows); code != 0 {
-			return code
-		}
-	} else {
-		writePeers(stdout, rows)
-	}
-	for _, row := range rows {
-		if row.Info == nil {
-			return 1
-		}
-	}
-	return 0
 }
 
 func peerListTargets(on, rawURL string, deps peersDeps) ([]peerRow, []string, error) {
@@ -143,9 +160,6 @@ func peerListTargets(on, rawURL string, deps peersDeps) ([]peerRow, []string, er
 	targets := make([]string, len(names))
 	for i, name := range names {
 		rows[i] = peerRow{Name: name, Target: peerURLOf(cfg.Peers[name]), Default: name == cfg.DefaultPeer}
-		if rec, ok := cfg.Leases[name]; ok {
-			rows[i].Lease = fmt.Sprintf("%s from %s", rec.Offer, rec.Broker)
-		}
 		target, err := configuredPeerURL(cfg, name)
 		if err != nil {
 			rows[i].Status = "misconfigured"

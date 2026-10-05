@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +27,35 @@ type Provider interface {
 	// Release destroys the lease's machine. It must succeed when run twice,
 	// and when State is empty because acquire stopped before saving any.
 	Release(ctx context.Context, req ReleaseRequest) error
+	// ReleaseSpec is everything Release depends on besides the request.
+	// Each lease records it when it is made, so the lease can be released
+	// after its offer changes or is removed.
+	ReleaseSpec() ReleaseSpec
+}
+
+// ReleaseSpec names one way of releasing machines.
+type ReleaseSpec struct {
+	Command []string       `json:"command,omitempty"`
+	Lambda  *LambdaRelease `json:"lambda,omitempty"`
+}
+
+type LambdaRelease struct {
+	APIKeyFile string `json:"api_key_file"`
+}
+
+func (s ReleaseSpec) equal(o ReleaseSpec) bool {
+	return slices.Equal(s.Command, o.Command) && (s.Lambda == nil) == (o.Lambda == nil) && (s.Lambda == nil || *s.Lambda == *o.Lambda)
+}
+
+// provider makes a provider that releases as s says.
+func (s ReleaseSpec) provider() (Provider, error) {
+	switch {
+	case len(s.Command) > 0 && s.Lambda == nil:
+		return CommandProvider{ReleaseCommand: s.Command}, nil
+	case len(s.Command) == 0 && s.Lambda != nil && s.Lambda.APIKeyFile != "":
+		return &LambdaProvider{APIKeyFile: s.Lambda.APIKeyFile}, nil
+	}
+	return nil, errors.New("no way to release its machines is set")
 }
 
 type AcquireRequest struct {
@@ -49,6 +79,9 @@ type AcquireRequest struct {
 type Machine struct {
 	Target proto.LeaseTarget
 	State  json.RawMessage // passed to Release
+	// Identity is a private key file the cloud peer reaches the machine with
+	// over SSH, when the provider made one.
+	Identity string
 }
 
 type ReleaseRequest struct {
@@ -110,6 +143,10 @@ func (p CommandProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 		return Machine{}, fmt.Errorf("acquire output: %v", err)
 	}
 	return Machine{Target: t, State: last}, nil
+}
+
+func (p CommandProvider) ReleaseSpec() ReleaseSpec {
+	return ReleaseSpec{Command: p.ReleaseCommand}
 }
 
 func (p CommandProvider) Release(ctx context.Context, req ReleaseRequest) error {

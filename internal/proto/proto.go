@@ -493,10 +493,11 @@ type Info struct {
 	MaxJobs      int   `json:"max_jobs"`
 	MaxQueued    int   `json:"max_queued"`
 	Facts        Facts `json:"facts"`
-	// Offers are machine shapes this runner can lease on demand. Leases lists
-	// the caller's unreleased lease IDs so clients can forget ended ones.
-	Offers []Offer  `json:"offers,omitempty"`
-	Leases []string `json:"leases,omitempty"`
+	// Offers are machine shapes this runner can lease on demand. Leases are
+	// the caller's leases that may still hold a machine, without progress;
+	// clients find their leased machines here and keep no list of their own.
+	Offers []Offer `json:"offers,omitempty"`
+	Leases []Lease `json:"leases,omitempty"`
 }
 
 // Offer is a machine shape a cloud peer can acquire. Its facts are declared
@@ -518,7 +519,10 @@ const (
 )
 
 type LeaseRequest struct {
-	Where string `json:"where"`
+	// RequestID is a ULID the client makes. Sending the same request again,
+	// as a client that lost the answer does, returns the same lease.
+	RequestID string `json:"request_id"`
+	Where     string `json:"where"`
 	// SSHKey is the caller's SSH public key. A leased machine reached over
 	// SSH admits only the key of the client that asked for it.
 	SSHKey string `json:"ssh_key,omitempty"`
@@ -538,17 +542,20 @@ type LeaseTarget struct {
 }
 
 type Lease struct {
-	ID         string       `json:"id"`
-	Offer      string       `json:"offer"`
-	Where      string       `json:"where"`
-	State      string       `json:"state"`
-	Target     *LeaseTarget `json:"target,omitempty"`
-	Facts      *Facts       `json:"facts,omitempty"` // measured once ready
-	Progress   []string     `json:"progress,omitempty"`
-	Error      string       `json:"error,omitempty"`
-	CreatedAt  time.Time    `json:"created_at"`
-	ReadyAt    time.Time    `json:"ready_at,omitzero"`
-	ReleasedAt time.Time    `json:"released_at,omitzero"`
+	ID     string       `json:"id"`
+	Offer  string       `json:"offer"`
+	Where  string       `json:"where"`
+	State  string       `json:"state"`
+	Target *LeaseTarget `json:"target,omitempty"`
+	// SSHKey is the client key a machine reached over SSH admits, so a
+	// client can tell which of its leases it can use itself.
+	SSHKey     string    `json:"ssh_key,omitempty"`
+	Facts      *Facts    `json:"facts,omitempty"` // measured once ready
+	Progress   []string  `json:"progress,omitempty"`
+	Error      string    `json:"error,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	ReadyAt    time.Time `json:"ready_at,omitzero"`
+	ReleasedAt time.Time `json:"released_at,omitzero"`
 	// ExpiresAt is the hard stop from the offer's max lifetime. IdleUntil
 	// is when an idle ready lease will be released unless work arrives.
 	ExpiresAt time.Time `json:"expires_at"`

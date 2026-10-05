@@ -96,9 +96,15 @@ func ConfigureSSHPeer(peerURL, identity, command, socket string) string {
 	return configuredURL
 }
 
-func restoreSSHPeer(peerURL, target, command, socket string) {
+func restoreSSHPeer(peerURL, target, command, socket, hostKey string, identities []string) {
 	if !IsSSHPeer(peerURL) || target == "" {
 		return
+	}
+	if hostKey != "" {
+		_ = TrustSSHHost(target, hostKey, "")
+		for _, identity := range identities {
+			_ = TrustSSHHost(target, hostKey, identity)
+		}
 	}
 	sshEndpoints.Store(strings.TrimSuffix(peerURL, "/"), sshEndpoint{
 		target: target, command: effectiveSSHCommand(command), socket: socket,
@@ -164,7 +170,11 @@ func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, er
 	if err != nil {
 		return nil, err
 	}
-	args := append(sshPinArgs(target),
+	pin, err := sshPinArgs(target)
+	if err != nil {
+		return nil, err
+	}
+	args := append(pin,
 		"-T",
 		"-o", "ControlMaster=auto",
 		"-o", "ControlPath="+filepath.Join(controlDir, "%C"),

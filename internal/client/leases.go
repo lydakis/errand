@@ -4,23 +4,41 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/lydakis/errand/internal/proto"
 )
 
 const maxLeaseResponseBytes = 1 << 20
 
-// AcquireLease asks a cloud peer for a machine matching where. The answer may
-// be an existing lease of the caller's that already matches.
-func AcquireLease(ctx context.Context, peerURL, where, sshKey string) (proto.Lease, error) {
-	body, _ := json.Marshal(proto.LeaseRequest{Where: where, SSHKey: sshKey})
+// AcquireLease asks a cloud peer for a machine matching where, giving each
+// attempt up to timeout. The answer may be an existing lease of the caller's
+// that already matches. A request whose answer is lost may still have
+// started a lease, so it is sent once more under the same request ID, which
+// returns that lease.
+func AcquireLease(ctx context.Context, peerURL, where, sshKey string, timeout time.Duration) (proto.Lease, error) {
+	body, _ := json.Marshal(proto.LeaseRequest{RequestID: proto.NewULID(), Where: where, SSHKey: sshKey})
+	endpoint := strings.TrimSuffix(peerURL, "/") + "/v0/leases"
 	var lease proto.Lease
-	err := leaseRequest(ctx, http.MethodPost, strings.TrimSuffix(peerURL, "/")+"/v0/leases", body, &lease)
-	return lease, err
+	var err error
+	for range 2 {
+		attempt, cancel := context.WithTimeout(ctx, timeout)
+		err = leaseRequest(attempt, http.MethodPost, endpoint, body, &lease)
+		cancel()
+		var refused *controlHTTPError
+		if err == nil || errors.As(err, &refused) {
+			return lease, err
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return lease, fmt.Errorf("%w (if the cloud peer started a lease anyway, errand leases lists it, and it ends once idle)", err)
 }
 
 func GetLease(ctx context.Context, peerURL, id string) (proto.Lease, error) {

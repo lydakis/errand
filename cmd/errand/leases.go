@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -31,6 +32,8 @@ type leaseOption struct {
 
 var leasePollInterval = time.Second
 
+func init() { config.FindLeasePeer = findLeasePeer }
+
 const leaseRequestTimeout = 30 * time.Second
 
 // matchingOffer returns the first offer whose declared facts satisfy q.
@@ -51,41 +54,131 @@ func describeOffer(o proto.Offer) string {
 	return o.Name
 }
 
-// forgetEndedLeases drops lease peers that probed cloud peers no longer
-// report as active. It returns the forgotten names.
-func forgetEndedLeases(probed map[string]proto.Info) map[string]bool {
-	brokers := map[string]map[string]bool{}
-	for name, info := range probed {
-		if len(info.Offers) == 0 {
+// leasePeer is a machine the caller leased, used as a peer. Clients keep no
+// record of their leases: cloud peers list them in their info.
+type leasePeer struct {
+	Name   string
+	Broker string
+	Lease  proto.Lease
+	Peer   config.Peer
+}
+
+// leasePeersOf names the ready leases a cloud peer reported as peers, and
+// trusts their host keys for this process.
+func leasePeersOf(cfg config.Client, broker string, info proto.Info) []leasePeer {
+	ids := make([]string, 0, len(info.Leases))
+	for _, l := range info.Leases {
+		ids = append(ids, l.ID)
+	}
+	identity, publicKey := clientLeaseIdentity()
+	var out []leasePeer
+	for _, l := range info.Leases {
+		if l.State != proto.LeaseReady || l.Target == nil || !proto.ValidULID(l.ID) {
 			continue
 		}
-		active := map[string]bool{}
-		for _, id := range info.Leases {
-			active[id] = true
+		// A machine reached over SSH admits only the key of the client
+		// that leased it, which may be another of the owner's machines.
+		if l.Target.SSH != "" && l.SSHKey != "" && l.SSHKey != publicKey {
+			continue
 		}
-		brokers[name] = active
-	}
-	if len(brokers) == 0 {
-		return nil
-	}
-	cfg, err := config.LoadClient()
-	if err != nil {
-		return nil
-	}
-	dropped, err := config.ForgetLeases(func(_ string, rec config.LeaseRecord) bool {
-		active, probedBroker := brokers[rec.Broker]
-		// A peer that took over the cloud peer's name knows nothing of its
-		// leases.
-		return !probedBroker || active[rec.ID] || cfg.Peers[rec.Broker] != rec.BrokerPeer
-	})
-	if err != nil {
-		return nil
-	}
-	out := map[string]bool{}
-	for _, name := range dropped {
-		out[name] = true
+		peer, err := leaseTargetPeer(*l.Target, identity)
+		if err != nil {
+			continue
+		}
+		out = append(out, leasePeer{Name: leasePeerName(cfg, broker, l.ID, ids), Broker: broker, Lease: l, Peer: peer})
 	}
 	return out
+}
+
+// leasePeerName names a lease after its cloud peer and the end of its ID,
+// such as cloud-7f3a: as short as keeps it apart from configured peers and
+// the cloud peer's other leases, which ids lists.
+func leasePeerName(cfg config.Client, broker, id string, ids []string) string {
+	id = strings.ToLower(id)
+	for n := 4; n < len(id); n++ {
+		suffix := id[len(id)-n:]
+		name := broker + "-" + suffix
+		if _, taken := cfg.Peers[name]; taken {
+			continue
+		}
+		if !slices.ContainsFunc(ids, func(other string) bool {
+			other = strings.ToLower(other)
+			return other != id && strings.HasSuffix(other, suffix)
+		}) {
+			return name
+		}
+	}
+	return broker + "-" + id
+}
+
+// splitLeaseName reads a lease peer name as a cloud peer's name and the end
+// of a lease ID. Any unambiguous ending of four or more characters works,
+// so a name stays valid as the cloud peer's leases come and go.
+func splitLeaseName(cfg config.Client, name string) (broker, suffix string, ok bool) {
+	for i := len(name) - 5; i > 0; i-- {
+		if name[i] != '-' {
+			continue
+		}
+		broker, suffix = name[:i], name[i+1:]
+		if _, configured := cfg.Peers[broker]; !configured && broker != "local" {
+			continue
+		}
+		if strings.Trim(suffix, "0123456789abcdefghjkmnpqrstvwxyz") == "" {
+			return broker, suffix, true
+		}
+	}
+	return "", "", false
+}
+
+// findLeasePeer resolves a lease peer name by asking its cloud peer, for
+// config.FindLeasePeer.
+func findLeasePeer(cfg config.Client, name string) (config.Peer, bool, error) {
+	broker, suffix, ok := splitLeaseName(cfg, name)
+	if !ok {
+		return config.Peer{}, false, nil
+	}
+	target, err := configuredPeerURL(cfg, broker)
+	if err != nil {
+		return config.Peer{}, false, err
+	}
+	info, err := client.ProbeInfo(context.Background(), target, 10*time.Second)
+	if err != nil {
+		return config.Peer{}, false, fmt.Errorf("asking %s for your leases: %w", broker, err)
+	}
+	var found []leasePeer
+	for _, lp := range leasePeersOf(cfg, broker, info) {
+		if strings.HasSuffix(strings.ToLower(lp.Lease.ID), suffix) {
+			found = append(found, lp)
+		}
+	}
+	switch len(found) {
+	case 0:
+		return config.Peer{}, false, fmt.Errorf("%s has no ready lease of yours whose ID ends in %s; see errand leases", broker, suffix)
+	case 1:
+		return found[0].Peer, true, nil
+	}
+	return config.Peer{}, false, fmt.Errorf("more than one lease on %s ends in %s; use a longer name", broker, suffix)
+}
+
+// leaseTargetPeer is the peer entry for a lease target. The host key of an
+// ssh target is trusted for this process, with identity offered when set.
+func leaseTargetPeer(t proto.LeaseTarget, identity string) (config.Peer, error) {
+	peer := config.LeasePeer(t)
+	if err := config.ValidatePeer("lease", peer); err != nil {
+		return config.Peer{}, err
+	}
+	if t.HostKey != "" {
+		if err := client.TrustSSHHost(t.SSH, t.HostKey, identity); err != nil {
+			return config.Peer{}, err
+		}
+	}
+	return peer, nil
+}
+
+// leaseCandidate is a lease peer as a run candidate.
+func leaseCandidate(lp leasePeer) config.RunCandidate {
+	url, _ := (config.Client{Peers: map[string]config.Peer{lp.Name: lp.Peer}}).PeerURL(lp.Name)
+	return config.RunCandidate{Name: lp.Name, URL: url, RemoteCommand: lp.Peer.RemoteCommand, RemoteSocket: lp.Peer.RemoteSocket}
 }
 
 // leaseRunner acquires a machine from a cloud peer, waits until it runs
@@ -109,9 +202,7 @@ func leaseRunner(opt leaseOption, where string, stderr io.Writer) (placementChoi
 	if err != nil {
 		return placementChoice{}, err
 	}
-	acquireCtx, cancelAcquire := context.WithTimeout(context.WithoutCancel(ctx), leaseRequestTimeout)
-	lease, err := client.AcquireLease(acquireCtx, broker.Target, where, sshKey)
-	cancelAcquire()
+	lease, err := client.AcquireLease(context.WithoutCancel(ctx), broker.Target, where, sshKey, leaseRequestTimeout)
 	if err != nil {
 		return placementChoice{}, fmt.Errorf("leasing from %s: %w", broker.Name, err)
 	}
@@ -163,7 +254,7 @@ func leaseRunner(opt leaseOption, where string, stderr io.Writer) (placementChoi
 		}
 		return placementChoice{}, fmt.Errorf("lease %s from %s did not become ready: %s", lease.ID, broker.Name, detail)
 	}
-	return recordLeasePeer(ctx, broker.Name, lease, where, keyFile, stderr)
+	return readyLease(ctx, broker, lease, where, keyFile, stderr)
 }
 
 // leaseKeyFile is the SSH key this client sends with lease requests.
@@ -175,37 +266,41 @@ func leaseKeyFile() (string, error) {
 	return filepath.Join(dir, "ssh", "errand_ed25519"), nil
 }
 
-func recordLeasePeer(ctx context.Context, brokerName string, lease proto.Lease, where, keyFile string, stderr io.Writer) (placementChoice, error) {
+// clientLeaseIdentity is this client's lease key file and its public key,
+// once it has one.
+func clientLeaseIdentity() (keyFile, publicKey string) {
+	keyFile, err := leaseKeyFile()
+	if err != nil {
+		return "", ""
+	}
+	public, err := os.ReadFile(keyFile + ".pub")
+	if err != nil {
+		return "", ""
+	}
+	if _, err := os.Stat(keyFile); err != nil {
+		return "", ""
+	}
+	return keyFile, strings.TrimSpace(string(public))
+}
+
+// readyLease checks that this machine reaches a ready lease and that it
+// matches, and returns it as a placement choice.
+func readyLease(ctx context.Context, broker placementChoice, lease proto.Lease, where, keyFile string, stderr io.Writer) (placementChoice, error) {
 	cfg, err := config.LoadClient()
 	if err != nil {
 		return placementChoice{}, err
 	}
-	configured := map[string]config.Peer{}
-	for name, peer := range cfg.Peers {
-		if _, isLease := cfg.Leases[name]; !isLease {
-			configured[name] = peer
-		}
-	}
-	// The pins go first, so no recorded lease peer is ever reached without
-	// them. They depend on the target alone, not on the peer's name.
-	if _, peerURL, err := leasePeer("lease", *lease.Target); err != nil {
+	peer, err := leaseTargetPeer(*lease.Target, keyFile)
+	if err != nil {
 		return placementChoice{}, fmt.Errorf("lease %s has an unusable target: %w", lease.ID, err)
-	} else if lease.Target.SSH != "" {
-		if err := client.PinSSHIdentity(peerURL, keyFile); err != nil {
-			return placementChoice{}, err
-		}
 	}
-	// The cloud peer's address is kept with the lease, so the lease can be
-	// released even if that peer's entry is later changed or removed.
-	name, err := config.RecordLease(config.LeaseRecord{Broker: brokerName, BrokerPeer: configured[brokerName], ID: lease.ID, Offer: lease.Offer, Target: *lease.Target, CreatedAt: lease.CreatedAt}, configured)
-	if err != nil {
-		return placementChoice{}, fmt.Errorf("recording lease %s: %w", lease.ID, err)
+	ids := []string{lease.ID}
+	for _, l := range broker.Info.Leases {
+		ids = append(ids, l.ID)
 	}
-	peer, peerURL, err := leasePeer(name, *lease.Target)
-	if err != nil {
-		return placementChoice{}, fmt.Errorf("lease %s has an unusable target: %w", name, err)
-	}
-	target := client.ConfigureSSHPeer(peerURL, name, peer.RemoteCommand, peer.RemoteSocket)
+	candidate := leaseCandidate(leasePeer{Name: leasePeerName(cfg, broker.Name, lease.ID, ids), Peer: peer})
+	name := candidate.Name
+	target := client.ConfigureSSHPeer(candidate.URL, name, candidate.RemoteCommand, candidate.RemoteSocket)
 	info, err := client.ProbeWhereInfo(ctx, target, where, 10*time.Second)
 	if err != nil {
 		return placementChoice{}, fmt.Errorf("lease %s is ready but this machine cannot reach it: %w", name, err)
@@ -214,38 +309,18 @@ func recordLeasePeer(ctx context.Context, brokerName string, lease proto.Lease, 
 		return placementChoice{}, fmt.Errorf("lease %s does not match %s: %s", name, where, strings.Join(missing, "; "))
 	}
 	fmt.Fprintf(stderr, "errand: lease %s ready (%s)\n", terminalSafeField(name), terminalSafeField(describeMachine(info.Facts)))
-	return placementChoice{
-		RunCandidate: config.RunCandidate{Name: name, URL: peerURL, RemoteCommand: peer.RemoteCommand, RemoteSocket: peer.RemoteSocket},
-		Info:         info,
-		Target:       target,
-	}, nil
-}
-
-// leasePeer resolves a lease target as a peer named name, pinning the host
-// key of an ssh target it carries one for.
-func leasePeer(name string, t proto.LeaseTarget) (config.Peer, string, error) {
-	peer := config.LeasePeer(t)
-	peerURL, err := (config.Client{Peers: map[string]config.Peer{name: peer}}).PeerURL(name)
-	if err != nil {
-		return config.Peer{}, "", err
-	}
-	if t.HostKey != "" {
-		if err := client.PinSSHHost(peerURL, t.HostKey); err != nil {
-			return config.Peer{}, "", err
-		}
-	}
-	return peer, peerURL, nil
+	return placementChoice{RunCandidate: candidate, Info: info, Target: target}, nil
 }
 
 // probeLeaseTarget lets a cloud peer watch the machines it leased, over the
-// same transports a client would use.
-func probeLeaseTarget(ctx context.Context, t proto.LeaseTarget, where string) (proto.Info, error) {
-	const name = "lease"
-	peer, peerURL, err := leasePeer(name, t)
+// same transports a client would use, offering identity over SSH.
+func probeLeaseTarget(ctx context.Context, t proto.LeaseTarget, identity, where string) (proto.Info, error) {
+	peer, err := leaseTargetPeer(t, identity)
 	if err != nil {
 		return proto.Info{}, err
 	}
-	target := client.ConfigureSSHPeer(peerURL, name, peer.RemoteCommand, peer.RemoteSocket)
+	c := leaseCandidate(leasePeer{Name: "lease", Peer: peer})
+	target := client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
 	if where != "" {
 		return client.ProbeWhereInfo(ctx, target, where, 10*time.Second)
 	}
@@ -328,14 +403,19 @@ func cmdLeases(args []string, stdout, stderr io.Writer) int {
 			code = 1
 			continue
 		}
-		active := map[string]bool{}
+		var active []string
 		for _, l := range leases {
 			if l.Active() {
-				active[l.ID] = true
+				active = append(active, l.ID)
 			}
-			rows = append(rows, row{Peer: leasePeerName(cfg, b.name, l.ID), Broker: b.name, Lease: l})
 		}
-		config.ForgetLeases(func(_ string, rec config.LeaseRecord) bool { return rec.Broker != b.name || active[rec.ID] })
+		for _, l := range leases {
+			r := row{Broker: b.name, Lease: l}
+			if l.State == proto.LeaseReady {
+				r.Peer = leasePeerName(cfg, b.name, l.ID, active)
+			}
+			rows = append(rows, r)
+		}
 	}
 	if *asJSON {
 		if rows == nil {
@@ -381,24 +461,12 @@ func until(now, t time.Time) string {
 	return "in " + t.Sub(now).Round(time.Second).String()
 }
 
-func leasePeerName(cfg config.Client, broker, id string) string {
-	for name, rec := range cfg.Leases {
-		if rec.Broker == broker && rec.ID == id {
-			return name
-		}
-	}
-	return ""
-}
-
 type leaseBroker struct{ name, target string }
 
 // leaseBrokers lists configured peers that advertise offers.
 func leaseBrokers(cfg config.Client, on string, stderr io.Writer) ([]leaseBroker, int) {
 	var names []string
 	for name := range cfg.Peers {
-		if _, isLease := cfg.Leases[name]; isLease {
-			continue
-		}
 		if on == "" || on == name {
 			names = append(names, name)
 		}
@@ -431,26 +499,31 @@ func leaseBrokers(cfg config.Client, on string, stderr io.Writer) ([]leaseBroker
 	return out, 0
 }
 
-// releaseLeases accepts lease peer names (cloud-7f3a) or lease IDs.
+// releaseLeases accepts lease peer names (cloud-7f3a), or lease IDs with
+// --on.
 func releaseLeases(cfg config.Client, on string, names []string, stdout, stderr io.Writer) int {
 	code := 0
 	for _, arg := range names {
-		broker, id, brokerCfg := on, arg, cfg
-		if rec, ok := cfg.Leases[arg]; ok {
-			if on != "" && on != rec.Broker {
-				fmt.Fprintf(stderr, "errand leases rm: %s is leased from %s, not %s\n", arg, rec.Broker, on)
+		broker, id := on, arg
+		if !proto.ValidULID(arg) {
+			b, suffix, ok := splitLeaseName(cfg, arg)
+			if !ok || on != "" && on != b {
+				fmt.Fprintf(stderr, "errand leases rm: %q is not a lease name; pass one such as cloud-7f3a, or --on CLOUD with a lease ID\n", arg)
 				code = 2
 				continue
 			}
-			broker, id = rec.Broker, rec.ID
-			brokerCfg = cfg
-			brokerCfg.Peers = map[string]config.Peer{rec.Broker: rec.BrokerPeer}
-		} else if !proto.ValidULID(arg) || on == "" {
-			fmt.Fprintf(stderr, "errand leases rm: %q is not a known lease; pass a lease peer name, or --on CLOUD with a lease ID\n", arg)
+			var err error
+			if broker, id, err = findLeaseID(cfg, b, suffix); err != nil {
+				fmt.Fprintf(stderr, "errand leases rm: %s: %v\n", terminalSafeField(arg), err)
+				code = 1
+				continue
+			}
+		} else if on == "" {
+			fmt.Fprintf(stderr, "errand leases rm: pass --on CLOUD with lease ID %s\n", arg)
 			code = 2
 			continue
 		}
-		target, err := configuredPeerURL(brokerCfg, broker)
+		target, err := configuredPeerURL(cfg, broker)
 		if err != nil {
 			fmt.Fprintf(stderr, "errand leases rm: %v\n", err)
 			code = 1
@@ -458,14 +531,41 @@ func releaseLeases(cfg config.Client, on string, names []string, stdout, stderr 
 		}
 		lease, err := waitReleased(target, id)
 		if err != nil {
-			fmt.Fprintf(stderr, "errand leases rm: %s: %v\n", arg, err)
+			fmt.Fprintf(stderr, "errand leases rm: %s: %v\n", terminalSafeField(arg), err)
 			code = 1
 			continue
 		}
-		config.ForgetLeases(func(_ string, rec config.LeaseRecord) bool { return rec.Broker != broker || rec.ID != id })
 		fmt.Fprintf(stdout, "%s %s\n", terminalSafeField(arg), lease.State)
 	}
 	return code
+}
+
+// findLeaseID finds the caller's active lease on broker whose ID ends in
+// suffix, launching ones included.
+func findLeaseID(cfg config.Client, broker, suffix string) (string, string, error) {
+	target, err := configuredPeerURL(cfg, broker)
+	if err != nil {
+		return "", "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	leases, err := client.ListLeases(ctx, target)
+	if err != nil {
+		return "", "", err
+	}
+	var ids []string
+	for _, l := range leases {
+		if l.Active() && strings.HasSuffix(strings.ToLower(l.ID), suffix) {
+			ids = append(ids, l.ID)
+		}
+	}
+	switch len(ids) {
+	case 0:
+		return "", "", fmt.Errorf("%s has no active lease of yours whose ID ends in %s", broker, suffix)
+	case 1:
+		return broker, ids[0], nil
+	}
+	return "", "", fmt.Errorf("more than one lease on %s ends in %s; use a longer name", broker, suffix)
 }
 
 func waitReleased(target, id string) (proto.Lease, error) {
