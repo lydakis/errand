@@ -123,3 +123,60 @@ func TestLeasePeerNames(t *testing.T) {
 		}
 	}
 }
+
+// A run on a lease withdraws its request exactly when no job was admitted
+// there; a job that was admitted, or whose answer was lost, leaves the lease
+// to the cloud peer's idle rule.
+func TestLeasedRunWithdrawsOnlyWhenNothingWasAdmitted(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		answer   func(http.ResponseWriter)
+		withdraw bool
+	}{
+		{"refused", func(w http.ResponseWriter) { http.Error(w, "refused", http.StatusForbidden) }, true},
+		{"answer lost", func(http.ResponseWriter) { panic(http.ErrAbortHandler) }, false},
+		{"admitted", func(w http.ResponseWriter) {
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateQueued})
+		}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			var requested, withdrawn atomic.Value
+			requested.Store("")
+			withdrawn.Store("")
+			id := proto.NewULID()
+			// One server is both the cloud peer and the leased machine.
+			var srv *httptest.Server
+			srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodPost && r.URL.Path == "/v0/leases":
+					var req proto.LeaseRequest
+					json.NewDecoder(r.Body).Decode(&req)
+					requested.Store(req.RequestID)
+					json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "a10", State: proto.LeaseReady, Target: &proto.LeaseTarget{URL: srv.URL}})
+				case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/v0/lease-requests/"):
+					withdrawn.Store(strings.TrimPrefix(r.URL.Path, "/v0/lease-requests/"))
+					json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "a10", State: proto.LeaseReady})
+				case r.Method == http.MethodGet && r.URL.Path == "/v0/info":
+					json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, MaxJobs: 1, Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: []proto.GPU{{Name: "NVIDIA A10", MemoryMiB: 24 << 10}}}})
+				case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/v0/jobs/"):
+					io.Copy(io.Discard, r.Body)
+					tc.answer(w)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+			var stderr strings.Builder
+			opts := client.RunOptions{Where: "gpu", Root: t.TempDir(), NoSnapshot: true, Detach: true, Argv: []string{"true"}, Stdout: io.Discard, Stderr: &stderr}
+			option := leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: "cloud"}, Target: srv.URL}, Offer: proto.Offer{Name: "a10"}}
+			configurePlacement(&opts, nil, func() (placementChoice, *client.Claim, error) { return leaseRunner(option, "gpu", &stderr) }, &stderr, func(placementChoice) {})
+			client.Run(opts)
+			if requested.Load() == "" || (withdrawn.Load() == requested.Load()) != tc.withdraw || (withdrawn.Load() != "") != tc.withdraw {
+				t.Fatalf("requested %q, withdrawn %q\n%s", requested.Load(), withdrawn.Load(), stderr.String())
+			}
+		})
+	}
+}

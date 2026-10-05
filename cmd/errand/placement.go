@@ -184,7 +184,7 @@ func announcePlacement(w io.Writer, c placementChoice, where string) {
 // runChoices places a run. When only a lease fits, it returns no choices and
 // a lease function instead, so the caller can rent the machine as late as
 // possible.
-func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placementChoice, func() (placementChoice, func(), error), error) {
+func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placementChoice, func() (placementChoice, *client.Claim, error), error) {
 	if e.Where != "" {
 		selection, err := chooseRunners(context.Background(), e, client.ProbeWhereInfo)
 		if err != nil {
@@ -192,7 +192,7 @@ func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placeme
 		}
 		selection.printExcluded(stderr)
 		if option := selection.Lease; option != nil {
-			return nil, func() (placementChoice, func(), error) { return leaseRunner(*option, e.Where, stderr) }, nil
+			return nil, func() (placementChoice, *client.Claim, error) { return leaseRunner(*option, e.Where, stderr) }, nil
 		}
 		return selection.Choices, nil, nil
 	}
@@ -206,23 +206,23 @@ func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placeme
 
 // configurePlacement hands the choices to a run. A lease is acquired only
 // once the run's local preparation has succeeded.
-func configurePlacement(opts *client.RunOptions, choices []placementChoice, lease func() (placementChoice, func(), error), stderr io.Writer, selected func(placementChoice)) {
+func configurePlacement(opts *client.RunOptions, choices []placementChoice, lease func() (placementChoice, *client.Claim, error), stderr io.Writer, selected func(placementChoice)) {
 	byTarget := make(map[client.RunTarget]placementChoice, len(choices))
-	add := func(c placementChoice) client.RunTarget {
-		target := client.RunTarget{PeerURL: c.Target, PeerName: c.Name}
+	add := func(c placementChoice, claim *client.Claim) client.RunTarget {
+		target := client.RunTarget{PeerURL: c.Target, PeerName: c.Name, Claim: claim}
 		byTarget[target] = c
 		return target
 	}
 	for _, c := range choices {
-		opts.Candidates = append(opts.Candidates, add(c))
+		opts.Candidates = append(opts.Candidates, add(c, nil))
 	}
 	if lease != nil {
-		opts.Resolve = func() ([]client.RunTarget, func(), error) {
-			c, abandon, err := lease()
+		opts.Resolve = func() ([]client.RunTarget, error) {
+			c, claim, err := lease()
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
-			return []client.RunTarget{add(c)}, abandon, nil
+			return []client.RunTarget{add(c, claim)}, nil
 		}
 	}
 	where := opts.Where

@@ -209,34 +209,85 @@ func TestWorkspacePlacementDoesNotRetryUncertainOrOtherRejections(t *testing.T) 
 	}
 }
 
-// A machine resolved for a run alone is let go if the run ends before it
-// submits anything there, and kept once something was submitted.
-func TestRunAbandonsResolvedTargetsOnlyBeforeSubmission(t *testing.T) {
-	var puts atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut {
-			puts.Add(1)
-			_, _ = io.Copy(io.Discard, r.Body)
-		}
-		http.Error(w, "refused", 403)
-	}))
-	defer server.Close()
+// A machine resolved for a run alone is given up exactly when no job was
+// admitted there: nothing was submitted, or the runner definitely refused.
+// A job that was admitted, or whose answer was lost, keeps it.
+func TestRunSettlesItsClaim(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		root      string
-		abandoned int32
+		name   string
+		root   bool
+		answer func(http.ResponseWriter)
+		giveUp bool
 	}{
-		{"fails before submitting", "", 1}, // change state needs a workspace root
-		{"submitted, then refused", t.TempDir(), 0},
+		{"fails before submitting", false, nil, true}, // change state needs a workspace root
+		{"refused", true, func(w http.ResponseWriter) { http.Error(w, "refused", 403) }, true},
+		{"answer lost", true, func(http.ResponseWriter) { panic(http.ErrAbortHandler) }, false},
+		{"admitted", true, func(w http.ResponseWriter) {
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateQueued})
+		}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			puts.Store(0)
-			var abandoned atomic.Int32
-			code := Run(RunOptions{Where: "gpu", Root: tc.root, NoSnapshot: true, Argv: []string{"true"}, Stdout: io.Discard, Stderr: io.Discard, Resolve: func() ([]RunTarget, func(), error) {
-				return []RunTarget{{PeerURL: server.URL, PeerName: "lease"}}, func() { abandoned.Add(1) }, nil
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			var puts atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut {
+					http.NotFound(w, r)
+					return
+				}
+				puts.Add(1)
+				_, _ = io.Copy(io.Discard, r.Body)
+				tc.answer(w)
+			}))
+			defer server.Close()
+			root := ""
+			if tc.root {
+				root = t.TempDir()
+			}
+			var givenUp atomic.Int32
+			Run(RunOptions{Where: "gpu", Root: root, NoSnapshot: true, Detach: true, Argv: []string{"true"}, Stdout: io.Discard, Stderr: io.Discard, Resolve: func() ([]RunTarget, error) {
+				return []RunTarget{{PeerURL: server.URL, PeerName: "lease", Claim: NewClaim(func() { givenUp.Add(1) })}}, nil
 			}})
-			if code == 0 || abandoned.Load() != tc.abandoned || (puts.Load() > 0) != (tc.abandoned == 0) {
-				t.Fatalf("code=%d abandoned=%d puts=%d", code, abandoned.Load(), puts.Load())
+			if want := map[bool]int32{true: 1, false: 0}[tc.giveUp]; givenUp.Load() != want || (puts.Load() > 0) != tc.root {
+				t.Fatalf("given up %d times, want %d (puts %d)", givenUp.Load(), want, puts.Load())
+			}
+		})
+	}
+}
+
+// Creating a workspace on a machine resolved for it alone settles the claim
+// the same way.
+func TestCreateWorkspaceSettlesItsClaim(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer func(http.ResponseWriter, *http.Request)
+		giveUp bool
+	}{
+		{"refused", func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "refused", 403) }, true},
+		{"answer lost", func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) }, false},
+		{"server failure", func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "broken", 500) }, false},
+		{"created", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(proto.Workspace{ID: strings.TrimPrefix(r.URL.Path, "/v0/workspaces/"), Name: "train"})
+		}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || strings.HasSuffix(r.URL.Path, "/diff") {
+					http.NotFound(w, r)
+					return
+				}
+				_, _ = io.Copy(io.Discard, r.Body)
+				tc.answer(w, r)
+			}))
+			defer server.Close()
+			var givenUp atomic.Int32
+			CreateWorkspace(RunOptions{Where: "gpu", Root: t.TempDir(), NoSnapshot: true, Stderr: io.Discard, Resolve: func() ([]RunTarget, error) {
+				return []RunTarget{{PeerURL: server.URL, PeerName: "lease", Claim: NewClaim(func() { givenUp.Add(1) })}}, nil
+			}}, "train")
+			if want := map[bool]int32{true: 1, false: 0}[tc.giveUp]; givenUp.Load() != want {
+				t.Fatalf("given up %d times, want %d", givenUp.Load(), want)
 			}
 		})
 	}

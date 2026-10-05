@@ -44,9 +44,14 @@ peer still ends them when they go idle or reach their lifetime.
   answers as an errand runner whose measured facts match, and the runner
   rechecks them when the job is admitted.
 
-Ctrl-C before the job starts withdraws the run's request. The cloud peer
-releases the lease if that request made it and no other run was given it; a
-ready lease is released at its next check unless a job is running on it.
+A run holds the lease it was given until its job is admitted there. If the
+run ends with no job admitted, whether from Ctrl-C, a failure before
+submitting, or the leased runner refusing the job, it withdraws its request.
+The cloud peer releases the lease once no run it was given still holds it; a
+ready lease is released at its next check unless a job is running on it. Once
+a job is admitted, or may have been because its answer was lost, the lease is
+left to the idle rule below. Being given to a run counts as use, so a reused
+lease starts a full idle window.
 
 ## Leases
 

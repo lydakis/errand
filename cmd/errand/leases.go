@@ -182,12 +182,12 @@ func leaseCandidate(lp leasePeer) config.RunCandidate {
 }
 
 // leaseRunner acquires a machine from a cloud peer, waits until it runs
-// errand, and returns it as an ordinary placement choice. Until the run
-// submits something to it, the run's request stays withdrawable: a failure
-// or Ctrl-C here withdraws it, and the returned abandon does so for a run
-// that ends before submitting, so a machine nobody uses does not keep
-// running.
-func leaseRunner(opt leaseOption, where string, stderr io.Writer) (placementChoice, func(), error) {
+// errand, and returns it as an ordinary placement choice. A failure or
+// Ctrl-C here withdraws the run's lease request. Otherwise the run settles
+// the returned claim: if no job was admitted there, it withdraws the
+// request, so a machine nobody uses does not keep running; if one was, or
+// may have been, the cloud peer's idle rule decides.
+func leaseRunner(opt leaseOption, where string, stderr io.Writer) (placementChoice, *client.Claim, error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	broker := opt.Broker
@@ -217,10 +217,10 @@ func leaseRunner(opt leaseOption, where string, stderr io.Writer) (placementChoi
 		}
 		return placementChoice{}, nil, fmt.Errorf("%w; %s", err, outcome)
 	}
-	abandon := func() {
-		fmt.Fprintf(stderr, "errand: nothing was started on lease %s; %s\n", lease.ID, withdrawLease(broker, requestID, lease.ID))
-	}
-	return choice, abandon, nil
+	claim := client.NewClaim(func() {
+		fmt.Fprintf(stderr, "errand: no job was admitted on lease %s; %s\n", lease.ID, withdrawLease(broker, requestID, lease.ID))
+	})
+	return choice, claim, nil
 }
 
 // followLease waits until a lease is ready and this machine reaches it.

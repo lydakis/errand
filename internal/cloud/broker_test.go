@@ -386,7 +386,7 @@ func TestWithdrawEndsOnlyAnUnsharedLease(t *testing.T) {
 		}
 		if running == 0 {
 			ended := waitState(t, b, "george", l.ID, proto.LeaseReleased)
-			if !strings.Contains(strings.Join(ended.Progress, "\n"), "releasing: the run that asked for it was interrupted") {
+			if !strings.Contains(strings.Join(ended.Progress, "\n"), "releasing: every run that asked for it gave it up") {
 				t.Fatalf("progress %q", ended.Progress)
 			}
 			continue
@@ -754,4 +754,85 @@ func TestStateDirIsAbsolute(t *testing.T) {
 	if want := filepath.Join(h.dir, "state", "lambda"); lambda.KeyDir != want {
 		t.Fatalf("key dir %q, want %q", lambda.KeyDir, want)
 	}
+}
+
+// An idle probe takes time, and a request may be handed the lease while it
+// runs. The probe's answer cannot then release the lease: the reason to
+// release is checked against the record as it is when the release is made.
+func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
+	for _, why := range []string{"unwanted", "idle"} {
+		t.Run(why, func(t *testing.T) {
+			h := newHarness(t, okAcquire)
+			h.cfg.IdlePoll = time.Hour // probe only when woken
+			if why == "idle" {
+				h.cfg.Offers[0].IdleTimeout = 200 * time.Millisecond
+			}
+			var hold atomic.Bool
+			probing, answer := make(chan struct{}), make(chan struct{})
+			h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
+				if where == "" && hold.Load() { // an idle probe, not the readiness check
+					probing <- struct{}{}
+					<-answer
+				}
+				return h.machine.probe(ctx, target, identity, where)
+			}
+			b := h.start(t)
+			first, second := proto.NewULID(), proto.NewULID()
+			l, err := b.Acquire("george", "", "gpu", "", first)
+			if err != nil {
+				t.Fatal(err)
+			}
+			waitState(t, b, "george", l.ID, proto.LeaseReady)
+			hold.Store(true)
+			if why == "unwanted" {
+				if _, err := b.Withdraw("george", first); err != nil { // wakes the worker
+					t.Fatal(err)
+				}
+			} else {
+				time.Sleep(300 * time.Millisecond) // past the idle deadline
+				wake(b, l.ID)
+			}
+			<-probing
+			if again, err := b.Acquire("george", "", "gpu", "", second); err != nil || again.ID != l.ID {
+				t.Fatalf("reuse: %+v %v", again, err)
+			}
+			hold.Store(false)
+			close(answer)
+			time.Sleep(100 * time.Millisecond)
+			if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
+				t.Fatalf("a lease handed out during the probe was released: %+v", got)
+			}
+		})
+	}
+}
+
+// Requests survive a restart: two runs share a ready lease, one withdraws,
+// the cloud peer restarts, and the lease ends only when the other withdraws.
+func TestWithdrawalsSurviveRestart(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.Offers[0].IdleTimeout = time.Hour
+	b := h.start(t)
+	first, second := proto.NewULID(), proto.NewULID()
+	l, _ := b.Acquire("george", "", "gpu", "", first)
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	if _, err := b.Acquire("george", "", "gpu", "", second); err != nil {
+		t.Fatal(err)
+	}
+	if w, err := b.Withdraw("george", first); err != nil || !w.Shared {
+		t.Fatalf("first withdrawal: %+v %v", w, err)
+	}
+	b.Close()
+	b2 := h.start(t)
+	time.Sleep(50 * time.Millisecond)
+	if got, _ := b2.Get("george", l.ID); got.State != proto.LeaseReady {
+		t.Fatalf("lease another run holds ended at restart: %+v", got)
+	}
+	// Withdrawing again changes nothing: the client may retry.
+	if w, err := b2.Withdraw("george", first); err != nil || !w.Shared || w.State != proto.LeaseReady {
+		t.Fatalf("repeated withdrawal: %+v %v", w, err)
+	}
+	if w, err := b2.Withdraw("george", second); err != nil || w.Shared {
+		t.Fatalf("last withdrawal: %+v %v", w, err)
+	}
+	waitState(t, b2, "george", l.ID, proto.LeaseReleased)
 }

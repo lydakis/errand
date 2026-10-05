@@ -271,7 +271,12 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	// A lease handed to another request is held by that request too.
 	share := func(l *lease) (proto.Lease, error) {
 		err := b.applyLocked(l, func(r *record) bool {
+			// Being handed out counts as use, so the new request gets a
+			// full idle window to submit its work.
 			r.Unwanted = false
+			if r.State == proto.LeaseReady {
+				r.LastBusy = time.Now()
+			}
 			if len(r.Requests) >= maxRequests {
 				r.Kept = true
 			} else {
@@ -648,32 +653,32 @@ func (b *Broker) watch(l *lease) {
 		if r.State != proto.LeaseReady {
 			return
 		}
-		now := time.Now()
-		reason := ""
-		switch {
-		case !now.Before(r.ExpiresAt):
-			reason = fmt.Sprintf("max lifetime of %s reached", r.ExpiresAt.Sub(r.CreatedAt).Round(time.Second))
-		case b.busy(l, r):
-			// In use, so no longer unwanted: from here the idle rule decides.
-			_ = b.update(l, func(r *record) bool {
-				r.LastBusy, r.Unwanted, r.Kept = now, false, true
-				return r.State == proto.LeaseReady
-			})
-		case r.Unwanted:
-			reason = "the run that asked for it was interrupted"
-		case !now.Before(r.LastBusy.Add(r.IdleTimeout)):
-			reason = fmt.Sprintf("idle for %s", r.IdleTimeout)
-		}
-		// The machine is destroyed only once the release is recorded;
+		busy := time.Now().Before(r.ExpiresAt) && b.busy(l, r)
+		// The probe took time, and requests may have changed the record
+		// meanwhile, so the decision is made against the record as it is
+		// now. The machine is destroyed only once the release is recorded;
 		// otherwise a restart would hand out a lease whose machine is gone.
-		if reason != "" && b.update(l, func(r *record) bool {
+		released := false
+		err := b.update(l, func(r *record) bool {
 			if r.State != proto.LeaseReady {
 				return false
 			}
+			now := time.Now()
+			reason := r.releaseReason(now, busy)
+			if reason == "" {
+				if !busy {
+					return false
+				}
+				// In use, so no longer unwanted: from here the idle rule decides.
+				r.LastBusy, r.Unwanted, r.Kept = now, false, true
+				return true
+			}
 			r.State = proto.LeaseReleasing
 			r.addProgress("releasing: " + reason)
+			released = true
 			return true
-		}) == nil {
+		})
+		if released && err == nil {
 			return
 		}
 		wait := b.cfg.IdlePoll
@@ -684,6 +689,22 @@ func (b *Broker) watch(l *lease) {
 			return
 		}
 	}
+}
+
+// releaseReason says why a ready lease should be released now, or nothing.
+// busy is whether its machine was just seen with work.
+func (r *record) releaseReason(now time.Time, busy bool) string {
+	switch {
+	case !now.Before(r.ExpiresAt):
+		return fmt.Sprintf("max lifetime of %s reached", r.ExpiresAt.Sub(r.CreatedAt).Round(time.Second))
+	case busy:
+		return ""
+	case r.Unwanted:
+		return "every run that asked for it gave it up"
+	case !now.Before(r.LastBusy.Add(r.IdleTimeout)):
+		return fmt.Sprintf("idle for %s", r.IdleTimeout)
+	}
+	return ""
 }
 
 // busy reports whether the machine has work, asking no later than the
