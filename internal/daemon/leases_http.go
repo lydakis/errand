@@ -111,7 +111,7 @@ func (d *Daemon) handleLeaseAdmit(w http.ResponseWriter, r *http.Request, id Ide
 		leaseError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, lease)
+	writeLease(w, id, lease)
 }
 
 func (d *Daemon) handleLeaseList(w http.ResponseWriter, _ *http.Request, id Identity) {
