@@ -14717,5 +14717,3063 @@
    "BenchmarkCheckpointEncode/encode-4               \t     783\t   1536059 ns/op\t 1564673 B/op\t       1 allocs/op",
    "BenchmarkCheckpointEncode/encode-4               \t     723\t   1578707 ns/op\t 1564672 B/op\t       1 allocs/op"
   ]
+ },
+ "after_review": {
+  "notes": "After review, 2026-10-05. Git-selected in-place edits, 10K files, 30 saves per run, instrumented builds of main 5cd41b0 and 114c460 that also record the daemon's completed GC cycles and allocated bytes at each step. Runs alternate main, candidate, candidate, main, main, candidate. pause_seconds is the idle time before each save (0 = back to back, as in the campaigns above).",
+  "runs": {
+   "pause-0/git-main-1": {
+    "saves": 30,
+    "visible_median_ms": 47.23,
+    "receipt_median_ms": 78.06,
+    "daemon_gc_cycles_before_visible_mean": 1.07,
+    "daemon_gc_cycles_after_visible_mean": 1.8,
+    "daemon_alloc_mb_before_visible_median": 7.98,
+    "daemon_alloc_mb_after_visible_median": 13.41,
+    "per_save": [
+     {
+      "visible_ms": 50.35,
+      "receipt_ms": 104.21,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.77,
+      "daemon_alloc_mb_after_visible": 13.33
+     },
+     {
+      "visible_ms": 60.03,
+      "receipt_ms": 104.53,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.78,
+      "daemon_alloc_mb_after_visible": 13.28
+     },
+     {
+      "visible_ms": 56.77,
+      "receipt_ms": 112.34,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.8,
+      "daemon_alloc_mb_after_visible": 13.34
+     },
+     {
+      "visible_ms": 44.41,
+      "receipt_ms": 76.24,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.83,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 48.0,
+      "receipt_ms": 82.68,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.93,
+      "daemon_alloc_mb_after_visible": 13.25
+     },
+     {
+      "visible_ms": 48.38,
+      "receipt_ms": 83.22,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 13.29
+     },
+     {
+      "visible_ms": 41.42,
+      "receipt_ms": 68.68,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.97,
+      "daemon_alloc_mb_after_visible": 13.23
+     },
+     {
+      "visible_ms": 52.05,
+      "receipt_ms": 96.1,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.94,
+      "daemon_alloc_mb_after_visible": 13.28
+     },
+     {
+      "visible_ms": 58.85,
+      "receipt_ms": 101.41,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.87,
+      "daemon_alloc_mb_after_visible": 13.37
+     },
+     {
+      "visible_ms": 55.4,
+      "receipt_ms": 85.87,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.85,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 46.42,
+      "receipt_ms": 79.16,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.94,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 43.93,
+      "receipt_ms": 75.05,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.08,
+      "daemon_alloc_mb_after_visible": 13.29
+     },
+     {
+      "visible_ms": 54.66,
+      "receipt_ms": 87.91,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.02,
+      "daemon_alloc_mb_after_visible": 13.28
+     },
+     {
+      "visible_ms": 51.62,
+      "receipt_ms": 77.11,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.02,
+      "daemon_alloc_mb_after_visible": 13.37
+     },
+     {
+      "visible_ms": 41.53,
+      "receipt_ms": 65.37,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 13.45
+     },
+     {
+      "visible_ms": 39.42,
+      "receipt_ms": 70.09,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.94,
+      "daemon_alloc_mb_after_visible": 13.32
+     },
+     {
+      "visible_ms": 41.74,
+      "receipt_ms": 74.49,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.93,
+      "daemon_alloc_mb_after_visible": 13.44
+     },
+     {
+      "visible_ms": 47.47,
+      "receipt_ms": 79.63,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.96,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 51.76,
+      "receipt_ms": 78.31,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 45.65,
+      "receipt_ms": 77.8,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.99,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 46.99,
+      "receipt_ms": 83.16,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.01,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 44.46,
+      "receipt_ms": 72.65,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.02,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 52.51,
+      "receipt_ms": 86.47,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 43.31,
+      "receipt_ms": 73.94,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.05,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 41.86,
+      "receipt_ms": 72.05,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.08,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 41.6,
+      "receipt_ms": 73.57,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.17,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 49.72,
+      "receipt_ms": 78.84,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.19,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 46.48,
+      "receipt_ms": 76.36,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.3,
+      "daemon_alloc_mb_after_visible": 13.32
+     },
+     {
+      "visible_ms": 49.48,
+      "receipt_ms": 75.04,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.14,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 45.75,
+      "receipt_ms": 71.51,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.16,
+      "daemon_alloc_mb_after_visible": 13.42
+     }
+    ]
+   },
+   "pause-0/git-candidate-2": {
+    "saves": 30,
+    "visible_median_ms": 64.91,
+    "receipt_median_ms": 87.95,
+    "daemon_gc_cycles_before_visible_mean": 1.37,
+    "daemon_gc_cycles_after_visible_mean": 0.6,
+    "daemon_alloc_mb_before_visible_median": 8.02,
+    "daemon_alloc_mb_after_visible_median": 4.91,
+    "per_save": [
+     {
+      "visible_ms": 71.98,
+      "receipt_ms": 98.83,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.02,
+      "daemon_alloc_mb_after_visible": 4.76
+     },
+     {
+      "visible_ms": 64.95,
+      "receipt_ms": 86.77,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.86,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 61.22,
+      "receipt_ms": 84.24,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.86,
+      "daemon_alloc_mb_after_visible": 4.92
+     },
+     {
+      "visible_ms": 54.64,
+      "receipt_ms": 81.22,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.87,
+      "daemon_alloc_mb_after_visible": 4.93
+     },
+     {
+      "visible_ms": 59.73,
+      "receipt_ms": 81.77,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.04,
+      "daemon_alloc_mb_after_visible": 4.76
+     },
+     {
+      "visible_ms": 69.55,
+      "receipt_ms": 100.73,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.91,
+      "daemon_alloc_mb_after_visible": 4.76
+     },
+     {
+      "visible_ms": 67.17,
+      "receipt_ms": 90.49,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.03,
+      "daemon_alloc_mb_after_visible": 4.95
+     },
+     {
+      "visible_ms": 56.76,
+      "receipt_ms": 79.48,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.86,
+      "daemon_alloc_mb_after_visible": 4.93
+     },
+     {
+      "visible_ms": 62.82,
+      "receipt_ms": 88.03,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.93,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 66.09,
+      "receipt_ms": 95.62,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 79.51,
+      "receipt_ms": 107.55,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 5.05
+     },
+     {
+      "visible_ms": 65.4,
+      "receipt_ms": 91.17,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.88,
+      "daemon_alloc_mb_after_visible": 5.06
+     },
+     {
+      "visible_ms": 62.83,
+      "receipt_ms": 86.12,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.88,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 66.24,
+      "receipt_ms": 87.88,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.09,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 56.76,
+      "receipt_ms": 80.86,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.0,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 60.91,
+      "receipt_ms": 85.97,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.99,
+      "daemon_alloc_mb_after_visible": 4.94
+     },
+     {
+      "visible_ms": 66.16,
+      "receipt_ms": 104.26,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.25,
+      "daemon_alloc_mb_after_visible": 4.91
+     },
+     {
+      "visible_ms": 69.97,
+      "receipt_ms": 94.22,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 4.76
+     },
+     {
+      "visible_ms": 74.54,
+      "receipt_ms": 116.46,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.34,
+      "daemon_alloc_mb_after_visible": 4.86
+     },
+     {
+      "visible_ms": 54.43,
+      "receipt_ms": 75.7,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.99,
+      "daemon_alloc_mb_after_visible": 4.91
+     },
+     {
+      "visible_ms": 60.58,
+      "receipt_ms": 84.04,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 4.96
+     },
+     {
+      "visible_ms": 56.31,
+      "receipt_ms": 79.92,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.17,
+      "daemon_alloc_mb_after_visible": 4.74
+     },
+     {
+      "visible_ms": 58.47,
+      "receipt_ms": 85.53,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.14,
+      "daemon_alloc_mb_after_visible": 4.91
+     },
+     {
+      "visible_ms": 65.26,
+      "receipt_ms": 100.92,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.14,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 61.11,
+      "receipt_ms": 83.7,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.14,
+      "daemon_alloc_mb_after_visible": 4.74
+     },
+     {
+      "visible_ms": 64.88,
+      "receipt_ms": 90.01,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.17,
+      "daemon_alloc_mb_after_visible": 5.0
+     },
+     {
+      "visible_ms": 65.05,
+      "receipt_ms": 93.95,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.39,
+      "daemon_alloc_mb_after_visible": 4.69
+     },
+     {
+      "visible_ms": 53.85,
+      "receipt_ms": 77.56,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.42,
+      "daemon_alloc_mb_after_visible": 4.7
+     },
+     {
+      "visible_ms": 72.13,
+      "receipt_ms": 97.16,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.2,
+      "daemon_alloc_mb_after_visible": 4.94
+     },
+     {
+      "visible_ms": 67.34,
+      "receipt_ms": 98.86,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.22,
+      "daemon_alloc_mb_after_visible": 4.85
+     }
+    ]
+   },
+   "pause-0/git-candidate-3": {
+    "saves": 30,
+    "visible_median_ms": 49.93,
+    "receipt_median_ms": 70.59,
+    "daemon_gc_cycles_before_visible_mean": 1.57,
+    "daemon_gc_cycles_after_visible_mean": 0.43,
+    "daemon_alloc_mb_before_visible_median": 8.15,
+    "daemon_alloc_mb_after_visible_median": 4.75,
+    "per_save": [
+     {
+      "visible_ms": 69.4,
+      "receipt_ms": 89.88,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.87,
+      "daemon_alloc_mb_after_visible": 4.87
+     },
+     {
+      "visible_ms": 56.56,
+      "receipt_ms": 82.04,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.77,
+      "daemon_alloc_mb_after_visible": 4.83
+     },
+     {
+      "visible_ms": 39.06,
+      "receipt_ms": 54.94,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.81,
+      "daemon_alloc_mb_after_visible": 4.76
+     },
+     {
+      "visible_ms": 66.84,
+      "receipt_ms": 84.5,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.08,
+      "daemon_alloc_mb_after_visible": 4.69
+     },
+     {
+      "visible_ms": 49.8,
+      "receipt_ms": 77.04,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 4.91
+     },
+     {
+      "visible_ms": 55.46,
+      "receipt_ms": 73.95,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.8,
+      "daemon_alloc_mb_after_visible": 5.03
+     },
+     {
+      "visible_ms": 39.03,
+      "receipt_ms": 57.56,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.78,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 40.02,
+      "receipt_ms": 59.46,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.88,
+      "daemon_alloc_mb_after_visible": 4.98
+     },
+     {
+      "visible_ms": 43.81,
+      "receipt_ms": 69.84,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.82,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 39.49,
+      "receipt_ms": 56.42,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.85,
+      "daemon_alloc_mb_after_visible": 4.98
+     },
+     {
+      "visible_ms": 39.57,
+      "receipt_ms": 67.13,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.87,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 41.78,
+      "receipt_ms": 62.69,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 65.38,
+      "receipt_ms": 83.49,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 4.71
+     },
+     {
+      "visible_ms": 51.92,
+      "receipt_ms": 72.44,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.18,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 52.24,
+      "receipt_ms": 69.82,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.08,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 54.08,
+      "receipt_ms": 72.18,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.1,
+      "daemon_alloc_mb_after_visible": 5.0
+     },
+     {
+      "visible_ms": 48.05,
+      "receipt_ms": 71.17,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.22,
+      "daemon_alloc_mb_after_visible": 4.69
+     },
+     {
+      "visible_ms": 52.37,
+      "receipt_ms": 71.7,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.23,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 52.68,
+      "receipt_ms": 70.0,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.19,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 50.06,
+      "receipt_ms": 72.7,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 4.75
+     },
+     {
+      "visible_ms": 43.73,
+      "receipt_ms": 63.76,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.38,
+      "daemon_alloc_mb_after_visible": 4.69
+     },
+     {
+      "visible_ms": 57.18,
+      "receipt_ms": 75.46,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.17,
+      "daemon_alloc_mb_after_visible": 4.92
+     },
+     {
+      "visible_ms": 51.09,
+      "receipt_ms": 67.61,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.33,
+      "daemon_alloc_mb_after_visible": 4.7
+     },
+     {
+      "visible_ms": 60.07,
+      "receipt_ms": 88.65,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.22,
+      "daemon_alloc_mb_after_visible": 5.08
+     },
+     {
+      "visible_ms": 45.93,
+      "receipt_ms": 67.15,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 43.25,
+      "receipt_ms": 69.73,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.51,
+      "daemon_alloc_mb_after_visible": 4.75
+     },
+     {
+      "visible_ms": 44.25,
+      "receipt_ms": 65.52,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.42,
+      "daemon_alloc_mb_after_visible": 4.69
+     },
+     {
+      "visible_ms": 48.31,
+      "receipt_ms": 74.8,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.32,
+      "daemon_alloc_mb_after_visible": 4.86
+     },
+     {
+      "visible_ms": 69.3,
+      "receipt_ms": 89.62,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.23,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 49.74,
+      "receipt_ms": 66.16,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.52,
+      "daemon_alloc_mb_after_visible": 4.73
+     }
+    ]
+   },
+   "pause-0/git-main-4": {
+    "saves": 30,
+    "visible_median_ms": 55.38,
+    "receipt_median_ms": 94.37,
+    "daemon_gc_cycles_before_visible_mean": 1.07,
+    "daemon_gc_cycles_after_visible_mean": 1.83,
+    "daemon_alloc_mb_before_visible_median": 8.05,
+    "daemon_alloc_mb_after_visible_median": 13.41,
+    "per_save": [
+     {
+      "visible_ms": 45.55,
+      "receipt_ms": 79.29,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.73,
+      "daemon_alloc_mb_after_visible": 13.37
+     },
+     {
+      "visible_ms": 48.94,
+      "receipt_ms": 86.39,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.81,
+      "daemon_alloc_mb_after_visible": 13.38
+     },
+     {
+      "visible_ms": 55.51,
+      "receipt_ms": 91.54,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.71,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 41.15,
+      "receipt_ms": 80.25,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.95,
+      "daemon_alloc_mb_after_visible": 13.2
+     },
+     {
+      "visible_ms": 55.25,
+      "receipt_ms": 101.79,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.76,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 57.09,
+      "receipt_ms": 95.75,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.78,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 59.19,
+      "receipt_ms": 94.38,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.79,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 54.55,
+      "receipt_ms": 89.36,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.8,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 63.53,
+      "receipt_ms": 106.68,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.82,
+      "daemon_alloc_mb_after_visible": 13.49
+     },
+     {
+      "visible_ms": 58.81,
+      "receipt_ms": 99.5,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.85,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 48.32,
+      "receipt_ms": 96.24,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 13.28
+     },
+     {
+      "visible_ms": 51.54,
+      "receipt_ms": 82.25,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.09,
+      "daemon_alloc_mb_after_visible": 13.34
+     },
+     {
+      "visible_ms": 54.36,
+      "receipt_ms": 84.97,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 61.21,
+      "receipt_ms": 103.71,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.9,
+      "daemon_alloc_mb_after_visible": 13.34
+     },
+     {
+      "visible_ms": 59.61,
+      "receipt_ms": 102.24,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.13,
+      "daemon_alloc_mb_after_visible": 13.28
+     },
+     {
+      "visible_ms": 58.51,
+      "receipt_ms": 89.5,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.04,
+      "daemon_alloc_mb_after_visible": 13.3
+     },
+     {
+      "visible_ms": 54.04,
+      "receipt_ms": 83.99,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.17,
+      "daemon_alloc_mb_after_visible": 13.28
+     },
+     {
+      "visible_ms": 58.03,
+      "receipt_ms": 94.71,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.05,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 55.24,
+      "receipt_ms": 94.36,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 61.82,
+      "receipt_ms": 100.14,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 13.26
+     },
+     {
+      "visible_ms": 55.62,
+      "receipt_ms": 90.92,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.08,
+      "daemon_alloc_mb_after_visible": 13.36
+     },
+     {
+      "visible_ms": 52.08,
+      "receipt_ms": 99.3,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.13,
+      "daemon_alloc_mb_after_visible": 13.33
+     },
+     {
+      "visible_ms": 46.8,
+      "receipt_ms": 85.97,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.09,
+      "daemon_alloc_mb_after_visible": 13.37
+     },
+     {
+      "visible_ms": 60.26,
+      "receipt_ms": 98.66,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.05,
+      "daemon_alloc_mb_after_visible": 13.45
+     },
+     {
+      "visible_ms": 57.08,
+      "receipt_ms": 91.21,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.08,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 62.21,
+      "receipt_ms": 113.03,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 13.45
+     },
+     {
+      "visible_ms": 55.16,
+      "receipt_ms": 98.08,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 8.1,
+      "daemon_alloc_mb_after_visible": 13.53
+     },
+     {
+      "visible_ms": 43.72,
+      "receipt_ms": 77.77,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.21,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 63.78,
+      "receipt_ms": 107.71,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.22,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 48.34,
+      "receipt_ms": 89.9,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.23,
+      "daemon_alloc_mb_after_visible": 13.43
+     }
+    ]
+   },
+   "pause-0/git-main-5": {
+    "saves": 30,
+    "visible_median_ms": 50.08,
+    "receipt_median_ms": 83.37,
+    "daemon_gc_cycles_before_visible_mean": 1.0,
+    "daemon_gc_cycles_after_visible_mean": 2.07,
+    "daemon_alloc_mb_before_visible_median": 8.0,
+    "daemon_alloc_mb_after_visible_median": 13.41,
+    "per_save": [
+     {
+      "visible_ms": 46.64,
+      "receipt_ms": 82.72,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.8,
+      "daemon_alloc_mb_after_visible": 13.38
+     },
+     {
+      "visible_ms": 37.47,
+      "receipt_ms": 62.48,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.73,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 41.57,
+      "receipt_ms": 65.64,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.75,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 52.19,
+      "receipt_ms": 90.79,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.8,
+      "daemon_alloc_mb_after_visible": 13.33
+     },
+     {
+      "visible_ms": 47.73,
+      "receipt_ms": 88.1,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.84,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 56.43,
+      "receipt_ms": 84.01,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.79,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 50.04,
+      "receipt_ms": 80.64,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.87,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 49.9,
+      "receipt_ms": 84.1,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.81,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 41.7,
+      "receipt_ms": 74.59,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.84,
+      "daemon_alloc_mb_after_visible": 13.32
+     },
+     {
+      "visible_ms": 50.73,
+      "receipt_ms": 91.8,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 13.38
+     },
+     {
+      "visible_ms": 47.99,
+      "receipt_ms": 82.34,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.01,
+      "daemon_alloc_mb_after_visible": 13.26
+     },
+     {
+      "visible_ms": 52.36,
+      "receipt_ms": 88.66,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 13.36
+     },
+     {
+      "visible_ms": 41.56,
+      "receipt_ms": 75.8,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 57.54,
+      "receipt_ms": 84.79,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.0,
+      "daemon_alloc_mb_after_visible": 13.32
+     },
+     {
+      "visible_ms": 46.92,
+      "receipt_ms": 80.5,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.92,
+      "daemon_alloc_mb_after_visible": 13.49
+     },
+     {
+      "visible_ms": 48.13,
+      "receipt_ms": 77.21,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.0,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 52.14,
+      "receipt_ms": 89.11,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.91,
+      "daemon_alloc_mb_after_visible": 13.46
+     },
+     {
+      "visible_ms": 55.0,
+      "receipt_ms": 95.0,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.02,
+      "daemon_alloc_mb_after_visible": 13.35
+     },
+     {
+      "visible_ms": 61.14,
+      "receipt_ms": 87.63,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.99,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 50.11,
+      "receipt_ms": 84.52,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.99,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 56.97,
+      "receipt_ms": 88.47,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.0,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 54.59,
+      "receipt_ms": 80.46,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.02,
+      "daemon_alloc_mb_after_visible": 13.44
+     },
+     {
+      "visible_ms": 61.13,
+      "receipt_ms": 101.18,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.05,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 54.53,
+      "receipt_ms": 79.55,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.11,
+      "daemon_alloc_mb_after_visible": 13.45
+     },
+     {
+      "visible_ms": 52.19,
+      "receipt_ms": 86.93,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.07,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 47.06,
+      "receipt_ms": 78.85,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 8.17,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 52.68,
+      "receipt_ms": 90.22,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.2,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 48.12,
+      "receipt_ms": 81.11,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.2,
+      "daemon_alloc_mb_after_visible": 13.51
+     },
+     {
+      "visible_ms": 41.99,
+      "receipt_ms": 66.96,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.21,
+      "daemon_alloc_mb_after_visible": 13.33
+     },
+     {
+      "visible_ms": 45.18,
+      "receipt_ms": 76.46,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.22,
+      "daemon_alloc_mb_after_visible": 13.43
+     }
+    ]
+   },
+   "pause-0/git-candidate-6": {
+    "saves": 30,
+    "visible_median_ms": 62.08,
+    "receipt_median_ms": 84.9,
+    "daemon_gc_cycles_before_visible_mean": 1.3,
+    "daemon_gc_cycles_after_visible_mean": 0.67,
+    "daemon_alloc_mb_before_visible_median": 8.02,
+    "daemon_alloc_mb_after_visible_median": 4.88,
+    "per_save": [
+     {
+      "visible_ms": 62.16,
+      "receipt_ms": 79.96,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.84,
+      "daemon_alloc_mb_after_visible": 4.76
+     },
+     {
+      "visible_ms": 48.47,
+      "receipt_ms": 69.75,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.9,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 46.34,
+      "receipt_ms": 66.14,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.79,
+      "daemon_alloc_mb_after_visible": 5.0
+     },
+     {
+      "visible_ms": 48.31,
+      "receipt_ms": 75.32,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.04,
+      "daemon_alloc_mb_after_visible": 4.67
+     },
+     {
+      "visible_ms": 70.88,
+      "receipt_ms": 108.95,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.01,
+      "daemon_alloc_mb_after_visible": 4.83
+     },
+     {
+      "visible_ms": 55.21,
+      "receipt_ms": 79.18,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.86,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 55.36,
+      "receipt_ms": 87.02,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.85,
+      "daemon_alloc_mb_after_visible": 4.89
+     },
+     {
+      "visible_ms": 66.28,
+      "receipt_ms": 92.61,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.74,
+      "daemon_alloc_mb_after_visible": 4.98
+     },
+     {
+      "visible_ms": 66.18,
+      "receipt_ms": 90.34,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.83,
+      "daemon_alloc_mb_after_visible": 5.0
+     },
+     {
+      "visible_ms": 62.28,
+      "receipt_ms": 83.47,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.9,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 84.01,
+      "receipt_ms": 115.21,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.86,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 72.01,
+      "receipt_ms": 98.01,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 5.04
+     },
+     {
+      "visible_ms": 56.72,
+      "receipt_ms": 83.76,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.96,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 70.24,
+      "receipt_ms": 98.08,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.9,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 55.59,
+      "receipt_ms": 79.85,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.84,
+      "daemon_alloc_mb_after_visible": 5.08
+     },
+     {
+      "visible_ms": 62.0,
+      "receipt_ms": 89.99,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.93,
+      "daemon_alloc_mb_after_visible": 4.74
+     },
+     {
+      "visible_ms": 63.78,
+      "receipt_ms": 83.41,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.33,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 61.01,
+      "receipt_ms": 86.03,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.14,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 64.28,
+      "receipt_ms": 93.97,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.16,
+      "daemon_alloc_mb_after_visible": 4.86
+     },
+     {
+      "visible_ms": 50.14,
+      "receipt_ms": 75.88,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.13,
+      "daemon_alloc_mb_after_visible": 4.87
+     },
+     {
+      "visible_ms": 65.59,
+      "receipt_ms": 104.87,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.16,
+      "daemon_alloc_mb_after_visible": 4.85
+     },
+     {
+      "visible_ms": 52.77,
+      "receipt_ms": 82.31,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 4.86
+     },
+     {
+      "visible_ms": 66.0,
+      "receipt_ms": 98.16,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.05,
+      "daemon_alloc_mb_after_visible": 5.0
+     },
+     {
+      "visible_ms": 71.16,
+      "receipt_ms": 97.56,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.23,
+      "daemon_alloc_mb_after_visible": 4.78
+     },
+     {
+      "visible_ms": 62.43,
+      "receipt_ms": 81.83,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.24,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 47.75,
+      "receipt_ms": 68.43,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.27,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 47.44,
+      "receipt_ms": 68.8,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.36,
+      "daemon_alloc_mb_after_visible": 4.95
+     },
+     {
+      "visible_ms": 57.99,
+      "receipt_ms": 81.46,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.32,
+      "daemon_alloc_mb_after_visible": 4.76
+     },
+     {
+      "visible_ms": 61.68,
+      "receipt_ms": 90.65,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.27,
+      "daemon_alloc_mb_after_visible": 4.9
+     },
+     {
+      "visible_ms": 66.36,
+      "receipt_ms": 91.82,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.19,
+      "daemon_alloc_mb_after_visible": 4.72
+     }
+    ]
+   },
+   "pause-0.5/git-main-1": {
+    "saves": 30,
+    "visible_median_ms": 50.96,
+    "receipt_median_ms": 86.86,
+    "daemon_gc_cycles_before_visible_mean": 1.17,
+    "daemon_gc_cycles_after_visible_mean": 2.03,
+    "daemon_alloc_mb_before_visible_median": 8.01,
+    "daemon_alloc_mb_after_visible_median": 13.4,
+    "per_save": [
+     {
+      "visible_ms": 76.59,
+      "receipt_ms": 113.19,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.73,
+      "daemon_alloc_mb_after_visible": 13.38
+     },
+     {
+      "visible_ms": 48.91,
+      "receipt_ms": 78.91,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.78,
+      "daemon_alloc_mb_after_visible": 13.33
+     },
+     {
+      "visible_ms": 56.68,
+      "receipt_ms": 101.03,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.78,
+      "daemon_alloc_mb_after_visible": 13.44
+     },
+     {
+      "visible_ms": 50.66,
+      "receipt_ms": 80.72,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.86,
+      "daemon_alloc_mb_after_visible": 13.37
+     },
+     {
+      "visible_ms": 51.1,
+      "receipt_ms": 86.58,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.85,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 52.9,
+      "receipt_ms": 87.79,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.77,
+      "daemon_alloc_mb_after_visible": 13.51
+     },
+     {
+      "visible_ms": 45.99,
+      "receipt_ms": 76.52,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.95,
+      "daemon_alloc_mb_after_visible": 13.27
+     },
+     {
+      "visible_ms": 43.81,
+      "receipt_ms": 77.71,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.97,
+      "daemon_alloc_mb_after_visible": 13.25
+     },
+     {
+      "visible_ms": 44.06,
+      "receipt_ms": 81.94,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 13.27
+     },
+     {
+      "visible_ms": 74.89,
+      "receipt_ms": 102.5,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.86,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 57.67,
+      "receipt_ms": 101.42,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.85,
+      "daemon_alloc_mb_after_visible": 13.51
+     },
+     {
+      "visible_ms": 55.27,
+      "receipt_ms": 113.68,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.96,
+      "daemon_alloc_mb_after_visible": 13.49
+     },
+     {
+      "visible_ms": 48.08,
+      "receipt_ms": 84.72,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.14,
+      "daemon_alloc_mb_after_visible": 13.26
+     },
+     {
+      "visible_ms": 48.14,
+      "receipt_ms": 76.34,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.93,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 50.82,
+      "receipt_ms": 91.29,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.91,
+      "daemon_alloc_mb_after_visible": 13.44
+     },
+     {
+      "visible_ms": 44.98,
+      "receipt_ms": 78.42,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.03,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 57.01,
+      "receipt_ms": 93.53,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.0,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 52.71,
+      "receipt_ms": 87.97,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.22,
+      "daemon_alloc_mb_after_visible": 13.19
+     },
+     {
+      "visible_ms": 45.15,
+      "receipt_ms": 70.73,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.02,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 70.13,
+      "receipt_ms": 110.69,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.18,
+      "daemon_alloc_mb_after_visible": 13.26
+     },
+     {
+      "visible_ms": 48.53,
+      "receipt_ms": 79.94,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 66.92,
+      "receipt_ms": 107.61,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 8.04,
+      "daemon_alloc_mb_after_visible": 13.46
+     },
+     {
+      "visible_ms": 52.31,
+      "receipt_ms": 85.23,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.18,
+      "daemon_alloc_mb_after_visible": 13.28
+     },
+     {
+      "visible_ms": 49.44,
+      "receipt_ms": 87.14,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.13,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 57.99,
+      "receipt_ms": 92.33,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.1,
+      "daemon_alloc_mb_after_visible": 13.5
+     },
+     {
+      "visible_ms": 60.11,
+      "receipt_ms": 94.3,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.12,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 80.29,
+      "receipt_ms": 117.42,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.21,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 47.38,
+      "receipt_ms": 81.7,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.22,
+      "daemon_alloc_mb_after_visible": 13.51
+     },
+     {
+      "visible_ms": 48.68,
+      "receipt_ms": 86.53,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.34,
+      "daemon_alloc_mb_after_visible": 13.33
+     },
+     {
+      "visible_ms": 44.44,
+      "receipt_ms": 78.99,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.34,
+      "daemon_alloc_mb_after_visible": 13.26
+     }
+    ]
+   },
+   "pause-0.5/git-candidate-2": {
+    "saves": 30,
+    "visible_median_ms": 55.94,
+    "receipt_median_ms": 81.53,
+    "daemon_gc_cycles_before_visible_mean": 1.33,
+    "daemon_gc_cycles_after_visible_mean": 0.7,
+    "daemon_alloc_mb_before_visible_median": 8.05,
+    "daemon_alloc_mb_after_visible_median": 4.88,
+    "per_save": [
+     {
+      "visible_ms": 63.75,
+      "receipt_ms": 100.87,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.81,
+      "daemon_alloc_mb_after_visible": 4.96
+     },
+     {
+      "visible_ms": 62.41,
+      "receipt_ms": 82.49,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.84,
+      "daemon_alloc_mb_after_visible": 4.94
+     },
+     {
+      "visible_ms": 59.57,
+      "receipt_ms": 87.07,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.81,
+      "daemon_alloc_mb_after_visible": 4.9
+     },
+     {
+      "visible_ms": 44.5,
+      "receipt_ms": 66.6,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.77,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 48.41,
+      "receipt_ms": 71.36,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.02,
+      "daemon_alloc_mb_after_visible": 4.95
+     },
+     {
+      "visible_ms": 69.48,
+      "receipt_ms": 96.61,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 87.61,
+      "receipt_ms": 110.57,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.95,
+      "daemon_alloc_mb_after_visible": 4.96
+     },
+     {
+      "visible_ms": 55.29,
+      "receipt_ms": 78.43,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 4.9
+     },
+     {
+      "visible_ms": 46.04,
+      "receipt_ms": 72.17,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.0,
+      "daemon_alloc_mb_after_visible": 4.75
+     },
+     {
+      "visible_ms": 61.25,
+      "receipt_ms": 84.07,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.07,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 54.76,
+      "receipt_ms": 80.58,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.93,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 51.61,
+      "receipt_ms": 72.1,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.87,
+      "daemon_alloc_mb_after_visible": 4.98
+     },
+     {
+      "visible_ms": 47.52,
+      "receipt_ms": 74.0,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.19,
+      "daemon_alloc_mb_after_visible": 4.87
+     },
+     {
+      "visible_ms": 57.76,
+      "receipt_ms": 78.64,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.08,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 58.22,
+      "receipt_ms": 90.08,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.23,
+      "daemon_alloc_mb_after_visible": 4.84
+     },
+     {
+      "visible_ms": 66.39,
+      "receipt_ms": 89.55,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.04,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 44.63,
+      "receipt_ms": 69.95,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 4.96
+     },
+     {
+      "visible_ms": 61.77,
+      "receipt_ms": 86.06,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.1,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 53.6,
+      "receipt_ms": 84.75,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.16,
+      "daemon_alloc_mb_after_visible": 4.83
+     },
+     {
+      "visible_ms": 53.38,
+      "receipt_ms": 75.57,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.02,
+      "daemon_alloc_mb_after_visible": 4.98
+     },
+     {
+      "visible_ms": 49.35,
+      "receipt_ms": 76.75,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.02,
+      "daemon_alloc_mb_after_visible": 4.89
+     },
+     {
+      "visible_ms": 57.35,
+      "receipt_ms": 79.23,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.23,
+      "daemon_alloc_mb_after_visible": 4.84
+     },
+     {
+      "visible_ms": 56.59,
+      "receipt_ms": 86.52,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.11,
+      "daemon_alloc_mb_after_visible": 4.85
+     },
+     {
+      "visible_ms": 49.25,
+      "receipt_ms": 70.43,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.26,
+      "daemon_alloc_mb_after_visible": 4.74
+     },
+     {
+      "visible_ms": 88.23,
+      "receipt_ms": 115.18,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.24,
+      "daemon_alloc_mb_after_visible": 4.99
+     },
+     {
+      "visible_ms": 51.66,
+      "receipt_ms": 71.44,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.31,
+      "daemon_alloc_mb_after_visible": 4.76
+     },
+     {
+      "visible_ms": 63.9,
+      "receipt_ms": 92.34,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.33,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 48.9,
+      "receipt_ms": 75.43,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.45,
+      "daemon_alloc_mb_after_visible": 4.85
+     },
+     {
+      "visible_ms": 54.74,
+      "receipt_ms": 83.4,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.28,
+      "daemon_alloc_mb_after_visible": 4.71
+     },
+     {
+      "visible_ms": 70.54,
+      "receipt_ms": 105.23,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.52,
+      "daemon_alloc_mb_after_visible": 4.96
+     }
+    ]
+   },
+   "pause-0.5/git-candidate-3": {
+    "saves": 30,
+    "visible_median_ms": 66.91,
+    "receipt_median_ms": 95.47,
+    "daemon_gc_cycles_before_visible_mean": 1.27,
+    "daemon_gc_cycles_after_visible_mean": 0.7,
+    "daemon_alloc_mb_before_visible_median": 8.08,
+    "daemon_alloc_mb_after_visible_median": 4.91,
+    "per_save": [
+     {
+      "visible_ms": 62.35,
+      "receipt_ms": 90.04,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.8,
+      "daemon_alloc_mb_after_visible": 4.9
+     },
+     {
+      "visible_ms": 61.55,
+      "receipt_ms": 88.06,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.72,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 67.15,
+      "receipt_ms": 93.75,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.83,
+      "daemon_alloc_mb_after_visible": 4.96
+     },
+     {
+      "visible_ms": 56.89,
+      "receipt_ms": 88.95,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.85,
+      "daemon_alloc_mb_after_visible": 4.91
+     },
+     {
+      "visible_ms": 75.01,
+      "receipt_ms": 114.61,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.83,
+      "daemon_alloc_mb_after_visible": 4.95
+     },
+     {
+      "visible_ms": 73.18,
+      "receipt_ms": 105.51,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.82,
+      "daemon_alloc_mb_after_visible": 4.96
+     },
+     {
+      "visible_ms": 76.21,
+      "receipt_ms": 105.95,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 5.03
+     },
+     {
+      "visible_ms": 65.39,
+      "receipt_ms": 93.25,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.76,
+      "daemon_alloc_mb_after_visible": 5.05
+     },
+     {
+      "visible_ms": 72.38,
+      "receipt_ms": 108.87,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.78,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 57.07,
+      "receipt_ms": 87.59,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.91,
+      "daemon_alloc_mb_after_visible": 4.75
+     },
+     {
+      "visible_ms": 72.24,
+      "receipt_ms": 100.32,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 4.71
+     },
+     {
+      "visible_ms": 61.56,
+      "receipt_ms": 89.65,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.11,
+      "daemon_alloc_mb_after_visible": 4.87
+     },
+     {
+      "visible_ms": 63.59,
+      "receipt_ms": 100.33,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.94,
+      "daemon_alloc_mb_after_visible": 4.94
+     },
+     {
+      "visible_ms": 76.42,
+      "receipt_ms": 104.27,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.95,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 58.91,
+      "receipt_ms": 87.03,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.91,
+      "daemon_alloc_mb_after_visible": 4.7
+     },
+     {
+      "visible_ms": 78.7,
+      "receipt_ms": 107.62,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.2,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 75.51,
+      "receipt_ms": 108.73,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 4.71
+     },
+     {
+      "visible_ms": 72.98,
+      "receipt_ms": 100.8,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.48,
+      "daemon_alloc_mb_after_visible": 4.68
+     },
+     {
+      "visible_ms": 68.07,
+      "receipt_ms": 95.7,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.11,
+      "daemon_alloc_mb_after_visible": 4.84
+     },
+     {
+      "visible_ms": 57.26,
+      "receipt_ms": 85.26,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 4.86
+     },
+     {
+      "visible_ms": 67.6,
+      "receipt_ms": 91.98,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.2,
+      "daemon_alloc_mb_after_visible": 4.92
+     },
+     {
+      "visible_ms": 77.0,
+      "receipt_ms": 108.48,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 4.96
+     },
+     {
+      "visible_ms": 81.4,
+      "receipt_ms": 108.3,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.1,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 63.15,
+      "receipt_ms": 95.25,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.14,
+      "daemon_alloc_mb_after_visible": 4.85
+     },
+     {
+      "visible_ms": 54.54,
+      "receipt_ms": 80.3,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.24,
+      "daemon_alloc_mb_after_visible": 4.85
+     },
+     {
+      "visible_ms": 66.67,
+      "receipt_ms": 98.74,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.22,
+      "daemon_alloc_mb_after_visible": 4.96
+     },
+     {
+      "visible_ms": 59.59,
+      "receipt_ms": 85.33,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.26,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 62.72,
+      "receipt_ms": 93.65,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.38,
+      "daemon_alloc_mb_after_visible": 4.98
+     },
+     {
+      "visible_ms": 69.62,
+      "receipt_ms": 109.68,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.4,
+      "daemon_alloc_mb_after_visible": 4.69
+     },
+     {
+      "visible_ms": 48.33,
+      "receipt_ms": 67.43,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.49,
+      "daemon_alloc_mb_after_visible": 4.69
+     }
+    ]
+   },
+   "pause-0.5/git-main-4": {
+    "saves": 30,
+    "visible_median_ms": 66.23,
+    "receipt_median_ms": 107.15,
+    "daemon_gc_cycles_before_visible_mean": 1.1,
+    "daemon_gc_cycles_after_visible_mean": 2.03,
+    "daemon_alloc_mb_before_visible_median": 8.01,
+    "daemon_alloc_mb_after_visible_median": 13.39,
+    "per_save": [
+     {
+      "visible_ms": 77.47,
+      "receipt_ms": 121.2,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.82,
+      "daemon_alloc_mb_after_visible": 13.37
+     },
+     {
+      "visible_ms": 57.09,
+      "receipt_ms": 90.82,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.92,
+      "daemon_alloc_mb_after_visible": 13.29
+     },
+     {
+      "visible_ms": 70.09,
+      "receipt_ms": 121.15,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.81,
+      "daemon_alloc_mb_after_visible": 13.24
+     },
+     {
+      "visible_ms": 66.36,
+      "receipt_ms": 114.8,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.88,
+      "daemon_alloc_mb_after_visible": 13.35
+     },
+     {
+      "visible_ms": 78.42,
+      "receipt_ms": 117.93,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.69,
+      "daemon_alloc_mb_after_visible": 13.32
+     },
+     {
+      "visible_ms": 70.42,
+      "receipt_ms": 117.05,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.87,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 55.09,
+      "receipt_ms": 96.39,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.01,
+      "daemon_alloc_mb_after_visible": 13.24
+     },
+     {
+      "visible_ms": 61.25,
+      "receipt_ms": 101.62,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.01,
+      "daemon_alloc_mb_after_visible": 13.21
+     },
+     {
+      "visible_ms": 60.96,
+      "receipt_ms": 98.02,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.01,
+      "daemon_alloc_mb_after_visible": 13.26
+     },
+     {
+      "visible_ms": 87.12,
+      "receipt_ms": 128.84,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.82,
+      "daemon_alloc_mb_after_visible": 13.43
+     },
+     {
+      "visible_ms": 74.95,
+      "receipt_ms": 120.21,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.81,
+      "daemon_alloc_mb_after_visible": 13.46
+     },
+     {
+      "visible_ms": 60.82,
+      "receipt_ms": 107.77,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 70.16,
+      "receipt_ms": 106.29,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.01,
+      "daemon_alloc_mb_after_visible": 13.38
+     },
+     {
+      "visible_ms": 63.56,
+      "receipt_ms": 98.59,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.0,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 69.79,
+      "receipt_ms": 110.63,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 13.21
+     },
+     {
+      "visible_ms": 54.68,
+      "receipt_ms": 89.18,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.96,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 76.78,
+      "receipt_ms": 120.12,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.95,
+      "daemon_alloc_mb_after_visible": 13.54
+     },
+     {
+      "visible_ms": 60.66,
+      "receipt_ms": 102.85,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.11,
+      "daemon_alloc_mb_after_visible": 13.37
+     },
+     {
+      "visible_ms": 64.26,
+      "receipt_ms": 106.53,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.13,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 61.13,
+      "receipt_ms": 103.41,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 13.28
+     },
+     {
+      "visible_ms": 69.83,
+      "receipt_ms": 113.62,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.12,
+      "daemon_alloc_mb_after_visible": 13.49
+     },
+     {
+      "visible_ms": 67.05,
+      "receipt_ms": 112.47,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 13.26
+     },
+     {
+      "visible_ms": 74.35,
+      "receipt_ms": 117.99,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 8.14,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 72.79,
+      "receipt_ms": 115.17,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.17,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 68.91,
+      "receipt_ms": 102.26,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.19,
+      "daemon_alloc_mb_after_visible": 13.33
+     },
+     {
+      "visible_ms": 66.11,
+      "receipt_ms": 154.62,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 57.4,
+      "receipt_ms": 88.13,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.21,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 64.42,
+      "receipt_ms": 104.69,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 8.16,
+      "daemon_alloc_mb_after_visible": 13.49
+     },
+     {
+      "visible_ms": 48.05,
+      "receipt_ms": 78.41,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.28,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 57.29,
+      "receipt_ms": 89.12,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.27,
+      "daemon_alloc_mb_after_visible": 13.41
+     }
+    ]
+   },
+   "pause-0.5/git-main-5": {
+    "saves": 30,
+    "visible_median_ms": 66.84,
+    "receipt_median_ms": 107.6,
+    "daemon_gc_cycles_before_visible_mean": 1.07,
+    "daemon_gc_cycles_after_visible_mean": 2.07,
+    "daemon_alloc_mb_before_visible_median": 8.0,
+    "daemon_alloc_mb_after_visible_median": 13.4,
+    "per_save": [
+     {
+      "visible_ms": 71.03,
+      "receipt_ms": 111.93,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.76,
+      "daemon_alloc_mb_after_visible": 13.37
+     },
+     {
+      "visible_ms": 61.66,
+      "receipt_ms": 107.05,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.88,
+      "daemon_alloc_mb_after_visible": 13.26
+     },
+     {
+      "visible_ms": 72.62,
+      "receipt_ms": 119.32,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.87,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 82.82,
+      "receipt_ms": 121.96,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.84,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 59.56,
+      "receipt_ms": 97.68,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.85,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 63.02,
+      "receipt_ms": 115.25,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.78,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 54.9,
+      "receipt_ms": 86.98,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.0,
+      "daemon_alloc_mb_after_visible": 13.29
+     },
+     {
+      "visible_ms": 62.44,
+      "receipt_ms": 103.58,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 13.33
+     },
+     {
+      "visible_ms": 59.93,
+      "receipt_ms": 115.61,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.85,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 65.74,
+      "receipt_ms": 100.96,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.93,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 61.72,
+      "receipt_ms": 96.1,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.94,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 57.6,
+      "receipt_ms": 99.14,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.93,
+      "daemon_alloc_mb_after_visible": 13.34
+     },
+     {
+      "visible_ms": 67.44,
+      "receipt_ms": 108.16,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.99,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 61.65,
+      "receipt_ms": 97.78,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.92,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 65.23,
+      "receipt_ms": 95.44,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.01,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 73.26,
+      "receipt_ms": 116.98,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.12,
+      "daemon_alloc_mb_after_visible": 13.25
+     },
+     {
+      "visible_ms": 75.03,
+      "receipt_ms": 111.12,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 78.27,
+      "receipt_ms": 128.77,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.2,
+      "daemon_alloc_mb_after_visible": 13.29
+     },
+     {
+      "visible_ms": 61.47,
+      "receipt_ms": 99.45,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.07,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 72.48,
+      "receipt_ms": 126.78,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 13.54
+     },
+     {
+      "visible_ms": 90.14,
+      "receipt_ms": 123.33,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.05,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 67.6,
+      "receipt_ms": 101.19,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 68.25,
+      "receipt_ms": 105.27,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.14,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 71.9,
+      "receipt_ms": 106.42,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.16,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 65.75,
+      "receipt_ms": 112.28,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.13,
+      "daemon_alloc_mb_after_visible": 13.39
+     },
+     {
+      "visible_ms": 72.19,
+      "receipt_ms": 116.3,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.21,
+      "daemon_alloc_mb_after_visible": 13.4
+     },
+     {
+      "visible_ms": 67.9,
+      "receipt_ms": 112.76,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 3,
+      "daemon_alloc_mb_before_visible": 8.21,
+      "daemon_alloc_mb_after_visible": 13.42
+     },
+     {
+      "visible_ms": 66.23,
+      "receipt_ms": 104.17,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.19,
+      "daemon_alloc_mb_after_visible": 13.41
+     },
+     {
+      "visible_ms": 80.92,
+      "receipt_ms": 121.12,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.3,
+      "daemon_alloc_mb_after_visible": 13.28
+     },
+     {
+      "visible_ms": 64.05,
+      "receipt_ms": 100.45,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 2,
+      "daemon_alloc_mb_before_visible": 8.19,
+      "daemon_alloc_mb_after_visible": 13.41
+     }
+    ]
+   },
+   "pause-0.5/git-candidate-6": {
+    "saves": 30,
+    "visible_median_ms": 64.06,
+    "receipt_median_ms": 92.09,
+    "daemon_gc_cycles_before_visible_mean": 1.3,
+    "daemon_gc_cycles_after_visible_mean": 0.63,
+    "daemon_alloc_mb_before_visible_median": 8.04,
+    "daemon_alloc_mb_after_visible_median": 4.9,
+    "per_save": [
+     {
+      "visible_ms": 74.65,
+      "receipt_ms": 106.1,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.75,
+      "daemon_alloc_mb_after_visible": 4.73
+     },
+     {
+      "visible_ms": 72.46,
+      "receipt_ms": 103.31,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.94,
+      "daemon_alloc_mb_after_visible": 4.75
+     },
+     {
+      "visible_ms": 60.1,
+      "receipt_ms": 93.58,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 4.98
+     },
+     {
+      "visible_ms": 65.9,
+      "receipt_ms": 92.09,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.04,
+      "daemon_alloc_mb_after_visible": 4.69
+     },
+     {
+      "visible_ms": 61.52,
+      "receipt_ms": 88.4,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.92,
+      "daemon_alloc_mb_after_visible": 4.82
+     },
+     {
+      "visible_ms": 58.07,
+      "receipt_ms": 90.34,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 4.87
+     },
+     {
+      "visible_ms": 56.87,
+      "receipt_ms": 83.31,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 67.6,
+      "receipt_ms": 98.9,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.8,
+      "daemon_alloc_mb_after_visible": 4.92
+     },
+     {
+      "visible_ms": 54.68,
+      "receipt_ms": 76.03,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.9,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 64.01,
+      "receipt_ms": 86.92,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.07,
+      "daemon_alloc_mb_after_visible": 4.72
+     },
+     {
+      "visible_ms": 57.18,
+      "receipt_ms": 84.14,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.03,
+      "daemon_alloc_mb_after_visible": 4.95
+     },
+     {
+      "visible_ms": 63.27,
+      "receipt_ms": 92.15,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.85,
+      "daemon_alloc_mb_after_visible": 4.96
+     },
+     {
+      "visible_ms": 76.14,
+      "receipt_ms": 102.4,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 7.97,
+      "daemon_alloc_mb_after_visible": 4.7
+     },
+     {
+      "visible_ms": 70.0,
+      "receipt_ms": 97.96,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.15,
+      "daemon_alloc_mb_after_visible": 4.83
+     },
+     {
+      "visible_ms": 57.09,
+      "receipt_ms": 92.08,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.89,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 67.84,
+      "receipt_ms": 113.65,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.97,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 79.52,
+      "receipt_ms": 113.72,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.0,
+      "daemon_alloc_mb_after_visible": 4.71
+     },
+     {
+      "visible_ms": 76.4,
+      "receipt_ms": 108.16,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.27,
+      "daemon_alloc_mb_after_visible": 4.9
+     },
+     {
+      "visible_ms": 63.81,
+      "receipt_ms": 87.49,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.1,
+      "daemon_alloc_mb_after_visible": 4.96
+     },
+     {
+      "visible_ms": 57.07,
+      "receipt_ms": 84.49,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.1,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 69.78,
+      "receipt_ms": 99.66,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 7.98,
+      "daemon_alloc_mb_after_visible": 4.9
+     },
+     {
+      "visible_ms": 57.25,
+      "receipt_ms": 86.27,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.06,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 119.65,
+      "receipt_ms": 144.17,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.17,
+      "daemon_alloc_mb_after_visible": 4.98
+     },
+     {
+      "visible_ms": 58.85,
+      "receipt_ms": 86.45,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.09,
+      "daemon_alloc_mb_after_visible": 4.98
+     },
+     {
+      "visible_ms": 66.73,
+      "receipt_ms": 90.3,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.12,
+      "daemon_alloc_mb_after_visible": 4.97
+     },
+     {
+      "visible_ms": 52.3,
+      "receipt_ms": 80.97,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 1,
+      "daemon_alloc_mb_before_visible": 8.08,
+      "daemon_alloc_mb_after_visible": 4.95
+     },
+     {
+      "visible_ms": 53.09,
+      "receipt_ms": 77.7,
+      "daemon_gc_cycles_before_visible": 1,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.24,
+      "daemon_alloc_mb_after_visible": 4.74
+     },
+     {
+      "visible_ms": 83.46,
+      "receipt_ms": 115.87,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.4,
+      "daemon_alloc_mb_after_visible": 4.7
+     },
+     {
+      "visible_ms": 67.13,
+      "receipt_ms": 93.71,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.41,
+      "daemon_alloc_mb_after_visible": 4.71
+     },
+     {
+      "visible_ms": 64.1,
+      "receipt_ms": 89.66,
+      "daemon_gc_cycles_before_visible": 2,
+      "daemon_gc_cycles_after_visible": 0,
+      "daemon_alloc_mb_before_visible": 8.7,
+      "daemon_alloc_mb_after_visible": 4.69
+     }
+    ]
+   }
+  },
+  "disk": {
+   "notes": "One more run per build and pause, sampling /proc/diskstats for the root device (ext4, mounted with discard) every 0.25 s over the measured saves.",
+   "runs": {
+    "pause-0/main": {
+     "saves": 30,
+     "visible_median_ms": 70.99,
+     "receipt_median_ms": 116.46,
+     "writes_per_save": 202.3,
+     "discards_per_save": 29.8,
+     "flushes_per_save": 56.1,
+     "device_busy_fraction": 0.429
+    },
+    "pause-0.5/main": {
+     "saves": 30,
+     "visible_median_ms": 78.93,
+     "receipt_median_ms": 123.18,
+     "writes_per_save": 203.6,
+     "discards_per_save": 29.9,
+     "flushes_per_save": 56.1,
+     "device_busy_fraction": 0.089
+    },
+    "pause-0/candidate": {
+     "saves": 30,
+     "visible_median_ms": 70.7,
+     "receipt_median_ms": 102.32,
+     "writes_per_save": 198.9,
+     "discards_per_save": 30.6,
+     "flushes_per_save": 57.1,
+     "device_busy_fraction": 0.449
+    },
+    "pause-0.5/candidate": {
+     "saves": 30,
+     "visible_median_ms": 80.93,
+     "receipt_median_ms": 115.83,
+     "writes_per_save": 197.7,
+     "discards_per_save": 29.9,
+     "flushes_per_save": 56.1,
+     "device_busy_fraction": 0.089
+    }
+   }
+  }
  }
 }

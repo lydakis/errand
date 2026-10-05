@@ -139,3 +139,80 @@ the CPU it saves, which show in every in-process pair, not as an end-to-end
 gain on this host.
 
 Raw reports: [benchmarks/2026-10-05-checkpoint-write-linux.json](benchmarks/2026-10-05-checkpoint-write-linux.json).
+
+## Checking the Git visible result
+
+The second campaign's Git visible ratio met the regression rule, so before
+merging, two more checks looked for it: one asked whether it depends on saves
+running back to back on this host, the other repeated the campaign on native
+machines.
+
+### Cloud host: spaced saves, garbage collection and the disk
+
+Instrumented builds of both revisions also recorded the daemon's completed
+garbage collection cycles and allocated bytes at every step. Three runs per
+build of 30 Git saves at 10K, alternating main, candidate, candidate, main,
+main, candidate:
+
+| Saves | Measure | Main | Candidate |
+|---|---|---:|---:|
+| Back to back | visible, per run | 47.2, 55.4, 50.1 ms | 64.9, 49.9, 62.1 ms |
+| Back to back | receipt, per run | 78.1, 94.4, 83.4 ms | 88.0, 70.6, 84.9 ms |
+| 0.5 s apart | visible, 90 saves | 62.7 ms | 62.6 ms |
+| 0.5 s apart | receipt, 90 saves | 102.7 ms | 90.1 ms (faster in 3/3 pairs) |
+
+- With saves half a second apart, the file appears at the same time and the
+  save finishes 12.6 ms sooner.
+- Back to back, the candidate was later in two of the three pairs above. A
+  further pair, run while sampling the disk, was level (71.0 against 70.7 ms).
+  Counting the two campaigns and the earlier instrumented runs, the
+  candidate was later in two of five back-to-back comparisons and level in
+  three.
+- The daemon allocates the same 8 MB per save before the file is visible in
+  both builds, and 4.9 MB instead of 13.4 MB after it. With less allocated
+  after the install, more of the remaining collections complete before the
+  next file is visible: 1.3–1.6 cycles per save instead of 1.0–1.2, and
+  0.4–0.7 instead of 1.8–2.1 after. With saves spaced out, saves with one
+  collection before visible took the same time in both builds (62.1 and
+  61.8 ms).
+- The disk was not the limit: back to back it was busy 43–45% of the time in
+  both builds, with the same writes, flushes and discards per save.
+
+### Native machines
+
+Main against the candidate on three machines, 10K files, six rounds with the
+order alternating, seven saves per cell, the same rules as above. Paired
+ratios, candidate over main, with the rounds the candidate was faster:
+
+| Machine | Case | Visible | Receipt |
+|---|---|---:|---:|
+| MacBook, APFS, in use during the run | explicit in-place edit | 1.017 (1/6) | 1.013 (3/6) |
+| MacBook | Git in-place edit | 0.995 (3/6) | 0.991 (3/6) |
+| MacBook | Git rename-over save | 0.988 (3/6) | 0.987 (4/6) |
+| Mac mini, APFS | explicit in-place edit | 0.926 (4/6) | 0.978 (4/6) |
+| Mac mini | Git in-place edit | 0.948 (5/6) | 0.946 (5/6) |
+| Mac mini | Git rename-over save | 0.999 (3/6) | 0.968 (5/6) |
+| Cabal, Linux, Btrfs on dm-crypt, idle | explicit in-place edit | 0.991 (3/6) | 0.933 (4/6) |
+| Cabal | Git in-place edit | 1.148 (3/6) | 1.074 (3/6) |
+| Cabal | Git rename-over save | 0.948 (4/6) | 0.925 (4/6) |
+
+Visible delivery medians were about 180 ms on the MacBook, 150 ms on the
+Mac mini and 160 ms on Cabal. No case on any machine meets the regression
+rule. Cabal's Git in-place edit ratio comes from rounds ranging from 0.66 to
+1.43, with the candidate faster in three of six. Only the Mac mini's Git
+in-place edit meets the gain rule for receipts.
+
+Bursts of 20 saves 5 ms apart showed no consistent difference. On the
+MacBook, a burst took about 0.5–0.6 s when the watch split it into two pushes
+and 1.1–1.25 s when it coalesced it into one. Main got the faster mode in five
+of six Git rounds and the candidate in one, but each burst starts after the
+same 2 s idle in both builds, so which mode it gets is set by when macOS
+delivers the first event, before any code this change touches. The Mac mini
+and Cabal were level within noise.
+
+So the Git visible result does not reproduce on native machines, and the
+change is level end to end. It is claimed for the shorter `Advance` and the
+lower CPU per save. The native reports are summarized here, not committed.
+
+The cloud data is under `after_review` in the
+[raw reports](benchmarks/2026-10-05-checkpoint-write-linux.json).
