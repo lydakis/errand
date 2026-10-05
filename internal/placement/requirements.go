@@ -206,3 +206,12 @@ func LessLoaded(a, b proto.Info) bool {
 	}
 	return float64(ac)/float64(a.MaxJobs) < float64(bc)/float64(b.MaxJobs)
 }
+
+// CheaperOffer orders offers for renting: an offer with a price before one
+// without, then the lower price.
+func CheaperOffer(a, b proto.Offer) bool {
+	if (a.PricePerHour > 0) != (b.PricePerHour > 0) {
+		return a.PricePerHour > 0
+	}
+	return a.PricePerHour < b.PricePerHour
+}

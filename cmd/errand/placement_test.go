@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -148,11 +149,58 @@ func TestWorkspaceWhereNeverLeases(t *testing.T) {
 	}
 	e := config.EffectiveRun{Where: "gpu", Candidates: []config.RunCandidate{{Name: "cloud", URL: "cloud"}}}
 	selection, err := chooseRunners(context.Background(), e, broker)
-	if err == nil || selection.Lease != nil || !strings.Contains(err.Error(), "pass --where \"gpu\" to lease") {
-		t.Fatalf("workspace where: %v %+v", err, selection.Lease)
+	if err == nil || len(selection.Leases) > 0 || !strings.Contains(err.Error(), "pass --where \"gpu\" to lease") {
+		t.Fatalf("workspace where: %v %+v", err, selection.Leases)
 	}
 	e.WhereMayLease = true
-	if selection, err := chooseRunners(context.Background(), e, broker); err != nil || selection.Lease == nil {
-		t.Fatalf("--where: %v %+v", err, selection.Lease)
+	if selection, err := chooseRunners(context.Background(), e, broker); err != nil || len(selection.Leases) == 0 {
+		t.Fatalf("--where: %v %+v", err, selection.Leases)
+	}
+}
+
+// Every reachable cloud peer offering a match is a supplier. The cheapest
+// offer comes first, priced before unpriced, and equal offers are tried in
+// random order. The cloud peers' own load does not matter.
+func TestLeaseSuppliersRankedByOffer(t *testing.T) {
+	gpu := proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 81920}}}
+	offers := map[string][]proto.Offer{}
+	probe := func(_ context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
+		if target == "gone" {
+			return proto.Info{}, errors.New("unreachable")
+		}
+		busy := map[string]int{"cabal": 1}[target]
+		return proto.Info{Placement: true, MaxJobs: 1, RunningJobs: busy, Facts: proto.Facts{OS: "linux"}, Offers: offers[target]}, nil
+	}
+	order := func(peers ...string) []string {
+		e := config.EffectiveRun{Where: "gpu=h100", WhereMayLease: true}
+		for _, p := range peers {
+			e.Candidates = append(e.Candidates, config.RunCandidate{Name: p, URL: p})
+		}
+		s, err := chooseRunners(context.Background(), e, probe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, o := range s.Leases {
+			names = append(names, o.Broker.Name+":"+o.Offer.Name)
+		}
+		return names
+	}
+	offers["cabal"] = []proto.Offer{{Name: "lambda", Facts: gpu, PricePerHour: 2.49}}
+	offers["mini"] = []proto.Offer{{Name: "pool", Facts: gpu}, {Name: "cheap", Facts: gpu, PricePerHour: 1.99}, {Name: "a10", Facts: proto.Facts{OS: "linux"}, PricePerHour: 0.5}}
+	if got := strings.Join(order("cabal", "mini", "gone"), " "); got != "mini:cheap cabal:lambda" {
+		t.Fatalf("ranked %s", got)
+	}
+	offers["mini"] = []proto.Offer{{Name: "pool", Facts: gpu}}
+	if got := strings.Join(order("cabal", "mini"), " "); got != "cabal:lambda mini:pool" {
+		t.Fatalf("an unpriced offer ranked first: %s", got)
+	}
+	offers["mini"] = []proto.Offer{{Name: "same", Facts: gpu, PricePerHour: 2.49}}
+	first := map[string]bool{}
+	for range 50 {
+		first[order("cabal", "mini")[0]] = true
+	}
+	if len(first) != 2 {
+		t.Fatalf("equal offers not shared: %v", first)
 	}
 }

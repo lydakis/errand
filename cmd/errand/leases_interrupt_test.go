@@ -54,7 +54,7 @@ func TestLeaseInterruptedDuringRequestIsWithdrawn(t *testing.T) {
 			}
 		}))
 		opt := leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: "cloud"}, Target: srv.URL}, Offer: proto.Offer{Name: "h100"}}
-		_, _, err := leaseRunner(opt, "gpu", io.Discard)
+		_, _, err := leaseRunner([]leaseOption{opt}, "gpu", io.Discard)
 		srv.Close()
 		if err == nil || !strings.Contains(err.Error(), tc.want) || withdrawn.Load() == "" || withdrawn.Load() != requested.Load() {
 			t.Fatalf("%s: err %v, requested %q, withdrawn %q", tc.state, err, requested.Load(), withdrawn.Load())
@@ -172,7 +172,9 @@ func TestLeasedRunWithdrawsOnlyWhenNothingWasAdmitted(t *testing.T) {
 			var stderr strings.Builder
 			opts := client.RunOptions{Where: "gpu", Root: t.TempDir(), NoSnapshot: true, Detach: true, Argv: []string{"true"}, Stdout: io.Discard, Stderr: &stderr}
 			option := leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: "cloud"}, Target: srv.URL}, Offer: proto.Offer{Name: "a10"}}
-			configurePlacement(&opts, nil, func() (placementChoice, *client.Claim, error) { return leaseRunner(option, "gpu", &stderr) }, &stderr, func(placementChoice) {})
+			configurePlacement(&opts, nil, func() (placementChoice, *client.Claim, error) {
+				return leaseRunner([]leaseOption{option}, "gpu", &stderr)
+			}, &stderr, func(placementChoice) {})
 			client.Run(opts)
 			if requested.Load() == "" || (withdrawn.Load() == requested.Load()) != tc.withdraw || (withdrawn.Load() != "") != tc.withdraw {
 				t.Fatalf("requested %q, withdrawn %q\n%s", requested.Load(), withdrawn.Load(), stderr.String())
@@ -202,5 +204,33 @@ func TestLeaseIDFindsItsCloudPeer(t *testing.T) {
 	}
 	if _, err := leaseOwnerPeer(cfg, proto.NewULID()); err == nil {
 		t.Fatal("found a lease no cloud peer has")
+	}
+}
+
+// A run asks the next supplier only when one turned the request down before
+// starting anything; any other failure may have started a lease, so it stops.
+func TestLeaseFallsBackOnlyAfterARefusal(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	for _, tc := range []struct {
+		status   int
+		fallBack bool
+	}{{http.StatusTooManyRequests, true}, {http.StatusForbidden, true}, {http.StatusPreconditionFailed, true}, {http.StatusInternalServerError, false}} {
+		var asked atomic.Int32
+		first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, `{"error":"no"}`, tc.status)
+		}))
+		second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			asked.Add(1)
+			http.Error(w, `{"error":"lease limit reached"}`, http.StatusTooManyRequests)
+		}))
+		opt := func(name, url string) leaseOption {
+			return leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: name}, Target: url}, Offer: proto.Offer{Name: "h100"}}
+		}
+		_, _, err := leaseRunner([]leaseOption{opt("cabal", first.URL), opt("mini", second.URL)}, "gpu", io.Discard)
+		first.Close()
+		second.Close()
+		if err == nil || (asked.Load() == 1) != tc.fallBack {
+			t.Fatalf("%d: asked the next supplier %d times: %v", tc.status, asked.Load(), err)
+		}
 	}
 }

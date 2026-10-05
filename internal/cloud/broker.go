@@ -224,9 +224,14 @@ func (b *Broker) load() ([]record, error) {
 func (b *Broker) Offers() []proto.Offer {
 	out := make([]proto.Offer, 0, len(b.cfg.Offers))
 	for _, o := range b.cfg.Offers {
-		out = append(out, proto.Offer{Name: o.Name, Facts: o.Facts, PricePerHour: o.PricePerHour, IdleTimeoutSec: int64(o.IdleTimeout / time.Second), MaxLifetimeSec: int64(o.MaxLifetime / time.Second)})
+		out = append(out, o.Offer())
 	}
 	return out
+}
+
+// Offer is how o is advertised.
+func (o *Offer) Offer() proto.Offer {
+	return proto.Offer{Name: o.Name, Facts: o.Facts, PricePerHour: o.PricePerHour, IdleTimeoutSec: int64(o.IdleTimeout / time.Second), MaxLifetimeSec: int64(o.MaxLifetime / time.Second)}
 }
 
 // Acquire returns the lease an earlier request with the same requestID
@@ -316,8 +321,10 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 		o := &b.cfg.Offers[i]
 		missing := q.Missing(o.Facts)
 		if len(missing) == 0 {
-			offer = o
-			break
+			if offer == nil || placement.CheaperOffer(o.Offer(), offer.Offer()) {
+				offer = o
+			}
+			continue
 		}
 		reasons = append(reasons, o.Name+": "+strings.Join(missing, "; "))
 	}

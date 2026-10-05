@@ -33,7 +33,7 @@ type placementSelection struct {
 	Excluded []placementExclusion
 	// Lease is set instead of Choices when no runner of the caller's matches
 	// the requirements but a cloud peer offers a machine that does.
-	Lease *leaseOption
+	Leases []leaseOption
 	// Probed holds every candidate that answered, by name.
 	Probed map[string]proto.Info
 }
@@ -79,21 +79,31 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 	if len(eligible) == 0 {
 		// Renting is only for capabilities none of your runners has, and
 		// never for the bare wildcard.
+		// Each reachable cloud peer offering a match is a supplier: its
+		// cheapest matching offer competes with the others' on price, and
+		// equal ones are tried in random order. How busy a cloud peer's own
+		// runner is does not matter; the job runs on the rented machine.
 		if !matched && !q.Any() {
 			for i, p := range probed {
 				if p.info == nil {
 					continue
 				}
-				info := p.info
-				if offer, ok := matchingOffer(q, info.Offers); ok {
+				if offer, ok := matchingOffer(q, p.info.Offers); ok {
 					c := candidates[i]
-					if !e.WhereMayLease {
-						return result, fmt.Errorf("no runner matches %q (%s); %s could lease %s, but a workspace's where never rents a machine: pass --where %q to lease", e.Where, strings.Join(exclusions, "; "), terminalSafeField(c.Name), terminalSafeField(describeOffer(offer)), e.Where)
-					}
 					target := client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
-					result.Lease = &leaseOption{Broker: placementChoice{RunCandidate: c, Info: *info, Target: target}, Offer: offer}
-					return result, nil
+					result.Leases = append(result.Leases, leaseOption{Broker: placementChoice{RunCandidate: c, Info: *p.info, Target: target}, Offer: offer})
 				}
+			}
+			if len(result.Leases) > 0 {
+				leases := result.Leases
+				rand.Shuffle(len(leases), func(i, j int) { leases[i], leases[j] = leases[j], leases[i] })
+				sort.SliceStable(leases, func(i, j int) bool { return placement.CheaperOffer(leases[i].Offer, leases[j].Offer) })
+				if !e.WhereMayLease {
+					o := leases[0]
+					result.Leases = nil
+					return result, fmt.Errorf("no runner matches %q (%s); %s could lease %s, but a workspace's where never rents a machine: pass --where %q to lease", e.Where, strings.Join(exclusions, "; "), terminalSafeField(o.Broker.Name), terminalSafeField(describeOffer(o.Offer)), e.Where)
+				}
+				return result, nil
 			}
 		}
 		return result, fmt.Errorf("no runner matches %q: %s", e.Where, strings.Join(exclusions, "; "))
@@ -191,8 +201,8 @@ func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placeme
 			return nil, nil, err
 		}
 		selection.printExcluded(stderr)
-		if option := selection.Lease; option != nil {
-			return nil, func() (placementChoice, *client.Claim, error) { return leaseRunner(*option, e.Where, stderr) }, nil
+		if options := selection.Leases; len(options) > 0 {
+			return nil, func() (placementChoice, *client.Claim, error) { return leaseRunner(options, e.Where, stderr) }, nil
 		}
 		return selection.Choices, nil, nil
 	}

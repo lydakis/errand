@@ -161,9 +161,9 @@ func cmdDoctorWith(args []string, stdout, stderr io.Writer, services doctorServi
 					report.Checks = append(report.Checks, doctorCheck{Name: "runner", Status: "error", Detail: selectionErr.Error(), Hint: "Check peer connectivity and requirements with errand peers."})
 					return finishDoctorReport(stdout, stderr, report, *asJSON)
 				}
-				if selection.Lease != nil {
+				if len(selection.Leases) > 0 {
 					// Doctor never rents a machine; it reports what a run would do.
-					report.Checks = append(report.Checks, doctorCheck{Name: "placement", Status: "ok", Detail: fmt.Sprintf("No runner of yours matches %s; a run would lease %s from %s.", effective.Where, describeOffer(selection.Lease.Offer), selection.Lease.Broker.Name)})
+					report.Checks = append(report.Checks, doctorCheck{Name: "placement", Status: "ok", Detail: fmt.Sprintf("No runner of yours matches %s; a run would lease %s from %s.", effective.Where, describeOffer(selection.Leases[0].Offer), selection.Leases[0].Broker.Name)})
 					report.Checks = append(report.Checks, doctorApplyChecks()...)
 					return finishDoctorReport(stdout, stderr, report, *asJSON)
 				}
