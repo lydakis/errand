@@ -249,7 +249,9 @@ func TestKillDuringCacheInsertionPreventsExecution(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		events, _ := os.ReadFile(filepath.Join(j.Dir, "events.ndjson"))
-		if strings.Contains(string(events), "change-base-captured") {
+		// Insertion follows extraction and precedes the change base, which pins
+		// the inserted bodies.
+		if strings.Contains(string(events), "workspace-extracted") {
 			break
 		}
 		if time.Now().After(deadline) {

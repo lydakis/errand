@@ -75,9 +75,28 @@ func (d *Daemon) acquireWorkspace(ctx context.Context, j *Job) error {
 	if err != nil {
 		return err
 	}
-	// The durable lease protects the tree; copying must not hold the global
-	// metadata mutex or delay status/cancellation of unrelated jobs.
-	return changeops.CaptureWorkspaceBaseContext(ctx, filepath.Join(s.dir, record.ID, "change-base"), j.Dir, record.Manifest)
+	// The durable lease protects the creation tree; reading it must not hold
+	// the global metadata mutex or delay status/cancellation of unrelated jobs.
+	// Its bodies join the job's change base pinned in the snapshot cache, which
+	// workspace creation filled; the job copies only what the cache lacks.
+	base := filepath.Join(s.dir, record.ID, "change-base")
+	pins := j.pinBase(d)
+	missing, err := d.cache.pinPresent(ctx, record.Manifest, pins)
+	if err != nil {
+		return err
+	}
+	if d.cache != nil {
+		for _, e := range missing {
+			if err := d.cache.Insert(ctx, filepath.Join(base, filepath.FromSlash(e.Path)), e.SHA256, e.Size, pins); err != nil && ctx.Err() != nil {
+				return ctx.Err()
+			}
+		}
+	}
+	if err := changeops.CaptureJobBaseContext(ctx, base, j.Dir, record.Manifest, pins.shared()); err != nil {
+		return err
+	}
+	j.event("change-base-captured", baseCaptureDetail(record.Manifest, pins.shared()))
+	return nil
 }
 
 func sameWorkspacePolicy(a, b proto.SelectionPolicy) bool {

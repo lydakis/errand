@@ -69,13 +69,13 @@ func TestExportRemoteRefusesDeletedSelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, job, manifest); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, job, manifest, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(file); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), workspace, job, manifest, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), workspace, job, nil, manifest, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}

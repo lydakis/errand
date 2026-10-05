@@ -23,7 +23,7 @@ func TestCheckpointPartialDirectoryDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), source, job, base); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), source, job, base, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, root := range []string{source, destination} {
@@ -34,7 +34,7 @@ func TestCheckpointPartialDirectoryDeletion(t *testing.T) {
 	writeTransferFile(t, source, "dir/clean", "source file\n")
 	writeTransferFile(t, source, "dir/conflict", "incoming\n")
 	writeTransferFile(t, destination, "dir/conflict", "destination\n")
-	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), source, job, base, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), source, job, nil, base, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,13 +51,13 @@ func TestCheckpointPartialDirectoryDeletion(t *testing.T) {
 	// User resolves the conflict; sender subsequently deletes the clean file.
 	writeTransferFile(t, destination, "dir/conflict", "incoming\n")
 	job2 := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), source, job2, version.Manifest); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), source, job2, version.Manifest, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(source, "dir/clean")); err != nil {
 		t.Fatal(err)
 	}
-	bundle2, _, err := CollectWorkspaceChangesContext(context.Background(), source, job2, version.Manifest, proto.SelectionPolicy{}, 1<<20)
+	bundle2, _, err := CollectWorkspaceChangesContext(context.Background(), source, job2, nil, version.Manifest, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestCheckpointDirectoryConflicts(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := CaptureWorkspaceBaseContext(context.Background(), source, job, base); err != nil {
+			if err := CaptureJobBaseContext(context.Background(), source, job, base, nil); err != nil {
 				t.Fatal(err)
 			}
 			if err := os.Chmod(filepath.Join(source, "dir"), 0700); err != nil {
@@ -255,7 +255,7 @@ func TestCheckpointDirectoryConflicts(t *testing.T) {
 			}
 			writeTransferFile(t, source, "dir/clean", "incoming\n")
 			writeTransferFile(t, destination, "dir/local", "destination only\n")
-			bundle, _, err := CollectWorkspaceChangesContext(context.Background(), source, job, base, proto.SelectionPolicy{}, 1<<20)
+			bundle, _, err := CollectWorkspaceChangesContext(context.Background(), source, job, nil, base, proto.SelectionPolicy{}, 1<<20)
 			if err != nil {
 				t.Fatal(err)
 			}

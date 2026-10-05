@@ -127,7 +127,7 @@ func TestRunWithoutSnapshotPreservesCachedBlobs(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "materialized")
 	hit, err := d.cache.Materialize(context.Background(), dest, proto.ManifestEntry{
 		Path: "materialized", Type: proto.EntryFile, Mode: 0o600, Size: size, SHA256: sha,
-	})
+	}, nil)
 	if err != nil || !hit {
 		t.Fatalf("cached blob after no-snapshot run: hit=%v err=%v", hit, err)
 	}

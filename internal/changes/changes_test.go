@@ -72,7 +72,7 @@ func collectTestChanges(workspace, jobDir string, specs []testChangeRoot, maxByt
 		}
 		bundle.Bytes += entry.Size
 	}
-	if err := commitBundle(workspace, workspace, jobDir, bundle); err != nil {
+	if err := commitBundleWithPhysicalModesContext(context.Background(), jobBundleBase(jobDir, nil), workspace, jobDir, bundle, nil); err != nil {
 		return proto.ChangeBundle{}, false, err
 	}
 	return bundle, true, nil
@@ -128,7 +128,7 @@ func TestCollectWorkspaceChangesCapturesCreatedModifiedAndDeletedPaths(t *testin
 		t.Fatal(err)
 	}
 	jobDir := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(workspace, "changed"), []byte("after"), 0o600); err != nil {
@@ -144,7 +144,7 @@ func TestCollectWorkspaceChangesCapturesCreatedModifiedAndDeletedPaths(t *testin
 		t.Fatal(err)
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), workspace, jobDir, baseline, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), workspace, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +187,7 @@ func TestCollectWorkspaceChangesUsesFrozenPolicyForNewPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	jobDir := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(workspace, ".errandignore"), nil, 0o600); err != nil {
@@ -208,7 +208,7 @@ func TestCollectWorkspaceChangesUsesFrozenPolicyForNewPaths(t *testing.T) {
 
 	policy := proto.SelectionPolicy{Ignore: []string{"target/"}}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), workspace, jobDir, baseline, policy, 1<<20,
+		context.Background(), workspace, jobDir, nil, baseline, policy, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
@@ -237,14 +237,14 @@ func TestCollectWorkspaceChangesAlwaysComparesSubmittedIgnoredPath(t *testing.T)
 		t.Fatal(err)
 	}
 	jobDir := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(tracked, []byte("after"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), workspace, jobDir, baseline,
+		context.Background(), workspace, jobDir, nil, baseline,
 		proto.SelectionPolicy{Ignore: []string{"target/"}}, 1<<20,
 	)
 	if err != nil || !collected {
@@ -281,14 +281,14 @@ func TestCollectWorkspaceChangesUsesGitQuestionMarkPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	jobDir := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(workspace, "fooa"), []byte("ignored"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), workspace, jobDir, baseline, policy, 1<<20,
+		context.Background(), workspace, jobDir, nil, baseline, policy, 1<<20,
 	)
 	if err != nil || collected || len(bundle.Paths) != 0 {
 		t.Fatalf("ignored wildcard change was retained: %+v, %t, %v", bundle, collected, err)
@@ -315,7 +315,7 @@ func TestCollectWorkspaceChangesKeepsPathsOutsideNestedGitignoreScope(t *testing
 		t.Fatal(err)
 	}
 	jobDir := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	for name := range map[string]bool{
@@ -330,7 +330,7 @@ func TestCollectWorkspaceChangesKeepsPathsOutsideNestedGitignoreScope(t *testing
 		}
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), workspace, jobDir, baseline, policy, 1<<20,
+		context.Background(), workspace, jobDir, nil, baseline, policy, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
@@ -349,7 +349,7 @@ func TestCollectWorkspaceChangesWithEmptyBaselineCapturesGeneratedTree(t *testin
 		t.Fatal(err)
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), workspace, t.TempDir(), proto.Manifest{}, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), workspace, t.TempDir(), nil, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("CollectWorkspaceChangesContext() = collected %t, error %v", collected, err)
@@ -372,7 +372,7 @@ func TestCollectWorkspaceChangesKeepsLexicalSiblingsAsSeparateRoots(t *testing.T
 	}
 	jobDir := t.TempDir()
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), remote, jobDir, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), remote, jobDir, nil, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
@@ -451,14 +451,14 @@ func TestApplyRecreatesUntrackedParentForCreatedRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	jobDir := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(remote, "build", "artifact"), []byte("remote"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
@@ -511,7 +511,7 @@ func TestApplyAllowsCreatedSiblingRootsInSeparateTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 	jobDir := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	for name, contents := range map[string]string{"a": "first", "b": "second"} {
@@ -520,7 +520,7 @@ func TestApplyAllowsCreatedSiblingRootsInSeparateTransactions(t *testing.T) {
 		}
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
@@ -589,13 +589,13 @@ func TestDeletedWorkspaceChangeAppliesOnlyAgainstOriginalValue(t *testing.T) {
 		t.Fatal(err)
 	}
 	jobDir := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(remote, "artifact")); err != nil {
 		t.Fatal(err)
 	}
-	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil || !collected {
 		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
 	}
@@ -627,7 +627,7 @@ func TestCollectWorkspaceChangesContextRefusesCanceledCollection(t *testing.T) {
 	workspace := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, collected, err := CollectWorkspaceChangesContext(ctx, workspace, t.TempDir(), proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
+	_, collected, err := CollectWorkspaceChangesContext(ctx, workspace, t.TempDir(), nil, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
 	if !errors.Is(err, context.Canceled) || collected {
 		t.Fatalf("CollectWorkspaceChangesContext() = collected %t, error %v", collected, err)
 	}
@@ -775,7 +775,7 @@ func TestCollectRefusesUnsupportedNodeReplacingSubmittedPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(workspace, "artifact")); err != nil {
@@ -784,7 +784,7 @@ func TestCollectRefusesUnsupportedNodeReplacingSubmittedPath(t *testing.T) {
 	if err := mkfifo(filepath.Join(workspace, "artifact")); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, baseline, proto.SelectionPolicy{}, 1<<20); err == nil ||
+	if _, _, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20); err == nil ||
 		!strings.Contains(err.Error(), "replaces submitted path") {
 		t.Fatalf("CollectWorkspaceChangesContext() error = %v", err)
 	}
@@ -795,7 +795,7 @@ func TestCollectIgnoresNewUnsupportedNodesWithoutInventingDeletes(t *testing.T) 
 	workspace := t.TempDir()
 	jobDir := t.TempDir()
 	baseline := proto.Manifest{}
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := mkfifo(filepath.Join(workspace, "events")); err != nil {
@@ -804,7 +804,7 @@ func TestCollectIgnoresNewUnsupportedNodesWithoutInventingDeletes(t *testing.T) 
 	if err := os.WriteFile(filepath.Join(workspace, "artifact"), []byte("retained"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -817,7 +817,7 @@ func TestCollectRetainsRestrictiveFinalModes(t *testing.T) {
 	workspace := t.TempDir()
 	jobDir := t.TempDir()
 	baseline := proto.Manifest{}
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	sealed := filepath.Join(workspace, "sealed")
@@ -835,7 +835,7 @@ func TestCollectRetainsRestrictiveFinalModes(t *testing.T) {
 	if err := os.Chmod(sealed, 0); err != nil {
 		t.Fatal(err)
 	}
-	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -864,7 +864,7 @@ func TestApplyRetainedRestrictiveTree(t *testing.T) {
 	remote := t.TempDir()
 	jobDir := t.TempDir()
 	baseline := proto.Manifest{}
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	sealed := filepath.Join(remote, "sealed")
@@ -884,7 +884,7 @@ func TestApplyRetainedRestrictiveTree(t *testing.T) {
 	defer os.Chmod(sealed, 0o700)
 
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -944,13 +944,13 @@ func TestDirectoryModeOnlyChangeDoesNotRetainContents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := CaptureWorkspaceBaseContext(context.Background(), workspace, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), workspace, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, baseline, proto.SelectionPolicy{}, 1)
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, jobDir, nil, baseline, proto.SelectionPolicy{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1025,7 +1025,7 @@ func TestDirectoryModeAndChildChangeStayCompactAndApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "changed"), []byte("after"), 0o600); err != nil {
@@ -1035,7 +1035,7 @@ func TestDirectoryModeAndChildChangeStayCompactAndApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 64,
+		context.Background(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 64,
 	)
 	if err != nil || !collected {
 		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
@@ -1121,13 +1121,13 @@ func TestApplyRefusesUnreadableWorkspaceWithoutChangingMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(remote, "sealed", "artifact"), []byte("after"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1185,7 +1185,7 @@ func TestCollectWorkspaceChangesHandlesInaccessibleWorkspaceRoot(t *testing.T) {
 	defer os.Chmod(workspace, 0o700)
 
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), workspace, t.TempDir(), proto.Manifest{}, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), workspace, t.TempDir(), nil, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
@@ -1308,7 +1308,7 @@ func TestCollectExcludesNestedGitMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), workspace, t.TempDir(), proto.Manifest{}, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), workspace, t.TempDir(), nil, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("CollectWorkspaceChangesContext() = %+v, %t, %v", bundle, collected, err)
@@ -1356,7 +1356,7 @@ func TestRecoverApplicationRollsBackRestrictiveInstall(t *testing.T) {
 	remote := t.TempDir()
 	jobDir := t.TempDir()
 	baseline := proto.Manifest{}
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	sealed := filepath.Join(remote, "sealed")
@@ -1372,7 +1372,7 @@ func TestRecoverApplicationRollsBackRestrictiveInstall(t *testing.T) {
 	defer os.Chmod(sealed, 0o700)
 
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("CollectWorkspaceChangesContext() = %+v, %t, %v", bundle, collected, err)
@@ -2372,13 +2372,13 @@ func applyFixture(t *testing.T, localValue, remoteValue string) (string, proto.C
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(remote, "artifact"), []byte(remoteValue), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2549,13 +2549,13 @@ func TestExtractAndApplyReplacesMatchingDestination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(remote, "dist", "app"), []byte("new"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2670,7 +2670,7 @@ func TestApplyWithConflictsMaterializesTextAndPreservesBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	jobDir := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, manifest); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, manifest, nil); err != nil {
 		t.Fatal(err)
 	}
 	for name, value := range map[string][]byte{
@@ -2689,7 +2689,7 @@ func TestApplyWithConflictsMaterializesTextAndPreservesBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), remote, jobDir, manifest, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), remote, jobDir, nil, manifest, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)
@@ -2760,7 +2760,7 @@ func TestApplyWithConflictsSkipsStructuralConflictAndAppliesCleanRoot(t *testing
 		t.Fatal(err)
 	}
 	jobDir := t.TempDir()
-	if err := CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, manifest); err != nil {
+	if err := CaptureJobBaseContext(context.Background(), remote, jobDir, manifest, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(filepath.Join(remote, "locked"), 0o755); err != nil {
@@ -2770,7 +2770,7 @@ func TestApplyWithConflictsSkipsStructuralConflictAndAppliesCleanRoot(t *testing
 		t.Fatal(err)
 	}
 	bundle, collected, err := CollectWorkspaceChangesContext(
-		context.Background(), remote, jobDir, manifest, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), remote, jobDir, nil, manifest, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("collection = %+v, %t, %v", bundle, collected, err)

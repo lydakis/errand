@@ -128,7 +128,7 @@ func TestApplyMergeInputsPreserveLogicalModes(t *testing.T) {
 	remote, jobDir, local := t.TempDir(), t.TempDir(), t.TempDir()
 	t.Cleanup(func() { _ = RemoveTree(remote); _ = RemoveTree(local) })
 	baseline := proto.Manifest{}
-	if err := CaptureWorkspaceBaseContext(t.Context(), remote, jobDir, baseline); err != nil {
+	if err := CaptureJobBaseContext(t.Context(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(remote, "dir/nested"), 0700); err != nil {
@@ -149,7 +149,7 @@ func TestApplyMergeInputsPreserveLogicalModes(t *testing.T) {
 	if err := os.Chmod(filepath.Join(remote, "dir/nested"), 0500); err != nil {
 		t.Fatal(err)
 	}
-	bundle, collected, err := CollectWorkspaceChangesContext(t.Context(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(t.Context(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil || !collected {
 		t.Fatalf("collect: %t, %v", collected, err)
 	}
