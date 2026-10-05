@@ -113,3 +113,13 @@ func TestProbeReportsTailscaleOfflineNode(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestDialPeerKeepsTryingNodeWithLiveDataPath(t *testing.T) {
+	// Offline to the coordination server, but this machine handshook with it
+	// a minute ago: traffic may still flow, so only the budget ends the dial.
+	fakeReach(t, 100*time.Millisecond, []tailnet.Peer{{HostName: "cabal", LastHandshake: time.Now().Add(-time.Minute), IPs: []string{"100.64.0.3"}}})
+	_, err := dialPeer(context.Background(), "tcp", "100.64.0.3:7443")
+	if !IsUnreachable(err) || !strings.Contains(err.Error(), "no answer within 100ms") {
+		t.Fatalf("err = %v", err)
+	}
+}

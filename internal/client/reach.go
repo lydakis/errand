@@ -22,14 +22,24 @@ import (
 // through a Tailscale relay, so the connect step gets its own short budget
 // while the request that follows keeps its full one. When a connection is
 // still pending shortly after it starts and its address belongs to a
-// Tailscale node, tailscaled already knows whether that node is offline;
-// asking it turns a timeout into an immediate, named answer.
+// Tailscale node, tailscaled may already know that node is gone; asking it
+// turns a timeout into an immediate, named answer.
+//
+// Tailscale's Online flag is control-plane state: a node that lost its
+// coordination server can still carry traffic, for example over a LAN. So a
+// node only counts as gone when it is offline and this machine has had no
+// WireGuard handshake with it within a session lifetime, which any working
+// data path (and any connection made a moment ago) would have.
 var (
 	peerConnectTimeout = 3 * time.Second
 	tailnetCheckAfter  = 300 * time.Millisecond
 	dialTCP            = (&net.Dialer{KeepAlive: 30 * time.Second}).DialContext
 	tailnetPeers       = cachedTailnetPeers
 )
+
+// wireGuardSessionLife is WireGuard's Reject-After-Time: a peer with no
+// handshake for this long has no usable session.
+const wireGuardSessionLife = 3 * time.Minute
 
 // UnreachableError reports that nothing could be connected to at a peer's
 // address, so no request was made.
@@ -53,8 +63,9 @@ func dialPeer(ctx context.Context, network, addr string) (net.Conn, error) {
 	defer cancel(nil)
 	dialCtx, cancelBudget := context.WithTimeout(dialCtx, peerConnectTimeout)
 	defer cancelBudget()
+	lookup := tailnetPeers
 	check := time.AfterFunc(tailnetCheckAfter, func() {
-		if err := tailnetOffline(dialCtx, addr); err != nil {
+		if err := tailnetOffline(dialCtx, addr, lookup); err != nil {
 			cancel(err)
 		}
 	})
@@ -105,9 +116,10 @@ var tailnetPrefixes = []netip.Prefix{
 }
 
 // tailnetOffline returns an UnreachableError when addr belongs to a node that
-// tailscaled reports offline. Any doubt (not a tailnet address, no
-// tailscaled, an unknown node) leaves the connection attempt alone.
-func tailnetOffline(ctx context.Context, addr string) error {
+// tailscaled reports offline and that has no live WireGuard session. Any
+// doubt (not a tailnet address, no tailscaled, an unknown node, a recent
+// handshake) leaves the connection attempt alone.
+func tailnetOffline(ctx context.Context, addr string, lookup func(context.Context) ([]tailnet.Peer, error)) error {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil
@@ -130,7 +142,7 @@ func tailnetOffline(ctx context.Context, addr string) error {
 	if len(wanted) == 0 {
 		return nil
 	}
-	peers, err := tailnetPeers(ctx)
+	peers, err := lookup(ctx)
 	if err != nil {
 		return nil
 	}
@@ -140,7 +152,7 @@ func tailnetOffline(ctx context.Context, addr string) error {
 			if err != nil || !wanted[ip.Unmap()] {
 				continue
 			}
-			if peer.Online {
+			if peer.Online || time.Since(peer.LastHandshake) < wireGuardSessionLife {
 				return nil
 			}
 			name := peer.HostName
@@ -157,30 +169,35 @@ func tailnetOffline(ctx context.Context, addr string) error {
 	return nil
 }
 
+// tailnetStatusFresh bounds how stale a shared status may be: long enough
+// for one fan-out's slow connections to share a lookup, short enough that a
+// handshake made since is seen.
+const tailnetStatusFresh = 2 * time.Second
+
 var tailnetCache struct {
 	sync.Mutex
-	done  bool
+	at    time.Time
 	peers []tailnet.Peer
 	err   error
 }
 
-// cachedTailnetPeers asks tailscaled once per process. Only connections that
-// are already slow get here, so a healthy fleet never pays for the lookup.
+// cachedTailnetPeers asks tailscaled at most once per tailnetStatusFresh.
+// Only connections that are already slow get here, so a healthy fleet never
+// pays for the lookup.
 func cachedTailnetPeers(ctx context.Context) ([]tailnet.Peer, error) {
 	tailnetCache.Lock()
 	defer tailnetCache.Unlock()
-	if !tailnetCache.done {
+	if time.Since(tailnetCache.at) >= tailnetStatusFresh {
 		provider, err := tailnet.Discover("", "")
+		var peers []tailnet.Peer
 		if err == nil {
-			tailnetCache.peers, err = provider.Peers(ctx)
+			peers, err = provider.Peers(ctx)
 		}
 		// A lookup cut short by this dial's deadline may succeed for the next.
-		if ctx.Err() == nil {
-			tailnetCache.done, tailnetCache.err = true, err
+		if ctx.Err() != nil {
+			return peers, err
 		}
-		if err != nil {
-			return nil, err
-		}
+		tailnetCache.at, tailnetCache.peers, tailnetCache.err = time.Now(), peers, err
 	}
 	return tailnetCache.peers, tailnetCache.err
 }

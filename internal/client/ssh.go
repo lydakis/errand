@@ -204,18 +204,21 @@ func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, er
 		conn.exited(err)
 	}()
 	// As in dialPeer: ssh still silent shortly after starting may be waiting
-	// on a Tailscale node that tailscaled already knows is offline.
+	// on a Tailscale node that is gone. A connection ssh did make, even one
+	// whose request is slow to answer, leaves a fresh WireGuard handshake,
+	// so tailnetOffline never cuts it.
+	budget, hostAddr, lookup := peerConnectTimeout, sshHostAddr, tailnetPeers
 	check := time.AfterFunc(tailnetCheckAfter, func() {
 		if conn.read.Load() {
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), peerConnectTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), budget)
 		defer cancel()
-		addr, err := sshHostAddr(ctx, target)
+		addr, err := hostAddr(ctx, target)
 		if err != nil || conn.read.Load() {
 			return
 		}
-		if offline := tailnetOffline(ctx, addr); offline != nil && !conn.read.Load() {
+		if offline := tailnetOffline(ctx, addr, lookup); offline != nil && !conn.read.Load() {
 			conn.abort(offline)
 		}
 	})
