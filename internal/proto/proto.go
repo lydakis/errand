@@ -278,6 +278,11 @@ type LogFrame struct {
 	TUnixMS int64  `json:"t_unix_ms"`
 }
 
+// LogHeartbeatInterval is how often a runner writes an SSE comment on an open
+// log stream, whatever the job is doing. A follower that hears nothing for a
+// few intervals knows the connection, not the job, has gone quiet.
+const LogHeartbeatInterval = 5 * time.Second
+
 type LogStreamError struct {
 	Message   string `json:"message"`
 	Retryable bool   `json:"retryable"`

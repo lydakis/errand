@@ -21,6 +21,17 @@ transaction fails, Errand exits 120. A secondary transaction failure is
 reported without replacing a nonzero process exit code. Detaching successfully
 returns zero for the detach action, before the remote command has finished.
 
+If the runner stops answering while you follow a job, Errand does not wait out
+the job's runtime limit. A runner writes a heartbeat on every open log stream
+every few seconds, so a connection that goes quiet is noticed within 15
+seconds and Errand reconnects, resuming the log where it stopped. When it
+cannot get the stream back for 60 seconds it stops, says the runner is
+unavailable and the job's state is unknown, prints the `errand status` and
+`errand attach` commands for the job, and exits 120. It never reports that as
+the job failing: the job may still be running, may have finished, or may have
+been lost with the runner. A Ctrl-C the runner never confirmed is called out
+along with the `errand kill` command, so it is not mistaken for a stopped job.
+
 ## Workspace selection and run preferences
 
 Run errand from a Git worktree for automatic snapshot selection. A non-Git

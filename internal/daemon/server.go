@@ -1592,6 +1592,8 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+	stream := startLogStream(w, flusher, logHeartbeatInterval)
+	defer stream.stop()
 
 	select {
 	case <-j.logReady:
@@ -1612,8 +1614,7 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 				return ctx.Err()
 			}
 			b, _ := json.Marshal(f)
-			fmt.Fprintf(w, "id: %d\nevent: log\ndata: %s\n\n", f.Seq, b)
-			flusher.Flush()
+			stream.write(fmt.Sprintf("id: %d\nevent: log\ndata: %s\n\n", f.Seq, b))
 			return nil
 		}); err != nil {
 			if ctx.Err() != nil {
@@ -1622,8 +1623,7 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 			b, _ := json.Marshal(proto.LogStreamError{
 				Message: err.Error(), Retryable: !logio.IsIntegrityError(err) && retryableLogFileError(err),
 			})
-			fmt.Fprintf(w, "event: error\ndata: %s\n\n", b)
-			flusher.Flush()
+			stream.write(fmt.Sprintf("event: error\ndata: %s\n\n", b))
 			return
 		}
 	} else {
@@ -1633,8 +1633,7 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 			b, _ := json.Marshal(proto.LogStreamError{
 				Message: "opening persisted logs: " + err.Error(), Retryable: retryableLogFileError(err),
 			})
-			fmt.Fprintf(w, "event: error\ndata: %s\n\n", b)
-			flusher.Flush()
+			stream.write(fmt.Sprintf("event: error\ndata: %s\n\n", b))
 			return
 		}
 	}
@@ -1644,8 +1643,52 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 		return
 	}
 	b, _ := json.Marshal(j.Status())
-	fmt.Fprintf(w, "event: status\ndata: %s\n\n", b)
-	flusher.Flush()
+	stream.write(fmt.Sprintf("event: status\ndata: %s\n\n", b))
+}
+
+var logHeartbeatInterval = proto.LogHeartbeatInterval
+
+// logStream serializes SSE writes for one log follower and keeps the
+// connection audibly alive while the job is staging, queued, silent, or
+// settling, so the client can tell a quiet job from a dead runner.
+type logStream struct {
+	mu      sync.Mutex
+	w       io.Writer
+	flusher http.Flusher
+	done    chan struct{}
+	stopped chan struct{}
+}
+
+func startLogStream(w io.Writer, flusher http.Flusher, interval time.Duration) *logStream {
+	s := &logStream{w: w, flusher: flusher, done: make(chan struct{}), stopped: make(chan struct{})}
+	go func() {
+		defer close(s.stopped)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.done:
+				return
+			case <-ticker.C:
+				s.write(":\n\n")
+			}
+		}
+	}()
+	return s
+}
+
+func (s *logStream) write(event string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	io.WriteString(s.w, event)
+	s.flusher.Flush()
+}
+
+// stop ends heartbeats before the handler returns; nothing may write to the
+// response after that.
+func (s *logStream) stop() {
+	close(s.done)
+	<-s.stopped
 }
 
 // handleChanges streams one immutable change bundle while holding a receipt

@@ -13,6 +13,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -34,7 +35,6 @@ const (
 	maintenanceTimeout    = 30 * time.Minute
 	submitRequestTimeout  = 31 * time.Minute
 	streamIdleTimeout     = 2 * time.Minute
-	streamDeadlineMargin  = 5 * time.Minute
 	maxProjectLabelBytes  = 128
 )
 
@@ -394,8 +394,8 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		if _, workerErr := ensureAutomaticApplyWorker(opts, jobID, automaticWorkerStarted); workerErr != nil {
 			errf("automatic workspace change application could not continue: %v", workerErr)
 		}
-		errf("%v", err)
-		errf("the job may still be running; resume with handle %s", handle)
+		reportStreamFailure(opts.Stderr, err, handle)
+		controller.reportUnconfirmedInterrupt()
 		return ExitTransaction, false
 	}
 	if !controller.releaseAtTerminal(interruptCtx) {
@@ -604,8 +604,8 @@ func attachWithDetachNotifications(
 		return controller.completeDetach(ctx)
 	}
 	if err != nil {
-		errf("%v", err)
-		errf("the job may still be running; resume with handle %s", handle)
+		reportStreamFailure(opts.Stderr, err, handle)
+		controller.reportUnconfirmedInterrupt()
 		return ExitTransaction
 	}
 	if !controller.releaseAtTerminal(ctx) {
@@ -1028,31 +1028,6 @@ type streamResult struct {
 	err    error
 }
 
-type streamDeadlineTracker struct {
-	deadline time.Time
-	phase    string
-}
-
-func newStreamDeadlineTracker(now time.Time, status proto.JobStatus) streamDeadlineTracker {
-	t := streamDeadlineTracker{deadline: now.Add(time.Duration(proto.DefaultLimits().MaxRuntimeSec)*time.Second + streamDeadlineMargin)}
-	t.observe(now, status)
-	return t
-}
-
-func (t *streamDeadlineTracker) observe(now time.Time, status proto.JobStatus) {
-	window := time.Duration(proto.DefaultLimits().MaxRuntimeSec)*time.Second + streamDeadlineMargin
-	switch {
-	case status.Result != nil:
-		t.phase = "terminal"
-	case status.State == proto.StateStaging || status.State == proto.StateQueued:
-		t.phase = status.State
-		t.deadline = now.Add(window)
-	case status.State == proto.StateRunning && t.phase != proto.StateRunning:
-		t.phase = proto.StateRunning
-		t.deadline = now.Add(window)
-	}
-}
-
 func streamUntilDetach(
 	opts RunOptions,
 	jobID string,
@@ -1090,6 +1065,61 @@ func streamUntilDetach(
 	}
 }
 
+// A log follower hears from the runner at least every heartbeat interval.
+// Missing several in a row means the connection went quiet, so the follower
+// reconnects; reconnecting without success for runnerContactWindow means the
+// runner is unavailable, and the follower stops instead of waiting out the
+// job's whole runtime limit.
+var (
+	logStreamIdleTimeout = 3 * proto.LogHeartbeatInterval
+	runnerContactWindow  = 60 * time.Second
+	reconnectBackoff     = func(attempt int) time.Duration { return min(time.Duration(attempt)*time.Second, 5*time.Second) }
+)
+
+// RunnerUnavailableError reports that a job's runner could not be heard from
+// for runnerContactWindow. It says nothing about the job: the job may still
+// be running, may have finished, or may have been lost with the runner.
+type RunnerUnavailableError struct {
+	For time.Duration
+	Err error // the last reconnect failure
+}
+
+func (e *RunnerUnavailableError) Error() string {
+	return fmt.Sprintf("runner unavailable for %s (%s)", seconds(e.For), e.reason())
+}
+
+func (e *RunnerUnavailableError) Unwrap() error { return e.Err }
+
+// reason is the last failure without the request URL, which only repeats the
+// handle the user is about to be shown.
+func (e *RunnerUnavailableError) reason() string {
+	var urlErr *neturl.Error
+	if errors.As(e.Err, &urlErr) {
+		return urlErr.Err.Error()
+	}
+	return e.Err.Error()
+}
+
+func seconds(d time.Duration) string {
+	return fmt.Sprintf("%ds", int64((d+time.Second/2)/time.Second))
+}
+
+// reportStreamFailure explains a follower that stopped before the job's
+// terminal status arrived. When the runner went quiet nothing is known about
+// the job, so the message says so rather than calling it a failure.
+func reportStreamFailure(stderr io.Writer, err error, handle string) {
+	var unavailable *RunnerUnavailableError
+	if !errors.As(err, &unavailable) {
+		fmt.Fprintf(stderr, "errand: %v\n", err)
+		fmt.Fprintf(stderr, "errand: the job may still be running; resume with handle %s\n", handle)
+		return
+	}
+	fmt.Fprintf(stderr, "errand: lost contact with the runner for %s (%s)\n", seconds(unavailable.For), unavailable.reason())
+	fmt.Fprintln(stderr, "errand: job state unknown; it may still be running there")
+	fmt.Fprintf(stderr, "errand: check it with: errand status %s\n", handle)
+	fmt.Fprintf(stderr, "errand: reattach with: errand attach %s\n", handle)
+}
+
 func streamContext(
 	ctx context.Context,
 	opts RunOptions,
@@ -1098,9 +1128,11 @@ func streamContext(
 ) (proto.JobStatus, error) {
 	terminalReplay := initial.State != proto.StateRunning && initial.Result != nil
 	var last int64
-	tracker := newStreamDeadlineTracker(time.Now(), initial)
-	for attempt := 0; ; attempt++ {
-		final, err := followOnceContext(ctx, opts, jobID, &last)
+	var failingSince time.Time
+	attempt := 0
+	heard := func() { failingSince, attempt = time.Time{}, 0 }
+	for {
+		final, err := followOnceContext(ctx, opts, jobID, &last, heard)
 		if err == nil {
 			return final, nil
 		}
@@ -1116,24 +1148,18 @@ func streamContext(
 			return proto.JobStatus{}, err
 		}
 		now := time.Now()
-		if tracker.phase == proto.StateStaging || tracker.phase == proto.StateQueued {
-			statusCtx, cancelStatus := context.WithTimeout(ctx, controlRequestTimeout)
-			status, statusErr := getStatusContext(statusCtx, opts.PeerURL, jobID)
-			cancelStatus()
-			if statusErr == nil {
-				now = time.Now()
-				tracker.observe(now, status)
-				terminalReplay = status.Result != nil
-			}
+		if failingSince.IsZero() {
+			failingSince = now
 		}
-		if now.After(tracker.deadline) {
-			kind := "log stream"
+		if quiet := now.Sub(failingSince); quiet >= runnerContactWindow {
 			if terminalReplay {
-				kind = "terminal log replay"
+				// The job's outcome is already known; only its logs are missing.
+				return proto.JobStatus{}, fmt.Errorf("terminal log replay failed for %s: %w", seconds(quiet), err)
 			}
-			return proto.JobStatus{}, fmt.Errorf("%s failed through transaction deadline: %w", kind, err)
+			return proto.JobStatus{}, &RunnerUnavailableError{For: quiet, Err: err}
 		}
-		timer := time.NewTimer(min(time.Duration(attempt+1)*time.Second, 5*time.Second))
+		attempt++
+		timer := time.NewTimer(reconnectBackoff(attempt))
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -1170,11 +1196,14 @@ func streamIntegrity(err error) error {
 	return &streamIntegrityError{err: err}
 }
 
+// followOnceContext follows one log connection. heard is called whenever the
+// runner proves it is serving this job: a heartbeat or a log frame.
 func followOnceContext(
 	ctx context.Context,
 	opts RunOptions,
 	jobID string,
 	last *int64,
+	heard func(),
 ) (proto.JobStatus, error) {
 	url := fmt.Sprintf("%s/v0/jobs/%s/logs?from=%d", opts.PeerURL, jobID, *last)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -1196,7 +1225,7 @@ func followOnceContext(
 
 	var event string
 	var data bytes.Buffer
-	sc := bufio.NewScanner(&idleReadCloser{ReadCloser: resp.Body, timeout: streamIdleTimeout})
+	sc := bufio.NewScanner(&idleReadCloser{ReadCloser: resp.Body, timeout: logStreamIdleTimeout})
 	sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
 	for sc.Scan() {
 		line := sc.Text()
@@ -1233,6 +1262,7 @@ func followOnceContext(
 					return proto.JobStatus{}, streamIntegrity(io.ErrShortWrite)
 				}
 				*last = f.Seq
+				heard()
 			case "status":
 				var st proto.JobStatus
 				if err := json.Unmarshal(data.Bytes(), &st); err != nil {
@@ -1252,6 +1282,8 @@ func followOnceContext(
 			}
 			event = ""
 			data.Reset()
+		case strings.HasPrefix(line, ":"):
+			heard() // heartbeat comment
 		case strings.HasPrefix(line, "event: "):
 			event = strings.TrimPrefix(line, "event: ")
 		case strings.HasPrefix(line, "data: "):

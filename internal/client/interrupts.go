@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"os"
+	"sync/atomic"
 	"time"
 )
 
@@ -74,6 +75,7 @@ type admittedJobController struct {
 	remote        chan struct{}
 	forwarded     chan error
 	done          chan struct{}
+	delivered     atomic.Bool // the runner accepted a forwarded SIGINT or force-kill
 }
 
 func newAdmittedJobController(target interruptTarget) *admittedJobController {
@@ -167,6 +169,7 @@ firstSignal:
 			map[string]string{"signal": "SIGINT"},
 			true,
 		)
+		c.delivered.Store(err == nil)
 		c.forwarded <- err
 		if err != nil && ctx.Err() == nil {
 			c.target.report("forwarding SIGINT failed: %v", err)
@@ -185,13 +188,29 @@ firstSignal:
 	c.target.notifications.stop()
 	killCtx, cancelKill := context.WithTimeout(ctx, controlRequestTimeout)
 	defer cancelKill()
-	if err := retryJobControl(
+	err := retryJobControl(
 		killCtx,
 		c.target.peerURL+"/v0/jobs/"+c.target.jobID+"/kill?force=1",
 		nil,
 		false,
-	); err != nil && ctx.Err() == nil {
+	)
+	if err == nil {
+		c.delivered.Store(true)
+	} else if ctx.Err() == nil {
 		c.target.report("force-kill failed: %v; process may still be running; handle %s", err, c.target.handle)
+	}
+}
+
+// reportUnconfirmedInterrupt runs when following stops before the job's end.
+// A Ctrl-C the runner never accepted must not read as a stopped job.
+func (c *admittedJobController) reportUnconfirmedInterrupt() {
+	select {
+	case <-c.remote:
+	default:
+		return
+	}
+	if !c.delivered.Load() {
+		c.target.report("Ctrl-C was not confirmed by the runner; stop the job with: errand kill %s", c.target.handle)
 	}
 }
 
