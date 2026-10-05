@@ -173,14 +173,45 @@ func (s *Watch) Close() error {
 }
 
 // InvalidatePreparation requests full source reconciliation after freezing or
-// packing finds a change before its native event arrives. It preserves queued
-// dirty hints and notifications without scheduling a cycle itself, so callers
-// retain control of retry backoff. It may run concurrently with event delivery.
+// packing finds a change, not attributable to files (see InvalidateFiles),
+// before its native event arrives. It preserves queued dirty hints and
+// notifications without scheduling a cycle itself, so callers retain control
+// of retry backoff. It may run concurrently with event delivery.
 func (s *Watch) InvalidatePreparation() {
 	s.dirtyMu.Lock()
 	s.fullScan = true
 	s.resetHashes = true
 	s.dirtyMu.Unlock()
+}
+
+// InvalidateFiles requests rereading files that freezing or packing found
+// changed before their native events arrived. Cached hashes are keyed by each
+// file's identity and timestamps, and selection evidence still proves
+// membership, so the rest of the preparation stays valid. Paths are native,
+// under the watched root; any other path forces full reconciliation. Like
+// InvalidatePreparation, it does not schedule a cycle.
+func (s *Watch) InvalidateFiles(paths []string) {
+	s.requeuePreparation(nil, false, false, false, paths)
+}
+
+// requeuePreparation returns hints a failed preparation consumed, plus files
+// found changed while they were read. A changed file may have been replaced,
+// so its directory is relisted as for an editor's rename-over save.
+func (s *Watch) requeuePreparation(dirty map[string]dirtyKind, full, reset, owed bool, files []string) {
+	s.dirtyMu.Lock()
+	defer s.dirtyMu.Unlock()
+	if s.dirty == nil {
+		s.dirty = make(map[string]dirtyKind)
+	}
+	for name, kind := range dirty {
+		s.dirty[name] = max(s.dirty[name], kind)
+	}
+	for _, name := range files {
+		s.dirty[name] = max(s.dirty[name], dirtyEntry)
+	}
+	s.fullScan = s.fullScan || full
+	s.resetHashes = s.resetHashes || reset
+	s.owedFull = s.owedFull || owed
 }
 
 func (s *Watch) invalidate() {
