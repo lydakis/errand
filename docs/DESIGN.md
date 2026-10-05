@@ -478,7 +478,12 @@ becomes a requirement — in which case it belongs in milestone 1.
   protocol, so payloads are base64. Ordering is **daemon-observed order**:
   there is no intrinsic total order between two pipes, only the order the
   daemon drained them. Reconnect resumes via `Last-Event-ID`. Plain
-  `stdout.log`/`stderr.log` are derived views.
+  `stdout.log`/`stderr.log` are derived views. The daemon writes an SSE
+  heartbeat comment every 5 seconds on every open stream, so a follower
+  can tell a silent job from a silent runner: three missed heartbeats mean
+  reconnect, and 60 seconds without getting the stream back means the
+  runner is unavailable and the job's state is unknown. The follower then
+  stops and says so instead of reporting a job failure.
 - **Separate outcomes.** `result.json` distinguishes
   `{exit_code, signal, changes_ok, cleanup_ok, logs_complete}` — a job can
   succeed while collection or cleanup fails, and the receipt says which.
