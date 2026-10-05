@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import shlex
@@ -9,6 +10,7 @@ import tomllib
 import unittest
 from unittest import mock
 
+import benchmark_loop
 from benchmark_loop import (Lines, Loop, NoOutput, burst_receipts, observer_command, peer_config, summarize,
                             tree_cpu, write_fixture)
 from benchmark_watch import cpu_seconds
@@ -148,6 +150,18 @@ class TreeCpuTest(unittest.TestCase):
         self.assertLess(cpu_seconds(pid)[0], 0.1)
         self.assertGreater(tree_cpu(pid), 0.25)
 
+    def test_rereads_the_parent_when_a_descendant_exits_mid_sample(self):
+        # The child is listed, then exits and is reaped after the parent was read.
+        reads = {1: iter([1.0, 1.5])}
+
+        def reaped(pid):
+            if pid == 2:
+                raise OSError("gone")
+            return next(reads[pid])
+        with mock.patch.object(benchmark_loop.subprocess, "check_output", return_value="1 0\n2 1\n"), \
+                mock.patch.object(benchmark_loop, "reaped_cpu", side_effect=reaped):
+            self.assertEqual(tree_cpu(1), 1.5)
+
     def test_counts_live_descendants(self):
         # Like an SSH transport that outlives every sample.
         pid = self.watch_like(f"({self.BUSY}; sleep 30) & sleep 1; echo done; wait")
@@ -164,6 +178,23 @@ class ArgumentTest(unittest.TestCase):
             self.assertEqual(run.returncode, 2)
             self.assertIn("duplicate checkout size", run.stderr)
             self.assertFalse(output.exists())
+
+    def test_a_runner_on_another_version_is_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            stub = Path(root, "errand")
+            info = json.dumps([{"name": "old", "status": "ready", "info": {"version": "0.7.0", "running_jobs": 0}}])
+            stub.write_text(f"#!/bin/sh\ncase $1 in version) echo errand 0.1.0-dev;; peers) echo '{info}';; *) exit 9;; esac\n")
+            stub.chmod(0o755)
+            Path(root, "config", "errand").mkdir(parents=True)
+            Path(root, "config", "errand", "config.toml").write_text('[peers.old]\nurl = "http://old:7443"\n')
+            output = Path(root, "out")
+            run = subprocess.run([sys.executable, str(Path(__file__).with_name("benchmark_loop.py")), "--binary", str(stub),
+                                  "--on", "old", "--output", str(output)], capture_output=True, text=True,
+                                 env=dict(os.environ, XDG_CONFIG_HOME=str(Path(root, "config"))), cwd=root)
+            self.assertEqual(run.returncode, 1, run.stderr)
+            report = json.loads((output / "report.json").read_text())
+            self.assertFalse(report["complete"])
+            self.assertIn("runs errand 0.7.0", report["error"])
 
 
 class SummaryTest(unittest.TestCase):

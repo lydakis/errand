@@ -56,8 +56,10 @@ whole-tree verification.
 ## Running it
 
 Build the commit being scored; the client and every daemon it talks to must
-run that build. Generated reports stay under ignored `dist/` because they
-contain peer facts and job handles.
+run that build. The harness refuses a runner that reports a different version,
+which catches a released runner but not another development build. Generated
+reports stay under ignored `dist/` because they contain peer facts and job
+handles.
 
 ```sh
 git rev-parse --short HEAD
@@ -110,6 +112,9 @@ runs. Each run leaves its finished jobs on the runner for normal retention and
 removes the workspace it created.
 
 ## Current main
+
+Both data files below were recorded before the harness gave `watch-start` and
+`burst` rows CPU, so those rows have none.
 
 ### Native machines and laptop to runner, `154c370`
 

@@ -111,19 +111,29 @@ def tree_cpu(pid):
     one-shot rows count theirs too.
     """
     rows = subprocess.check_output(["ps", "-A", "-o", "pid=", "-o", "ppid="], text=True).split()
-    children = collections.defaultdict(list)
-    for child, parent in zip(rows[::2], rows[1::2]):
-        children[int(parent)].append(int(child))
-    total, stack = 0.0, [pid]
+    parents, children = {}, collections.defaultdict(list)
+    for child, parent in zip(map(int, rows[::2]), map(int, rows[1::2])):
+        parents[child] = parent
+        children[parent].append(child)
+    used, stack = {}, [pid]
     while stack:
         current = stack.pop()
         stack += children[current]
         try:
-            total += reaped_cpu(current)
+            used[current] = reaped_cpu(current)
         except OSError:
             if current == pid:
-                raise  # a descendant that exited meanwhile is in its parent's reaped time later
-    return total
+                raise
+            # It exited after the listing and was reaped after its parent was
+            # read, so read the nearest live ancestor again.
+            while current != pid:
+                current = parents[current]
+                try:
+                    used[current] = reaped_cpu(current)
+                    break
+                except OSError:
+                    pass
+    return sum(used.values())
 
 
 def children_cpu():
@@ -596,6 +606,10 @@ def main():
                 info = before[0]["info"]
                 if any(info.get(key, 0) for key in ("running_jobs", "starting_jobs", "staging_jobs", "queued_jobs")):
                     raise ValueError(f"{peer} has active jobs; benchmark an idle runner")
+                # Development builds all report 0.1.0-dev, so this catches a released runner only.
+                if info.get("version") != report["client_version"].removeprefix("errand "):
+                    raise ValueError(f"{peer} runs errand {info.get('version')}, not the client's "
+                                     f"{report['client_version']}; score one build on both ends")
                 report["peers"][peer] = {"before": before}
                 for files in sizes:
                     def record(case, sample, row):
