@@ -793,7 +793,7 @@ func TestInfoShowsOffersOnlyWithLeaseIDs(t *testing.T) {
 
 // A leased machine admits its owner for every action, so an owner whose
 // submit action was taken away is not shown where its leases are, and they
-// end.
+// end at its next request of any kind, even one it is no longer allowed.
 func TestLeasesEndWithoutSubmit(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("provider scripts are POSIX shell")
@@ -802,7 +802,19 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 	acquire := filepath.Join(dir, "acquire.sh")
 	os.WriteFile(acquire, []byte("#!/bin/sh\necho '{\"url\":\"http://box:7443\"}'\n"), 0o700)
 	gpu := []proto.GPU{{Name: "NVIDIA H100 80GB HBM3", MemoryMiB: 81559}}
-	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: "test", GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: &cloud.Config{
+	var actions atomic.Pointer[[]string]
+	socket := fakeWhoisSocketHandler(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Tailscale-Version", "1.100.0")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"Node":        map[string]any{"Name": "laptop.tailnet.ts.net.", "StableID": "node-1"},
+			"UserProfile": map[string]any{"ID": 7, "LoginName": "someone@github"},
+			"CapMap": map[string]any{
+				proto.DefaultCapability: []any{map[string]any{"actions": *actions.Load()}},
+			},
+		})
+	}, nil)
+	d, err := New(Config{StateDir: t.TempDir(), TailscaledSocket: socket, Version: "test", GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: &cloud.Config{
 		Offers:    []cloud.Offer{{Name: "x", Facts: proto.Facts{GPUs: gpu}, Provider: cloud.CommandProvider{AcquireCommand: []string{acquire}, ReleaseCommand: []string{"/bin/true"}}, IdleTimeout: time.Hour, MaxLifetime: time.Hour}},
 		AdmitKeys: func(context.Context, proto.LeaseTarget, string, []string) error { return nil },
 		Probe: func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) {
@@ -814,35 +826,60 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	id := Identity{Login: "someone@github", UserID: 7, Actions: map[string]bool{proto.ActionSubmit: true, proto.ActionLease: true}}
-	lease, err := d.broker.Acquire(leaseOwner(id), id.Login, "gpu", "", proto.NewULID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	info := func(id Identity) proto.Info {
-		w := httptest.NewRecorder()
-		d.handleInfo(w, httptest.NewRequest(http.MethodGet, "/v0/info", nil), id)
+	ts := httptest.NewServer(d.Handler())
+	defer ts.Close()
+	owner := Identity{Login: "someone@github", UserID: 7}
+	info := func(granted ...string) (int, proto.Info) {
+		actions.Store(&granted)
+		res, err := ts.Client().Get(ts.URL + "/v0/info")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
 		var info proto.Info
-		json.Unmarshal(w.Body.Bytes(), &info)
-		return info
+		json.NewDecoder(res.Body).Decode(&info)
+		return res.StatusCode, info
 	}
-	for deadline := time.Now().Add(5 * time.Second); ; {
-		got := info(id)
-		if len(got.Leases) == 1 && got.Leases[0].State == proto.LeaseReady && got.Leases[0].Target != nil {
-			break
+	ready := func() proto.Lease {
+		lease, err := d.broker.Acquire(leaseOwner(owner), owner.Login, "gpu", "", proto.NewULID())
+		if err != nil {
+			t.Fatal(err)
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("lease never ready: %+v", got.Leases)
+		for deadline := time.Now().Add(5 * time.Second); ; {
+			_, got := info(proto.ActionSubmit, proto.ActionLease)
+			if len(got.Leases) == 1 && got.Leases[0].State == proto.LeaseReady && got.Leases[0].Target != nil {
+				return lease
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("lease never ready: %+v", got.Leases)
+			}
+			time.Sleep(10 * time.Millisecond)
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
-	id.Actions = map[string]bool{proto.ActionLease: true}
-	if got := info(id); len(got.Leases) != 1 || got.Leases[0].Target != nil {
-		t.Fatalf("a caller without submit was shown its lease's target: %+v", got.Leases)
+	ended := func(lease proto.Lease, after string) {
+		t.Helper()
+		if l, _ := d.broker.Get(leaseOwner(owner), lease.ID); l.State == proto.LeaseReady {
+			t.Fatalf("lease kept after %s: %+v", after, l)
+		}
 	}
-	if l, _ := d.broker.Get(leaseOwner(id), lease.ID); l.State == proto.LeaseReady {
-		t.Fatalf("lease kept after its owner lost submit: %+v", l)
+
+	lease := ready()
+	if code, got := info(proto.ActionLease); code != http.StatusOK || len(got.Leases) != 1 || got.Leases[0].Target != nil {
+		t.Fatalf("a caller without submit was shown its lease's target: %d %+v", code, got.Leases)
 	}
+	ended(lease, "its owner lost submit")
+
+	lease = ready()
+	if code, got := info(proto.ActionReadOwn); code != http.StatusOK || len(got.Leases) != 0 {
+		t.Fatalf("info without lease: %d %+v", code, got.Leases)
+	}
+	ended(lease, "its owner lost submit and lease")
+
+	lease = ready()
+	if code, _ := info(); code != http.StatusForbidden {
+		t.Fatalf("info with no grant: %d", code)
+	}
+	ended(lease, "its owner lost every action")
 }
 
 // A web page cannot make a caller's browser lease a machine.

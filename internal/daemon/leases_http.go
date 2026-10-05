@@ -118,7 +118,6 @@ func (d *Daemon) handleLeaseList(w http.ResponseWriter, _ *http.Request, id Iden
 	if !d.requireBroker(w) {
 		return
 	}
-	d.checkLeaseAccess(id)
 	leases := leaseView(id, d.broker.List(leaseOwner(id)))
 	if leases == nil {
 		leases = []proto.Lease{}
@@ -130,7 +129,6 @@ func (d *Daemon) handleLeaseGet(w http.ResponseWriter, r *http.Request, id Ident
 	if !d.requireBroker(w) {
 		return
 	}
-	d.checkLeaseAccess(id)
 	lease, ok := d.broker.Get(leaseOwner(id), r.PathValue("id"))
 	if !ok {
 		httpError(w, http.StatusNotFound, "no such lease")
@@ -141,7 +139,7 @@ func (d *Daemon) handleLeaseGet(w http.ResponseWriter, r *http.Request, id Ident
 
 // A leased machine admits its owner for every action, so holding a lease
 // needs the submit action here. An owner who has lost it loses its leases
-// the next time it asks about them, and is never told where they are.
+// at its next request to this runner, and is never told where they are.
 func (d *Daemon) checkLeaseAccess(id Identity) {
 	if !id.Allowed(proto.ActionSubmit) {
 		_ = d.broker.EndAll(leaseOwner(id), "its owner may no longer submit jobs on this runner")
