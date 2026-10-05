@@ -27,6 +27,8 @@ outside the timer.
 """
 
 import argparse
+import collections
+import ctypes
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -77,6 +79,51 @@ for line in sys.stdin:
             break
         time.sleep(.002)
 """
+
+
+class _Usage(ctypes.Structure):
+    """macOS's rusage_info_v2: own and reaped-children CPU, in Mach time units."""
+    _fields_ = [("uuid", ctypes.c_uint8 * 16)] + [(name, ctypes.c_uint64) for name in (
+        "user", "system", "pkg_idle_wkups", "interrupt_wkups", "pageins", "wired_size", "resident_size",
+        "phys_footprint", "start", "exit", "child_user", "child_system")] + [("rest", ctypes.c_uint64 * 6)]
+
+
+class _Timebase(ctypes.Structure):
+    _fields_ = [("numer", ctypes.c_uint32), ("denom", ctypes.c_uint32)]
+
+
+def reaped_cpu(pid):
+    """CPU seconds of a live process plus the children it has waited for."""
+    if platform.system() == "Linux":
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        return sum(int(f) for f in fields[11:15]) / os.sysconf("SC_CLK_TCK")  # utime, stime, cutime, cstime
+    libc, usage, base = ctypes.CDLL(None), _Usage(), _Timebase()
+    if libc.proc_pid_rusage(pid, 2, ctypes.byref(usage)) != 0:  # RUSAGE_INFO_V2
+        raise OSError(f"no usage for process {pid}")
+    libc.mach_timebase_info(ctypes.byref(base))
+    return (usage.user + usage.system + usage.child_user + usage.child_system) * base.numer / base.denom / 1e9
+
+
+def tree_cpu(pid):
+    """CPU seconds of a live process and its live descendants, with what each has reaped.
+
+    The watch's Git helpers and an SSH transport are its children, and the
+    one-shot rows count theirs too.
+    """
+    rows = subprocess.check_output(["ps", "-A", "-o", "pid=", "-o", "ppid="], text=True).split()
+    children = collections.defaultdict(list)
+    for child, parent in zip(rows[::2], rows[1::2]):
+        children[int(parent)].append(int(child))
+    total, stack = 0.0, [pid]
+    while stack:
+        current = stack.pop()
+        stack += children[current]
+        try:
+            total += reaped_cpu(current)
+        except OSError:
+            if current == pid:
+                raise  # a descendant that exited meanwhile is in its parent's reaped time later
+    return total
 
 
 def children_cpu():
@@ -307,7 +354,7 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
             return stamp, row
 
         stamp, _ = receipt()
-        result = dict(wall_ms=(stamp - started) * 1000, client_cpu_ms=cpu_seconds(watch.process.pid)[0] * 1000)
+        result = dict(wall_ms=(stamp - started) * 1000, client_cpu_ms=tree_cpu(watch.process.pid) * 1000)
         if loop.daemon:
             result["daemon_cpu_ms"] = (cpu_seconds(loop.daemon.pid)[0] - daemon) * 1000
         record("watch-start", 0, result)
@@ -317,7 +364,7 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
             body = f"{seed} save {sample}"
             if poller:
                 poller.send(body)
-            client = cpu_seconds(watch.process.pid)[0]
+            client = tree_cpu(watch.process.pid)
             daemon = cpu_seconds(loop.daemon.pid)[0] if loop.daemon else None
             started = time.monotonic()
             (repo / "edit.txt").write_text(body + "\n")
@@ -331,7 +378,7 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
                 if status != "seen":
                     raise ValueError("the runner's copy never showed the save")
                 result["visible_ms"] = (seen - started) * 1000
-            result["client_cpu_ms"] = (cpu_seconds(watch.process.pid)[0] - client) * 1000
+            result["client_cpu_ms"] = (tree_cpu(watch.process.pid) - client) * 1000
             if loop.daemon:
                 result["daemon_cpu_ms"] = (cpu_seconds(loop.daemon.pid)[0] - daemon) * 1000
             record("save", sample, result)
@@ -340,7 +387,7 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
         last = f"{seed} burst {BURST_EDITS - 1}"
         if poller:
             poller.send(last)
-        client = cpu_seconds(watch.process.pid)[0]
+        client = tree_cpu(watch.process.pid)
         daemon = cpu_seconds(loop.daemon.pid)[0] if loop.daemon else None
         started = time.monotonic()
         for edit in range(BURST_EDITS):
@@ -356,7 +403,7 @@ def measure_saves(loop, peer, files, samples, seed, temp, record, target):
         # least twice the slowest single save before calling it finished.
         stamp, receipts = burst_receipts(receipt, started, max(1, 2 * slowest))
         result.update(wall_ms=(stamp - started) * 1000, receipts=receipts,
-                      client_cpu_ms=(cpu_seconds(watch.process.pid)[0] - client) * 1000)
+                      client_cpu_ms=(tree_cpu(watch.process.pid) - client) * 1000)
         if loop.daemon:
             result["daemon_cpu_ms"] = (cpu_seconds(loop.daemon.pid)[0] - daemon) * 1000
         burst = result
@@ -504,6 +551,8 @@ def main():
         parser.error(f"binary not found: {args.binary}")
     binary = str(Path(binary).resolve())
     sizes = args.files or [1000]
+    if len(set(sizes)) != len(sizes):
+        parser.error("duplicate checkout size")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     nonce = uuid.uuid4().hex
@@ -527,7 +576,8 @@ def main():
             temp = Path(directory).resolve()
             # Isolate local receipt and apply state, and the client config: configured
             # peers keep only their own entries from the user's config.
-            env = dict(os.environ, XDG_STATE_HOME=str(temp / "state"), XDG_CONFIG_HOME=str(temp / "config"))
+            env = dict(os.environ, XDG_STATE_HOME=str(temp / "state"), XDG_CONFIG_HOME=str(temp / "config"),
+                       GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")  # no fsmonitor, hooks or global ignores
             peers = args.on
             if args.isolated:
                 (temp / "sockets").mkdir()

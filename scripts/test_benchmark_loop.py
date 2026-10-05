@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
+import shlex
 import subprocess
+import sys
 import tempfile
 import time
 import tomllib
@@ -8,7 +10,8 @@ import unittest
 from unittest import mock
 
 from benchmark_loop import (Lines, Loop, NoOutput, burst_receipts, observer_command, peer_config, summarize,
-                            write_fixture)
+                            tree_cpu, write_fixture)
+from benchmark_watch import cpu_seconds
 
 
 class LoopRunTest(unittest.TestCase):
@@ -128,6 +131,39 @@ class BurstTest(unittest.TestCase):
 
     def test_stops_at_a_silence_longer_than_twice_the_slowest_push(self):
         self.assertEqual(burst_receipts(self.receipts([0.3, 0.6, 2.0]), 0, 1), (0.6, 2))
+
+
+class TreeCpuTest(unittest.TestCase):
+    BUSY = shlex.quote(sys.executable) + " -c " + shlex.quote(
+        "import time\nt = time.process_time()\nwhile time.process_time() - t < 0.3: pass")
+
+    def watch_like(self, script):
+        process = Lines(["sh", "-c", script], ".", dict(os.environ))
+        self.addCleanup(lambda: (process.process.kill(), process.process.wait()))
+        self.assertEqual(process.next(30)[1], "done")
+        return process.process.pid
+
+    def test_counts_children_the_process_has_reaped(self):
+        pid = self.watch_like(f"{self.BUSY}; echo done; sleep 30")
+        self.assertLess(cpu_seconds(pid)[0], 0.1)
+        self.assertGreater(tree_cpu(pid), 0.25)
+
+    def test_counts_live_descendants(self):
+        # Like an SSH transport that outlives every sample.
+        pid = self.watch_like(f"({self.BUSY}; sleep 30) & sleep 1; echo done; wait")
+        self.assertGreater(tree_cpu(pid), 0.25)
+
+
+class ArgumentTest(unittest.TestCase):
+    def test_duplicate_sizes_are_refused_before_any_output(self):
+        with tempfile.TemporaryDirectory() as root:
+            output = Path(root, "out")
+            run = subprocess.run([sys.executable, str(Path(__file__).with_name("benchmark_loop.py")), "--binary", "/bin/sh",
+                                  "--isolated", "--files", "1000", "--files", "1000", "--output", str(output)],
+                                 capture_output=True, text=True)
+            self.assertEqual(run.returncode, 2)
+            self.assertIn("duplicate checkout size", run.stderr)
+            self.assertFalse(output.exists())
 
 
 class SummaryTest(unittest.TestCase):
