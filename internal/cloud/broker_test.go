@@ -790,10 +790,12 @@ func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 			if why == "idle" {
 				h.cfg.Offers[0].IdleTimeout = 200 * time.Millisecond
 			}
+			// Each idle probe (not the readiness check) waits for the test.
 			var hold atomic.Bool
+			hold.Store(true)
 			probing, answer := make(chan struct{}), make(chan struct{})
 			h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
-				if where == "" && hold.Load() { // an idle probe, not the readiness check
+				if where == "" && hold.Load() {
 					probing <- struct{}{}
 					<-answer
 				}
@@ -806,21 +808,19 @@ func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 				t.Fatal(err)
 			}
 			waitState(t, b, "george", l.ID, proto.LeaseReady)
-			hold.Store(true)
+			<-probing // the first idle probe, which will find the machine idle
 			if why == "unwanted" {
-				if _, err := b.Withdraw("george", first); err != nil { // wakes the worker
+				if _, err := b.Withdraw("george", first); err != nil {
 					t.Fatal(err)
 				}
 			} else {
 				time.Sleep(300 * time.Millisecond) // past the idle deadline
-				wake(b, l.ID)
 			}
-			<-probing
 			if again, err := b.Acquire("george", "", "gpu", "", second); err != nil || again.ID != l.ID {
 				t.Fatalf("reuse: %+v %v", again, err)
 			}
 			hold.Store(false)
-			close(answer)
+			answer <- struct{}{}
 			time.Sleep(100 * time.Millisecond)
 			if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
 				t.Fatalf("a lease handed out during the probe was released: %+v", got)
