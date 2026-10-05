@@ -100,3 +100,18 @@ func leaseRequest(ctx context.Context, method, endpoint string, body []byte, dst
 	}
 	return nil
 }
+
+// LeaseRefused reports whether a cloud peer turned a lease request down
+// before starting anything: the caller may not lease there, nothing there
+// matches, or it is at its lease limit.
+func LeaseRefused(err error) bool {
+	var refused *controlHTTPError
+	if !errors.As(err, &refused) {
+		return false
+	}
+	switch refused.statusCode {
+	case http.StatusForbidden, http.StatusPreconditionFailed, http.StatusTooManyRequests:
+		return true
+	}
+	return false
+}

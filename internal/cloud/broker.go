@@ -224,9 +224,14 @@ func (b *Broker) load() ([]record, error) {
 func (b *Broker) Offers() []proto.Offer {
 	out := make([]proto.Offer, 0, len(b.cfg.Offers))
 	for _, o := range b.cfg.Offers {
-		out = append(out, proto.Offer{Name: o.Name, Facts: o.Facts, PricePerHour: o.PricePerHour, IdleTimeoutSec: int64(o.IdleTimeout / time.Second), MaxLifetimeSec: int64(o.MaxLifetime / time.Second)})
+		out = append(out, o.Offer())
 	}
 	return out
+}
+
+// Offer is how o is advertised.
+func (o *Offer) Offer() proto.Offer {
+	return proto.Offer{Name: o.Name, Facts: o.Facts, PricePerHour: o.PricePerHour, IdleTimeoutSec: int64(o.IdleTimeout / time.Second), MaxLifetimeSec: int64(o.MaxLifetime / time.Second)}
 }
 
 // Acquire returns the lease an earlier request with the same requestID
@@ -316,8 +321,10 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 		o := &b.cfg.Offers[i]
 		missing := q.Missing(o.Facts)
 		if len(missing) == 0 {
-			offer = o
-			break
+			if offer == nil || placement.CheaperOffer(o.Offer(), offer.Offer()) {
+				offer = o
+			}
+			continue
 		}
 		reasons = append(reasons, o.Name+": "+strings.Join(missing, "; "))
 	}
@@ -532,14 +539,15 @@ func (b *Broker) work(l *lease) {
 // the lease is ready or releasing, or the broker is closing, so it never
 // acquires twice.
 func (b *Broker) launch(l *lease) {
-	offer := b.offers[l.Offer] // only this process's leases are launching
 	b.mu.Lock()
 	if l.State != proto.LeaseLaunching {
 		b.mu.Unlock()
 		return // released before the acquire started
 	}
+	offer := b.offers[l.Offer] // only this process's leases are launching
 	// The hard stop holds while launching too.
-	deadline := earlier(l.CreatedAt.Add(b.cfg.AcquireTimeout), l.ExpiresAt)
+	created := l.CreatedAt
+	deadline := earlier(created.Add(b.cfg.AcquireTimeout), l.ExpiresAt)
 	ctx, cancel := context.WithDeadline(b.ctx, deadline)
 	l.stop = cancel
 	id, where, login, sshKey := l.ID, l.Where, l.Login, l.SSHKey
@@ -559,7 +567,7 @@ func (b *Broker) launch(l *lease) {
 	if ctx.Err() != nil {
 		err = errors.New("acquire canceled")
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			err = fmt.Errorf("acquire did not finish within %s", deadline.Sub(l.CreatedAt))
+			err = fmt.Errorf("acquire did not finish within %s", deadline.Sub(created))
 		}
 	}
 	if err == nil {

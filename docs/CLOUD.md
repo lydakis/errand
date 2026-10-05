@@ -37,9 +37,15 @@ cloud peer still ends them when they go idle or reach their lifetime.
 - Only when no reachable runner of yours matches the requirements. A matching
   runner that is busy queues the job; errand does not rent a second machine.
 - Never for `--where '*'`.
-- The first configured cloud peer (by name) with a matching offer is used, and
-  its first matching offer. A ready or launching lease of yours that already
-  matches is reused, if you asked for it from the same machine.
+- Every reachable cloud peer with a matching offer can supply the machine.
+  The cheapest matching offer wins: an offer with `price_per_hour` before one
+  without, and equal offers in random order. Neither your default peer nor how
+  busy a cloud peer's own runner is plays a part. If a cloud peer turns the
+  request down before starting anything (no permission, nothing matches any
+  more, or it is at `max_leases`), the next one is asked. A cloud peer that
+  does not answer is skipped, so keep offers on an always-on machine. A ready
+  or launching lease of yours that already matches is reused, if you asked
+  for it from the same machine.
 - An offer's facts are a claim. The lease becomes ready only once the machine
   answers as an errand runner whose measured facts match, and the runner
   rechecks them when the job is admitted.

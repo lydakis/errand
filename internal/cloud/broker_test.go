@@ -875,3 +875,19 @@ func TestLeaseHoldersAreBounded(t *testing.T) {
 		t.Fatalf("request past the bound: %v", err)
 	}
 }
+
+// A cloud peer leases its cheapest matching offer, priced before unpriced,
+// the same order clients rank cloud peers' offers in.
+func TestAcquireTakesCheapestMatchingOffer(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	base := h.cfg.Offers[0]
+	pool, dear, cheap := base, base, base
+	pool.Name, dear.Name, cheap.Name = "pool", "dear", "cheap"
+	dear.PricePerHour, cheap.PricePerHour = 3.5, 1.25
+	h.cfg.Offers = []Offer{pool, dear, cheap}
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", proto.NewULID())
+	if err != nil || l.Offer != "cheap" {
+		t.Fatalf("leased %q: %v", l.Offer, err)
+	}
+}
