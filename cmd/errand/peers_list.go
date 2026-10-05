@@ -40,12 +40,19 @@ func leaseRows(rows []peerRow, deps peersDeps) ([]peerRow, []string) {
 			continue
 		}
 		for _, lp := range leasePeersOf(cfg, row.Name, *row.Info) {
-			c := leaseCandidate(lp)
-			leases = append(leases, peerRow{Name: lp.Name, Target: peerURLOf(lp.Peer), Lease: fmt.Sprintf("%s from %s", lp.Lease.Offer, lp.Broker)})
-			targets = append(targets, client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket))
+			row, target := leaseRow(lp)
+			leases = append(leases, row)
+			targets = append(targets, target)
 		}
 	}
 	return leases, targets
+}
+
+// leaseRow is a ready lease's row, with its transport.
+func leaseRow(lp leasePeer) (peerRow, string) {
+	c := leaseCandidate(lp)
+	row := peerRow{Name: lp.Name, Target: peerURLOf(lp.Peer), Lease: fmt.Sprintf("%s from %s", lp.Lease.Offer, lp.Broker)}
+	return row, client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
 }
 
 func cmdPeersList(args []string, stdout, stderr io.Writer, deps peersDeps) int {
@@ -144,7 +151,15 @@ func peerListTargets(on, rawURL string, deps peersDeps) ([]peerRow, []string, er
 	}
 	if on != "" {
 		if _, ok := cfg.Peers[on]; !ok {
-			return nil, nil, fmt.Errorf("unknown peer %q", on)
+			lp, ok, err := leasePeerNamed(cfg, on)
+			if err != nil {
+				return nil, nil, err
+			}
+			if !ok {
+				return nil, nil, fmt.Errorf("unknown peer %q", on)
+			}
+			row, target := leaseRow(lp)
+			return []peerRow{row}, []string{target}, nil
 		}
 		cfg.Peers = map[string]config.Peer{on: cfg.Peers[on]}
 	}

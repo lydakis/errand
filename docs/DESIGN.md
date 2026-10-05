@@ -932,8 +932,12 @@ full-duplex TCP connection in its request and response bodies;
 `GET /v0/change-reconciliation` pages through durable owner- and client-scoped
 collection markers so local change GC can reconcile after a lost deletion
 response; `POST /v0/change-reconciliation/ack` releases the change hold after that
-reconciliation while preserving the replay-prevention lifetime; and
-`GET /v0/info` returns facts. A negotiated blob disappearing before
+reconciliation while preserving the replay-prevention lifetime;
+`POST /v0/leases` hands a cloud peer's caller a lease for one run, named by
+the run's request ID; `DELETE /v0/lease-requests/<request id>` withdraws only
+that run's hold on the lease it was handed (lease guarantee 3), and is not a
+user-facing command; `GET /v0/leases` and `DELETE /v0/leases/<id>` list and
+release the caller's leases; and `GET /v0/info` returns facts. A negotiated blob disappearing before
 submission returns the machine-readable `snapshot_cache_miss` error code so
 the client can retry the same job ID with a complete snapshot. Curl-debuggable;
 the route prefix is the request-protocol version; receipt and change-bundle

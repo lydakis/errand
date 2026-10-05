@@ -144,6 +144,10 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	if out, err = cli("peers"); err != nil || !strings.Contains(out, "lease: h100 from cloud") || !strings.Contains(out, "1x NVIDIA H100 80GB HBM3 (80 GiB)") {
 		t.Fatalf("peers: %v\n%s", err, out)
 	}
+	// Anything listed as a peer can be inspected as one.
+	if out, err = cli("peers", "--on", name[1]); err != nil || !strings.Contains(out, "lease: h100 from cloud") || strings.Count(out, "\n") != 2 {
+		t.Fatalf("peers --on lease peer: %v\n%s", err, out)
+	}
 	if out, err = cli("leases"); err != nil || !regexp.MustCompile(name[1]+`\s+cloud\s+h100\s+ready`).MatchString(out) {
 		t.Fatalf("leases: %v\n%s", err, out)
 	}
@@ -194,14 +198,14 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 		t.Fatalf("unmatched: %v\n%s", err, out)
 	}
 
-	if out, err = cli("leases", "rm", name[1]); err != nil || !strings.Contains(out, name[1]+" released") {
-		t.Fatalf("leases rm: %v\n%s", err, out)
+	if out, err = cli("leases", "release", name[1]); err != nil || !strings.Contains(out, name[1]+" released") {
+		t.Fatalf("leases release: %v\n%s", err, out)
 	}
 	if data, _ := os.ReadFile(releaseLog); bytes.Count(data, []byte("\n")) != 2 {
 		t.Fatalf("releases %q", data)
 	}
-	if out, err = cli("leases", "rm", name[1]); err == nil || !strings.Contains(out, "no active lease of yours") {
-		t.Fatalf("leases rm twice: %v\n%s", err, out)
+	if out, err = cli("leases", "release", name[1]); err == nil || !strings.Contains(out, "no active lease of yours") {
+		t.Fatalf("leases release twice: %v\n%s", err, out)
 	}
 }
 
