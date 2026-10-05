@@ -366,6 +366,8 @@ func (c *TransferCheckpoint) open(statePath string) (*applyDestination, *applyDe
 	return destination, storage, filepath.Base(statePath), nil
 }
 
+// save publishes state, whose manifest the caller has validated as a
+// checkpoint manifest, and retains it as the record a read would decode.
 func (c *TransferCheckpoint) save(destination, storage *applyDestination, name string, state checkpointState) error {
 	// Publication may fail after rename. Never keep a cache across a failed write.
 	if c.cache != nil {
@@ -385,7 +387,11 @@ func (c *TransferCheckpoint) save(destination, storage *applyDestination, name s
 		return nil
 	}
 	state.Manifest = cloneSourceManifest(state.Manifest) // own it, as a decoded record would
-	if record, err := c.validatedRecord(raw, state); err == nil {
+	if record, err := c.checkedRecord(raw, state); err == nil {
+		// The next delta expands against this record and needs its identity.
+		// Hash it now, after the install, rather than before the next save's
+		// files can appear.
+		record.rootHash()
 		c.remember(record)
 		c.Reuse.put(c.StatePath, record)
 	}

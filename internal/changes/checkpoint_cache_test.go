@@ -83,6 +83,40 @@ func TestCheckpointCacheIndependentRequests(t *testing.T) {
 	}
 }
 
+// Advance retains the record it publishes with that record's identity
+// already computed, so the next delta does not hash the checkpoint before its
+// files can appear. A new request decoding the published bytes agrees.
+func TestCheckpointAdvanceRetainsRecordIdentity(t *testing.T) {
+	root, bundle, staged := applyFixture(t, "original\n", "source\n")
+	target := transferTarget(t, root)
+	checkpoint := checkpointFor(t, target)
+	if _, err := checkpoint.Initialize(bundle.BaseManifest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := target.Apply(staged, bundle, nil, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	version, err := checkpoint.Advance(0, target.StatePath, bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checkpoint.cache == nil || checkpoint.cache.record == nil {
+		t.Fatal("advance retained no record")
+	}
+	if got, want := checkpoint.cache.record.root, version.Manifest.RootHash(); got != want {
+		t.Fatalf("retained identity %q, want %q", got, want)
+	}
+	fresh := &TransferCheckpoint{Root: checkpoint.Root, RootID: checkpoint.RootID, Owner: checkpoint.Owner,
+		SourceID: checkpoint.SourceID, StatePath: checkpoint.StatePath}
+	decoded, err := fresh.readVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(decoded.state, checkpoint.cache.record.state) || decoded.rootHash() != version.Manifest.RootHash() {
+		t.Fatal("retained record differs from the published one")
+	}
+}
+
 func TestCheckpointCacheBoundsAndRemoval(t *testing.T) {
 	// Accounting/eviction is a resource contract; active readers remain valid.
 	r := &checkpointRecord{raw: []byte("record"), state: checkpointState{CheckpointVersion: CheckpointVersion{Manifest: proto.Manifest{}}}}
