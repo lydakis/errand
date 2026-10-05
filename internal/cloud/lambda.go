@@ -16,13 +16,15 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/fsowner"
 	"github.com/lydakis/errand/internal/proto"
 )
 
 // LambdaProvider rents Lambda Cloud instances. It launches one, installs
-// errand on it over SSH, joins it to the tailnet with a tagged auth key and
-// terminates it on release. See docs/CLOUD.md.
+// errand on it over SSH and terminates it on release. With a Tailscale auth
+// key the machine joins the tailnet and clients reach it there; without one
+// they reach it over SSH, with its host key pinned. See docs/CLOUD.md.
 //
 // Lambda's launch request cannot be retried safely: a launch whose answer is
 // lost may still have created a billed instance. So the provider keeps one
@@ -36,13 +38,14 @@ type LambdaProvider struct {
 	InstanceType         string
 	Regions              []string // preference order; empty means any with capacity
 	FileSystems          []string
-	SSHKeyName           string // registered with Lambda
-	SSHPrivateKeyFile    string // its private half, used once to install errand
-	User                 string // login on the instance; Lambda images use ubuntu
-	TailscaleAuthKeyFile string
+	SSHKeyName           string   // registered with Lambda
+	SSHPrivateKeyFile    string   // its private half: installs errand, watches an SSH runner
+	User                 string   // login on the instance; Lambda images use ubuntu
+	TailscaleAuthKeyFile string   // empty: clients reach the machine over SSH
 	ErrandBinary         string   // a linux build for Arch
 	Arch                 string   // the instance's architecture, amd64 or arm64
 	AllowUsers           []string // tailnet logins admitted besides the caller
+	AuthorizedKeys       []string // SSH public keys of the clients' machines
 
 	// Tests replace these.
 	BaseURL    string
@@ -83,18 +86,22 @@ func LeaseHostname(leaseID string) string {
 }
 
 func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machine, error) {
-	// A request over SSH or the local socket has no tailnet login, so the
-	// machine would admit no one; refuse before paying for it.
-	if req.Login == "" && len(p.allowUsers()) == 0 {
+	tailnet := p.TailscaleAuthKeyFile != ""
+	// On the tailnet the machine admits tailnet logins, and a request over
+	// SSH or the local socket has none; refuse before paying for a machine
+	// that would admit no one.
+	if tailnet && req.Login == "" && len(p.allowUsers()) == 0 {
 		return Machine{}, errors.New("this lease request has no tailnet login to admit (it came over SSH or the local socket); ask over the tailnet, or set allow_users on the offer")
 	}
 	key, err := readSecret(p.APIKeyFile, "Lambda API key")
 	if err != nil {
 		return Machine{}, err
 	}
-	authKey, err := readSecret(p.TailscaleAuthKeyFile, "Tailscale auth key")
-	if err != nil {
-		return Machine{}, err
+	var authKey string
+	if tailnet {
+		if authKey, err = readSecret(p.TailscaleAuthKeyFile, "Tailscale auth key"); err != nil {
+			return Machine{}, err
+		}
 	}
 	// Everything the install needs is checked before paying for a machine.
 	public, err := p.checkInstall(ctx)
@@ -163,7 +170,17 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 	if err := p.install(ctx, ip, hostPublic, name, authKey, req.Login); err != nil {
 		return Machine{}, err
 	}
-	state.LeaseTarget = proto.LeaseTarget{URL: "http://" + name + ":7443"}
+	if tailnet {
+		state.LeaseTarget = proto.LeaseTarget{URL: "http://" + name + ":7443"}
+	} else {
+		// The runner listens on no port; jobs reach it over SSH, as the
+		// login it runs as. This cloud peer watches it with the key it
+		// installed it with, which clients never need.
+		state.LeaseTarget = proto.LeaseTarget{SSH: p.user() + "@" + ip, HostKey: hostPublic}
+		if err := client.PinSSHIdentity("ssh://"+state.SSH, p.SSHPrivateKeyFile); err != nil {
+			return Machine{}, err
+		}
+	}
 	if err := saveState(req, state); err != nil {
 		return Machine{}, err
 	}
@@ -240,6 +257,14 @@ func (p *LambdaProvider) Release(ctx context.Context, req ReleaseRequest) error 
 		return fmt.Errorf("Lambda did not confirm terminating %s; trying again", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+// user is the login on the instance.
+func (p *LambdaProvider) user() string {
+	if p.User == "" {
+		return "ubuntu"
+	}
+	return p.User
 }
 
 func (p *LambdaProvider) now() time.Time {

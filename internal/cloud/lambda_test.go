@@ -399,6 +399,49 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 	}
 }
 
+// Without a Tailscale key the machine is reached over SSH: the runner opens
+// no port, the target pins the host key the machine booted with, and the
+// clients' keys are installed for the login it runs as.
+func TestLambdaAcquireOverSSH(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cache)
+	t.Setenv("HOME", cache)
+	p, _, ssh := newLambda(t)
+	p.TailscaleAuthKeyFile = ""
+	p.AuthorizedKeys = []string{"ssh-ed25519 AAAAmac george@mac", "ssh-ed25519 AAAAmini george@mini"}
+	id := proto.NewULID()
+	// A request without a tailnet login is fine: SSH keys decide who gets in.
+	machine, err := p.Acquire(context.Background(), AcquireRequest{LeaseID: id, Offer: "h100", Where: "gpu", Progress: func(string) {}, Save: noSave})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (proto.LeaseTarget{SSH: "ubuntu@203.0.113.7", HostKey: "ssh-ed25519 AAAAhost errand-lease"}); machine.Target != want {
+		t.Fatalf("target %+v", machine.Target)
+	}
+	if !strings.Contains(string(machine.State), `"ssh":"ubuntu@203.0.113.7"`) {
+		t.Fatalf("state %s", machine.State)
+	}
+	var runner map[string]any
+	if _, err := toml.Decode(ssh.files["errandd.toml"], &runner); err != nil || len(runner) != 1 || runner["transport"] != "ssh" {
+		t.Fatalf("runner config %v %v", runner, err)
+	}
+	if _, ok := ssh.files["tailscale-auth-key"]; ok {
+		t.Fatal("bundle carries an auth key")
+	}
+	if got := ssh.files["authorized-keys"]; got != "ssh-ed25519 AAAAmac george@mac\nssh-ed25519 AAAAmini george@mini\n" {
+		t.Fatalf("authorized-keys %q", got)
+	}
+	// This cloud peer watches the machine with the key it installed with.
+	base, _ := os.UserCacheDir()
+	pins, _ := filepath.Glob(filepath.Join(base, "errand", "ssh", "pins", "*.identity"))
+	if len(pins) != 1 {
+		t.Fatalf("identity pins %q", pins)
+	}
+	if got, _ := os.ReadFile(pins[0]); string(got) != p.SSHPrivateKeyFile {
+		t.Fatalf("identity pin %q", got)
+	}
+}
+
 // lambdaStateJSON is saved state for a launch sent at sent.
 func lambdaStateJSON(sent time.Time, key, instanceID string) json.RawMessage {
 	data, _ := json.Marshal(lambdaState{Sent: sent.UTC(), KeyID: keyID(key), Region: "us-east-1", InstanceID: instanceID})
@@ -951,7 +994,7 @@ func TestLambdaInstallCommandUnpacksBundle(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, _, _ := newLambda(t)
-	config, err := lambdaRunnerConfig([]string{"george@github"})
+	config, err := lambdaRunnerConfig(true, []string{"george@github"})
 	if err != nil {
 		t.Fatal(err)
 	}

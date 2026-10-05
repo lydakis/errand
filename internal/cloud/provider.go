@@ -128,5 +128,8 @@ func checkTarget(t proto.LeaseTarget) error {
 	if t.URL == "" && t.SSH == "" {
 		return errors.New("provider named no url or ssh target")
 	}
+	if t.HostKey != "" && t.SSH == "" {
+		return errors.New("provider named a host_key without an ssh target")
+	}
 	return nil
 }

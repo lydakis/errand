@@ -164,14 +164,14 @@ func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, er
 	if err != nil {
 		return nil, err
 	}
-	args := []string{
+	args := append(sshPinArgs(target),
 		"-T",
 		"-o", "ControlMaster=auto",
-		"-o", "ControlPath=" + filepath.Join(controlDir, "%C"),
+		"-o", "ControlPath="+filepath.Join(controlDir, "%C"),
 		"-o", "ControlPersist=60s",
 		"-o", "ServerAliveInterval=30",
 		"--", target, remoteInvocation,
-	}
+	)
 	cmd := exec.CommandContext(ctx, "ssh", args...)
 	cmd.Stderr = os.Stderr // ssh prompts and host-key warnings stay visible
 	stdin, err := cmd.StdinPipe()

@@ -130,6 +130,11 @@ allow_users = ["broker@example"]
 		{func(o *CloudOffer) { o.Lambda.AllowUsers = []string{" "} }, "not a tailnet login"},
 		{func(o *CloudOffer) { o.Lambda.AllowUsers = []string{"a@github", ""} }, "not a tailnet login"},
 		{func(o *CloudOffer) { o.Lambda.AllowUsers = []string{"a@github\n"} }, "not a tailnet login"},
+		{func(o *CloudOffer) { o.Lambda.TailscaleAuthKeyFile = "ts.key" }, "tailscale_auth_key_file must be an absolute path"},
+		{func(o *CloudOffer) { o.Lambda.TailscaleAuthKeyFile = ""; o.Lambda.AllowUsers = []string{"a@github"} }, "needs tailscale_auth_key_file"},
+		{func(o *CloudOffer) { o.Lambda.AuthorizedKeys = []string{"AAAA george@mac"} }, "not one SSH public key"},
+		{func(o *CloudOffer) { o.Lambda.AuthorizedKeys = []string{"ssh-ed25519 AAAA a\nssh-ed25519 AAAA b"} }, "not one SSH public key"},
+		{func(o *CloudOffer) { o.Lambda.AuthorizedKeys = []string{`command="sh" ssh-ed25519 AAAA`} }, "not one SSH public key"},
 		{func(o *CloudOffer) { o.OS = "windows" }, "Lambda offers run linux"},
 		{func(o *CloudOffer) { o.Lambda.ErrandBinary = ""; o.Arch = "riscv" }, "arch must"},
 		{func(o *CloudOffer) { o.Price = -1 }, "price_per_hour"},
@@ -142,6 +147,15 @@ allow_users = ["broker@example"]
 		if _, err := (DaemonCloud{Offers: []CloudOffer{o}}).Broker(); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v", tc.want, err)
 		}
+	}
+	// Without a Tailscale key, clients' SSH keys are installed instead.
+	ssh := lambda
+	ssh.TailscaleAuthKeyFile = ""
+	ssh.AuthorizedKeys = []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 george@mac"}
+	if b, err := (DaemonCloud{Offers: []CloudOffer{{Name: "x", Lambda: &ssh}}}).Broker(); err != nil {
+		t.Fatal(err)
+	} else if p := b.Offers[0].Provider.(*cloud.LambdaProvider); p.TailscaleAuthKeyFile != "" || len(p.AuthorizedKeys) != 1 {
+		t.Fatalf("provider %+v", p)
 	}
 	// Without errand_binary the broker installs itself, which only fits a
 	// machine of its own platform.

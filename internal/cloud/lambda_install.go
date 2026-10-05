@@ -51,10 +51,7 @@ func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, 
 	if err != nil {
 		return err
 	}
-	user := p.User
-	if user == "" {
-		user = "ubuntu"
-	}
+	user := p.user()
 	base := []string{
 		"-i", p.SSHPrivateKeyFile,
 		"-o", "BatchMode=yes",
@@ -89,7 +86,7 @@ func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, 
 	if login != "" && !slices.Contains(allow, login) {
 		allow = append(allow, login)
 	}
-	config, err := lambdaRunnerConfig(allow)
+	config, err := lambdaRunnerConfig(authKey != "", allow)
 	if err != nil {
 		return err
 	}
@@ -112,9 +109,16 @@ func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, 
 	return nil
 }
 
-// lambdaRunnerConfig is the errandd.toml of a leased machine's runner.
-func lambdaRunnerConfig(allowUsers []string) ([]byte, error) {
+// lambdaRunnerConfig is the errandd.toml of a leased machine's runner: on
+// the tailnet it admits allowUsers; otherwise it is reached only over SSH.
+func lambdaRunnerConfig(tailnet bool, allowUsers []string) ([]byte, error) {
 	var b bytes.Buffer
+	if !tailnet {
+		err := toml.NewEncoder(&b).Encode(struct {
+			Transport string `toml:"transport"`
+		}{"ssh"})
+		return b.Bytes(), err
+	}
 	err := toml.NewEncoder(&b).Encode(struct {
 		Listen     string   `toml:"listen"`
 		AllowUsers []string `toml:"allow_users"`
@@ -138,8 +142,15 @@ func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname
 	if err := addString("install.sh", 0o600, lambdaInstallScript); err != nil {
 		return err
 	}
-	if err := addString("tailscale-auth-key", 0o600, authKey+"\n"); err != nil {
-		return err
+	if authKey != "" {
+		if err := addString("tailscale-auth-key", 0o600, authKey+"\n"); err != nil {
+			return err
+		}
+	}
+	if len(p.AuthorizedKeys) > 0 {
+		if err := addString("authorized-keys", 0o644, strings.Join(p.AuthorizedKeys, "\n")+"\n"); err != nil {
+			return err
+		}
 	}
 	if err := addString("hostname", 0o644, hostname+"\n"); err != nil {
 		return err

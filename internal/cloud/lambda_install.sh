@@ -10,8 +10,19 @@ cd "$dir"
 
 install -m 0755 errand /usr/local/bin/errand
 install -D -m 0644 errandd.toml /etc/errand/errandd.toml
-command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
-tailscale up --auth-key="file:$dir/tailscale-auth-key" --hostname="$(cat hostname)"
+# With an auth key the machine joins the tailnet; without one, clients reach
+# the runner over SSH as the login below.
+if [ -f tailscale-auth-key ]; then
+  command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
+  tailscale up --auth-key="file:$dir/tailscale-auth-key" --hostname="$(cat hostname)"
+fi
+if [ -f authorized-keys ]; then
+  home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+  install -d -m 0700 -o "$SUDO_USER" -g "$(id -gn "$SUDO_USER")" "$home/.ssh"
+  cat authorized-keys >> "$home/.ssh/authorized_keys"
+  chown "$SUDO_USER:" "$home/.ssh/authorized_keys"
+  chmod 0600 "$home/.ssh/authorized_keys"
+fi
 
 cat > /etc/systemd/system/errand.service <<'UNIT'
 [Unit]

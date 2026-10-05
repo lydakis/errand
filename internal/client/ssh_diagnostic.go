@@ -44,8 +44,8 @@ func inspectSSH(ctx context.Context, peerURL string, run func(context.Context, [
 	}
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
-	args := []string{"-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UpdateHostKeys=no", "-o", "ControlMaster=no", "-o", "ControlPath=" + filepath.Join(controlDir, "%C"), "--", endpoint.target,
-		"command -v " + shellQuote(endpoint.command) + " >/dev/null || exit 127"}
+	args := append(sshPinArgs(endpoint.target), "-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UpdateHostKeys=no", "-o", "ControlMaster=no", "-o", "ControlPath="+filepath.Join(controlDir, "%C"), "--", endpoint.target,
+		"command -v "+shellQuote(endpoint.command)+" >/dev/null || exit 127")
 	detail, err := run(ctx, args)
 	if err == nil {
 		return nil

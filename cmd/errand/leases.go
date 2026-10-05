@@ -165,8 +165,7 @@ func recordLeasePeer(ctx context.Context, brokerName string, lease proto.Lease, 
 	if err != nil {
 		return placementChoice{}, fmt.Errorf("recording lease %s: %w", lease.ID, err)
 	}
-	peer := config.LeasePeer(*lease.Target)
-	peerURL, err := (config.Client{Peers: map[string]config.Peer{name: peer}}).PeerURL(name)
+	peer, peerURL, err := leasePeer(name, *lease.Target)
 	if err != nil {
 		return placementChoice{}, fmt.Errorf("lease %s has an unusable target: %w", name, err)
 	}
@@ -186,12 +185,27 @@ func recordLeasePeer(ctx context.Context, brokerName string, lease proto.Lease, 
 	}, nil
 }
 
+// leasePeer resolves a lease target as a peer named name, pinning the host
+// key of an ssh target it carries one for.
+func leasePeer(name string, t proto.LeaseTarget) (config.Peer, string, error) {
+	peer := config.LeasePeer(t)
+	peerURL, err := (config.Client{Peers: map[string]config.Peer{name: peer}}).PeerURL(name)
+	if err != nil {
+		return config.Peer{}, "", err
+	}
+	if t.HostKey != "" {
+		if err := client.PinSSHHost(peerURL, t.HostKey); err != nil {
+			return config.Peer{}, "", err
+		}
+	}
+	return peer, peerURL, nil
+}
+
 // probeLeaseTarget lets a cloud peer watch the machines it leased, over the
 // same transports a client would use.
 func probeLeaseTarget(ctx context.Context, t proto.LeaseTarget, where string) (proto.Info, error) {
 	const name = "lease"
-	peer := config.LeasePeer(t)
-	peerURL, err := (config.Client{Peers: map[string]config.Peer{name: peer}}).PeerURL(name)
+	peer, peerURL, err := leasePeer(name, t)
 	if err != nil {
 		return proto.Info{}, err
 	}

@@ -529,6 +529,9 @@ type LeaseTarget struct {
 	SSH           string `json:"ssh,omitempty"`
 	RemoteCommand string `json:"remote_command,omitempty"`
 	RemoteSocket  string `json:"remote_socket,omitempty"`
+	// HostKey pins an ssh target's host key ("ssh-ed25519 AAAA..."), so
+	// clients need no known_hosts entry for a machine that just booted.
+	HostKey string `json:"host_key,omitempty"`
 }
 
 type Lease struct {
