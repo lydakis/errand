@@ -282,3 +282,63 @@ func TestUnconfirmedInterruptIsReportedWhenRunnerIsLost(t *testing.T) {
 		t.Fatalf("stderr does not admit the interrupt was lost:\n%s", stderr.String())
 	}
 }
+
+// A runner that answers but keeps failing the log stream is reachable, so the
+// follower asks it for the job's state instead of calling it lost.
+func TestStalledStreamFromALiveRunnerReportsItsState(t *testing.T) {
+	shortRunnerContact(t, 100*time.Millisecond, 200*time.Millisecond)
+	jobID := proto.NewULID()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v0/jobs/"+jobID:
+			json.NewEncoder(w).Encode(proto.JobStatus{ID: jobID, State: proto.StateRunning})
+		case strings.HasSuffix(r.URL.Path, "/logs"):
+			w.Header().Set("Content-Type", "text/event-stream")
+			io.WriteString(w, "event: error\ndata: {\"message\":\"reading io.log: input/output error\",\"retryable\":true}\n\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	var stderr bytes.Buffer
+	code := attachWithDetachNotifications(AttachOptions{
+		PeerURL: server.URL, PeerName: "cabal", JobID: jobID, Stdout: io.Discard, Stderr: &stderr,
+	}, make(chan os.Signal, 2), testInterruptNotifications(), nil)
+	if code != ExitTransaction {
+		t.Fatalf("attach exit = %d, want %d", code, ExitTransaction)
+	}
+	out := stderr.String()
+	for _, want := range []string{
+		"the runner answers, but the job's log stream kept failing",
+		"input/output error",
+		"the runner reports the job as running",
+		"errand attach cabal/" + jobID,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("stderr missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "lost contact") || strings.Contains(out, "state unknown") {
+		t.Fatalf("a reachable runner was reported lost:\n%s", out)
+	}
+}
+
+func TestStalledStreamWithUnknownJobSaysWhy(t *testing.T) {
+	shortRunnerContact(t, 100*time.Millisecond, 200*time.Millisecond)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/logs") {
+			http.Error(w, "busy", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, `{"error":"no such job"}`, http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	_, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL}, "job",
+		proto.JobStatus{ID: "job", State: proto.StateRunning})
+	var stalled *LogStreamStalledError
+	if !errors.As(err, &stalled) || stalled.Status != nil || !IsNotFound(stalled.StatusErr) {
+		t.Fatalf("stalled stream error = %#v", err)
+	}
+}

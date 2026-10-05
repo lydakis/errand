@@ -29,7 +29,8 @@ cannot get the stream back for 60 seconds it stops, says the runner is
 unavailable and the job's state is unknown, prints the `errand status` and
 `errand attach` commands for the job, and exits 120. It never reports that as
 the job failing: the job may still be running, may have finished, or may have
-been lost with the runner. A Ctrl-C the runner never confirmed is called out
+been lost with the runner. If the runner still answers but cannot serve the
+log, Errand asks it for the job's state and reports that instead. A Ctrl-C the runner never confirmed is called out
 along with the `errand kill` command, so it is not mistaken for a stopped job.
 
 ## Workspace selection and run preferences

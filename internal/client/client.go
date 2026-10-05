@@ -1104,18 +1104,63 @@ func seconds(d time.Duration) string {
 	return fmt.Sprintf("%ds", int64((d+time.Second/2)/time.Second))
 }
 
+// LogStreamStalledError reports a runner that still answers requests but
+// could not serve the job's log stream for runnerContactWindow.
+type LogStreamStalledError struct {
+	For       time.Duration
+	Err       error            // the last stream failure
+	Status    *proto.JobStatus // what the runner reported, when it could
+	StatusErr error            // why it could not
+}
+
+func (e *LogStreamStalledError) Error() string {
+	return fmt.Sprintf("log stream failing for %s (%v)", seconds(e.For), e.Err)
+}
+
+func (e *LogStreamStalledError) Unwrap() error { return e.Err }
+
+const stalledStatusTimeout = 5 * time.Second
+
+// stalledStream decides what a follower that made no progress for the whole
+// window can honestly say. One status request tells a runner that is gone
+// from one that answers but cannot serve the log; only the first leaves the
+// job's state unknown.
+func stalledStream(ctx context.Context, peerURL, jobID string, quiet time.Duration, streamErr error) error {
+	statusCtx, cancel := context.WithTimeout(ctx, stalledStatusTimeout)
+	defer cancel()
+	status, err := getStatusContext(statusCtx, peerURL, jobID)
+	if err == nil {
+		return &LogStreamStalledError{For: quiet, Err: streamErr, Status: &status}
+	}
+	var answered *controlHTTPError
+	if errors.As(err, &answered) {
+		return &LogStreamStalledError{For: quiet, Err: streamErr, StatusErr: err}
+	}
+	return &RunnerUnavailableError{For: quiet, Err: streamErr}
+}
+
 // reportStreamFailure explains a follower that stopped before the job's
 // terminal status arrived. When the runner went quiet nothing is known about
 // the job, so the message says so rather than calling it a failure.
 func reportStreamFailure(stderr io.Writer, err error, handle string) {
 	var unavailable *RunnerUnavailableError
-	if !errors.As(err, &unavailable) {
+	var stalled *LogStreamStalledError
+	switch {
+	case errors.As(err, &unavailable):
+		fmt.Fprintf(stderr, "errand: lost contact with the runner for %s (%s)\n", seconds(unavailable.For), unavailable.reason())
+		fmt.Fprintln(stderr, "errand: job state unknown; it may still be running there")
+	case errors.As(err, &stalled):
+		fmt.Fprintf(stderr, "errand: the runner answers, but the job's log stream kept failing for %s (%v)\n", seconds(stalled.For), stalled.Err)
+		if stalled.Status != nil {
+			fmt.Fprintf(stderr, "errand: the runner reports the job as %s\n", stalled.Status.State)
+		} else {
+			fmt.Fprintf(stderr, "errand: job state unknown (%v)\n", stalled.StatusErr)
+		}
+	default:
 		fmt.Fprintf(stderr, "errand: %v\n", err)
 		fmt.Fprintf(stderr, "errand: the job may still be running; resume with handle %s\n", handle)
 		return
 	}
-	fmt.Fprintf(stderr, "errand: lost contact with the runner for %s (%s)\n", seconds(unavailable.For), unavailable.reason())
-	fmt.Fprintln(stderr, "errand: job state unknown; it may still be running there")
 	fmt.Fprintf(stderr, "errand: check it with: errand status %s\n", handle)
 	fmt.Fprintf(stderr, "errand: reattach with: errand attach %s\n", handle)
 }
@@ -1156,7 +1201,7 @@ func streamContext(
 				// The job's outcome is already known; only its logs are missing.
 				return proto.JobStatus{}, fmt.Errorf("terminal log replay failed for %s: %w", seconds(quiet), err)
 			}
-			return proto.JobStatus{}, &RunnerUnavailableError{For: quiet, Err: err}
+			return proto.JobStatus{}, stalledStream(ctx, opts.PeerURL, jobID, quiet, err)
 		}
 		attempt++
 		timer := time.NewTimer(reconnectBackoff(attempt))

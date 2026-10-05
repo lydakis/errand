@@ -1592,11 +1592,13 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
-	stream := startLogStream(w, flusher, logHeartbeatInterval)
+	stream := startLogStream(w, logHeartbeatInterval)
 	defer stream.stop()
 
 	select {
 	case <-j.logReady:
+	case <-stream.broken:
+		return
 	case <-r.Context().Done():
 		return
 	}
@@ -1614,10 +1616,9 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 				return ctx.Err()
 			}
 			b, _ := json.Marshal(f)
-			stream.write(fmt.Sprintf("id: %d\nevent: log\ndata: %s\n\n", f.Seq, b))
-			return nil
+			return stream.write(fmt.Sprintf("id: %d\nevent: log\ndata: %s\n\n", f.Seq, b))
 		}); err != nil {
-			if ctx.Err() != nil {
+			if ctx.Err() != nil || stream.failed() {
 				return
 			}
 			b, _ := json.Marshal(proto.LogStreamError{
@@ -1639,6 +1640,8 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	}
 	select {
 	case <-j.done:
+	case <-stream.broken:
+		return
 	case <-r.Context().Done():
 		return
 	}
@@ -1646,7 +1649,13 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	stream.write(fmt.Sprintf("event: status\ndata: %s\n\n", b))
 }
 
-var logHeartbeatInterval = proto.LogHeartbeatInterval
+var (
+	logHeartbeatInterval = proto.LogHeartbeatInterval
+	// logWriteTimeout bounds each write to a follower. One that stops reading
+	// is dropped instead of holding its log-reader reservation forever; it
+	// resumes from its last frame when it reconnects.
+	logWriteTimeout = time.Minute
+)
 
 // logStream serializes SSE writes for one log follower and keeps the
 // connection audibly alive while the job is staging, queued, silent, or
@@ -1654,13 +1663,18 @@ var logHeartbeatInterval = proto.LogHeartbeatInterval
 type logStream struct {
 	mu      sync.Mutex
 	w       io.Writer
-	flusher http.Flusher
+	rc      *http.ResponseController
+	err     error
+	broken  chan struct{} // closed on the first failed write
 	done    chan struct{}
 	stopped chan struct{}
 }
 
-func startLogStream(w io.Writer, flusher http.Flusher, interval time.Duration) *logStream {
-	s := &logStream{w: w, flusher: flusher, done: make(chan struct{}), stopped: make(chan struct{})}
+func startLogStream(w http.ResponseWriter, interval time.Duration) *logStream {
+	s := &logStream{
+		w: w, rc: http.NewResponseController(w),
+		broken: make(chan struct{}), done: make(chan struct{}), stopped: make(chan struct{}),
+	}
 	go func() {
 		defer close(s.stopped)
 		ticker := time.NewTicker(interval)
@@ -1668,6 +1682,8 @@ func startLogStream(w io.Writer, flusher http.Flusher, interval time.Duration) *
 		for {
 			select {
 			case <-s.done:
+				return
+			case <-s.broken:
 				return
 			case <-ticker.C:
 				s.write(":\n\n")
@@ -1677,18 +1693,43 @@ func startLogStream(w io.Writer, flusher http.Flusher, interval time.Duration) *
 	return s
 }
 
-func (s *logStream) write(event string) {
+// write sends one event. After a failure, including a write deadline the
+// follower did not drain in time, every later write fails at once.
+func (s *logStream) write(event string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	io.WriteString(s.w, event)
-	s.flusher.Flush()
+	if s.err != nil {
+		return s.err
+	}
+	// Transports without deadlines still work; only the bound is lost.
+	_ = s.rc.SetWriteDeadline(time.Now().Add(logWriteTimeout))
+	_, err := io.WriteString(s.w, event)
+	if err == nil {
+		err = s.rc.Flush()
+	}
+	if err != nil {
+		s.err = err
+		close(s.broken)
+	}
+	return err
+}
+
+func (s *logStream) failed() bool {
+	select {
+	case <-s.broken:
+		return true
+	default:
+		return false
+	}
 }
 
 // stop ends heartbeats before the handler returns; nothing may write to the
-// response after that.
+// response after that. Every write is bounded, so this cannot hang.
 func (s *logStream) stop() {
 	close(s.done)
 	<-s.stopped
+	// The connection may serve another request; don't leave it a deadline.
+	_ = s.rc.SetWriteDeadline(time.Time{})
 }
 
 // handleChanges streams one immutable change bundle while holding a receipt
