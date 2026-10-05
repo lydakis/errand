@@ -68,9 +68,15 @@ func forgetEndedLeases(probed map[string]proto.Info) map[string]bool {
 	if len(brokers) == 0 {
 		return nil
 	}
+	cfg, err := config.LoadClient()
+	if err != nil {
+		return nil
+	}
 	dropped, err := config.ForgetLeases(func(_ string, rec config.LeaseRecord) bool {
 		active, probedBroker := brokers[rec.Broker]
-		return !probedBroker || active[rec.ID]
+		// A peer that took over the cloud peer's name knows nothing of its
+		// leases.
+		return !probedBroker || active[rec.ID] || cfg.Peers[rec.Broker] != rec.BrokerPeer
 	})
 	if err != nil {
 		return nil
@@ -180,18 +186,24 @@ func recordLeasePeer(ctx context.Context, brokerName string, lease proto.Lease, 
 			configured[name] = peer
 		}
 	}
-	name, err := config.RecordLease(config.LeaseRecord{Broker: brokerName, ID: lease.ID, Offer: lease.Offer, Target: *lease.Target, CreatedAt: lease.CreatedAt}, configured)
+	// The pins go first, so no recorded lease peer is ever reached without
+	// them. They depend on the target alone, not on the peer's name.
+	if _, peerURL, err := leasePeer("lease", *lease.Target); err != nil {
+		return placementChoice{}, fmt.Errorf("lease %s has an unusable target: %w", lease.ID, err)
+	} else if lease.Target.SSH != "" {
+		if err := client.PinSSHIdentity(peerURL, keyFile); err != nil {
+			return placementChoice{}, err
+		}
+	}
+	// The cloud peer's address is kept with the lease, so the lease can be
+	// released even if that peer's entry is later changed or removed.
+	name, err := config.RecordLease(config.LeaseRecord{Broker: brokerName, BrokerPeer: configured[brokerName], ID: lease.ID, Offer: lease.Offer, Target: *lease.Target, CreatedAt: lease.CreatedAt}, configured)
 	if err != nil {
 		return placementChoice{}, fmt.Errorf("recording lease %s: %w", lease.ID, err)
 	}
 	peer, peerURL, err := leasePeer(name, *lease.Target)
 	if err != nil {
 		return placementChoice{}, fmt.Errorf("lease %s has an unusable target: %w", name, err)
-	}
-	if lease.Target.SSH != "" {
-		if err := client.PinSSHIdentity(peerURL, keyFile); err != nil {
-			return placementChoice{}, err
-		}
 	}
 	target := client.ConfigureSSHPeer(peerURL, name, peer.RemoteCommand, peer.RemoteSocket)
 	info, err := client.ProbeWhereInfo(ctx, target, where, 10*time.Second)
@@ -423,7 +435,7 @@ func leaseBrokers(cfg config.Client, on string, stderr io.Writer) ([]leaseBroker
 func releaseLeases(cfg config.Client, on string, names []string, stdout, stderr io.Writer) int {
 	code := 0
 	for _, arg := range names {
-		broker, id := on, arg
+		broker, id, brokerCfg := on, arg, cfg
 		if rec, ok := cfg.Leases[arg]; ok {
 			if on != "" && on != rec.Broker {
 				fmt.Fprintf(stderr, "errand leases rm: %s is leased from %s, not %s\n", arg, rec.Broker, on)
@@ -431,12 +443,14 @@ func releaseLeases(cfg config.Client, on string, names []string, stdout, stderr 
 				continue
 			}
 			broker, id = rec.Broker, rec.ID
+			brokerCfg = cfg
+			brokerCfg.Peers = map[string]config.Peer{rec.Broker: rec.BrokerPeer}
 		} else if !proto.ValidULID(arg) || on == "" {
 			fmt.Fprintf(stderr, "errand leases rm: %q is not a known lease; pass a lease peer name, or --on CLOUD with a lease ID\n", arg)
 			code = 2
 			continue
 		}
-		target, err := configuredPeerURL(cfg, broker)
+		target, err := configuredPeerURL(brokerCfg, broker)
 		if err != nil {
 			fmt.Fprintf(stderr, "errand leases rm: %v\n", err)
 			code = 1

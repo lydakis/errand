@@ -309,7 +309,7 @@ func TestRestartRecoversLeases(t *testing.T) {
 	b.Close()
 
 	// A launch interrupted by a crash is released on the next start.
-	crashed := record{Owner: "george", Provider: "command", Lease: proto.Lease{ID: proto.NewULID(), Offer: "h100", Where: "gpu", State: proto.LeaseLaunching, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}}
+	crashed := record{Owner: "george", Provider: providerKind(h.cfg.Offers[0].Provider), Lease: proto.Lease{ID: proto.NewULID(), Offer: "h100", Where: "gpu", State: proto.LeaseLaunching, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}}
 	data, _ := json.Marshal(crashed)
 	if err := os.WriteFile(filepath.Join(h.cfg.StateDir, "leases", crashed.ID+".json"), data, 0600); err != nil {
 		t.Fatal(err)
@@ -352,15 +352,25 @@ func TestRestartRefusesChangedProvider(t *testing.T) {
 	changed := h.cfg
 	changed.Offers = slices.Clone(h.cfg.Offers)
 	changed.Offers[0].Provider = &LambdaProvider{}
-	if _, err := New(changed); err == nil || !strings.Contains(err.Error(), `acquired by a "command" provider, but the offer now uses lambda`) {
+	if _, err := New(changed); err == nil || !strings.Contains(err.Error(), "the offer now has (lambda)") {
 		t.Fatalf("changed provider: %v", err)
+	}
+	// Other commands might not release what the old ones acquired.
+	command := h.cfg.Offers[0].Provider.(CommandProvider)
+	command.ReleaseCommand = append(slices.Clone(command.ReleaseCommand), "--other")
+	changed.Offers[0].Provider = command
+	if _, err := New(changed); err == nil || !strings.Contains(err.Error(), "other provider settings") {
+		t.Fatalf("changed release command: %v", err)
+	}
+	if active, err := ActiveLeases(h.cfg.StateDir); err != nil || !slices.Equal(active, []string{l.ID}) {
+		t.Fatalf("active leases %q %v", active, err)
 	}
 	// A record that does not name its provider is trusted to none.
 	unnamed := record{Owner: "george", Lease: proto.Lease{ID: proto.NewULID(), Offer: "h100", Where: "gpu", State: proto.LeaseReady, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}}
 	data, _ := json.Marshal(unnamed)
 	path := filepath.Join(h.cfg.StateDir, "leases", unnamed.ID+".json")
 	os.WriteFile(path, data, 0600)
-	if _, err := New(h.cfg); err == nil || !strings.Contains(err.Error(), `acquired by a "" provider`) {
+	if _, err := New(h.cfg); err == nil || !strings.Contains(err.Error(), "other provider settings ()") {
 		t.Fatalf("record without a provider: %v", err)
 	}
 	os.Remove(path)
@@ -515,4 +525,48 @@ func TestExpiredLeaseReleasesWithoutProbe(t *testing.T) {
 	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReleased {
 		t.Fatalf("expired lease %+v", got)
 	}
+}
+
+// The idle check destroys a machine only once its release is recorded.
+func TestAutomaticReleaseOnlyOnceRecorded(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.IdlePoll = time.Hour
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	record := filepath.Join(h.cfg.StateDir, "leases", l.ID+".json")
+	saved, _ := os.ReadFile(record)
+	os.Remove(record)
+	os.MkdirAll(filepath.Join(record, "blocked"), 0700)
+	b.mu.Lock()
+	b.leases[l.ID].ExpiresAt = time.Now().Add(-time.Second)
+	b.mu.Unlock()
+	b.reapOnce()
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady || h.releases() != "" {
+		t.Fatalf("released without a record: %+v, releases %q", got, h.releases())
+	}
+	os.RemoveAll(record)
+	os.WriteFile(record, saved, 0600)
+	b.reapOnce()
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReleased || !strings.Contains(h.releases(), l.ID) {
+		t.Fatalf("expired lease %+v, releases %q", got, h.releases())
+	}
+}
+
+// A provider that writes an endless progress line still finishes.
+func TestAcquireSurvivesHugeProgressLine(t *testing.T) {
+	h := newHarness(t, `head -c 200000 /dev/zero | tr '\0' x >&2
+echo >&2
+echo "after the long line" >&2
+echo '{"url":"http://box:7443"}'
+`)
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
 }

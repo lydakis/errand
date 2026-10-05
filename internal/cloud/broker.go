@@ -5,6 +5,8 @@ package cloud
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -146,13 +148,52 @@ func New(cfg Config) (*Broker, error) {
 // providerKind names the kind of provider, which must stay the same for an
 // offer while it has active leases.
 func providerKind(p Provider) string {
-	switch p.(type) {
+	switch p := p.(type) {
 	case *LambdaProvider:
 		return "lambda"
-	case CommandProvider, *CommandProvider:
-		return "command"
+	case CommandProvider:
+		return commandKind(p)
+	case *CommandProvider:
+		return commandKind(*p)
 	}
 	return fmt.Sprintf("%T", p)
+}
+
+// commandKind fingerprints a command provider, so leases are never handed to
+// different commands than the ones that acquired them.
+func commandKind(p CommandProvider) string {
+	data, _ := json.Marshal([][]string{p.AcquireCommand, p.ReleaseCommand})
+	sum := sha256.Sum256(data)
+	return "command:" + hex.EncodeToString(sum[:8])
+}
+
+// ActiveLeases lists the leases recorded under stateDir that may still hold
+// a machine, so a runner whose cloud section is gone can refuse to start
+// rather than leave them running.
+func ActiveLeases(stateDir string) ([]string, error) {
+	dir := filepath.Join(stateDir, "leases")
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, e := range entries {
+		id, ok := strings.CutSuffix(e.Name(), ".json")
+		if !ok || !proto.ValidULID(id) {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			return nil, err
+		}
+		var r record
+		if err := json.Unmarshal(data, &r); err != nil || r.State != proto.LeaseReleased && r.State != proto.LeaseFailed {
+			ids = append(ids, id) // an unreadable record may be active
+		}
+	}
+	return ids, nil
 }
 
 // recover reloads persisted leases. A launch cut short by a restart may
@@ -198,7 +239,7 @@ func (b *Broker) recover() error {
 			// Every record names its provider, so one that does not is not
 			// trusted to any provider either.
 			if r.Provider != providerKind(offer.Provider) {
-				return fmt.Errorf("lease %s on cloud offer %q was acquired by a %q provider, but the offer now uses %s; restore it until the lease is released", id, r.Offer, r.Provider, providerKind(offer.Provider))
+				return fmt.Errorf("lease %s on cloud offer %q was acquired with other provider settings (%s) than the offer now has (%s); restore them until the lease is released", id, r.Offer, r.Provider, providerKind(offer.Provider))
 			}
 		}
 		b.leases[id] = &lease{record: r}
@@ -584,15 +625,24 @@ func (b *Broker) endReady(l *lease, info *proto.Info, probeErr error) {
 	case !now.Before(l.IdleUntil):
 		reason = fmt.Sprintf("idle for %s", offer.IdleTimeout)
 	}
-	if reason != "" {
-		l.State = proto.LeaseReleasing
-		l.addProgress("releasing: " + reason)
+	if reason == "" {
+		_ = b.persist(&l.record)
+		b.mu.Unlock()
+		return
 	}
-	_ = b.persist(&l.record)
+	// The machine is destroyed only once the release is recorded; otherwise
+	// a restart would hand out a lease whose machine is gone. The next idle
+	// check tries again.
+	progress := slices.Clone(l.Progress)
+	l.State = proto.LeaseReleasing
+	l.addProgress("releasing: " + reason)
+	if err := b.persist(&l.record); err != nil {
+		l.State, l.Progress = proto.LeaseReady, progress
+		b.mu.Unlock()
+		return
+	}
 	b.mu.Unlock()
-	if reason != "" {
-		b.release(l)
-	}
+	b.release(l)
 }
 
 // Get returns one of the owner's leases.

@@ -53,7 +53,10 @@ leased machine end with the lease, so fetch what you need first.
 Leases are recorded in the cloud peer's state directory before anything is
 acquired. After a restart, the cloud peer keeps watching ready leases and
 releases any launch the restart interrupted. A failed release is retried every
-idle check until it succeeds.
+idle check until it succeeds. While leases are active, the cloud peer refuses
+to start if their offer is gone, if its provider or commands changed, or if
+the `[cloud]` section was removed: only what acquired a machine can release
+it.
 
 ## Configure a cloud peer
 

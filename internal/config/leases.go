@@ -18,11 +18,14 @@ import (
 // it exists, the lease is a peer named after the broker and the lease ID, so
 // --on, --where and job handles reach the machine like any configured peer.
 type LeaseRecord struct {
-	Broker    string            `json:"broker"`
-	ID        string            `json:"id"`
-	Offer     string            `json:"offer"`
-	Target    proto.LeaseTarget `json:"target"`
-	CreatedAt time.Time         `json:"created_at"`
+	Broker string `json:"broker"`
+	// BrokerPeer is the cloud peer's entry when the lease was made. Release
+	// goes there even if the entry has since changed.
+	BrokerPeer Peer              `json:"broker_peer"`
+	ID         string            `json:"id"`
+	Offer      string            `json:"offer"`
+	Target     proto.LeaseTarget `json:"target"`
+	CreatedAt  time.Time         `json:"created_at"`
 }
 
 // LeasePeer is the peer entry a lease target stands for.

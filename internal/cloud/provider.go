@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -82,6 +83,9 @@ func (p CommandProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 			req.Progress(line)
 		}
 	}
+	// A line too long to show stops the scanner; the rest is still read, so
+	// the command never blocks on a full pipe.
+	_, _ = io.Copy(io.Discard, stderr)
 	err = cmd.Wait()
 	if ctx.Err() != nil {
 		return Machine{}, ctx.Err()

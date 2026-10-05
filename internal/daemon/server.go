@@ -227,7 +227,16 @@ func New(cfg Config) (*Daemon, error) {
 		_ = d.Close()
 		return nil, err
 	}
-	if cfg.Cloud != nil {
+	if cfg.Cloud == nil {
+		// Without a broker nothing would ever release these machines.
+		if active, err := cloud.ActiveLeases(cfg.StateDir); err != nil || len(active) > 0 {
+			_ = d.Close()
+			if err != nil {
+				return nil, fmt.Errorf("checking for active cloud leases: %w", err)
+			}
+			return nil, fmt.Errorf("leases %s are still active, but this runner has no cloud offers; restore its [cloud] section until they are released", strings.Join(active, ", "))
+		}
+	} else {
 		brokerCfg := *cfg.Cloud
 		brokerCfg.StateDir = cfg.StateDir
 		if d.broker, err = cloud.New(brokerCfg); err != nil {

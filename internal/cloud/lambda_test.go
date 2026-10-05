@@ -382,13 +382,14 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 	// uses them never changes.
 	binary, _ := os.ReadFile(p.ErrandBinary)
 	var runner struct {
+		Transport  string   `toml:"transport"`
 		Listen     string   `toml:"listen"`
 		AllowUsers []string `toml:"allow_users"`
 	}
 	if _, err := toml.Decode(ssh.files["errandd.toml"], &runner); err != nil {
 		t.Fatalf("errandd.toml: %v\n%s", err, ssh.files["errandd.toml"])
 	}
-	if want := []string{"broker@example", `odd%u${HOME}"'x`, "george@github"}; runner.Listen != "tailnet:7443" || !slices.Equal(runner.AllowUsers, want) {
+	if want := []string{"broker@example", `odd%u${HOME}"'x`, "george@github"}; runner.Transport != "tailscale" || runner.Listen != "tailnet:7443" || !slices.Equal(runner.AllowUsers, want) {
 		t.Errorf("runner config %+v, want allow_users %q", runner, want)
 	}
 	for name, want := range map[string]string{
@@ -429,9 +430,8 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 // no port, the target pins the host key the machine booted with, and the
 // clients' keys are installed for the login it runs as.
 func TestLambdaAcquireOverSSH(t *testing.T) {
-	cache := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", cache)
-	t.Setenv("HOME", cache)
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
 	p, _, ssh := newLambda(t)
 	p.TailscaleAuthKeyFile = ""
 	id := proto.NewULID()
@@ -458,8 +458,7 @@ func TestLambdaAcquireOverSSH(t *testing.T) {
 		t.Fatalf("authorized-keys %q", got)
 	}
 	// This cloud peer watches the machine with its own key.
-	base, _ := os.UserCacheDir()
-	pins, _ := filepath.Glob(filepath.Join(base, "errand", "ssh", "pins", "*.identity"))
+	pins, _ := filepath.Glob(filepath.Join(state, "errand", "ssh", "pins", "*.identity"))
 	if len(pins) != 1 {
 		t.Fatalf("identity pins %q", pins)
 	}

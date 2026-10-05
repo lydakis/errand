@@ -179,6 +179,9 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 		t.Fatalf("unmatched: %v\n%s", err, out)
 	}
 
+	// The lease remembers its cloud peer: it is released there even after
+	// the name points somewhere else.
+	writeClientConfig(t, "[peers.cloud]\nurl='http://127.0.0.1:9'\n")
 	if out, err = cli("leases", "rm", name[1]); err != nil || !strings.Contains(out, name[1]+" released") {
 		t.Fatalf("leases rm: %v\n%s", err, out)
 	}

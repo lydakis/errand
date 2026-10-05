@@ -16,8 +16,9 @@ import (
 // accept only hostKey,
 // a public key such as "ssh-ed25519 AAAA...". Leased machines are reached
 // this way: their host key is known from launch, and their address may have
-// belonged to another machine before. Pins live in errand's SSH cache, so
-// later commands keep them.
+// belonged to another machine before. Pins live in errand's state
+// directory, beside the lease records that need them, not in a cache that
+// may be cleared.
 func PinSSHHost(peerURL, hostKey string) error {
 	target, ok := sshTarget(peerURL)
 	if !ok {
@@ -56,33 +57,58 @@ func PinSSHIdentity(peerURL, identityFile string) error {
 }
 
 func sshPinCreate(target string) (string, error) {
-	dir, err := sshControlDir()
+	dir, err := sshPinDir()
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "pins"), 0o700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	return sshPinBase(dir, target), nil
 }
 
+// sshPinDir is ssh/pins in the directory config.StateDirectory names, which
+// this package cannot import.
+func sshPinDir() (string, error) {
+	if state := os.Getenv("XDG_STATE_HOME"); state != "" {
+		if !filepath.IsAbs(state) {
+			return "", fmt.Errorf("XDG_STATE_HOME must be an absolute path")
+		}
+		return filepath.Join(state, "errand", "ssh", "pins"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".local", "state", "errand", "ssh", "pins"), nil
+}
+
 // sshPinArgs are the ssh options a pin adds. They come before any other
 // option, since ssh keeps the first value it is given.
 func sshPinArgs(target string) []string {
-	dir, err := sshControlDirPath()
+	dir, err := sshPinDir()
+	if err != nil {
+		return nil
+	}
+	controlDir, err := sshControlDirPath()
 	if err != nil {
 		return nil
 	}
 	base := sshPinBase(dir, target)
-	if _, err := os.Stat(base + ".known_hosts"); err != nil || strings.Contains(base, `"`) {
+	known, err := os.ReadFile(base + ".known_hosts")
+	if err != nil || strings.ContainsAny(base+controlDir, `"`) {
 		return nil
 	}
+	// A connection shared through a control master skips the host key
+	// check, so pinned connections share only with ones pinned the same way.
+	sum := sha256.Sum256([]byte(target + "\n" + string(known)))
 	args := []string{
 		"-o", "HostKeyAlias=" + sshPinAlias(target),
 		"-o", `UserKnownHostsFile="` + base + `.known_hosts"`,
 		"-o", "GlobalKnownHostsFile=/dev/null",
 		"-o", "StrictHostKeyChecking=yes",
 		"-o", "UpdateHostKeys=no",
+		"-o", `ControlPath="` + filepath.Join(controlDir, "pin-"+hex.EncodeToString(sum[:10])) + `"`,
 	}
 	if identity, err := os.ReadFile(base + ".identity"); err == nil && len(identity) > 0 {
 		args = append(args, "-i", string(identity))
@@ -92,7 +118,7 @@ func sshPinArgs(target string) []string {
 
 func sshPinBase(dir, target string) string {
 	sum := sha256.Sum256([]byte(target))
-	return filepath.Join(dir, "pins", hex.EncodeToString(sum[:16]))
+	return filepath.Join(dir, hex.EncodeToString(sum[:16]))
 }
 
 func sshPinAlias(target string) string {

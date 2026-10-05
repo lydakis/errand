@@ -111,7 +111,8 @@ func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, 
 }
 
 // lambdaRunnerConfig is the errandd.toml of a leased machine's runner: on
-// the tailnet it admits allowUsers; otherwise it is reached only over SSH.
+// the tailnet it admits allowUsers and refuses SSH clients, so the tailnet
+// policy decides who gets in; otherwise it is reached only over SSH.
 func lambdaRunnerConfig(tailnet bool, allowUsers []string) ([]byte, error) {
 	var b bytes.Buffer
 	if !tailnet {
@@ -121,9 +122,10 @@ func lambdaRunnerConfig(tailnet bool, allowUsers []string) ([]byte, error) {
 		return b.Bytes(), err
 	}
 	err := toml.NewEncoder(&b).Encode(struct {
+		Transport  string   `toml:"transport"`
 		Listen     string   `toml:"listen"`
 		AllowUsers []string `toml:"allow_users"`
-	}{"tailnet:7443", allowUsers})
+	}{"tailscale", "tailnet:7443", allowUsers})
 	return b.Bytes(), err
 }
 

@@ -50,9 +50,8 @@ func TestLeaseInterruptedDuringRequestIsReleased(t *testing.T) {
 // An ssh lease target's host key is pinned before anything connects, and a
 // cloud peer cannot slip anything but one public key into the pin.
 func TestLeasePeerPinsHostKey(t *testing.T) {
-	cache := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", cache)
-	t.Setenv("HOME", cache)
+	state := t.TempDir() // holds the pins and the lease record
+	t.Setenv("XDG_STATE_HOME", state)
 	target := proto.LeaseTarget{SSH: "ubuntu@203.0.113.7", HostKey: "ssh-ed25519 AAAA\n@cert-authority * ssh-ed25519 AAAA"}
 	if _, _, err := leasePeer("cloud-7f3a", target); err == nil {
 		t.Fatal("pinned a host key with a second line")
@@ -62,7 +61,6 @@ func TestLeasePeerPinsHostKey(t *testing.T) {
 		t.Fatalf("%q %v", peerURL, err)
 	}
 	// The client reaches the machine with the key it sent with the request.
-	t.Setenv("XDG_STATE_HOME", t.TempDir()) // the lease record stays here
 	writeClientConfig(t, "")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // stop at the probe; the pins come first
@@ -71,8 +69,7 @@ func TestLeasePeerPinsHostKey(t *testing.T) {
 	if _, err := recordLeasePeer(ctx, "cloud", lease, "gpu", keyFile, io.Discard); err == nil {
 		t.Fatal("probe of an unreachable lease succeeded")
 	}
-	base, _ := os.UserCacheDir()
-	pins, _ := filepath.Glob(filepath.Join(base, "errand", "ssh", "pins", "*.identity"))
+	pins, _ := filepath.Glob(filepath.Join(state, "errand", "ssh", "pins", "*.identity"))
 	if len(pins) != 1 {
 		t.Fatalf("identity pins %q", pins)
 	}
