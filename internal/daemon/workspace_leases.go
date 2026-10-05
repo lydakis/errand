@@ -22,8 +22,7 @@ type workspaceLeaseRef struct {
 
 func (d *Daemon) acquireWorkspace(ctx context.Context, j *Job) error {
 	s := d.workspaces
-	var record workspaceRecord
-	err := func() error {
+	return func() error {
 		unlock := s.lockWorkspace(j.Spec.WorkspaceID)
 		defer unlock()
 		s.mu.Lock()
@@ -69,34 +68,12 @@ func (d *Daemon) acquireWorkspace(ctx context.Context, j *Job) error {
 		if err := s.write(r); err != nil {
 			return err
 		}
-		j.workspaceRoot, j.baseline, record = data, r.Manifest, r
+		// The creation tree holds every baseline body and stays unchanged while
+		// the lease holds the workspace, so collection reads it in place.
+		j.workspaceRoot, j.baseline = data, r.Manifest
+		j.changeBase = changeops.TreeBase(filepath.Join(s.dir, r.ID, "change-base"))
 		return nil
 	}()
-	if err != nil {
-		return err
-	}
-	// The durable lease protects the creation tree; reading it must not hold
-	// the global metadata mutex or delay status/cancellation of unrelated jobs.
-	// Its bodies join the job's change base pinned in the snapshot cache, which
-	// workspace creation filled; the job copies only what the cache lacks.
-	base := filepath.Join(s.dir, record.ID, "change-base")
-	pins := j.pinBase(d)
-	missing, err := d.cache.pinPresent(ctx, record.Manifest, pins)
-	if err != nil {
-		return err
-	}
-	if d.cache != nil {
-		for _, e := range missing {
-			if err := d.cache.Insert(ctx, filepath.Join(base, filepath.FromSlash(e.Path)), e.SHA256, e.Size, pins); err != nil && ctx.Err() != nil {
-				return ctx.Err()
-			}
-		}
-	}
-	if err := changeops.CaptureJobBaseContext(ctx, base, j.Dir, record.Manifest, pins.shared()); err != nil {
-		return err
-	}
-	j.event("change-base-captured", baseCaptureDetail(record.Manifest, pins.shared()))
-	return nil
 }
 
 func sameWorkspacePolicy(a, b proto.SelectionPolicy) bool {

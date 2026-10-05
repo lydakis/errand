@@ -336,13 +336,12 @@ func hashRootFileContext(ctx context.Context, root *os.Root, rel string, before 
 
 // CollectWorkspaceChangesContext retains the submitted and final values of
 // every changed root so a later client can perform a real three-way merge.
-// Submitted bodies come from shared or the job's private store, which
-// CaptureJobBaseContext filled with the same shared lookup.
+// Submitted bodies come from base.
 func CollectWorkspaceChangesContext(
 	ctx context.Context,
 	workspace string,
 	jobDir string,
-	shared SharedBlobs,
+	base ChangeBase,
 	baseline proto.Manifest,
 	selection proto.SelectionPolicy,
 	maxBytes int64,
@@ -367,7 +366,7 @@ func CollectWorkspaceChangesContext(
 		return proto.ChangeBundle{}, false, errors.Join(err, access.restore())
 	}
 	bundle, collected, collectErr := collectAccessibleWorkspaceChangesContext(
-		ctx, workspace, jobDir, shared, baseline, maxBytes, access, selector,
+		ctx, workspace, jobDir, base, baseline, maxBytes, access, selector,
 	)
 	return bundle, collected, errors.Join(collectErr, access.restore())
 }
@@ -376,7 +375,7 @@ func collectAccessibleWorkspaceChangesContext(
 	ctx context.Context,
 	workspace string,
 	jobDir string,
-	shared SharedBlobs,
+	base ChangeBase,
 	baseline proto.Manifest,
 	maxBytes int64,
 	access *treeAccess,
@@ -410,7 +409,7 @@ func collectAccessibleWorkspaceChangesContext(
 		return bundle, false, err
 	}
 	if err := commitBundleWithPhysicalModesContext(
-		ctx, jobBundleBase(jobDir, shared), workspace, jobDir, bundle, access.physical,
+		ctx, base.bundleBase(jobDir), workspace, jobDir, bundle, access.physical,
 	); err != nil {
 		return proto.ChangeBundle{}, false, err
 	}

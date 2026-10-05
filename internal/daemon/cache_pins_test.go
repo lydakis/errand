@@ -90,8 +90,8 @@ func TestPinsCountEveryHolder(t *testing.T) {
 	c := testCache(t, 1<<20, time.Hour)
 	first, second := c.newPins(), c.newPins()
 	e := insertPinned(t, c, "held twice", first)
-	if missing, err := c.pinPresent(context.Background(), proto.Manifest{Entries: []proto.ManifestEntry{e}}, second); err != nil || len(missing) != 0 {
-		t.Fatalf("pinPresent = %v, %v", missing, err)
+	if hit, err := c.Materialize(context.Background(), filepath.Join(t.TempDir(), "f"), e, second); err != nil || !hit {
+		t.Fatalf("materialize = %v, %v", hit, err)
 	}
 	first.release()
 	old := time.Now().Add(-2 * time.Hour)
@@ -135,24 +135,49 @@ func TestMaterializePinsOnlyVerifiedHits(t *testing.T) {
 	}
 }
 
-func TestPinPresentReportsMissingBodiesOnce(t *testing.T) {
-	c := testCache(t, 1<<20, time.Hour)
-	held := insertPinned(t, c, "held", nil)
-	absent := blobEntry("absent")
-	twin := absent
-	twin.Path = "twin"
-	m := proto.Manifest{Entries: []proto.ManifestEntry{held, absent, twin}}
+func TestReleasingPinsEvictsDownToTheBudget(t *testing.T) {
+	c := testCache(t, 12, time.Hour)
 	pins := c.newPins()
-	missing, err := c.pinPresent(context.Background(), m, pins)
-	if err != nil || len(missing) != 1 || missing[0].SHA256 != absent.SHA256 {
-		t.Fatalf("pinPresent missing = %v, %v", missing, err)
+	first := insertPinned(t, c, "first body", pins)
+	second := insertPinned(t, c, "second body", pins)
+	if !blobPresent(c, first.SHA256) || !blobPresent(c, second.SHA256) {
+		t.Fatal("eviction took a pinned blob")
 	}
-	if _, ok := pins.shared()(held.SHA256); !ok {
-		t.Fatal("present blob was not pinned")
+	pins.release()
+	if c.bytes > c.maxBytes {
+		t.Fatalf("cache holds %d bytes after its pins were released, budget %d", c.bytes, c.maxBytes)
 	}
-	var none *blobCache
-	if missing, err := none.pinPresent(context.Background(), m, none.newPins()); err != nil || len(missing) != 2 {
-		t.Fatalf("pinPresent without a cache = %v, %v", missing, err)
+	if blobPresent(c, first.SHA256) && blobPresent(c, second.SHA256) {
+		t.Fatal("released blobs stayed above the budget")
+	}
+}
+
+func TestInsertRollbackKeepsABlobAnotherJobPins(t *testing.T) {
+	c := testCache(t, 15, time.Hour)
+	other := c.newPins()
+	e := insertPinned(t, c, "0123456789", other)
+	insertPinned(t, c, "held body", other) // pinned past the budget
+	// An unexpected entry makes the eviction scan, and so the insert, fail.
+	if err := os.WriteFile(filepath.Join(c.dir, "unexpected"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(t.TempDir(), "src")
+	if err := os.WriteFile(src, []byte("0123456789"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mine := c.newPins()
+	if err := c.Insert(context.Background(), src, e.SHA256, e.Size, mine); err == nil {
+		t.Fatal("insert succeeded despite eviction scan failure")
+	}
+	if _, ok := mine.shared()(e.SHA256); ok {
+		t.Fatal("failed insert pinned its blob")
+	}
+	path, ok := other.shared()(e.SHA256)
+	if !ok {
+		t.Fatal("failed insert dropped another job's pin")
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != "0123456789" {
+		t.Fatalf("other job's body = %q, %v", got, err)
 	}
 }
 
@@ -217,28 +242,14 @@ func TestJobBaseComesFromPinnedCache(t *testing.T) {
 	}
 }
 
-// A job on a persistent workspace pins the bodies workspace creation cached,
-// and puts back any the cache lost from the workspace's creation tree.
-func TestWorkspaceJobBaseReadsAndRefillsTheCache(t *testing.T) {
+// A job on a persistent workspace reads its base in place from the workspace's
+// creation tree: it copies and pins nothing, and needs nothing from the cache.
+func TestWorkspaceJobBaseReadsTheCreationTree(t *testing.T) {
 	d, ts := testDaemon(t)
-	root := workspaceWith(t, map[string]string{"value": "initial\n"})
+	root := workspaceWith(t, map[string]string{"value": "initial\n", "kept": "kept\n"})
 	if _, err := client.CreateWorkspace(client.RunOptions{PeerURL: ts.URL, Root: root}, "experiment"); err != nil {
 		t.Fatal(err)
 	}
-	run := func(command string) string {
-		t.Helper()
-		var stderr bytes.Buffer
-		code := client.Run(client.RunOptions{PeerURL: ts.URL, Root: root, Workspace: "experiment", Argv: []string{"/bin/sh", "-c", command}, Stdout: io.Discard, Stderr: &stderr})
-		if code != 0 {
-			t.Fatalf("run: %d %s", code, stderr.String())
-		}
-		id := lastJobID(t, d)
-		if events := jobEvents(t, d, id); !strings.Contains(events, "copied=0/2") {
-			t.Fatalf("workspace job copied bodies: %s", events)
-		}
-		return id
-	}
-	run("echo first > value")
 	// Lose every cached body, as eviction would.
 	entries, err := os.ReadDir(d.cache.dir)
 	if err != nil {
@@ -249,22 +260,37 @@ func TestWorkspaceJobBaseReadsAndRefillsTheCache(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	id := run("echo second > value")
-	bundle, err := changeops.Load(filepath.Join(d.jobsDir(), id))
-	if err != nil {
-		t.Fatal(err)
-	}
-	archive, err := changeops.OpenBaseArchive(filepath.Join(d.jobsDir(), id))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer archive.Close()
-	staged := t.TempDir()
-	if err := changeops.ExtractBase(archive, staged, bundle, 1<<20); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := os.ReadFile(filepath.Join(staged, "value")); err != nil || string(got) != "initial\n" {
-		t.Fatalf("base value = %q, %v; want the creation body", got, err)
+	for _, body := range []string{"first", "second"} {
+		var stderr bytes.Buffer
+		code := client.Run(client.RunOptions{PeerURL: ts.URL, Root: root, Workspace: "experiment", Argv: []string{"/bin/sh", "-c", "echo " + body + " > value"}, Stdout: io.Discard, Stderr: &stderr})
+		if code != 0 {
+			t.Fatalf("run: %d %s", code, stderr.String())
+		}
+		id := lastJobID(t, d)
+		if events := jobEvents(t, d, id); strings.Contains(events, "change-base-captured") {
+			t.Fatalf("workspace job captured a change base: %s", events)
+		}
+		if n := len(d.cache.pins); n != 0 {
+			t.Fatalf("workspace job left %d blobs pinned", n)
+		}
+		jobDir := filepath.Join(d.jobsDir(), id)
+		bundle, err := changeops.Load(jobDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		archive, err := changeops.OpenBaseArchive(jobDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		staged := t.TempDir()
+		err = changeops.ExtractBase(archive, staged, bundle, 1<<20)
+		archive.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := os.ReadFile(filepath.Join(staged, "value")); err != nil || string(got) != "initial\n" {
+			t.Fatalf("base value = %q, %v; want the creation body", got, err)
+		}
 	}
 }
 

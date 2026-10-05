@@ -48,6 +48,7 @@ type Job struct {
 	workspaceLeaseErr   error
 	treeBaselines       map[string]string
 	basePins            *cachePins
+	changeBase          changeops.ChangeBase
 	cachePublicationErr error
 	publishTrees        bool
 	ID                  string
@@ -413,6 +414,7 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 		}
 		return false, fmt.Errorf("capturing submitted workspace for change merging: %w", err)
 	}
+	j.changeBase = changeops.StoredBase(pins.shared())
 	j.event("change-base-captured", baseCaptureDetail(manifest, pins.shared()))
 	if err := j.prepareNamedCacheTrees(stagingCtx, d); err != nil {
 		return false, err
@@ -655,7 +657,7 @@ func (j *Job) launch(d *Daemon) error {
 				collectErr = errors.New("process scope cleanup incomplete")
 			} else {
 				bundle, collected, collectErr = changeops.CollectWorkspaceChangesContext(
-					changeCtx, workspace, j.Dir, j.basePins.shared(), j.baseline, j.Spec.Selection, j.Spec.Limits.MaxChangeBytes)
+					changeCtx, workspace, j.Dir, j.changeBase, j.baseline, j.Spec.Selection, j.Spec.Limits.MaxChangeBytes)
 			}
 			j.mu.Lock()
 			ctxErr := changeCtx.Err()

@@ -149,7 +149,7 @@ func TestApplyMergeInputsPreserveLogicalModes(t *testing.T) {
 	if err := os.Chmod(filepath.Join(remote, "dir/nested"), 0500); err != nil {
 		t.Fatal(err)
 	}
-	bundle, collected, err := CollectWorkspaceChangesContext(t.Context(), remote, jobDir, nil, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(t.Context(), remote, jobDir, ChangeBase{}, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil || !collected {
 		t.Fatalf("collect: %t, %v", collected, err)
 	}

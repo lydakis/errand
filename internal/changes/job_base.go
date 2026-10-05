@@ -14,14 +14,31 @@ import (
 )
 
 // A job's change base is its baseline manifest plus the submitted body of each
-// file, addressed by hash. Change collection reads only the bodies under the
-// changed paths, so a job that changes nothing never reads its base. Most
-// bodies stay in a shared content store (the runner's snapshot cache, pinned
-// for the job); the job's private store holds a copy of the rest.
+// file. Change collection reads only the bodies under the changed paths, so a
+// job that changes nothing never reads its base.
 
 // SharedBlobs returns the path of a body another store keeps for the job.
 // ok is false for any body the job's private store must hold instead.
 type SharedBlobs func(sha string) (path string, ok bool)
+
+// ChangeBase says where change collection reads a job's submitted bodies. The
+// zero value reads only the job's private store.
+type ChangeBase struct {
+	shared SharedBlobs
+	tree   string
+}
+
+// StoredBase reads each body from shared, or else from the job's private store,
+// which CaptureJobBaseContext fills with the same shared lookup.
+func StoredBase(shared SharedBlobs) ChangeBase {
+	return ChangeBase{shared: shared}
+}
+
+// TreeBase reads each body at its path in tree, which holds the baseline and
+// must stay unchanged until the job's changes are collected.
+func TreeBase(tree string) ChangeBase {
+	return ChangeBase{tree: tree}
+}
 
 func jobBlobPath(jobDir, sha string) string {
 	return filepath.Join(workspaceBasePath(jobDir), sha)
@@ -91,16 +108,32 @@ func CaptureJobBaseContext(ctx context.Context, workspace, jobDir string, manife
 	return nil
 }
 
-// jobBundleBase packs a bundle's base archive from the job's change base.
-func jobBundleBase(jobDir string, shared SharedBlobs) bundleBase {
-	return func(ctx context.Context, dir string, m proto.Manifest) error {
-		return packBundleContentArchive(ctx, dir, baseArchiveFile, m, func(e proto.ManifestEntry) (io.ReadCloser, error) {
-			if shared != nil {
-				if path, ok := shared(e.SHA256); ok {
-					return os.Open(path)
+// bundleBase packs a bundle's base archive from the job's change base.
+func (b ChangeBase) bundleBase(jobDir string) bundleBase {
+	return func(ctx context.Context, dir string, m proto.Manifest) (err error) {
+		if b.tree == "" {
+			return packBundleContentArchive(ctx, dir, baseArchiveFile, m, func(e proto.ManifestEntry) (io.ReadCloser, error) {
+				if b.shared != nil {
+					if path, ok := b.shared(e.SHA256); ok {
+						return os.Open(path)
+					}
 				}
+				return os.Open(jobBlobPath(jobDir, e.SHA256))
+			})
+		}
+		root, err := os.OpenRoot(b.tree)
+		if err != nil {
+			return err
+		}
+		defer func() { err = errors.Join(err, root.Close()) }()
+		paths := materializationPaths{root: root, verify: true}
+		defer func() { err = errors.Join(err, paths.close()) }()
+		return packBundleContentArchive(ctx, dir, baseArchiveFile, m, func(e proto.ManifestEntry) (io.ReadCloser, error) {
+			in, err := openMaterializationSource(&paths, e, e.Mode)
+			if err != nil {
+				return nil, err
 			}
-			return os.Open(jobBlobPath(jobDir, e.SHA256))
+			return in, nil
 		})
 	}
 }

@@ -3,23 +3,18 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"os"
+	"log"
 	"sync"
-	"time"
 
 	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/proto"
 )
 
-// A job's change base reads the submitted bodies of its changed files from the
-// snapshot cache. The job pins those blobs from staging until it settles, so
-// eviction, expiry and GC cannot remove them meanwhile. Pins live in memory:
-// nothing reads a job base after a daemon restart. Pinned blobs can hold the
-// cache above its byte budget until their jobs settle.
-
-// pinTouchInterval bounds how often a pin refreshes a blob's last use. Last
-// use only orders eviction, and a job on a persistent workspace pins every body.
-const pinTouchInterval = time.Hour
+// An ephemeral job's change base reads the submitted bodies of its changed
+// files from the snapshot cache. The job pins those blobs from staging until it
+// settles, so eviction, expiry and GC cannot remove them meanwhile. Pins live in
+// memory: nothing reads a job base after a daemon restart. Pinned blobs can hold
+// the cache above its byte budget until their jobs settle.
 
 // cachePins is one job's hold on cached blobs.
 type cachePins struct {
@@ -51,7 +46,8 @@ func (p *cachePins) shared() changeops.SharedBlobs {
 	}
 }
 
-// release drops the job's pins. It is idempotent.
+// release drops the job's pins and evicts down to the cache's budget, which
+// the pinned blobs may have held it above. It is idempotent.
 func (p *cachePins) release() {
 	if p == nil {
 		return
@@ -60,12 +56,18 @@ func (p *cachePins) release() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	held := len(p.shas) != 0
 	for sha := range p.shas {
 		c.unpinLocked(sha)
 	}
 	p.shas = nil
 	p.released = true
+	p.mu.Unlock()
+	if held {
+		if err := c.enforceSizeLocked(context.Background()); err != nil {
+			log.Printf("snapshot cache eviction after a job settled: %v", err)
+		}
+	}
 }
 
 // pinLocked adds sha to p. The caller holds c.mu and has seen the blob.
@@ -103,52 +105,6 @@ func (c *blobCache) unpinLocked(sha string) {
 
 func (c *blobCache) pinnedLocked(sha string) bool {
 	return c.pins[sha] > 0
-}
-
-// pinPresent pins the cached bodies of m's files and returns one entry for
-// each body the cache does not hold. A nil cache holds nothing.
-func (c *blobCache) pinPresent(ctx context.Context, m proto.Manifest, p *cachePins) ([]proto.ManifestEntry, error) {
-	var missing []proto.ManifestEntry
-	if c == nil {
-		seen := make(map[string]bool)
-		for _, e := range m.Entries {
-			if e.Type == proto.EntryFile && !seen[e.SHA256] {
-				seen[e.SHA256] = true
-				missing = append(missing, e)
-			}
-		}
-		return missing, nil
-	}
-	if err := c.mu.LockContext(ctx); err != nil {
-		return nil, err
-	}
-	defer c.mu.Unlock()
-	now := time.Now()
-	seen := make(map[string]bool)
-	for _, e := range m.Entries {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if e.Type != proto.EntryFile || seen[e.SHA256] {
-			continue
-		}
-		seen[e.SHA256] = true
-		if !validBlobHash(e.SHA256) {
-			missing = append(missing, e)
-			continue
-		}
-		path := c.path(e.SHA256)
-		fi, err := os.Lstat(path)
-		if err != nil || !fi.Mode().IsRegular() || fi.Size() != e.Size || (c.expired(fi, now) && !c.pinnedLocked(e.SHA256)) {
-			missing = append(missing, e)
-			continue
-		}
-		c.pinLocked(p, e.SHA256)
-		if now.Sub(fi.ModTime()) > pinTouchInterval {
-			os.Chtimes(path, now, now)
-		}
-	}
-	return missing, nil
 }
 
 // pinBase gives the job its hold on the cache for its change base.

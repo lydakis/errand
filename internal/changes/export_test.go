@@ -75,7 +75,7 @@ func TestExportRemoteRefusesDeletedSelection(t *testing.T) {
 	if err := os.Remove(file); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), workspace, job, nil, manifest, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), workspace, job, ChangeBase{}, manifest, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}

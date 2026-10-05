@@ -34,7 +34,7 @@ func TestCheckpointPartialDirectoryDeletion(t *testing.T) {
 	writeTransferFile(t, source, "dir/clean", "source file\n")
 	writeTransferFile(t, source, "dir/conflict", "incoming\n")
 	writeTransferFile(t, destination, "dir/conflict", "destination\n")
-	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), source, job, nil, base, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), source, job, ChangeBase{}, base, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestCheckpointPartialDirectoryDeletion(t *testing.T) {
 	if err := os.Remove(filepath.Join(source, "dir/clean")); err != nil {
 		t.Fatal(err)
 	}
-	bundle2, _, err := CollectWorkspaceChangesContext(context.Background(), source, job2, nil, version.Manifest, proto.SelectionPolicy{}, 1<<20)
+	bundle2, _, err := CollectWorkspaceChangesContext(context.Background(), source, job2, ChangeBase{}, version.Manifest, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +255,7 @@ func TestCheckpointDirectoryConflicts(t *testing.T) {
 			}
 			writeTransferFile(t, source, "dir/clean", "incoming\n")
 			writeTransferFile(t, destination, "dir/local", "destination only\n")
-			bundle, _, err := CollectWorkspaceChangesContext(context.Background(), source, job, nil, base, proto.SelectionPolicy{}, 1<<20)
+			bundle, _, err := CollectWorkspaceChangesContext(context.Background(), source, job, ChangeBase{}, base, proto.SelectionPolicy{}, 1<<20)
 			if err != nil {
 				t.Fatal(err)
 			}

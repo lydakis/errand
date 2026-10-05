@@ -60,7 +60,7 @@ func TestCheckpointRecordsSourceAndPreservesDestinationEdits(t *testing.T) {
 	}
 	source2 := strings.Replace(source, "source", "source two", 1)
 	writeTransferFile(t, sender, "artifact", source2)
-	bundle2, _, err := CollectWorkspaceChangesContext(context.Background(), sender, job, nil, first.Manifest, proto.SelectionPolicy{}, 1<<20)
+	bundle2, _, err := CollectWorkspaceChangesContext(context.Background(), sender, job, ChangeBase{}, first.Manifest, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestCheckpointMetadataDeletionAndTypeChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeTransferFile(t, sourceRoot, "replace/child", "new")
-	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), sourceRoot, job, nil, base, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), sourceRoot, job, ChangeBase{}, base, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}

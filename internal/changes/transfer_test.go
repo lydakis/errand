@@ -327,7 +327,7 @@ func mixedTransferFixture(t *testing.T) (string, proto.ChangeBundle, string) {
 	writeTransferFile(t, remote, "binary", "incoming\x00")
 	writeTransferFile(t, local, "binary", "destination\x00")
 	writeTransferFile(t, local, "text", "destination\n")
-	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), remote, job, nil, manifest, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(context.Background(), remote, job, ChangeBase{}, manifest, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}

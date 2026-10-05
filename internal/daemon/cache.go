@@ -303,6 +303,10 @@ func (c *blobCache) Insert(ctx context.Context, src, sha string, size int64, pin
 	c.pinLocked(pins, sha)
 	if err := c.enforceSizeLocked(ctx); err != nil {
 		c.dropPinLocked(pins, sha)
+		if c.pinnedLocked(sha) {
+			// Another job's change base reads this verified body.
+			return err
+		}
 		fi, statErr := os.Lstat(p)
 		if statErr == nil {
 			if removeErr := os.Remove(p); removeErr != nil {

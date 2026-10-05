@@ -36,7 +36,7 @@ func TestTransferBlobsReconstructCheckpointAfterSourceDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeTransferFile(t, source, "file", "accepted source\n")
-	bundle, _, err := CollectWorkspaceChangesContext(ctx, source, first, treeBlobs(workspaceBasePath(first), base), base, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(ctx, source, first, TreeBase(workspaceBasePath(first)), base, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestTransferBlobsReconstructCheckpointAfterSourceDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertTransferFile(t, workspaceBasePath(second), "file", "accepted source\n")
-	deletion, _, err := CollectWorkspaceChangesContext(ctx, source, second, treeBlobs(workspaceBasePath(second), next.Manifest), next.Manifest, proto.SelectionPolicy{}, 1<<20)
+	deletion, _, err := CollectWorkspaceChangesContext(ctx, source, second, TreeBase(workspaceBasePath(second)), next.Manifest, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,20 +81,6 @@ func TestTransferBlobsReconstructCheckpointAfterSourceDeletion(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(receiver, "file")); !os.IsNotExist(err) {
 		t.Fatalf("deletion did not reach receiver: %v", err)
-	}
-}
-
-// treeBlobs reads the bodies of a base that MaterializeBase rebuilt as a tree.
-func treeBlobs(root string, m proto.Manifest) SharedBlobs {
-	paths := make(map[string]string)
-	for _, e := range m.Entries {
-		if e.Type == proto.EntryFile {
-			paths[e.SHA256] = filepath.Join(root, filepath.FromSlash(e.Path))
-		}
-	}
-	return func(sha string) (string, bool) {
-		path, ok := paths[sha]
-		return path, ok
 	}
 }
 

@@ -47,7 +47,7 @@ func TestSymlinkTargetsCollectOnWindows(t *testing.T) {
 	if err := CaptureJobBaseContext(ctx, workspace, job, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
-	if bundle, collected, err := CollectWorkspaceChangesContext(ctx, workspace, job, nil, baseline, proto.SelectionPolicy{}, 1<<20); err != nil || collected {
+	if bundle, collected, err := CollectWorkspaceChangesContext(ctx, workspace, job, ChangeBase{}, baseline, proto.SelectionPolicy{}, 1<<20); err != nil || collected {
 		t.Fatalf("unchanged links: collected = %t, bundle = %+v, err = %v", collected, bundle, err)
 	}
 	if err := os.Remove(filepath.Join(workspace, "link")); err != nil {
@@ -59,7 +59,7 @@ func TestSymlinkTargetsCollectOnWindows(t *testing.T) {
 	if err := os.Symlink("../src/file", filepath.Join(workspace, "src", "new-link")); err != nil {
 		t.Fatal(err)
 	}
-	bundle, collected, err := CollectWorkspaceChangesContext(ctx, workspace, job, nil, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(ctx, workspace, job, ChangeBase{}, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}

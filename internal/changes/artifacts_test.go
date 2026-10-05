@@ -30,7 +30,7 @@ func TestArtifactRetentionSelectsIgnoredOutputs(t *testing.T) {
 			// Ignore rules may use the enclosing Git worktree's coordinates;
 			// artifact declarations always use the submitted workspace's root.
 			policy := proto.SelectionPolicy{Prefix: "packages/api", Ignore: []string{"/packages/api/ignored/"}, Artifacts: []string{artifact}}
-			bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, nil, proto.Manifest{}, policy, 1<<20)
+			bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, ChangeBase{}, proto.Manifest{}, policy, 1<<20)
 			if err != nil || !collected {
 				t.Fatalf("collect: %v %v", collected, err)
 			}
@@ -49,7 +49,7 @@ func TestArtifactRetentionSelectsIgnoredOutputs(t *testing.T) {
 			if got, err := os.ReadFile(filepath.Join(output, "ignored/reports/result.txt")); err != nil || string(got) != "result" {
 				t.Fatalf("export: %q %v", got, err)
 			}
-			if _, _, err := CollectWorkspaceChangesContext(context.Background(), root, job, nil, proto.Manifest{}, policy, 5); !errors.Is(err, ErrByteLimitExceeded) {
+			if _, _, err := CollectWorkspaceChangesContext(context.Background(), root, job, ChangeBase{}, proto.Manifest{}, policy, 5); !errors.Is(err, ErrByteLimitExceeded) {
 				t.Fatalf("artifact ignored byte limit: %v", err)
 			}
 		})
@@ -64,7 +64,7 @@ func TestMissingArtifactDoesNotRetainIgnoredAncestors(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(root, "ignored"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	_, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, nil, proto.Manifest{}, proto.SelectionPolicy{Ignore: []string{"ignored/"}, Artifacts: []string{"ignored/missing"}}, 1<<20)
+	_, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, ChangeBase{}, proto.Manifest{}, proto.SelectionPolicy{Ignore: []string{"ignored/"}, Artifacts: []string{"ignored/missing"}}, 1<<20)
 	if err != nil || collected {
 		t.Fatalf("missing artifact: %v %v", collected, err)
 	}

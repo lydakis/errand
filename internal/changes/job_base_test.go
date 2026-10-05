@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/lydakis/errand/internal/proto"
@@ -87,7 +88,7 @@ func TestJobBaseCopiesOnlyBodiesTheSharedStoreLacks(t *testing.T) {
 	if err := os.Remove(filepath.Join(workspace, "dir/twin-b.txt")); err != nil {
 		t.Fatal(err)
 	}
-	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, job, shared, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, job, StoredBase(shared), baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil || !collected {
 		t.Fatalf("collect = %v, %v", collected, err)
 	}
@@ -153,5 +154,54 @@ func TestJobBaseKeepsReadOnlyAndSearchOnlySources(t *testing.T) {
 	stored, err := os.ReadDir(workspaceBasePath(job))
 	if err != nil || len(stored) != 3 {
 		t.Fatalf("private store = %v, %v; want 3 bodies", stored, err)
+	}
+}
+
+// A tree base reads bodies in place from a tree that keeps the baseline, such
+// as a persistent workspace's creation tree, without any capture.
+func TestTreeBaseReadsBodiesInPlace(t *testing.T) {
+	tree, baseline := jobBaseFixture(t)
+	workspace, _ := jobBaseFixture(t)
+	if err := os.Chmod(filepath.Join(tree, "dir"), 0o100); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(filepath.Join(tree, "dir"), 0o700) })
+	for _, name := range []string{"cached.txt", "dir/twin-a.txt"} {
+		if err := os.WriteFile(filepath.Join(workspace, filepath.FromSlash(name)), []byte("job output\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job := t.TempDir()
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), workspace, job, TreeBase(tree), baseline, proto.SelectionPolicy{}, 1<<20)
+	if err != nil || !collected {
+		t.Fatalf("collect = %v, %v", collected, err)
+	}
+	base := filepath.Join(extractTestBundle(t, job, bundle), "base")
+	for name, want := range map[string]string{"cached.txt": "cached body\n", "dir/twin-a.txt": "twin body\n"} {
+		got, err := os.ReadFile(filepath.Join(base, filepath.FromSlash(name)))
+		if err != nil || string(got) != want {
+			t.Fatalf("base %s = %q, %v; want %q", name, got, err, want)
+		}
+	}
+	if info, err := os.Stat(filepath.Join(tree, "dir")); err != nil || info.Mode().Perm() != 0o100 {
+		t.Fatalf("tree directory mode changed: %v, %v", info, err)
+	}
+	if _, err := os.Stat(workspaceBasePath(job)); !os.IsNotExist(err) {
+		t.Fatalf("tree base made a private store: %v", err)
+	}
+}
+
+func TestTreeBaseRefusesAChangedBody(t *testing.T) {
+	tree, baseline := jobBaseFixture(t)
+	workspace, _ := jobBaseFixture(t)
+	if err := os.WriteFile(filepath.Join(tree, "copied.txt"), []byte("COPIED BODY\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, "copied.txt"), []byte("job output\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := CollectWorkspaceChangesContext(context.Background(), workspace, t.TempDir(), TreeBase(tree), baseline, proto.SelectionPolicy{}, 1<<20)
+	if err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("collect = %v, want a content mismatch", err)
 	}
 }

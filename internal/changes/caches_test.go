@@ -23,7 +23,7 @@ func TestCacheExclusionWinsOverArtifactAncestors(t *testing.T) {
 		}
 	}
 	policy := proto.SelectionPolicy{Artifacts: []string{"out"}, Ignore: []string{"out/"}, Caches: []proto.CacheBinding{{Name: "compiler", Path: "out/cache"}}}
-	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, nil, proto.Manifest{}, policy, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, ChangeBase{}, proto.Manifest{}, policy, 1<<20)
 	if err != nil || !collected {
 		t.Fatalf("collect: %v %v", collected, err)
 	}
@@ -53,7 +53,7 @@ func TestCacheRetentionPreservesDistinctPathCase(t *testing.T) {
 		t.Fatal(statErr)
 	}
 	policy := proto.SelectionPolicy{Caches: []proto.CacheBinding{{Name: "compiler", Path: "build"}}}
-	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, nil, proto.Manifest{}, policy, 1<<20)
+	bundle, collected, err := CollectWorkspaceChangesContext(context.Background(), root, job, ChangeBase{}, proto.Manifest{}, policy, 1<<20)
 	if statErr == nil {
 		if err == nil {
 			t.Fatal("accepted ambiguous cache casing")
