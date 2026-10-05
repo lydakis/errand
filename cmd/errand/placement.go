@@ -83,8 +83,11 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 		// cheapest matching offer competes with the others' on price, and
 		// equal ones are tried in random order. How busy a cloud peer's own
 		// runner is does not matter; the job runs on the rented machine.
+		// Only configured peers supply machines: a leased runner that
+		// offers some itself would rent a machine nobody watches once its
+		// own lease ends.
 		if !matched && !q.Any() {
-			for i, p := range probed {
+			for i, p := range probed[:len(e.Candidates)] {
 				if p.info == nil {
 					continue
 				}

@@ -833,6 +833,11 @@ func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 			}
 		}
 		id, err := d.identifyRequest(r)
+		// Any request ends the leases of a caller that may no longer submit,
+		// whatever it asked for and even when it may ask for nothing at all.
+		if d.broker != nil && id.Owner() != "" {
+			d.checkLeaseAccess(id)
+		}
 		if err != nil {
 			httpError(w, http.StatusForbidden, err.Error())
 			return
@@ -871,7 +876,6 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 	// only record of them a client needs.
 	if d.broker != nil && id.Allowed(proto.ActionLease) {
 		offers = d.broker.Offers()
-		d.checkLeaseAccess(id)
 		leases = leaseView(id, d.broker.Active(leaseOwner(id)))
 	}
 	d.mu.Lock()
