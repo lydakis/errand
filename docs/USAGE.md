@@ -472,6 +472,21 @@ returns 0 for the detach action; it is not the unfinished job's exit status.
 Non-terminal EOF is ignored, so scripts remain attached unless they request
 `--detach` explicitly.
 
+To read a job's output without following it, add `--no-follow`: attach prints
+what the job has written so far and exits 0, leaving the job alone, with no
+Ctrl-C forwarding and no workspace apply. That answers "did the service start?"
+from a script or an agent:
+
+```sh
+errand attach --no-follow --tail 100 gb10/JOB_ID
+errand attach --no-follow --since 10m gb10/JOB_ID | grep "socket connected"
+```
+
+`--tail N` starts with the last N lines, counted across stdout and stderr in
+the order the runner saw them, and `--since` skips output written before a
+duration ago (`10m`) or an RFC 3339 time. Both also work on a followed
+`attach`, which then continues live from there.
+
 `--forward [LOCAL:]REMOTE` opens TCP listeners on IPv4 and IPv6 local loopback for the
 attached session. It is repeatable and can be added when initially running a
 job or on any later `attach`. Omitting `LOCAL` uses the remote port locally.
