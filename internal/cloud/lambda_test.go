@@ -126,6 +126,12 @@ func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			next = strconv.Itoa(end)
 		}
 		json.NewEncoder(w).Encode(map[string]any{"data": list, "page_token": next})
+		// Lambda lists a terminating instance as terminated a little later.
+		for _, in := range list {
+			if in.Status == "terminating" {
+				in.Status = "terminated"
+			}
+		}
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/instances/") && f.pollErrors > 0:
 		f.pollErrors--
 		w.WriteHeader(http.StatusBadGateway)
@@ -151,7 +157,7 @@ func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			f.terminated = append(f.terminated, id)
-			f.instances[id].Status = "terminated"
+			f.instances[id].Status = "terminating"
 			done = append(done, f.instances[id])
 		}
 		reply(map[string]any{"terminated_instances": done})
@@ -415,11 +421,12 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 	}
 
 	release := ReleaseRequest{LeaseID: id, Offer: "h100", State: machine.State}
-	if err := p.Release(context.Background(), release); err != nil {
-		t.Fatal(err)
+	// Asked to terminate, then terminating, then listed as terminated.
+	if calls := releaseUntilDone(t, p, release); calls != 3 {
+		t.Fatalf("released after %d calls", calls)
 	}
 	if err := p.Release(context.Background(), release); err != nil {
-		t.Fatalf("second release: %v", err)
+		t.Fatalf("release once terminated: %v", err)
 	}
 	if len(api.terminated) != 1 || api.terminated[0] != "inst-a" {
 		t.Fatalf("terminated %v", api.terminated)
@@ -509,13 +516,12 @@ func TestLambdaReleaseFindsUnsavedInstance(t *testing.T) {
 	api.instances["inst-other"] = &lambdaInstance{ID: "inst-other", Name: "someone-else", Status: "active"}
 	api.instances["inst-another"] = &lambdaInstance{ID: "inst-another", Name: "someone-else-too", Status: "active"}
 	api.pageSize = 1 // the lease's instance is on the last page
-	// A termination Lambda does not confirm is not a release.
+	// A termination Lambda accepts but does not carry out is not a
+	// release: it is asked again until Lambda lists the instance as
+	// terminated.
 	api.keepAlive = 1
-	if err := p.Release(context.Background(), ReleaseRequest{LeaseID: id, Offer: "h100", State: sent}); err == nil || !strings.Contains(err.Error(), "did not confirm terminating inst-z") {
-		t.Fatalf("unconfirmed termination: %v", err)
-	}
-	if err := p.Release(context.Background(), ReleaseRequest{LeaseID: id, Offer: "h100", State: sent}); err != nil {
-		t.Fatal(err)
+	if calls := releaseUntilDone(t, p, ReleaseRequest{LeaseID: id, Offer: "h100", State: sent}); calls != 4 {
+		t.Fatalf("released after %d calls", calls)
 	}
 	if len(api.terminated) != 1 || api.terminated[0] != "inst-z" {
 		t.Fatalf("terminated %v", api.terminated)
@@ -1089,4 +1095,22 @@ func TestLambdaSlowSaveIsRedone(t *testing.T) {
 	if len(sents) != 2 || !sents[1].After(sents[0]) || len(api.launches) != 1 {
 		t.Fatalf("saved launch times %v, %d launches", sents, len(api.launches))
 	}
+}
+
+// releaseUntilDone calls Release as the broker would until it reports the
+// machine gone, and returns how many calls that took.
+func releaseUntilDone(t *testing.T, p *LambdaProvider, req ReleaseRequest) int {
+	t.Helper()
+	for calls := 1; calls <= 10; calls++ {
+		err := p.Release(context.Background(), req)
+		if err == nil {
+			return calls
+		}
+		var pending *ReleasePending
+		if !errors.As(err, &pending) {
+			t.Fatalf("release call %d: %v", calls, err)
+		}
+	}
+	t.Fatal("release never finished")
+	return 0
 }

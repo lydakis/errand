@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -786,6 +787,59 @@ func TestInfoShowsOffersOnlyWithLeaseIDs(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || len(info.Offers) != tc.offers {
 			t.Errorf("actions %v: %v, %d offers, want %d", tc.actions, err, len(info.Offers), tc.offers)
 		}
+	}
+}
+
+// A leased machine admits its owner for every action, so an owner whose
+// submit action was taken away is not shown where its leases are, and they
+// end.
+func TestLeasesEndWithoutSubmit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("provider scripts are POSIX shell")
+	}
+	dir := t.TempDir()
+	acquire := filepath.Join(dir, "acquire.sh")
+	os.WriteFile(acquire, []byte("#!/bin/sh\necho '{\"url\":\"http://box:7443\"}'\n"), 0o700)
+	gpu := []proto.GPU{{Name: "NVIDIA H100 80GB HBM3", MemoryMiB: 81559}}
+	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: "test", GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: &cloud.Config{
+		Offers: []cloud.Offer{{Name: "x", Facts: proto.Facts{GPUs: gpu}, Provider: cloud.CommandProvider{AcquireCommand: []string{acquire}, ReleaseCommand: []string{"/bin/true"}}, IdleTimeout: time.Hour, MaxLifetime: time.Hour}},
+		Probe: func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) {
+			return proto.Info{Facts: proto.Facts{GPUs: gpu}}, nil
+		},
+		ReadyPoll: 10 * time.Millisecond, IdlePoll: 10 * time.Millisecond,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	id := Identity{Login: "someone@github", UserID: 7, Actions: map[string]bool{proto.ActionSubmit: true, proto.ActionLease: true}}
+	lease, err := d.broker.Acquire(leaseOwner(id), id.Login, "gpu", "", proto.NewULID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := func(id Identity) proto.Info {
+		w := httptest.NewRecorder()
+		d.handleInfo(w, httptest.NewRequest(http.MethodGet, "/v0/info", nil), id)
+		var info proto.Info
+		json.Unmarshal(w.Body.Bytes(), &info)
+		return info
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		got := info(id)
+		if len(got.Leases) == 1 && got.Leases[0].State == proto.LeaseReady && got.Leases[0].Target != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("lease never ready: %+v", got.Leases)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	id.Actions = map[string]bool{proto.ActionLease: true}
+	if got := info(id); len(got.Leases) != 1 || got.Leases[0].Target != nil {
+		t.Fatalf("a caller without submit was shown its lease's target: %+v", got.Leases)
+	}
+	if l, _ := d.broker.Get(leaseOwner(id), lease.ID); l.State == proto.LeaseReady {
+		t.Fatalf("lease kept after its owner lost submit: %+v", l)
 	}
 }
 

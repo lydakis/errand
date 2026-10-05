@@ -871,7 +871,8 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 	// only record of them a client needs.
 	if d.broker != nil && id.Allowed(proto.ActionLease) {
 		offers = d.broker.Offers()
-		leases = d.broker.Active(leaseOwner(id))
+		d.checkLeaseAccess(id)
+		leases = leaseView(id, d.broker.Active(leaseOwner(id)))
 	}
 	d.mu.Lock()
 	o := d.occupancyLocked()

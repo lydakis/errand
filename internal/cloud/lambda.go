@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -221,45 +220,40 @@ func (p *LambdaProvider) Release(ctx context.Context, req ReleaseRequest) error 
 	if err != nil {
 		return err
 	}
+	// Released means Lambda itself lists every instance of the lease as
+	// terminated, or no longer lists it at all.
 	name := LeaseHostname(req.LeaseID)
-	var ids []string
+	var running, terminating []string
 	ended := false
 	for _, in := range instances {
 		if in.ID != state.InstanceID && in.Name != name {
 			continue
 		}
-		if lambdaGone(in.Status) {
-			ended = true
-		} else {
-			ids = append(ids, in.ID)
-		}
-	}
-	if len(ids) == 0 {
 		switch {
-		case ended:
-			return nil
-		case p.now().Sub(state.Sent) < lambdaLaunchSettle:
-			return fmt.Errorf("no instance named %s yet; checking again in case its launch is still registering", name)
-		case state.KeyID != keyID(key):
-			return fmt.Errorf("the Lambda API key changed since %s was launched and this key does not see it; restore the old key in api_key_file, or terminate %s in the Lambda console", name, name)
+		case in.Status == "terminated" || in.Status == "preempted":
+			ended = true
+		case in.Status == "terminating":
+			terminating = append(terminating, in.ID)
+		default:
+			running = append(running, in.ID)
 		}
+	}
+	if len(running) > 0 {
+		if err := p.call(ctx, key, http.MethodPost, "/instance-operations/terminate", map[string]any{"instance_ids": running}, nil); err != nil {
+			return fmt.Errorf("terminating %s: %w", strings.Join(running, ", "), err)
+		}
+		return &ReleasePending{"asked Lambda to terminate " + strings.Join(running, ", ") + "; waiting for it to list them as terminated"}
+	}
+	if len(terminating) > 0 {
+		return &ReleasePending{"waiting for Lambda to finish terminating " + strings.Join(terminating, ", ")}
+	}
+	switch {
+	case ended:
 		return nil
-	}
-	var out struct {
-		Data struct {
-			Terminated []lambdaInstance `json:"terminated_instances"`
-		} `json:"data"`
-	}
-	if err := p.call(ctx, key, http.MethodPost, "/instance-operations/terminate", map[string]any{"instance_ids": ids}, &out); err != nil {
-		return fmt.Errorf("terminating %s: %w", strings.Join(ids, ", "), err)
-	}
-	// Only the instances Lambda lists as terminated are confirmed; release
-	// fails, and is retried, until every one is.
-	missing := slices.DeleteFunc(ids, func(id string) bool {
-		return slices.ContainsFunc(out.Data.Terminated, func(in lambdaInstance) bool { return in.ID == id })
-	})
-	if len(missing) > 0 {
-		return fmt.Errorf("Lambda did not confirm terminating %s; trying again", strings.Join(missing, ", "))
+	case p.now().Sub(state.Sent) < lambdaLaunchSettle:
+		return fmt.Errorf("no instance named %s yet; checking again in case its launch is still registering", name)
+	case state.KeyID != keyID(key):
+		return fmt.Errorf("the Lambda API key changed since %s was launched and this key does not see it; restore the old key in api_key_file, or terminate %s in the Lambda console", name, name)
 	}
 	return nil
 }

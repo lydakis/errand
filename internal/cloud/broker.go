@@ -326,6 +326,21 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 
 // Release ends an owner's lease. A launching lease stops its acquire first.
 func (b *Broker) Release(owner, id string) (proto.Lease, error) {
+	return b.end(owner, id, "release requested")
+}
+
+// EndAll releases every lease of owner that may still hold a machine.
+func (b *Broker) EndAll(owner, why string) error {
+	var errs []error
+	for _, l := range b.Active(owner) {
+		if _, err := b.end(owner, l.ID, "releasing: "+why); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (b *Broker) end(owner, id, note string) (proto.Lease, error) {
 	b.mu.Lock()
 	l, ok := b.leases[id]
 	b.mu.Unlock()
@@ -337,9 +352,9 @@ func (b *Broker) Release(owner, id string) (proto.Lease, error) {
 	err := b.update(l, func(r *record) bool {
 		switch r.State {
 		case proto.LeaseLaunching:
-			r.addProgress("release requested while launching")
+			r.addProgress(note + " while launching")
 		case proto.LeaseReady:
-			r.addProgress("release requested")
+			r.addProgress(note)
 		default:
 			return false
 		}
@@ -681,6 +696,12 @@ func (b *Broker) release(l *lease) {
 		cancel()
 	}
 	if b.ctx.Err() != nil {
+		return
+	}
+	var pending *ReleasePending
+	if errors.As(err, &pending) {
+		b.note(l, "release: "+pending.Msg)
+		b.sleep(l, b.cfg.ReadyPoll)
 		return
 	}
 	if err != nil {

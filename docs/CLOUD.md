@@ -106,7 +106,10 @@ add cloud peers you control.
 Callers need the `lease` action in the errand capability, separate from
 `submit` because leases can cost money. Leasing also needs `submit`, since the
 leased machine admits the caller for every action. `allow_users` grants every
-action.
+action. A caller whose `submit` is taken away is no longer shown where its
+leases are, and they end the next time it asks the cloud peer about them.
+Until then the machine still admits it, at most until `idle_timeout` or
+`max_lifetime`.
 
 ```jsonc
 "app": { "lydakis.dev/cap/errand": [{ "actions": ["submit", "read-own", "kill-own", "forward-own", "lease"] }] }
@@ -121,7 +124,8 @@ sends errand, the runner's config and any keys as one archive and runs a
 fixed install script from it
 ([`internal/cloud/lambda_install.sh`](../internal/cloud/lambda_install.sh)),
 which starts the runner as a system service. Releasing terminates the
-instance. Lambda accepts one launch per account every 12 seconds, so leases
+instance, and a lease counts as released only once Lambda lists its instance
+as terminated. Lambda accepts one launch per account every 12 seconds, so leases
 launched together take turns.
 
 Clients reach the machine one of two ways:
@@ -202,8 +206,9 @@ Lambda bills from launch until the instance is terminated. Shutting the
 machine down from inside does not stop billing, so errand relies on the cloud
 peer: it terminates on release, after `idle_timeout`, and at `max_lifetime`,
 and keeps retrying a failed termination. `max_leases` caps how many instances
-can run at once. If the cloud peer is gone for good, terminate leftovers named
-`errand-*` in the Lambda console. Leases keep using the `api_key_file` they
+can run at once. These limits hold only while the cloud peer runs; they are not
+a spending cap, and errand sets none on the Lambda account. If the cloud peer is
+gone for good, terminate leftovers named `errand-*` in the Lambda console. Leases keep using the `api_key_file` they
 were made with, so keep that file, and the key in it, until they are released:
 a different key may belong to another account, so errand keeps retrying the
 release of any lease whose machine the key cannot see.

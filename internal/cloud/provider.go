@@ -84,6 +84,13 @@ type Machine struct {
 	Identity string
 }
 
+// ReleasePending is what Release returns when the provider has accepted the
+// release but does not yet show the machine gone. The broker asks again
+// shortly, and the lease counts as released only once Release returns nil.
+type ReleasePending struct{ Msg string }
+
+func (e *ReleasePending) Error() string { return e.Msg }
+
 type ReleaseRequest struct {
 	LeaseID string
 	Offer   string
