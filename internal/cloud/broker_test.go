@@ -1034,18 +1034,24 @@ func TestRequestArrivingAfterItsWithdrawalStartsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The record is bounded by age and count.
+	// The record is bounded by age and count, for each owner on its own.
 	var w withdrawnRequests
 	now := time.Now()
 	w = w.add("george", "old", now.Add(-2*withdrawnRequestAge))
-	for i := range maxWithdrawnRequests {
-		w = w.add("george", fmt.Sprint(i), now.Add(time.Duration(i)))
+	w = w.add("george", "kept", now)
+	for i := range 10 * maxWithdrawnPerOwner {
+		w = w.add("flood", fmt.Sprint(i), now.Add(time.Duration(i)))
 	}
-	if len(w) != maxWithdrawnRequests || w.has("george", "old", now) || !w.has("george", "0", now) {
-		t.Fatalf("%d withdrawals kept", len(w))
+	if len(w["flood"]) != maxWithdrawnPerOwner || w.has("flood", "0", now) || !w.has("flood", fmt.Sprint(10*maxWithdrawnPerOwner-1), now) {
+		t.Fatalf("%d withdrawals kept for one owner", len(w["flood"]))
 	}
-	w = w.add("george", "next", now.Add(time.Hour/2))
-	if len(w) != maxWithdrawnRequests || w.has("george", "0", now) || !w.has("george", "next", now) {
-		t.Fatalf("the oldest withdrawal was not dropped at the cap")
+	if !w.has("george", "kept", now) || w.has("george", "old", now) {
+		t.Fatal("another owner's flood evicted a live withdrawal")
+	}
+	for i := range maxWithdrawnOwners {
+		w = w.add(fmt.Sprint("owner", i), "x", now.Add(time.Minute))
+	}
+	if len(w) != maxWithdrawnOwners || w.has("george", "kept", now) {
+		t.Fatalf("%d owners kept", len(w))
 	}
 }
