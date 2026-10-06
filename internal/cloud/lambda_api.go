@@ -329,7 +329,7 @@ func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, in
 // overPrice refuses t when Lambda lists it above max_price_per_hour.
 func (p *LambdaProvider) overPrice(t lambdaInstanceType) error {
 	if price := float64(t.PriceCentsPerHour) / 100; p.MaxPricePerHour > 0 && price > p.MaxPricePerHour {
-		return fmt.Errorf("Lambda now charges $%.2f/h for %s, above max_price_per_hour = %g in [cloud.lambda]", price, p.InstanceType, p.MaxPricePerHour)
+		return fmt.Errorf("Lambda now charges $%.2f/h for %s, above max_price_per_hour = %g", price, p.InstanceType, p.MaxPricePerHour)
 	}
 	return nil
 }

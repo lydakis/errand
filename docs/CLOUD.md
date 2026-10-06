@@ -299,8 +299,10 @@ file systems must all be in that region.
 
 **One instance type as a configured offer.** A `[[cloud.offers]]` entry with
 a `[cloud.offers.lambda]` table rents one instance type with a shape, price
-and timeouts of your own, and takes the same settings as `[cloud.lambda]`
-plus `instance_type`. A configured offer hides a listed one of the same name.
+and timeouts of your own. Its `[cloud.offers.lambda]` table takes the
+account settings of `[cloud.lambda]`, including `max_price_per_hour` with the
+same $10/h default, plus `instance_type`; `price_per_hour` is only the price
+errand shows. A configured offer hides a listed one of the same name.
 
 ```toml
 [[cloud.offers]]
