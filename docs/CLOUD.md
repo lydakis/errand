@@ -390,3 +390,5 @@ owner's.
 - Lambda is the only built-in provider; others use commands.
 - NVIDIA GPUs only, through `nvidia-smi`.
 - Only Lambda filesystems outlive a lease. errand does not rent more machines when your runners are full.
+- A leased Windows machine must be on your tailnet: errand has no SSH transport to
+  Windows runners yet (see [WINDOWS.md](WINDOWS.md)).
