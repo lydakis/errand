@@ -1018,3 +1018,20 @@ func (serveTestProvider) Self(context.Context) (tailnet.Self, error) {
 }
 
 func (serveTestProvider) Peers(context.Context) ([]tailnet.Peer, error) { return nil, nil }
+
+func TestParseSinceTakesADurationOrATime(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	got, err := parseSince("10m", now)
+	if err != nil || !got.Equal(now.Add(-10*time.Minute)) {
+		t.Fatalf("10m = %v, %v", got, err)
+	}
+	got, err = parseSince("2026-10-05T11:00:00Z", now)
+	if err != nil || !got.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("RFC 3339 time = %v, %v", got, err)
+	}
+	for _, bad := range []string{"-5m", "yesterday", "11:00"} {
+		if _, err := parseSince(bad, now); err == nil {
+			t.Fatalf("%q was accepted", bad)
+		}
+	}
+}

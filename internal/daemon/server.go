@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -1626,10 +1627,37 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 		return
 	}
 	defer j.releaseLogReader()
-	from, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
+	query := r.URL.Query()
+	from, _ := strconv.ParseInt(query.Get("from"), 10, 64)
 	if lei, err := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64); err == nil && lei > from {
 		from = lei
 	}
+	if from < 0 || from == math.MaxInt64 {
+		httpError(w, http.StatusBadRequest, "from must be a log sequence number")
+		return
+	}
+	// follow=0 replays what is written so far and ends with an "end" event
+	// carrying the job's current status. tail=N and since=UNIX_MS narrow where
+	// a replay from the start begins; a resumed replay (from > 0) ignores them.
+	follow := query.Get("follow") != "0"
+	tail, sinceMS := -1, int64(0)
+	if v := query.Get("tail"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			httpError(w, http.StatusBadRequest, "tail must be a non-negative line count")
+			return
+		}
+		tail = n
+	}
+	if v := query.Get("since"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 0 {
+			httpError(w, http.StatusBadRequest, "since must be a Unix time in milliseconds")
+			return
+		}
+		sinceMS = n
+	}
+	windowed := from == 0 && (tail >= 0 || sinceMS > 0)
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		httpError(w, http.StatusInternalServerError, "streaming unsupported")
@@ -1642,6 +1670,18 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	stream := startLogStream(w, logHeartbeatInterval)
 	defer stream.stop()
 
+	end := func() {
+		b, _ := json.Marshal(j.Status())
+		stream.write(fmt.Sprintf("event: end\ndata: %s\n\n", b))
+	}
+	if !follow {
+		select {
+		case <-j.logReady:
+		default:
+			end() // nothing has been logged yet
+			return
+		}
+	}
 	select {
 	case <-j.logReady:
 	case <-stream.broken:
@@ -1658,21 +1698,58 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	logPath := filepath.Join(j.Dir, "io.log")
 	if _, err := os.Stat(logPath); err == nil {
 		ctx := r.Context()
-		if err := logio.Follow(ctx, logPath, from, live, func(f proto.LogFrame) error {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			b, _ := json.Marshal(f)
-			return stream.write(fmt.Sprintf("id: %d\nevent: log\ndata: %s\n\n", f.Seq, b))
-		}); err != nil {
-			if ctx.Err() != nil || stream.failed() {
-				return
-			}
+		replayErr := func(err error) {
 			b, _ := json.Marshal(proto.LogStreamError{
 				Message: err.Error(), Retryable: !logio.IsIntegrityError(err) && retryableLogFileError(err),
 			})
 			stream.write(fmt.Sprintf("event: error\ndata: %s\n\n", b))
-			return
+		}
+		window := logio.Window{Start: from + 1, Last: -1}
+		if windowed || !follow {
+			found, err := logio.FindWindow(logPath, sinceMS, tail, live)
+			if err != nil {
+				replayErr(err)
+				return
+			}
+			if windowed {
+				window.Start, window.Cut = found.Start, found.Cut
+			}
+			if !follow {
+				window.Last = found.Last
+			}
+		}
+		if follow || window.Start <= window.Last {
+			sent := false
+			if err := logio.Follow(ctx, logPath, window.Start-1, live, func(f proto.LogFrame) error {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				// A since later than everything written so far holds back
+				// live output until it reaches that time.
+				if !windowed || sent || f.TUnixMS >= sinceMS {
+					if f.Seq == window.Start {
+						var err error
+						if f, err = logio.TrimFrame(f, window.Cut); err != nil {
+							return err
+						}
+					}
+					b, _ := json.Marshal(f)
+					if err := stream.write(fmt.Sprintf("id: %d\nevent: log\ndata: %s\n\n", f.Seq, b)); err != nil {
+						return err
+					}
+					sent = true
+				}
+				if !follow && f.Seq >= window.Last {
+					return errReplayDone
+				}
+				return nil
+			}); err != nil && !errors.Is(err, errReplayDone) {
+				if ctx.Err() != nil || stream.failed() {
+					return
+				}
+				replayErr(err)
+				return
+			}
 		}
 	} else {
 		status := j.Status()
@@ -1685,6 +1762,10 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 			return
 		}
 	}
+	if !follow {
+		end()
+		return
+	}
 	select {
 	case <-j.done:
 	case <-stream.broken:
@@ -1695,6 +1776,10 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	b, _ := json.Marshal(j.Status())
 	stream.write(fmt.Sprintf("event: status\ndata: %s\n\n", b))
 }
+
+// errReplayDone stops a follow=0 replay once it has sent every frame that was
+// complete when the request began.
+var errReplayDone = errors.New("replay done")
 
 var (
 	logHeartbeatInterval = proto.LogHeartbeatInterval

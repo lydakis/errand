@@ -95,9 +95,21 @@ type RunOptions struct {
 	Forwards       []PortForward
 	changeClientID string
 	selectionGuard *snapshot.SelectionGuard
+	logs           LogWindow
 	Stdout         io.Writer
 	Stderr         io.Writer
 }
+
+// LogWindow narrows which of a job's output attach shows.
+// The zero value shows all output and follows the job.
+type LogWindow struct {
+	Tail     bool      // start with only the last Lines lines
+	Lines    int       // with Tail; 0 starts with none and shows only new output
+	Since    time.Time // skip output written before this; zero shows everything
+	NoFollow bool      // stop after the output written so far
+}
+
+func (w LogWindow) narrowed() bool { return w.Tail || !w.Since.IsZero() }
 
 // Run performs one job transaction and returns the CLI exit code per the
 // two-layer rule: transaction success mirrors the remote process; a transaction
@@ -575,12 +587,16 @@ type AttachOptions struct {
 	Stdout        io.Writer
 	Stderr        io.Writer
 	Forwards      []PortForward
+	Logs          LogWindow
 }
 
 // Attach resumes following an existing job: it streams the log from the
 // beginning, forwards Ctrl-C (twice force-kills), and exits per the same
 // two-layer rule as an attached run.
 func Attach(opts AttachOptions) int {
+	if opts.Logs.NoFollow {
+		return readLogs(opts)
+	}
 	sigCh := make(chan os.Signal, 2)
 	signal.Notify(sigCh, os.Interrupt)
 	defer signal.Stop(sigCh)
@@ -642,7 +658,7 @@ func attachWithDetachNotifications(
 		newInterruptTarget(opts.PeerURL, opts.JobID, handle, errf, interruptsControl),
 	)
 
-	runOpts := RunOptions{PeerURL: opts.PeerURL, Stdout: opts.Stdout, Stderr: opts.Stderr}
+	runOpts := RunOptions{PeerURL: opts.PeerURL, Stdout: opts.Stdout, Stderr: opts.Stderr, logs: opts.Logs}
 	final, err, detached := streamUntilDetach(runOpts, opts.JobID, status, detach)
 	if detached {
 		return controller.completeDetach(ctx)
@@ -666,6 +682,33 @@ func attachWithDetachNotifications(
 	}
 	forwarding.Close()
 	return withLostOutput(finishTerminalChanges(runOpts, opts.JobID, handle, final), outputLost)
+}
+
+// readLogs prints the output a job has written so far and returns, leaving
+// the job alone: no interrupt forwarding, no detach, no workspace apply.
+func readLogs(opts AttachOptions) int {
+	if opts.Stdout == nil {
+		opts.Stdout = os.Stdout
+	}
+	if opts.Stderr == nil {
+		opts.Stderr = os.Stderr
+	}
+	handle := peerLabel(opts.PeerName, opts.PeerURL) + "/" + opts.JobID
+	if opts.BeforeContact != nil {
+		opts.BeforeContact()
+	}
+	status, err := getStatus(opts.PeerURL, opts.JobID)
+	if err != nil {
+		fmt.Fprintf(opts.Stderr, "errand: %v\n", err)
+		return ExitTransaction
+	}
+	runOpts := RunOptions{PeerURL: opts.PeerURL, Stdout: opts.Stdout, Stderr: opts.Stderr, logs: opts.Logs}
+	_, err = streamContext(context.Background(), runOpts, opts.JobID, status)
+	if err != nil {
+		fmt.Fprintf(opts.Stderr, "errand: reading the logs of %s: %v\n", handle, err)
+		return ExitTransaction
+	}
+	return 0
 }
 
 func finishTerminalChanges(opts RunOptions, jobID, handle string, final proto.JobStatus) int {
@@ -1316,6 +1359,20 @@ func followOnceContext(
 	heard func(),
 ) (proto.JobStatus, error) {
 	url := fmt.Sprintf("%s/v0/jobs/%s/logs?from=%d", opts.PeerURL, jobID, *last)
+	// A narrowed replay starts wherever the runner says; once a frame has
+	// arrived, resuming continues from it as usual.
+	narrowed := *last == 0 && opts.logs.narrowed()
+	if narrowed {
+		if opts.logs.Tail {
+			url += fmt.Sprintf("&tail=%d", opts.logs.Lines)
+		}
+		if !opts.logs.Since.IsZero() {
+			url += fmt.Sprintf("&since=%d", max(opts.logs.Since.UnixMilli(), 0))
+		}
+	}
+	if opts.logs.NoFollow {
+		url += "&follow=0"
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return proto.JobStatus{}, err
@@ -1347,7 +1404,7 @@ func followOnceContext(
 				if err := json.Unmarshal(data.Bytes(), &f); err != nil {
 					return proto.JobStatus{}, streamIntegrity(err)
 				}
-				if f.Seq != *last+1 {
+				if f.Seq != *last+1 && !(narrowed && *last == 0 && f.Seq > 0) {
 					return proto.JobStatus{}, streamIntegrity(fmt.Errorf("log sequence %d, expected %d", f.Seq, *last+1))
 				}
 				if f.Stream != "stdout" && f.Stream != "stderr" {
@@ -1373,7 +1430,8 @@ func followOnceContext(
 				}
 				*last = f.Seq
 				heard()
-			case "status":
+			case "status", "end":
+				// "end" closes a follow=0 replay with the job's current status.
 				var st proto.JobStatus
 				if err := json.Unmarshal(data.Bytes(), &st); err != nil {
 					return proto.JobStatus{}, streamIntegrity(err)

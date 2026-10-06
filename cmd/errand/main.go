@@ -68,7 +68,7 @@ Commands:
   errand leases                  List or release machines leased from cloud peers
   errand ps                      List jobs
   errand status HANDLE           Inspect a job and its results
-  errand attach HANDLE           Follow a job's logs
+  errand attach HANDLE           Follow a job's logs (--no-follow, --tail, --since)
   errand fetch HANDLE [PATH]      Stage, apply, or export retained files
   errand push [options]           Stage or apply local files in a selected workspace
   errand kill HANDLE             Stop a job
@@ -284,6 +284,9 @@ func cmdAttach(args []string) int {
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	profile := fs.String("profile", "", "session preferences from workspace or personal configuration")
+	noFollow := fs.Bool("no-follow", false, "print the output written so far and exit, leaving the job running")
+	tail := fs.Int("tail", 0, "start with the last `N` lines of output")
+	since := fs.String("since", "", "skip output written before a `time`: a duration ago (10m) or an RFC 3339 time")
 	var session sessionFlags
 	session.bind(fs)
 	setFlagUsage(fs, "errand attach [options] HANDLE")
@@ -295,6 +298,28 @@ func cmdAttach(args []string) int {
 	}
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "errand attach: exactly one HANDLE (peer/ULID) is required")
+		return 2
+	}
+	logs := client.LogWindow{NoFollow: *noFollow}
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "tail" {
+			logs.Tail, logs.Lines = true, *tail
+		}
+	})
+	if logs.Tail && *tail < 0 {
+		fmt.Fprintln(os.Stderr, "errand: --tail must be a line count")
+		return 2
+	}
+	if *since != "" {
+		at, err := parseSince(*since, time.Now())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "errand: --since: %v\n", err)
+			return 2
+		}
+		logs.Since = at
+	}
+	if *noFollow && len(session.forwards) != 0 {
+		fmt.Fprintln(os.Stderr, "errand: --no-follow and --forward are mutually exclusive")
 		return 2
 	}
 	cli, err := session.overrides(fs)
@@ -327,12 +352,30 @@ func cmdAttach(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
+	if *noFollow {
+		forwards = nil // configured forwards serve a followed job, not a finite read
+	}
 	peerURL, label, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
-	return client.Attach(client.AttachOptions{BeforeContact: func() { warnRunnerVersion(peerURL, label) }, PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards})
+	return client.Attach(client.AttachOptions{BeforeContact: func() { warnRunnerVersion(peerURL, label) }, PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards, Logs: logs})
+}
+
+// parseSince reads --since: a duration before now (10m, 2h) or an RFC 3339
+// time.
+func parseSince(value string, now time.Time) (time.Time, error) {
+	if d, err := time.ParseDuration(value); err == nil {
+		if d < 0 {
+			return time.Time{}, fmt.Errorf("%q is in the future", value)
+		}
+		return now.Add(-d), nil
+	}
+	if at, err := time.Parse(time.RFC3339, value); err == nil {
+		return at, nil
+	}
+	return time.Time{}, fmt.Errorf("%q is neither a duration like 10m nor an RFC 3339 time", value)
 }
 
 func cmdKill(args []string) int {
