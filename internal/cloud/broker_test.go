@@ -1659,6 +1659,88 @@ func TestHoldThatKeepsFailing(t *testing.T) {
 	waitProgress(t, b, l.ID, "could not hold the machine idle for another 300ms; releasing it without the hold: ssh: connection timed out")
 }
 
+// A lease keeps only the last of its progress lines, numbered so a client
+// can tell which ones it has not shown.
+func TestProgressTailIsNumbered(t *testing.T) {
+	var r record
+	for n := 1; n <= maxProgressLines+50; n++ {
+		r.addProgress(fmt.Sprintf("line %d", n))
+	}
+	if len(r.Progress) != maxProgressLines || r.ProgressSeq != maxProgressLines+50 || r.Progress[0] != "line 51" {
+		t.Fatalf("%d lines up to %d, starting %q", len(r.Progress), r.ProgressSeq, r.Progress[0])
+	}
+}
+
+// A request that arrives after its own withdrawal starts nothing: a run
+// that withdrew a request the cloud peer had not seen yet has gone.
+func TestRequestArrivingAfterItsWithdrawalStartsNothing(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	b := h.start(t)
+	request := proto.NewULID()
+	var e *Error
+	if _, err := b.Withdraw("george", request); !errors.As(err, &e) || e.Status != http.StatusNotFound {
+		t.Fatalf("withdrawing a request not seen yet: %v", err)
+	}
+	if l, err := b.Acquire("george", "", "gpu", "", request); !errors.As(err, &e) || e.Status != http.StatusGone {
+		t.Fatalf("acquired after the withdrawal: %+v %v", l, err)
+	}
+	if leases := b.List("george"); len(leases) != 0 {
+		t.Fatalf("leases %+v", leases)
+	}
+	// Only that owner's request is refused.
+	if _, err := b.Acquire("someone", "", "gpu", "", request); err != nil {
+		t.Fatal(err)
+	}
+
+	// The record is bounded by count, for each owner and in all, and an
+	// entry is dropped only once it expires: a withdrawal finding no room is
+	// refused, never acknowledged.
+	var w withdrawnRequests
+	now := time.Now()
+	if !w.add("george", "old", now.Add(-2*withdrawnRequestAge)) || !w.add("george", "kept", now) {
+		t.Fatal("refused a withdrawal with room for it")
+	}
+	for i := range maxWithdrawnPerOwner {
+		if !w.add("flood", fmt.Sprint(i), now) {
+			t.Fatalf("refused withdrawal %d of an owner's %d", i, maxWithdrawnPerOwner)
+		}
+	}
+	if w.add("flood", "more", now) || w.has("flood", "more", now) || !w.has("flood", "0", now) {
+		t.Fatal("an owner's full record took another entry")
+	}
+	if !w.has("george", "kept", now) || w.has("george", "old", now) {
+		t.Fatal("another owner's flood dropped a live withdrawal")
+	}
+	for i := 0; ; i++ {
+		if !w.add(fmt.Sprint("owner", i/maxWithdrawnPerOwner), fmt.Sprint(i), now) {
+			break
+		}
+	}
+	if total := func() (n int) {
+		for _, r := range w {
+			n += len(r)
+		}
+		return n
+	}(); total != maxWithdrawn || !w.has("george", "kept", now) || w.add("george", "new", now) {
+		t.Fatalf("%d withdrawals kept in all", total)
+	}
+
+	// A broker whose record is full refuses the withdrawal rather than
+	// settling it.
+	b.mu.Lock()
+	b.withdrawn = w
+	b.mu.Unlock()
+	if _, err := b.Withdraw("george", proto.NewULID()); !errors.As(err, &e) || e.Status != http.StatusServiceUnavailable {
+		t.Fatalf("withdrawing with no room: %v", err)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	// Expired entries make room.
+	if !b.withdrawn.add("george", "new", now.Add(withdrawnRequestAge+time.Second)) {
+		t.Fatal("expired withdrawals were not dropped")
+	}
+}
+
 // fakeCatalog lists whatever offers it is given, counting listings.
 type fakeCatalog struct {
 	mu     sync.Mutex

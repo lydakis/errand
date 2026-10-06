@@ -277,7 +277,7 @@ func TestLeaseFallsBackOnlyAfterARefusal(t *testing.T) {
 	for _, tc := range []struct {
 		status   int
 		fallBack bool
-	}{{http.StatusTooManyRequests, true}, {http.StatusForbidden, true}, {http.StatusPreconditionFailed, true}, {http.StatusInternalServerError, false}} {
+	}{{http.StatusTooManyRequests, true}, {http.StatusForbidden, true}, {http.StatusNotFound, true}, {http.StatusPreconditionFailed, true}, {http.StatusInternalServerError, false}} {
 		var asked atomic.Int32
 		first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"no"}`, tc.status)
@@ -295,6 +295,101 @@ func TestLeaseFallsBackOnlyAfterARefusal(t *testing.T) {
 		if err == nil || (asked.Load() == 1) != tc.fallBack {
 			t.Fatalf("%d: asked the next supplier %d times: %v", tc.status, asked.Load(), err)
 		}
+	}
+}
+
+// A request whose answer was lost may have started a lease, whatever a
+// retry is answered: the run withdraws it and asks no other supplier.
+func TestLeaseWithdrawsAfterALostAnswer(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	id := proto.NewULID()
+	for _, tc := range []struct {
+		name     string
+		retry    func(http.ResponseWriter)
+		withdraw func(http.ResponseWriter)
+		want     string
+	}{
+		{"refused", func(w http.ResponseWriter) { http.Error(w, `{"error":"no lease action"}`, http.StatusForbidden) },
+			func(w http.ResponseWriter) {
+				json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "h100", State: proto.LeaseReleasing})
+			}, "released lease " + id},
+		{"unanswered", func(http.ResponseWriter) { panic(http.ErrAbortHandler) },
+			func(w http.ResponseWriter) {
+				http.Error(w, `{"error":"no lease was handed to that request"}`, http.StatusNotFound)
+			},
+			"cloud started no lease for it"},
+	} {
+		var requests atomic.Int32
+		var requested, withdrawn atomic.Value
+		requested.Store("")
+		withdrawn.Store("")
+		first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodPost && r.URL.Path == "/v0/leases":
+				var req proto.LeaseRequest
+				json.NewDecoder(r.Body).Decode(&req)
+				requested.Store(req.RequestID)
+				if requests.Add(1) == 1 {
+					panic(http.ErrAbortHandler)
+				}
+				tc.retry(w)
+			case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/v0/lease-requests/"):
+				withdrawn.Store(strings.TrimPrefix(r.URL.Path, "/v0/lease-requests/"))
+				tc.withdraw(w)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		var asked atomic.Int32
+		second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			asked.Add(1)
+			http.Error(w, `{"error":"lease limit reached"}`, http.StatusTooManyRequests)
+		}))
+		opt := func(name, url string) leaseOption {
+			return leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: name}, Target: url}, Offer: proto.Offer{Name: "h100"}}
+		}
+		_, err := leaseRunner([]leaseOption{opt("cloud", first.URL), opt("mini", second.URL)}, "gpu", io.Discard)
+		first.Close()
+		second.Close()
+		if err == nil || !strings.Contains(err.Error(), tc.want) || asked.Load() != 0 || withdrawn.Load() == "" || withdrawn.Load() != requested.Load() {
+			t.Fatalf("%s: err %v, next supplier asked %d times, requested %q, withdrawn %q", tc.name, err, asked.Load(), requested.Load(), withdrawn.Load())
+		}
+	}
+}
+
+// A launch's progress keeps showing after the cloud peer's bounded tail of
+// it fills up.
+func TestFollowLeaseShowsProgressPastTheTail(t *testing.T) {
+	defer func(d time.Duration) { leasePollInterval = d }(leasePollInterval)
+	leasePollInterval = time.Millisecond
+	id := proto.NewULID()
+	const total, tail = 250, 100
+	var polls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Each poll finds seven new lines; the tail keeps the last hundred.
+		seq := min(total, 7*int(polls.Add(1)))
+		l := proto.Lease{ID: id, Offer: "h100", State: proto.LeaseLaunching, ProgressSeq: seq}
+		for n := max(1, seq-tail+1); n <= seq; n++ {
+			l.Progress = append(l.Progress, fmt.Sprintf("line %d", n))
+		}
+		if seq == total {
+			l.State, l.Error = proto.LeaseFailed, "gave up"
+		}
+		json.NewEncoder(w).Encode(l)
+	}))
+	defer srv.Close()
+	broker := placementChoice{RunCandidate: config.RunCandidate{Name: "cloud"}, Target: srv.URL}
+	var stderr strings.Builder
+	start := proto.Lease{ID: id, Offer: "h100", State: proto.LeaseLaunching, ProgressSeq: 1, Progress: []string{"line 1"}}
+	if _, err := followLease(context.Background(), broker, start, "gpu", "", "", &stderr); err == nil || !strings.Contains(err.Error(), "gave up") {
+		t.Fatalf("followed to %v", err)
+	}
+	var want strings.Builder
+	for n := 1; n <= total; n++ {
+		fmt.Fprintf(&want, "errand: cloud: line %d\n", n)
+	}
+	if stderr.String() != want.String() {
+		t.Fatalf("shown:\n%s", stderr.String())
 	}
 }
 

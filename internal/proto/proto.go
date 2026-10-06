@@ -566,13 +566,17 @@ type Lease struct {
 	// SSHKeys are the client keys a machine reached over SSH admits: one
 	// for each of the owner's devices that asked for the lease, once the
 	// cloud peer has added it. A client uses a lease once its key is here.
-	SSHKeys    []string  `json:"ssh_keys,omitempty"`
-	Facts      *Facts    `json:"facts,omitempty"` // measured once ready
-	Progress   []string  `json:"progress,omitempty"`
-	Error      string    `json:"error,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
-	ReadyAt    time.Time `json:"ready_at,omitzero"`
-	ReleasedAt time.Time `json:"released_at,omitzero"`
+	SSHKeys  []string `json:"ssh_keys,omitempty"`
+	Facts    *Facts   `json:"facts,omitempty"` // measured once ready
+	Progress []string `json:"progress,omitempty"`
+	// ProgressSeq counts every progress line the lease has had. Progress
+	// holds only the last of them, so a client following a launch prints
+	// the lines numbered after the last one it showed.
+	ProgressSeq int       `json:"progress_seq,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	ReadyAt     time.Time `json:"ready_at,omitzero"`
+	ReleasedAt  time.Time `json:"released_at,omitzero"`
 	// ExpiresAt is the hard stop from the offer's max lifetime. IdleUntil
 	// is when an idle ready lease will be released unless work arrives.
 	ExpiresAt time.Time `json:"expires_at"`
