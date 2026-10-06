@@ -296,30 +296,8 @@ cloud peer keeps the only lease record. See [cloud peers](CLOUD.md).
 1. A lease is recorded, with how to release its machine, before anything is acquired; only its own worker calls the provider.
 2. A lease ends only when its owner releases it or loses `submit`, when every run handed it withdraws while it is launching, after `idle_timeout` with no work and no new run handed it, at `max_lifetime`, or when its launch fails or a restart interrupts it.
 3. Withdrawing only cancels a launch: a run that gives up while its lease is launching withdraws, and the launch stops once no run is waiting for it. A ready lease belongs to no run. A request that reaches the cloud peer after its own withdrawal, within the hour, is refused and starts nothing. The cloud peer never forgets such a withdrawal early: when it has no room to record one (128 per owner, 4,096 in all), it refuses the withdrawal, and the run reports that the lease may exist.
-4. Every automatic release is decided against the lease record when the release is recorded, never against an earlier observation, and follows this lifecycle. `idle_timeout` runs from the lease's last sign of work, `max_lifetime` from its creation, and `max_lifetime` ends a lease in any state at the next check, without a hold and whatever its runner is doing.
-
-   | State | When | Next |
-   |---|---|---|
-   | launching | the machine answers as an errand runner and matches | ready |
-   | | every run handed it withdraws, its owner releases it, the launch fails, `acquire_timeout` or `max_lifetime` passes, or the cloud peer restarts | releasing |
-   | ready | an idle check or a drain finds work, a run is handed it, or a run names it with `--on` once it is ready to submit | ready, with a full `idle_timeout` from then |
-   | | `idle_timeout` passes without any of these | idle-due |
-   | | its owner releases it, or `max_lifetime` passes | releasing, without a hold |
-   | idle-due | the idle check finds work, or the drain does before `max_lifetime` | ready, with a full `idle_timeout` |
-   | | the runner cannot be reached, has no SSH route (a provider command's machine reached only over the tailnet), or refuses the hold | releasing, without a hold |
-   | | the runner agrees to refuse new jobs, which it does only while it has none; the hold's token and time are recorded before it is asked | holding |
-   | | the drain fails while the runner answers, or its answer is lost (an error or a timeout), so the hold may have been taken | idle-due with the hold recorded: not handed out, and tried again at each idle check, which first lifts the hold; after one more `idle_timeout`, releasing without the hold |
-   | holding | still due when the release is recorded | releasing, with the hold |
-   | | the release cannot be recorded | ready, with the hold lifted |
-   | | the cloud peer stops before recording the release, or the hold cannot be lifted | ready with the hold recorded: not handed out until the hold is lifted, or has lapsed for certain: five minutes, the runner's hold, after the latest a drain recorded when it started could have reached the runner |
-   | releasing | the provider confirms the machine is gone | released, or failed if its launch failed |
-   | | the provider is still terminating it, or fails | releasing, tried again with no deadline; the hold, which lapses on the runner after five minutes, is renewed every minute under its recorded token, across restarts of the cloud peer; a runner that took work after its hold lapsed is released anyway, and its progress says the hold was lost |
-   | released, failed | | kept as history: the last 32, for up to a week |
-
-   Every hand-out, to a run asking for a machine, a request asked again, or a run naming a lease with `--on`, at any time and after a restart, follows one rule on the record alone: the lease is ready, no hold is recorded for it that has not lapsed, and the latest check of its runner passed. A lease launching, releasing, or with a hold recorded is not handed out as a ready machine, whatever its runner last answered; a request asked again whose ready lease is refused is answered as a new request would be. A runner that answers a hold under any token but the one the cloud peer recorded gives a hold the cloud peer cannot renew or lift, so the cloud peer lifts it and counts the drain as failed.
-
-   Each step is recorded before it acts on the machine, or is safe to repeat when a restart finds it unrecorded: a lease is recorded before its machine is acquired, and one still launching at a restart is released; a key added to the machine stays pending until recorded, and adding it again changes nothing; a hold's token, which the cloud peer chooses, is recorded before the hold is taken, and taking, renewing and lifting it by that token can be repeated; a release is recorded before the machine is destroyed, and destroying it again changes nothing. The runner takes the hold only from its own user on its local socket, which the cloud peer reaches over SSH, for Lambda machines on the tailnet too.
-5. A run handed a ready lease, or naming it with `--on` once it is ready to submit, may use it for at least `idle_timeout` unless its owner releases it or `max_lifetime` passes; a command that only reads, or a run that fails before it can submit, does not renew it. A ready lease is handed out only while the cloud peer's latest check of its runner, at launch or at the last idle check since the cloud peer started, reached it and found it still matching; one whose check failed is passed over and gets no new idle window. Nothing on the machine survives the lease.
+4. Every automatic release is decided against the lease record when the release is recorded, never against an earlier observation. A run's claim of a ready lease (being handed it, or naming it with `--on` to run on, create a workspace on, or push to, once it is ready to submit) and its idle release are decided under one lock: whichever is recorded first wins, and a claim refused because the release came first gets 409 (404 once the release is confirmed), so the command places no work there. A job submitted to the machine without a claim, after the last idle check and before the release, can still be lost with it.
+5. A run handed a ready lease, or naming it with `--on` once it is ready to submit, may use it for at least `idle_timeout` unless its owner releases it or `max_lifetime` passes; a command that only reads, or a run that fails before it can submit, does not renew it. A ready lease is handed out only while the cloud peer's latest check of its runner, at launch or at the last idle check since the cloud peer started, reached it and found it still matching; one whose check failed is passed over and gets no new idle window. A request asked again is handed its ready lease only under the same rule, and is otherwise answered as a new request. Nothing on the machine survives the lease.
 6. A lease counts as released only once the provider confirms the machine is gone; until then the release is retried.
 7. So, while the cloud peer runs, no machine bills past `max_lifetime` plus the time to confirm its release. If the cloud peer is gone for good, nothing ends its machines: there is no spending cap.
 
@@ -907,15 +885,13 @@ management follows those same aliases plus `-a` for `discover --all`. Routing,
 transport details, workspace mutation, and snapshot-boundary options remain
 long-form.
 
-`errand setup` acquires an expiring lease from the local daemon before
-changing config or service files. The daemon grants it only while idle and
-atomically refuses new admissions until restart, so setup cannot race a newly
-submitted job. A cloud peer takes the same lease on a runner it leased, over
-SSH as the runner's user, before releasing it for idleness. If an existing
-local socket cannot be reserved, setup refuses the restart. Its generated SSH
-peer block includes the effective `remote_socket` and an absolute
-`remote_command` unless setup proved that `/usr/local/bin/errand` resolves to
-the installed executable.
+`errand setup` acquires an expiring lease from the local daemon before changing
+config or service files. The daemon grants it only while idle and atomically
+refuses new admissions until restart, so setup cannot race a newly submitted
+job. If an existing local socket cannot be reserved, setup refuses the
+restart. Its generated SSH peer block includes the effective `remote_socket`
+and an absolute `remote_command` unless setup proved that
+`/usr/local/bin/errand` resolves to the installed executable.
 
 Without `--detach`: streams, exits per the two-layer status rule — drop-in
 for scripts. With `--detach`: prints the peer-qualified handle and returns.

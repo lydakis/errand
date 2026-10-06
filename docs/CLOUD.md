@@ -112,8 +112,8 @@ lease is ready, only the idle and lifetime rules below or `errand leases
 release` end it. A run that stops after
 that, with or without a job, leaves the machine up for at most one idle
 window. Being given to a run counts as work, so a reused ready lease starts a
-full idle window; so does naming it to run on with `--on`, from any device,
-once the run is ready to submit. Commands that only read, such as `errand ps`
+full idle window; so does naming it with `--on` to run on, create a workspace
+on, or push to, from any device, once the command is ready to submit. Commands that only read, such as `errand ps`
 or `errand logs`, do not, even from a device that naming the lease lets in,
 and neither does a run that fails before it can submit. Each
 idle check also confirms that the cloud peer can still reach the machine and
@@ -135,21 +135,11 @@ release attempts.
 The cloud peer releases a ready lease when its runner has had no staging,
 starting, running or queued jobs for the offer's `idle_timeout`, or when the
 lease reaches `max_lifetime`, even if a job is still running. A runner it
-cannot reach counts as idle. Before releasing an idle lease, the cloud peer
-has its runner refuse new jobs, so a job submitted just before the release is
-refused rather than lost, and one that took a job just before keeps the
-lease for another full idle window. It does this over SSH, as the runner's own user, for
-Lambda machines on the tailnet too. From the moment it asks, the lease is
-neither handed out nor run on by name, until the release or until the hold is
-lifted. If it cannot get the hold, or the answer is lost, while the machine
-still answers, the lease is kept, still not handed out, and at the next idle
-check the cloud peer lifts the hold and tries the release again, for up to one
-more `idle_timeout`. After that, a runner that stayed idle is
-released without the hold. The hold lasts until the machine is gone: the
-cloud peer renews it while the provider terminates the machine, however long
-that takes. A provider command's machine that the cloud peer
-reaches only over the tailnet cannot be asked, so it is released on the idle
-check alone. A cloud peer keeps its 32 most recent ended leases, for up to a
+cannot reach counts as idle. A run asks the cloud peer for its lease right
+before it submits, and the cloud peer decides that and the idle release one at
+a time: a run that asks first keeps the lease for a full idle window, and one
+that asks after the release is recorded is refused before it submits
+anything. A cloud peer keeps its 32 most recent ended leases, for up to a
 week, for `errand leases` to list. Persistent workspaces and retained results
 on a leased machine end with the lease, so fetch what you need first.
 
@@ -268,8 +258,6 @@ boots.
   the machine's host key, so errand checks it without a `known_hosts` entry.
 - **Over your tailnet**, when `tailscale_auth_key_file` is set. The machine
   joins as `errand-<lease id>`, and the runner listens only on the tailnet.
-  Over SSH it admits only the cloud peer's own key, which the cloud peer uses
-  to hold the runner idle before releasing it.
 
 For SSH nothing more is needed. On first use the cloud peer makes an SSH key
 in its state directory and adds the public half to your Lambda account as

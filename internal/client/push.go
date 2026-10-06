@@ -29,6 +29,13 @@ type PushOptions struct {
 	watchState                              *pushWatchState
 	retryCheckpoint                         bool
 	refreshSource                           bool
+
+	// BeforeSubmit, when set, runs once per push, after every local step
+	// and check has succeeded, right before the first request that changes
+	// the workspace goes out; an error ends the push without it. A watch
+	// runs it for each batch it pushes.
+	BeforeSubmit func() error
+	claim        func() error // BeforeSubmit for this push, run at most once
 }
 
 type pushWatchState struct {
@@ -55,6 +62,7 @@ type pendingPush struct {
 func PushChanges(opts PushOptions) (proto.PushResult, error) {
 	opts.meter = startTransfer(opts.Stats)
 	defer opts.meter.finish()
+	opts.claim = once(opts.BeforeSubmit)
 	var result proto.PushResult
 	if opts.Workspace == "" {
 		return result, fmt.Errorf("--workspace is required")
@@ -110,6 +118,23 @@ func PushChanges(opts PushOptions) (proto.PushResult, error) {
 	})
 	return result, err
 }
+
+// once runs f the first time it is called and succeeds, and does nothing
+// after that; a nil f does nothing.
+func once(f func() error) func() error {
+	done := false
+	return func() error {
+		if f == nil || done {
+			return nil
+		}
+		if err := f(); err != nil {
+			return err
+		}
+		done = true
+		return nil
+	}
+}
+
 func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOrigin, dir string, result *proto.PushResult) error {
 	if opts.watchState != nil {
 		if err := opts.watchState.observeGeneration(dir); err != nil {
@@ -132,6 +157,9 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if pending.Applying {
 		// Complete the exact interrupted request before accepting another one. The
 		// remote receipt makes a lost response safe to retry despite later job edits.
+		if err := opts.claim(); err != nil {
+			return err
+		}
 		err := finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter)
 		result.Recovered = true
 		if opts.watchState != nil {
@@ -240,6 +268,9 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if opts.Apply && pending.Staged != nil {
 		response = *pending.Staged
 	} else {
+		if err := opts.claim(); err != nil {
+			return err
+		}
 		response, err = uploadPush(opts.PeerURL, ws.ID, filepath.Join(dir, "push-sources", pending.Request.ID), pending.Request, opts.meter)
 		if err != nil {
 			// This typed rejection is emitted before the receiver stages anything.
@@ -275,6 +306,9 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	}
 	pending.Applying = true
 	pending.Apply = proto.PushApplyRequest{Path: opts.Path, Conflicts: opts.MaterializeConflicts}
+	if err := opts.claim(); err != nil {
+		return err
+	}
 	if err := replaceTransferJSON(pendingPath, pending); err != nil {
 		return err
 	}

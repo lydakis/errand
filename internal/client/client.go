@@ -1093,17 +1093,11 @@ type submitHTTPError struct {
 // claimOnce is opts' BeforeSubmit for one attempt at its target, run at
 // most once, right before the first request that places work there.
 func claimOnce(opts RunOptions) func() error {
-	claimed := false
-	return func() error {
-		if opts.BeforeSubmit == nil || claimed {
-			return nil
-		}
-		if err := opts.BeforeSubmit(RunTarget{PeerURL: opts.PeerURL, PeerName: opts.PeerName}); err != nil {
-			return err
-		}
-		claimed = true
-		return nil
+	if opts.BeforeSubmit == nil {
+		return once(nil)
 	}
+	target := RunTarget{PeerURL: opts.PeerURL, PeerName: opts.PeerName}
+	return once(func() error { return opts.BeforeSubmit(target) })
 }
 
 type submitNotStartedError struct {

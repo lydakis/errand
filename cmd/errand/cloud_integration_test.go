@@ -74,7 +74,6 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	brokerCfg.Probe, brokerCfg.AdmitKeys = probeLeaseTarget, admitLeaseKeys
-	brokerCfg.Drain, brokerCfg.Resume = drainLeaseTarget, resumeLeaseTarget
 	brokerCfg.ReadyPoll = 10 * time.Millisecond
 	broker, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: version, GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: brokerCfg})
 	if err != nil {
@@ -190,6 +189,20 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	if n := admissions.Load(); n != 1 {
 		t.Fatalf("reads asked the cloud peer for the lease (%d asks)", n)
 	}
+	// Creating a workspace on the lease, and pushing to it, ask for it too.
+	if out, err = cli("workspaces", "create", "--on", name[1], "api"); err != nil {
+		t.Fatalf("workspaces create --on lease peer: %v\n%s", err, out)
+	}
+	if n := admissions.Load(); n != 2 {
+		t.Fatalf("workspace create asked the cloud peer for its lease %d times", n-1)
+	}
+	os.WriteFile(filepath.Join(root, "input.txt"), []byte("pushed to the leased box\n"), 0600)
+	if out, err = cli("push", "--on", name[1], "--workspace", "api"); err != nil {
+		t.Fatalf("push --on lease peer: %v\n%s", err, out)
+	}
+	if n := admissions.Load(); n != 3 {
+		t.Fatalf("push asked the cloud peer for its lease %d times", n-2)
+	}
 	// The cloud peer ends the lease on its own (idle, lifetime) while its
 	// machine still answers: the run must not go to the ended lease.
 	out, err = cli("leases", "--json")
@@ -247,7 +260,7 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 func TestCloudPeerRefusesWildcardLeases(t *testing.T) {
 	brokerCfg := &cloud.Config{Offers: []cloud.Offer{{Name: "x", Provider: cloud.CommandProvider{AcquireCommand: []string{"/bin/false"}, ReleaseCommand: []string{"/bin/true"}}, IdleTimeout: time.Minute, MaxLifetime: time.Minute}},
 		Probe:     func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) { return proto.Info{}, nil },
-		AdmitKeys: admitLeaseKeys, Drain: drainLeaseTarget, Resume: resumeLeaseTarget}
+		AdmitKeys: admitLeaseKeys}
 	d, err := daemon.New(daemon.Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: version, Cloud: brokerCfg})
 	if err != nil {
 		t.Fatal(err)

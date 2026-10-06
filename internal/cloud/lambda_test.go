@@ -384,10 +384,6 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 	if machine.Target.URL != "http://"+host+":7443" {
 		t.Fatalf("target %+v", machine.Target)
 	}
-	// The cloud peer holds the runner idle over SSH, with its own key.
-	if want := (proto.LeaseTarget{SSH: "ubuntu@203.0.113.7", HostKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUF errand-lease"}); machine.Drain == nil || *machine.Drain != want || machine.Identity != p.keyFile() {
-		t.Fatalf("drain %+v with %q", machine.Drain, machine.Identity)
-	}
 	launch := api.launches[0]
 	if launch["region_name"] != "us-east-1" || launch["name"] != host || launch["instance_type_name"] != "gpu_1x_h100_pcie" {
 		t.Fatalf("launch %v", launch)
@@ -432,7 +428,7 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 	if _, err := toml.Decode(ssh.files["errandd.toml"], &runner); err != nil {
 		t.Fatalf("errandd.toml: %v\n%s", err, ssh.files["errandd.toml"])
 	}
-	if want := []string{"broker@example", `odd%u${HOME}"'x`, "george@github"}; runner.Transport != "both" || runner.Listen != "tailnet:7443" || !slices.Equal(runner.AllowUsers, want) {
+	if want := []string{"broker@example", `odd%u${HOME}"'x`, "george@github"}; runner.Transport != "tailscale" || runner.Listen != "tailnet:7443" || !slices.Equal(runner.AllowUsers, want) {
 		t.Errorf("runner config %+v, want allow_users %q", runner, want)
 	}
 	for name, want := range map[string]string{
@@ -1126,8 +1122,6 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 			return machine.probe(ctx, proto.LeaseTarget{URL: "http://box:7443"}, identity, where)
 		},
 		AdmitKeys: machine.admit,
-		Drain:     machine.drain,
-		Resume:    machine.resume,
 		ReadyPoll: time.Millisecond,
 		IdlePoll:  time.Hour,
 	})

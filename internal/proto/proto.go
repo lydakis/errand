@@ -54,14 +54,6 @@ type SetupQuiesceRelease struct {
 	Token string `json:"token"`
 }
 
-// SetupQuiesceRequest, sent to take the hold, names it with the caller's
-// own Token, a ULID, so the caller can record the token before the hold
-// exists. A live hold with that token is renewed; otherwise the hold is
-// taken under it, which an idle runner grants as it would any other.
-type SetupQuiesceRequest struct {
-	Token string `json:"token"`
-}
-
 const (
 	EntryFile    = "file"
 	EntryDir     = "dir"
