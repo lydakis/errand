@@ -35,20 +35,30 @@ func fetchRecorded(j *Job) bool {
 // unfetched results is not idle: they end with its machine. d.mu must be
 // held.
 func (d *Daemon) noteResultsLocked(j *Job, res *proto.Result) {
-	if j.unfetched || j.fetched || !hasResults(res) {
+	if j.fetched || !hasResults(res) {
 		return
 	}
-	j.unfetched = true
-	d.unfetched++
+	d.unfetched[j.ID] = j.Admission.Time
 }
 
 // forgetResultsLocked stops counting j's results, which are fetched or gone.
 // d.mu must be held.
 func (d *Daemon) forgetResultsLocked(j *Job) {
-	if j.unfetched {
-		j.unfetched = false
-		d.unfetched--
+	delete(d.unfetched, j.ID)
+}
+
+// latestUnfetchedLocked is when the runner admitted the most recent job whose
+// results are counted, or zero when none are. A cloud peer compares it with
+// the runner's latest admission when its lease became ready, so only jobs
+// admitted during the lease hold it. d.mu must be held.
+func (d *Daemon) latestUnfetchedLocked() time.Time {
+	var latest time.Time
+	for _, admitted := range d.unfetched {
+		if admitted.After(latest) {
+			latest = admitted
+		}
 	}
+	return latest
 }
 
 // resultsFetched records that a client downloaded j's retained changes

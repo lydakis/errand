@@ -126,9 +126,12 @@ type Daemon struct {
 	closeOnce         sync.Once
 	closeErr          error
 
-	// unfetched counts finished jobs whose retained workspace changes no
-	// client has downloaded yet (see noteResultsLocked). Protected by mu.
-	unfetched int
+	// unfetched holds, by job ID, when the runner admitted each finished job
+	// whose retained workspace changes no client has downloaded yet (see
+	// noteResultsLocked), and lastAdmitted when it admitted its most recent
+	// job. Protected by mu.
+	unfetched    map[string]time.Time
+	lastAdmitted time.Time
 }
 
 func New(cfg Config) (*Daemon, error) {
@@ -189,7 +192,7 @@ func New(cfg Config) (*Daemon, error) {
 	}
 	d := &Daemon{
 		placementSlots: make(chan struct{}, 4),
-		cfg:            cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{},
+		cfg:            cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{}, unfetched: map[string]time.Time{},
 		identity: identity, selfUID: currentUID(),
 		writeAdmissionReceipt: (*Job).writeJSON,
 		writeProcessScope:     replaceJSONDurable,
@@ -429,6 +432,9 @@ func (d *Daemon) loadExisting() error {
 		j.markLogReady()
 		if admRaw, err := os.ReadFile(filepath.Join(dir, "admission.json")); err == nil {
 			json.Unmarshal(admRaw, &j.Admission)
+		}
+		if j.Admission.Time.After(d.lastAdmitted) {
+			d.lastAdmitted = j.Admission.Time
 		}
 		specRaw, err := os.ReadFile(filepath.Join(dir, "spec.json"))
 		if err != nil {
@@ -887,6 +893,7 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 	}
 	d.mu.Lock()
 	o := d.occupancyLocked()
+	latestAdmitted, latestUnfetched := d.lastAdmitted, d.latestUnfetchedLocked()
 	busy := d.capacityFullLocked() || d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil)
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, proto.Info{
@@ -900,11 +907,13 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 		RunningJobs:  o.running,
 		QueuedJobs:   o.queued,
 		MaxJobs:      d.cfg.MaxJobs,
-		Unfetched:    o.unfetched,
 		MaxQueued:    d.cfg.MaxQueued,
 		Facts:        facts,
 		Offers:       offers,
 		Leases:       leases,
+
+		LatestAdmitted:  latestAdmitted.Round(0),
+		LatestUnfetched: latestUnfetched.Round(0),
 	})
 }
 
@@ -1156,6 +1165,9 @@ admissionCheck:
 	j.Dir = dir
 	d.jobs[jobID] = j
 	d.queue = append(d.queue, j)
+	if j.Admission.Time.After(d.lastAdmitted) {
+		d.lastAdmitted = j.Admission.Time
+	}
 	d.mu.Unlock()
 
 	// rejectPreExecution mirrors the pre-3.5 semantics for failures during
@@ -1309,11 +1321,10 @@ func (d *Daemon) removeQueuedLocked(j *Job) bool {
 }
 
 type occupancy struct {
-	staging   int
-	queued    int
-	starting  int
-	running   int
-	unfetched int // finished jobs' changes not downloaded yet, which are no active job's
+	staging  int
+	queued   int
+	starting int
+	running  int
 }
 
 func activeJobSummary(o occupancy) string {
@@ -1338,7 +1349,7 @@ func activeJobSummary(o occupancy) string {
 // occupancyLocked derives the public phase counts from scheduler ownership.
 // d.mu must be held so queue and running membership cannot change mid-snapshot.
 func (d *Daemon) occupancyLocked() occupancy {
-	o := occupancy{unfetched: d.unfetched}
+	var o occupancy
 	for _, j := range d.queue {
 		j.mu.Lock()
 		if j.state == proto.StateStaging {

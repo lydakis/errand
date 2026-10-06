@@ -111,6 +111,13 @@ type record struct {
 	// Identity is the private key file this cloud peer reaches the machine
 	// with, when the provider made one.
 	Identity string `json:"identity,omitempty"`
+	// AdmittedBefore is when, by its own clock, the machine admitted its
+	// most recent job before the lease was ready; zero for a new machine.
+	// Only results of jobs it admits later hold the lease: those of earlier
+	// jobs belong to an earlier lease of a reused machine, or to its own
+	// users, and the lease's owner cannot fetch them. It is compared only
+	// with times the machine reports, never with this peer's clock.
+	AdmittedBefore time.Time `json:"admitted_before,omitzero"`
 	// LastBusy is when a ready lease was last seen with work or handed out.
 	// It is kept only in memory, since a restart starts a full idle window
 	// anyway, so no failed write can lose it.
@@ -804,10 +811,10 @@ func (b *Broker) launch(l *lease) {
 			err = checkTarget(machine.Target)
 		}
 	}
-	var facts proto.Facts
+	var info proto.Info
 	if err == nil {
 		b.note(l, "waiting for errand on the machine")
-		facts, err = b.waitReady(ctx, l, machine, where)
+		info, err = b.waitReady(ctx, l, machine, where)
 	}
 	if b.ctx.Err() != nil {
 		return // the record still says launching, so the next start releases it
@@ -821,8 +828,8 @@ func (b *Broker) launch(l *lease) {
 			}
 			now := time.Now()
 			r.State = proto.LeaseReady
-			r.Target, r.Facts = &machine.Target, &facts
-			r.ReadyAt, r.LastBusy = now, now
+			r.Target, r.Facts = &machine.Target, &info.Facts
+			r.ReadyAt, r.LastBusy, r.AdmittedBefore = now, now, info.LatestAdmitted
 			r.addProgress(fmt.Sprintf("ready after %s", now.Sub(r.CreatedAt).Round(time.Second)))
 			return true
 		}); err == nil {
@@ -843,8 +850,8 @@ func (b *Broker) launch(l *lease) {
 
 // waitReady polls until the machine runs errand and its measured facts
 // satisfy the lease's requirements, where; an offer's facts are only a
-// claim.
-func (b *Broker) waitReady(ctx context.Context, l *lease, m Machine, where string) (proto.Facts, error) {
+// claim. It returns the machine's answer to the poll that found it ready.
+func (b *Broker) waitReady(ctx context.Context, l *lease, m Machine, where string) (proto.Info, error) {
 	q, _ := placement.Parse(where)
 	last := ""
 	for {
@@ -857,7 +864,7 @@ func (b *Broker) waitReady(ctx context.Context, l *lease, m Machine, where strin
 		} else if missing := q.Missing(info.Facts); len(missing) > 0 {
 			reason = "machine does not match: " + strings.Join(missing, "; ")
 		} else {
-			return info.Facts, nil
+			return info, nil
 		}
 		if reason != last {
 			b.note(l, reason)
@@ -865,7 +872,7 @@ func (b *Broker) waitReady(ctx context.Context, l *lease, m Machine, where strin
 		}
 		select {
 		case <-ctx.Done():
-			return proto.Facts{}, fmt.Errorf("machine was not ready in time (%s)", last)
+			return proto.Info{}, fmt.Errorf("machine was not ready in time (%s)", last)
 		case <-time.After(b.cfg.ReadyPoll):
 		}
 	}
@@ -1014,10 +1021,10 @@ func (b *Broker) stopped(l *lease) bool {
 	return l.State != proto.LeaseReady
 }
 
-// busy reports whether the machine has work, jobs or finished jobs' results
-// that no client has fetched yet, asking no later than the
-// lease's hard stop, and why it cannot be handed out, if it cannot: it did
-// not answer, or its facts no longer match the lease's where.
+// busy reports whether the machine has work, jobs or the results of jobs it
+// admitted during the lease that no client has fetched yet, asking no later
+// than the lease's hard stop, and why it cannot be handed out, if it cannot:
+// it did not answer, or its facts no longer match the lease's where.
 func (b *Broker) busy(l *lease, r record) (busy bool, failed string) {
 	ctx, cancel, ok := b.readyCall(l, r, probeTimeout)
 	defer cancel()
@@ -1031,7 +1038,11 @@ func (b *Broker) busy(l *lease, r record) (busy bool, failed string) {
 	} else if missing := q.Missing(info.Facts); len(missing) > 0 {
 		failed = "it no longer matches " + r.Where + ": " + strings.Join(missing, "; ")
 	}
-	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs+info.Unfetched > 0, failed
+	active := info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0
+	// Both times are the machine's, so its clock is never compared with
+	// this peer's.
+	results := info.LatestUnfetched.After(r.AdmittedBefore)
+	return err == nil && (active || results), failed
 }
 
 // release tries once to destroy the machine and records the outcome.

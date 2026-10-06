@@ -510,9 +510,13 @@ type Info struct {
 	Offers []Offer `json:"offers,omitempty"`
 	Leases []Lease `json:"leases,omitempty"`
 
-	// Unfetched counts finished jobs whose retained workspace changes no
-	// client has downloaded yet: results that end with the machine.
-	Unfetched int `json:"unfetched"`
+	// LatestAdmitted is when the runner admitted its most recent job, and
+	// LatestUnfetched when it admitted the most recent finished job whose
+	// retained workspace changes no client has downloaded yet: results that
+	// end with the machine. Both are by the runner's clock, and zero when
+	// there is no such job.
+	LatestAdmitted  time.Time `json:"latest_admitted,omitzero"`
+	LatestUnfetched time.Time `json:"latest_unfetched,omitzero"`
 }
 
 // Offer is a machine shape a cloud peer can acquire. Its facts are declared

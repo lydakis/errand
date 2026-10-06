@@ -6,13 +6,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/lydakis/errand/internal/proto"
 )
 
 // A finished job's retained changes count as work in /v0/info until a client
 // downloads them whole, across a restart of the runner; a job that changed
-// nothing never counts, and removing the job stops the count.
+// nothing never counts, and removing the job stops the count. Info reports
+// when the runner admitted the most recent such job, and its most recent job
+// of any kind, across a restart too.
 func TestInfoCountsUnfetchedResults(t *testing.T) {
 	state := t.TempDir()
 	start := func() (*Daemon, *httptest.Server) {
@@ -30,7 +33,7 @@ func TestInfoCountsUnfetchedResults(t *testing.T) {
 		}
 	}
 	defer func() { stop() }()
-	unfetched := func() int {
+	info := func() proto.Info {
 		t.Helper()
 		resp, err := http.Get(ts.URL + "/v0/info")
 		if err != nil {
@@ -41,7 +44,23 @@ func TestInfoCountsUnfetchedResults(t *testing.T) {
 		if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 			t.Fatal(err)
 		}
-		return info.Unfetched
+		return info
+	}
+	admitted := func(id string) time.Time {
+		t.Helper()
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		j, ok := d.jobs[id]
+		if !ok {
+			t.Fatalf("no job %s", id)
+		}
+		return j.Admission.Time
+	}
+	latest := func(want time.Time) {
+		t.Helper()
+		if got := info().LatestUnfetched; !got.Equal(want) {
+			t.Fatalf("latest unfetched %s, want %s", got, want)
+		}
 	}
 	run := func(script string) string {
 		t.Helper()
@@ -67,36 +86,37 @@ func TestInfoCountsUnfetchedResults(t *testing.T) {
 		}
 	}
 
-	run("cat value.txt")
-	if n := unfetched(); n != 0 {
-		t.Fatalf("a job that changed nothing counts as %d unfetched", n)
+	lastAdmitted := func(want time.Time) {
+		t.Helper()
+		if got := info().LatestAdmitted; !got.Equal(want) {
+			t.Fatalf("latest admitted %s, want %s", got, want)
+		}
 	}
-	fetched := run("echo fetched > value.txt")
-	kept := run("echo kept > value.txt")
-	if n := unfetched(); n != 2 {
-		t.Fatalf("%d unfetched, want 2", n)
-	}
-	fetch(fetched)
-	fetch(fetched) // a second download changes nothing
-	if n := unfetched(); n != 1 {
-		t.Fatalf("%d unfetched after one fetch, want 1", n)
-	}
+
+	lastAdmitted(time.Time{})
+	unchanged := run("cat value.txt")
+	latest(time.Time{}) // a job that changed nothing never counts
+	lastAdmitted(admitted(unchanged))
+	older := run("echo older > value.txt")
+	newer := run("echo newer > value.txt")
+	latest(admitted(newer))
+	fetch(newer)
+	fetch(newer) // a second download changes nothing
+	latest(admitted(older))
+	lastAdmitted(admitted(newer))
 	stop()
 	d, ts = start()
-	if n := unfetched(); n != 1 {
-		t.Fatalf("%d unfetched after a restart, want 1", n)
-	}
+	latest(admitted(older))
+	lastAdmitted(admitted(newer))
 	keep := 0
 	postJobGC(t, ts.URL, proto.JobGCRequest{Keep: &keep})
 	d.mu.Lock()
-	_, ok := d.jobs[kept]
+	_, ok := d.jobs[older]
 	d.mu.Unlock()
 	if ok {
 		t.Fatal("job GC kept the unfetched job")
 	}
-	if n := unfetched(); n != 0 {
-		t.Fatalf("%d unfetched after the jobs were removed, want 0", n)
-	}
+	latest(time.Time{})
 }
 
 // A download can finish after a job publishes its result but before the job
@@ -110,7 +130,7 @@ func TestFetchBeforeResultsAreCountedIsRecorded(t *testing.T) {
 	d.resultsFetched(j)
 	d.mu.Lock()
 	d.noteResultsLocked(j, res)
-	n := d.unfetched
+	n := len(d.unfetched)
 	d.mu.Unlock()
 	if n != 0 {
 		t.Fatalf("%d unfetched after a download that finished before the count, want 0", n)

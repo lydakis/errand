@@ -85,12 +85,10 @@ type Job struct {
 	stagingOnce         sync.Once
 	changeCancel        context.CancelFunc
 	changeCancelRequest string
-	// unfetched is whether the job is counted in Daemon.unfetched, and
-	// fetched whether a client has downloaded its retained changes whole,
-	// which fetched.json records across restarts. Protected by the daemon's
-	// mu.
-	unfetched bool
-	fetched   bool
+	// fetched is whether a client has downloaded the job's retained changes
+	// whole, which fetched.json records across restarts. Protected by the
+	// daemon's mu.
+	fetched bool
 }
 
 func newJob(id, dir string) *Job {
