@@ -509,6 +509,10 @@ type Info struct {
 	// clients find their leased machines here and keep no list of their own.
 	Offers []Offer `json:"offers,omitempty"`
 	Leases []Lease `json:"leases,omitempty"`
+
+	// Transfers counts workspace transfers in progress (creations, push
+	// uploads and applies): work the runner is doing that no job counts.
+	Transfers int `json:"transfers"`
 }
 
 // Offer is a machine shape a cloud peer can acquire. Its facts are declared

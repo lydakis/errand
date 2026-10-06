@@ -25,6 +25,7 @@ import (
 type fakeMachine struct {
 	gpus    []proto.GPU
 	running atomic.Int32
+	uploads atomic.Int32 // workspace transfers in progress
 	down    atomic.Bool
 	probes  atomic.Int32
 
@@ -57,7 +58,7 @@ func (m *fakeMachine) probe(_ context.Context, target proto.LeaseTarget, _, _ st
 	m.mu.Lock()
 	gpus := m.gpus
 	m.mu.Unlock()
-	return proto.Info{MaxJobs: 1, RunningJobs: int(m.running.Load()), Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: gpus}}, nil
+	return proto.Info{MaxJobs: 1, RunningJobs: int(m.running.Load()), Transfers: int(m.uploads.Load()), Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: gpus}}, nil
 }
 
 func script(t *testing.T, dir, name, body string) string {
@@ -1963,4 +1964,30 @@ func TestLeasePastDeadlines(t *testing.T) {
 	if got, _ := b.Get("george", idle.ID); got.State != proto.LeaseReady {
 		t.Fatalf("released after it was handed out: %+v", got)
 	}
+}
+
+// A workspace upload in progress is work: a lease whose runner is still
+// receiving one is not released at its idle deadline, and once the upload
+// ends the idle rule applies again.
+func TestUploadInProgressKeepsLease(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	h.machine.uploads.Store(1)
+	time.Sleep(150 * time.Millisecond) // past the idle deadline
+	wake(b, l.ID)
+	time.Sleep(50 * time.Millisecond)
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
+		t.Fatalf("lease released during an upload: %+v", got)
+	}
+	h.machine.uploads.Store(0)
+	time.Sleep(150 * time.Millisecond)
+	wake(b, l.ID)
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 }
