@@ -163,8 +163,7 @@ The following properties must hold:
 - Retries cannot execute an admitted job twice. Ambiguous state is reported and
   is never treated as permission to replay execution. A client that stops
   hearing a running job's heartbeat does not resubmit it: it reports the
-  state the runner gives when the runner still answers, and that the state
-  is unknown when it does not.
+  state the runner returns, or that the state is unknown when it gets none.
 - On Windows, the runner refuses to start a `.bat` or `.cmd` program with an
   argument that `cmd.exe` would reinterpret (`"`, `%`, `^`, `&`, `|`, `<`,
   `>` or a line break), so argv cannot become a different command.
@@ -179,8 +178,10 @@ The following properties must hold:
 Cloud peers and leases:
 
 - Leasing needs both the `lease` and `submit` actions on the cloud peer, and
-  happens only for `--where` requirements no reachable runner matches. A
-  `--where '*'` request never rents. Clients ask only configured peers (and
+  the cloud peer refuses `--where '*'`. Whether to lease is the client's
+  choice: the errand CLI asks only when no reachable runner matches, but the
+  cloud peer cannot check that, so a caller with `lease` can rent whenever
+  it asks. Clients ask only configured peers (and
   the local runner) for offers and leases, never discovered or unconfigured
   hosts.
 - Lease requests and device key admissions must be `application/json` and
@@ -220,8 +221,9 @@ Cloud peers and leases:
 - Values from the caller (`where`, login, SSH public key) reach provider
   commands only as environment variables, never as arguments or shell text,
   and an SSH key must parse as one public key. The Lambda provider sends
-  everything it installs as file contents in one archive over SSH, so no
-  value is quoted into a shell or unit file.
+  errand, the runner configuration and keys as file contents in one archive
+  over SSH, so none of them is quoted into a shell or unit file. (The
+  machine's host key travels separately, in its Lambda launch data.)
 - The Lambda API key and the tailnet auth key are read only from regular
   files owned by the cloud peer's user that no other user can read (mode
   `600` on Unix; on Windows, readable only by that user, SYSTEM and
@@ -243,9 +245,7 @@ Cloud peers and leases:
   until it succeeds. The idle and lifetime rules start a release; they do not
   cut off access to a machine whose release keeps failing. A restart releases launches it interrupted and starts a
   full idle window for each ready lease, so restarts can extend a lease up
-  to its `max_lifetime`. Removing an offer only stops new leases. A Lambda lease counts as released only once
-  Lambda lists its instance as terminated or preempted, or no longer lists
-  an instance it listed before.
+  to its `max_lifetime`. Removing an offer only stops new leases.
 - A cloud peer starts a new lease only while fewer than `max_leases` leases
   are active across all callers; lowering the setting does not end leases
   already active. For offers from `[cloud.lambda]`, unless
@@ -298,9 +298,9 @@ outside a protected client or runner boundary are high-impact findings.
   independently reportable unless it bypasses an Errand-enforced limit or
   crosses another caller's boundary.
 - A `lease` grant intentionally lets the caller spend money on the cloud
-  peer's provider account, within `max_leases` and, for Lambda,
-  `max_price_per_hour`. These limits hold only while the cloud peer runs;
-  they are not a spending cap on the provider account.
+  peer's provider account. `max_leases` and, for `[cloud.lambda]` offers,
+  `max_price_per_hour` limit only new launches, and only while the cloud
+  peer runs; they are not a spending cap on the provider account.
 - Configuring a cloud peer trusts it as much as a configured peer: it chooses
   the machines that receive jobs, workspace snapshots and `--passenv`
   values. The cloud peer has root on the Lambda machines it leases, and it
@@ -308,8 +308,8 @@ outside a protected client or runner boundary are high-impact findings.
 - A device key admitted to a leased machine reached over SSH gets a shell
   as the machine's login, the same authority as `submit` there. A Lambda
   machine's runner and jobs run as that login, which can use `sudo`, so
-  anyone admitted to a Lambda machine, over SSH or the tailnet, has root on
-  it.
+  anyone who can run a job on a Lambda machine, or reach it over SSH, has
+  root on it.
 - Taking `submit` away on the cloud peer does not reach into machines
   already leased. The owner's leases end at its next request to the cloud
   peer, and until then a leased machine still admits it, until the cloud
