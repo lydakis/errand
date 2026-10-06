@@ -91,7 +91,7 @@ func PushChanges(opts PushOptions) (proto.PushResult, error) {
 	if err != nil {
 		return result, fmt.Errorf("push requires this workspace's originating checkout: %w", err)
 	}
-	if err := validateApplyCallerWorkspace(origin.Root, opts.Root); err != nil {
+	if err := validatePushCaller(origin, opts.Workspace, opts.Root); err != nil {
 		return result, err
 	}
 	err = withWorkspaceChangeLock(origin.Root, func() error {

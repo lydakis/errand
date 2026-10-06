@@ -113,6 +113,36 @@ func RunAutomaticApplyWorker(peerURL, jobID string) error {
 	return runAutomaticApplyWorkerContext(context.Background(), peerURL, jobID, automaticApplyPollInterval)
 }
 
+// The detached worker outlives runner outages: it keeps polling until the
+// job could no longer be running under its runtime limit, then records the
+// apply as pending for an explicit fetch --apply.
+const streamDeadlineMargin = 5 * time.Minute
+
+type streamDeadlineTracker struct {
+	deadline time.Time
+	phase    string
+}
+
+func newStreamDeadlineTracker(now time.Time, status proto.JobStatus) streamDeadlineTracker {
+	t := streamDeadlineTracker{deadline: now.Add(time.Duration(proto.DefaultLimits().MaxRuntimeSec)*time.Second + streamDeadlineMargin)}
+	t.observe(now, status)
+	return t
+}
+
+func (t *streamDeadlineTracker) observe(now time.Time, status proto.JobStatus) {
+	window := time.Duration(proto.DefaultLimits().MaxRuntimeSec)*time.Second + streamDeadlineMargin
+	switch {
+	case status.Result != nil:
+		t.phase = "terminal"
+	case status.State == proto.StateStaging || status.State == proto.StateQueued:
+		t.phase = status.State
+		t.deadline = now.Add(window)
+	case status.State == proto.StateRunning && t.phase != proto.StateRunning:
+		t.phase = proto.StateRunning
+		t.deadline = now.Add(window)
+	}
+}
+
 func runAutomaticApplyWorkerContext(ctx context.Context, peerURL, jobID string, pollInterval time.Duration) error {
 	consecutiveErrors := 0
 	now := time.Now()
@@ -184,7 +214,7 @@ func runAutomaticApplyWorkerContext(ctx context.Context, peerURL, jobID string, 
 }
 
 func restoreSSHEndpoint(state localChangeState) {
-	restoreSSHPeer(state.PeerURL, state.SSHTarget, state.SSHRemoteCommand, state.SSHRemoteSocket)
+	restoreSSHPeer(state.PeerURL, state.SSHTarget, state.SSHRemoteCommand, state.SSHRemoteSocket, state.SSHHostKey, state.SSHIdentities)
 }
 
 func automaticApplyPollDelay(base time.Duration, consecutiveErrors int) time.Duration {

@@ -47,17 +47,20 @@ type EffectiveRun struct {
 	Profile           string                `json:"profile,omitempty"`
 	Workspace         string                `json:"workspace,omitempty"`
 	Where             string                `json:"where,omitempty"`
-	Candidates        []RunCandidate        `json:"-"`
-	Peer              string                `json:"peer"`
-	URL               string                `json:"url"`
-	RemoteCommand     string                `json:"remote_command,omitempty"`
-	RemoteSocket      string                `json:"remote_socket,omitempty"`
-	Root              string                `json:"workspace_root"`
-	Workdir           string                `json:"workdir"`
-	Project           string                `json:"project"`
-	ApplyOnSuccess    bool                  `json:"apply_on_success"`
-	NoSnapshot        bool                  `json:"no_snapshot"`
-	Sources           map[string]string     `json:"sources"`
+	// WhereMayLease is false when Where came from the workspace, which may
+	// pick your runners but not spend money renting one.
+	WhereMayLease  bool              `json:"-"`
+	Candidates     []RunCandidate    `json:"-"`
+	Peer           string            `json:"peer"`
+	URL            string            `json:"url"`
+	RemoteCommand  string            `json:"remote_command,omitempty"`
+	RemoteSocket   string            `json:"remote_socket,omitempty"`
+	Root           string            `json:"workspace_root"`
+	Workdir        string            `json:"workdir"`
+	Project        string            `json:"project"`
+	ApplyOnSuccess bool              `json:"apply_on_success"`
+	NoSnapshot     bool              `json:"no_snapshot"`
+	Sources        map[string]string `json:"sources"`
 }
 
 // ResolveRun reads personal configuration once and uses only the workspace

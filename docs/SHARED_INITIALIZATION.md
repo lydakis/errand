@@ -24,7 +24,8 @@ See the complete tables and all retained attempts below.
 Workspace creation, ephemeral job staging and persistent job acquisition all call
 `CaptureWorkspaceBaseContext` to preserve their immutable change base before a
 command can mutate the workspace. Capture now uses the same materializer as
-push/fetch staging and private merge inputs.
+push/fetch staging and private merge inputs. Jobs have since stopped copying a base
+tree; see [job change bases](JOB_BASE.md).
 
 Previously capture cloned or copied files in parallel, synchronized them, then
 serially walked the destination through the snapshot tar packer into `io.Discard`

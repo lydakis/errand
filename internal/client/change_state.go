@@ -107,12 +107,16 @@ func localChangeClientID() (string, error) {
 }
 
 type localChangeState struct {
-	WorkspaceID        string              `json:"workspace_id,omitempty"`
-	JobID              string              `json:"job_id"`
-	PeerURL            string              `json:"peer_url"`
-	SSHTarget          string              `json:"ssh_target,omitempty"`
-	SSHRemoteCommand   string              `json:"ssh_remote_command,omitempty"`
-	SSHRemoteSocket    string              `json:"ssh_remote_socket,omitempty"`
+	WorkspaceID      string `json:"workspace_id,omitempty"`
+	JobID            string `json:"job_id"`
+	PeerURL          string `json:"peer_url"`
+	SSHTarget        string `json:"ssh_target,omitempty"`
+	SSHRemoteCommand string `json:"ssh_remote_command,omitempty"`
+	SSHRemoteSocket  string `json:"ssh_remote_socket,omitempty"`
+	// SSHHostKey and SSHIdentities let a later process reach a leased
+	// machine as this one did.
+	SSHHostKey         string              `json:"ssh_host_key,omitempty"`
+	SSHIdentities      []string            `json:"ssh_identities,omitempty"`
 	Root               string              `json:"root"`
 	RootID             fsidentity.Identity `json:"root_identity"`
 	ManifestRoot       string              `json:"manifest_root"`
@@ -157,14 +161,21 @@ func loadLocalChangeStateFile(path, owner string) (localChangeState, error) {
 		return state, err
 	}
 	if err := json.Unmarshal(raw, &state); err != nil {
-		return state, err
+		return state, &unreadableChangeStateError{err}
 	}
 	if !proto.ValidULID(state.JobID) || !validLocalManifestRoot(state.ManifestRoot) ||
 		localChangeKey(state.PeerURL, state.JobID) != owner {
-		return state, fmt.Errorf("local change state identity mismatch")
+		return state, &unreadableChangeStateError{errors.New("local change state identity mismatch")}
 	}
 	return state, nil
 }
+
+// unreadableChangeStateError marks a job record that was read but that this
+// version cannot decode, such as one written by an earlier errand. No command
+// can use it, so GC collects it like any other expired record.
+type unreadableChangeStateError struct{ error }
+
+func (e *unreadableChangeStateError) Unwrap() error { return e.error }
 
 func saveLocalChangeState(state localChangeState) error {
 	if !proto.ValidULID(state.JobID) {

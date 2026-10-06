@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -65,9 +66,10 @@ Run options:
 Commands:
   errand peers                   List, add, remove, or discover runners
   errand workspaces              Create, list, or remove persistent workspaces
+  errand leases                  List or release machines leased from cloud peers
   errand ps                      List jobs
   errand status HANDLE           Inspect a job and its results
-  errand attach HANDLE           Follow a job's logs
+  errand attach HANDLE           Follow a job's logs (--no-follow, --tail, --since)
   errand fetch HANDLE [PATH]      Stage, apply, or export retained files
   errand push [options]           Stage or apply local files in a selected workspace
   errand kill HANDLE             Stop a job
@@ -110,6 +112,8 @@ func runCLI(args []string) int {
 		return cmdPeers(args[1:])
 	case "workspaces":
 		return cmdWorkspaces(args[1:])
+	case "leases":
+		return cmdLeases(args[1:], os.Stdout, os.Stderr)
 	case "config":
 		return cmdConfig(args[1:])
 	case "access":
@@ -281,6 +285,9 @@ func cmdAttach(args []string) int {
 	on := fs.String("on", "", "peer name")
 	rawURL := fs.String("url", "", "peer base URL")
 	profile := fs.String("profile", "", "session preferences from workspace or personal configuration")
+	noFollow := fs.Bool("no-follow", false, "print the output written so far and exit, leaving the job running")
+	tail := fs.Int("tail", 0, "start with the last `N` lines of output")
+	since := fs.String("since", "", "skip output written before a `time`: a duration ago (10m) or an RFC 3339 time")
 	var session sessionFlags
 	session.bind(fs)
 	setFlagUsage(fs, "errand attach [options] HANDLE")
@@ -292,6 +299,28 @@ func cmdAttach(args []string) int {
 	}
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "errand attach: exactly one HANDLE (peer/ULID) is required")
+		return 2
+	}
+	logs := client.LogWindow{NoFollow: *noFollow}
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "tail" {
+			logs.Tail, logs.Lines = true, *tail
+		}
+	})
+	if logs.Tail && *tail < 0 {
+		fmt.Fprintln(os.Stderr, "errand: --tail must be a line count")
+		return 2
+	}
+	if *since != "" {
+		at, err := parseSince(*since, time.Now())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "errand: --since: %v\n", err)
+			return 2
+		}
+		logs.Since = at
+	}
+	if *noFollow && len(session.forwards) != 0 {
+		fmt.Fprintln(os.Stderr, "errand: --no-follow and --forward are mutually exclusive")
 		return 2
 	}
 	cli, err := session.overrides(fs)
@@ -324,12 +353,30 @@ func cmdAttach(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
+	if *noFollow {
+		forwards = nil // configured forwards serve a followed job, not a finite read
+	}
 	peerURL, label, jobID, err := resolveHandle(fs.Arg(0), *rawURL, *on)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return 2
 	}
-	return client.Attach(client.AttachOptions{BeforeContact: func() { warnRunnerVersion(peerURL, label) }, PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards})
+	return client.Attach(client.AttachOptions{BeforeContact: func() { warnRunnerVersion(peerURL, label) }, PeerURL: peerURL, PeerName: label, JobID: jobID, Forwards: forwards, Logs: logs})
+}
+
+// parseSince reads --since: a duration before now (10m, 2h) or an RFC 3339
+// time.
+func parseSince(value string, now time.Time) (time.Time, error) {
+	if d, err := time.ParseDuration(value); err == nil {
+		if d < 0 {
+			return time.Time{}, fmt.Errorf("%q is in the future", value)
+		}
+		return now.Add(-d), nil
+	}
+	if at, err := time.Parse(time.RFC3339, value); err == nil {
+		return at, nil
+	}
+	return time.Time{}, fmt.Errorf("%q is neither a duration like 10m nor an RFC 3339 time", value)
 }
 
 func cmdKill(args []string) int {
@@ -390,9 +437,42 @@ type peerQueryResult[T any] struct {
 }
 
 type fleetRead[T any] struct {
-	targets []peerTarget
-	results []peerQueryResult[T]
-	failed  bool
+	targets  []peerTarget
+	results  []peerQueryResult[T]
+	failures []peerFailure
+	failed   bool
+}
+
+type peerFailure struct {
+	name string
+	err  error
+}
+
+func (r *fleetRead[T]) fail(name string, err error) {
+	r.failures = append(r.failures, peerFailure{name: name, err: err})
+	r.failed = true
+}
+
+// reportFailures follows the results: what could be read is shown first,
+// then one line for each peer that could not be.
+func (r fleetRead[T]) reportFailures(stderr io.Writer) {
+	for _, f := range r.failures {
+		fmt.Fprintf(stderr, "errand: peer %s: %s\n", terminalSafeField(f.name), terminalSafeField(describePeerError(f.err)))
+	}
+}
+
+// describePeerError tells apart a peer that could not be connected to from
+// one that was connected to but did not answer in time.
+func describePeerError(err error) string {
+	var unreachable *client.UnreachableError
+	if errors.As(err, &unreachable) {
+		return unreachable.Error()
+	}
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &netErr) && netErr.Timeout() {
+		return "timed out: connected, but the runner did not answer in time"
+	}
+	return err.Error()
 }
 
 func queryPeerTargets[T any](targets []peerTarget, query func(string) (T, error)) []peerQueryResult[T] {
@@ -428,10 +508,11 @@ func readFleet[T any](rawURL, on string, stderr io.Writer, query func(string) (T
 	if len(targets) == 0 {
 		return read, errNoUsablePeers
 	}
-	for _, result := range queryPeerTargets(targets, query) {
+	var results []peerQueryResult[T]
+	read.targets, results = queryFleet(targets, rawURL == "" && on == "", query)
+	for _, result := range results {
 		if result.err != nil {
-			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
-			read.failed = true
+			read.fail(result.target.name, result.err)
 			continue
 		}
 		read.results = append(read.results, result)
@@ -485,6 +566,59 @@ func peerTargets(rawURL, on string) ([]peerTarget, []error, error) {
 		targets = append(targets, peerTarget{name: name, url: url})
 	}
 	return targets, warnings, nil
+}
+
+// queryFleet queries targets and, when leases is set, the machines the
+// caller leased, which their cloud peers list when asked. Each target is
+// asked for its leases while it is queried, so listing them costs a fleet
+// read no round trip, and an unreachable peer only one connection attempt;
+// a cloud peer's leased machines are queried as soon as it has answered.
+func queryFleet[T any](targets []peerTarget, leases bool, query func(string) (T, error)) ([]peerTarget, []peerQueryResult[T]) {
+	var cfg config.Client
+	if leases {
+		var err error
+		cfg, err = config.LoadClient()
+		leases = err == nil
+	}
+	results := make([]peerQueryResult[T], len(targets))
+	leased := make([][]peerQueryResult[T], len(targets))
+	var wg sync.WaitGroup
+	read := func(r *peerQueryResult[T], target peerTarget) {
+		defer wg.Done()
+		value, err := query(target.url)
+		*r = peerQueryResult[T]{target: target, value: value, err: err}
+	}
+	for i, target := range targets {
+		wg.Add(1)
+		go read(&results[i], target)
+		if !leases {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			info, err := client.ProbeInfo(context.Background(), target.url, 2*time.Second)
+			if err != nil {
+				return // the query reports the peer
+			}
+			lps := leasePeersOf(cfg, target.name, info)
+			leased[i] = make([]peerQueryResult[T], len(lps))
+			for j, lp := range lps {
+				c := leaseCandidate(lp)
+				wg.Add(1)
+				go read(&leased[i][j], peerTarget{name: lp.Name, url: client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)})
+			}
+		}()
+	}
+	wg.Wait()
+	all := slices.Clone(targets)
+	for _, l := range leased {
+		for _, r := range l {
+			all = append(all, r.target)
+			results = append(results, r)
+		}
+	}
+	return all, results
 }
 
 func cmdPs(args []string) int {
@@ -557,12 +691,13 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	rows := make([]psRow, 0)
-	for _, result := range queryPeerTargets(targets, func(url string) ([]psRow, error) {
+	var results []peerQueryResult[[]psRow]
+	read.targets, results = queryFleet(targets, *rawURL == "" && *on == "", func(url string) ([]psRow, error) {
 		return psPeerRows(url, *workspace, !all && last == 0, byPeer[url])
-	}) {
+	})
+	for _, result := range results {
 		if result.err != nil {
-			fmt.Fprintf(stderr, "errand: peer %s: %v\n", result.target.name, result.err)
-			read.failed = true
+			read.fail(result.target.name, result.err)
 		} else {
 			read.results = append(read.results, result)
 		}
@@ -599,6 +734,7 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	} else if len(read.results) != 0 {
 		fmt.Fprintln(stdout, psEmptyMessage(read.targets, !all && last == 0, read.failed))
 	}
+	read.reportFailures(stderr)
 	return read.exitCode()
 }
 
@@ -683,7 +819,13 @@ func cmdServe(args []string) int {
 			log.Fatalf("errand serve: %v", err)
 		}
 	}
+	broker, err := fileCfg.Cloud.Broker()
+	if err != nil {
+		log.Fatalf("errand serve: %v", err)
+	}
+	broker.Probe, broker.AdmitKeys = probeLeaseTarget, admitLeaseKeys
 	d, err := daemon.New(daemon.Config{
+		Cloud:              broker,
 		ChangeStorage:      client.ChangeStorageStats,
 		DisableSSH:         fileCfg.Transport == config.TransportTailscale,
 		LocalOnly:          fileCfg.Transport == config.TransportLocal,

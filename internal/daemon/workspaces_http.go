@@ -109,7 +109,7 @@ func (d *Daemon) handleWorkspaceCreate(w http.ResponseWriter, r *http.Request, i
 		httpError(w, 500, err.Error())
 		return
 	}
-	extractOptions, restored := d.snapshotExtractOptions(r.Context())
+	extractOptions, restored := d.snapshotExtractOptions(r.Context(), nil)
 	if err := archive.ExtractWith(&contextReader{ctx: r.Context(), r: input}, data, request.Manifest, d.cfg.MaxLimits.MaxWorkspaceBytes, extractOptions); err != nil {
 		if errors.Is(err, archive.ErrCacheMiss) {
 			httpErrorCode(w, http.StatusConflict, proto.ErrorCodeSnapshotCacheMiss, err.Error())

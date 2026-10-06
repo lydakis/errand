@@ -43,12 +43,19 @@ func resolvePlacement(out *EffectiveRun, personal Client, selected workspace.Sel
 		if err := set(nil, &personal.DefaultWhere, personalSource+" (default_", ")"); err != nil {
 			return err
 		}
+		out.WhereMayLease = true
 	}
 	if err := set(selected.Peer, selected.Where, workspaceSource+" (run.", ")"); err != nil {
 		return err
 	}
+	if selected.Where != nil {
+		out.WhereMayLease = false
+	}
 	if err := set(profile.Run.Peer, profile.Run.Where, profileSource+" run.", ""); err != nil {
 		return err
+	}
+	if profile.Run.Where != nil { // profiles are only ever selected explicitly
+		out.WhereMayLease = true
 	}
 	if cli.Peer != "" {
 		out.Peer = cli.Peer
@@ -64,6 +71,7 @@ func resolvePlacement(out *EffectiveRun, personal Client, selected workspace.Sel
 		if err := set(nil, &cli.Where, "cli: --", ""); err != nil {
 			return err
 		}
+		out.WhereMayLease = true
 	}
 	if out.Where == "" {
 		return nil

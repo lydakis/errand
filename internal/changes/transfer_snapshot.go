@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/proto"
@@ -27,9 +28,15 @@ func CopyTransferSource(ctx context.Context, source, destination string, m proto
 	// The two ends can independently reject the same changing source bytes.
 	// Only translate a pure content mismatch; never discard a destination I/O
 	// failure or a separate pack failure in favor of unlimited source retries.
-	if _, mismatch := err.(*archive.ContentMismatchError); mismatch &&
+	if mismatch, ok := err.(*archive.ContentMismatchError); ok &&
 		(packErr == nil || packErr == err || snapshot.IsSourceChanged(packErr)) {
-		return fmt.Errorf("%v: %w", err, snapshot.ErrSourceChanged)
+		changed := snapshot.FileChanged(filepath.Join(source, filepath.FromSlash(mismatch.Path)),
+			fmt.Errorf("%v: %w", err, snapshot.ErrSourceChanged))
+		// A structural change the packer saw still needs full reconciliation.
+		if _, files := snapshot.ChangedFiles(packErr); packErr != nil && packErr != err && !files {
+			return errors.Join(changed, packErr)
+		}
+		return changed
 	}
 	err = errors.Join(err, packErr)
 	if err != nil {

@@ -55,6 +55,15 @@ def summarize(samples):
             for (peer, scenario), values in sorted(groups.items())]
 
 
+def successful_receipt(status):
+    """Return the terminal result, or raise unless it confirms a successful transaction."""
+    result = status.get("result") or {}
+    if status.get("state") != "exited" or result.get("exit_code") != 0 or not all(
+            result.get(key) for key in ("started", "cleanup_ok", "changes_ok", "logs_complete")) or result.get("transaction_error"):
+        raise ValueError("terminal receipt does not confirm a successful transaction")
+    return result
+
+
 def run_process(argv, cwd, env, timeout):
     start = time.perf_counter_ns()
     try:
@@ -92,11 +101,7 @@ def measure_peer(binary, peer, scenario, index, root, env, timeout, output):
             raise ValueError("job did not complete successfully or no handle was reported")
         status = checked_json(binary, ["status", "--json", record["handle"]], root, env)
         (output / f"{stem}.status.json").write_text(json.dumps(status, indent=2) + "\n")
-        result = status.get("result") or {}
-        if status.get("state") != "exited" or result.get("exit_code") != 0 or not all(
-                result.get(key) for key in ("started", "cleanup_ok", "changes_ok", "logs_complete")) or result.get("transaction_error"):
-            raise ValueError("terminal receipt does not confirm a successful transaction")
-        record["process_ms"] = result.get("duration_ms", 0)
+        record["process_ms"] = successful_receipt(status).get("duration_ms", 0)
         record.update(parse_transfer(stderr, "cold" if scenario == "warmup" else scenario))
         record["valid"] = True
     except (ValueError, OSError) as error:

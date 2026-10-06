@@ -157,8 +157,8 @@ errand --on cabal -- nix flake check  # named peer (personal alias)
 errand --where kvm,arch=amd64 -- ...      # facts-based selection among peers
 ```
 
-Facts (arch, OS, CPU count, /dev/kvm, and installed tools) are measured
-with `observed_at` timestamps. Memory, disk, GPU and tool-version
+Facts (arch, OS, CPU count, /dev/kvm, installed tools, and NVIDIA GPUs) are
+measured with `observed_at` timestamps. Memory, disk and tool-version
 requirements are not part of the current selector. Client-side they are
 selection hints; **the daemon revalidates them as requirements at
 admission** against the actual job user — `/dev/kvm` must be openable, a
@@ -235,7 +235,7 @@ required:
 
 The capability carries an **action schema from day one** (not a boolean):
 `submit`, `read-own`, `kill-own`, `forward-own`, `manage-caches`, `gc-own`,
-and later `read-all`.
+`lease` (cloud peers, below), and later `read-all`.
 Matching grants are additive; errand merges capability objects
 deliberately (union of actions). A nonempty exact `deny_users` login match is
 checked first and refuses authorization even when `allow_users` also matches.
@@ -279,6 +279,27 @@ on another initiator, or an explicit `--url`. A raw URL retains its scheme and
 port in the handle. A bare ULID resolves through `--on`, `--url`, or the
 configured default peer. Unknown aliases and conflicting `--on`/`--url`
 selectors fail locally rather than being guessed as network hosts.
+
+### Cloud peers (amendment, 2026-10-04)
+
+A runner with `[[cloud.offers]]` is a cloud peer: when `--where` matches none
+of the caller's runners but matches an offer, the client asks it for a lease.
+It acquires a machine from Lambda or through provider commands, waits until
+that machine answers as an errand runner whose measured facts match, and hands
+back how to reach it. The client reaches the lease as a peer named
+`<cloud peer>-<lease id suffix>` and submits to it directly, so the cloud peer
+is a capacity broker, not a relay, and the no-relaying rule above holds. The
+cloud peer keeps the only lease record. See [cloud peers](CLOUD.md).
+
+#### Lease guarantees
+
+1. A lease is recorded, with how to release its machine, before anything is acquired; only its own worker calls the provider.
+2. A lease ends only when its owner releases it or loses `submit`, when every run handed it withdraws while it is launching, after `idle_timeout` with no work and no new run handed it, at `max_lifetime`, or when its launch fails or a restart interrupts it.
+3. Withdrawing only cancels a launch: a run that gives up while its lease is launching withdraws, and the launch stops once no run is waiting for it. A ready lease belongs to no run. A request that reaches the cloud peer after its own withdrawal, within the hour, is refused and starts nothing. The cloud peer never forgets such a withdrawal early: when it has no room to record one (128 per owner, 4,096 in all), it refuses the withdrawal, and the run reports that the lease may exist.
+4. Every automatic release is decided against the lease record when the release is recorded, never against an earlier observation.
+5. A run handed a ready lease may use it for at least `idle_timeout` unless its owner releases it or `max_lifetime` passes. Nothing on the machine survives the lease.
+6. A lease counts as released only once the provider confirms the machine is gone; until then the release is retried.
+7. So, while the cloud peer runs, no machine bills past `max_lifetime` plus the time to confirm its release. If the cloud peer is gone for good, nothing ends its machines: there is no spending cap.
 
 ## Execution backends and isolation — separate axes
 
@@ -457,7 +478,12 @@ becomes a requirement — in which case it belongs in milestone 1.
   protocol, so payloads are base64. Ordering is **daemon-observed order**:
   there is no intrinsic total order between two pipes, only the order the
   daemon drained them. Reconnect resumes via `Last-Event-ID`. Plain
-  `stdout.log`/`stderr.log` are derived views.
+  `stdout.log`/`stderr.log` are derived views. The daemon writes an SSE
+  heartbeat comment every 5 seconds on every open stream, so a follower
+  can tell a silent job from a silent runner: three missed heartbeats mean
+  reconnect, and 60 seconds without getting the stream back means the
+  runner is unavailable and the job's state is unknown. The follower then
+  stops and says so instead of reporting a job failure.
 - **Separate outcomes.** `result.json` distinguishes
   `{exit_code, signal, changes_ok, cleanup_ok, logs_complete}` — a job can
   succeed while collection or cleanup fails, and the receipt says which.
@@ -770,7 +796,8 @@ binary aborts safely before the installation transaction.
 Client-side workspace identity and staging records are keyed by runner endpoint plus job
 ID. Pending apply journals are never collected. Pre-admission records follow an
 explicit local GC cutoff; unresolved submitted records receive a 30-day safety
-window before an explicit `gc changes` may retire them.
+window before an explicit `gc changes` may retire them. Records this version
+cannot decode are never migrated; they follow the explicit cutoff.
 
 `fetch --output DIR` exports the selected remote values into a new directory,
 preserving workspace-relative paths, file modes, and safe symlinks. It requires
@@ -912,7 +939,13 @@ full-duplex TCP connection in its request and response bodies;
 `GET /v0/change-reconciliation` pages through durable owner- and client-scoped
 collection markers so local change GC can reconcile after a lost deletion
 response; `POST /v0/change-reconciliation/ack` releases the change hold after that
-reconciliation while preserving the replay-prevention lifetime; and
+reconciliation while preserving the replay-prevention lifetime;
+`POST /v0/leases` hands a cloud peer's caller a lease for one run, named by
+the run's request ID; `DELETE /v0/lease-requests/<request id>` withdraws that
+run from a lease that is still launching (lease guarantee 3), and is not a
+user-facing command; `GET /v0/leases` and `DELETE /v0/leases/<id>` list and
+release the caller's leases; `POST /v0/leases/<id>/ssh-keys` lets another
+of the caller's devices into a leased machine reached over SSH; and
 `GET /v0/info` returns facts. A negotiated blob disappearing before
 submission returns the machine-readable `snapshot_cache_miss` error code so
 the client can retry the same job ID with a complete snapshot. Curl-debuggable;
@@ -979,7 +1012,7 @@ queueing, and startup latency.
 - Container and Nix backends need a concrete workload that justifies managing
   execution environments and their lifecycle. Named caches already work with
   the host backend independently of containers.
-- Resource reservations and richer requirements, such as memory, GPUs, or tool
+- Resource reservations and richer requirements, such as memory or tool
   versions, should follow workloads that job-slot balancing cannot serve.
   The current CPU predicate describes machine capacity; it does not reserve cores.
 - Privilege separation between the daemon and workers remains future work.

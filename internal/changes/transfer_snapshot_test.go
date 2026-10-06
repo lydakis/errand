@@ -26,4 +26,7 @@ func TestCopyTransferSourcePreservesMutationError(t *testing.T) {
 	if !snapshot.IsSourceChanged(err) {
 		t.Fatalf("copy lost source mutation classification: %v", err)
 	}
+	if files, ok := snapshot.ChangedFiles(err); !ok || len(files) != 1 || files[0] != name {
+		t.Fatalf("copy did not name the changed file: %q %v (%v)", files, ok, err)
+	}
 }

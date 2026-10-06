@@ -27,6 +27,26 @@ runner response under `info`, including CPU count, version, capacity, and tool
 paths. Failed peers remain in the array with a `detail` message and no `info`.
 The command exits nonzero if any selected peer cannot be queried.
 
+### Unreachable peers
+
+Commands that ask every peer (`peers`, `ps`, `df`, `workspaces`, and
+`--where` placement) show what the reachable peers returned, then name each
+peer that could not be read and why. A peer that cannot be connected to fails
+in the connect step, which gets 3 seconds of its own; the request that follows
+keeps its full budget, so a slow runner is not mistaken for a missing one.
+When a connection to a Tailscale address is still pending after a moment,
+errand asks tailscaled about that node; a node Tailscale reports offline,
+with no WireGuard handshake from this machine in the last 3 minutes, fails at
+once with when it was last seen. (Tailscale's online flag only says whether a
+node reaches its coordination server, so a recent handshake keeps the
+connection attempt going.) SSH peers get the same
+treatment: a 3-second `ConnectTimeout`, and when ssh has not answered after a
+moment, errand looks up where the ssh_config host points (`ssh -G`) and asks
+tailscaled about that address, unless ssh goes through a `ProxyJump` or
+`ProxyCommand`. The early answer is used only when it covers every address
+the host resolves to and was observed after the connection attempt began. Single-peer commands such as `run` and
+`attach` fail the same way.
+
 ## Runner setup
 
 `errand setup` defaults to both SSH and Tailscale for new runners.
@@ -279,7 +299,10 @@ identity records, verified downloads, and interrupted download staging;
 pending apply transactions are always protected. Records whose submission never began follow
 the requested `--older-than` boundary. Unresolved submitted jobs remain
 protected for 30 days, after which an explicit local GC may retire abandoned
-state.
+state. A job record this version cannot decode, such as one written by an
+earlier errand, follows the `--older-than` boundary: no command can fetch,
+apply or recover through it, so keeping it protects nothing. Each record GC
+cannot collect is named with the reason, and the exit status is nonzero.
 Cache previews report the selected runner and separate snapshot/named-cache
 expiry and byte budgets supplied by that runner. Policy reporting is required;
 the client rejects incomplete responses.

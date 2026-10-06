@@ -97,13 +97,13 @@ func testChangeApplyFixture(t *testing.T, baseValue, remoteValue string) (string
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := changeops.CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := changeops.CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(remote, "artifact"), []byte(remoteValue), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, changeops.ChangeBase{}, baseline, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,14 +247,14 @@ func TestAutomaticApplyWorkerAppliesCompletedDetachedJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := changeops.CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := changeops.CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(remote, "artifact"), []byte("remote"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	bundle, collected, err := changeops.CollectWorkspaceChangesContext(
-		context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), remote, jobDir, changeops.ChangeBase{}, baseline, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -421,7 +421,7 @@ func TestPartialManualApplyDoesNotCompleteAutomaticApplyPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := changeops.CaptureWorkspaceBaseContext(context.Background(), remote, jobDir, baseline); err != nil {
+	if err := changeops.CaptureJobBaseContext(context.Background(), remote, jobDir, baseline, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"first", "second"} {
@@ -430,7 +430,7 @@ func TestPartialManualApplyDoesNotCompleteAutomaticApplyPolicy(t *testing.T) {
 		}
 	}
 	bundle, collected, err := changeops.CollectWorkspaceChangesContext(
-		context.Background(), remote, jobDir, baseline, proto.SelectionPolicy{}, 1<<20,
+		context.Background(), remote, jobDir, changeops.ChangeBase{}, baseline, proto.SelectionPolicy{}, 1<<20,
 	)
 	if err != nil || !collected {
 		t.Fatalf("collecting changes = %t, %v", collected, err)
@@ -906,7 +906,7 @@ func TestChangeDownloadsForDifferentJobsRunConcurrently(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(remote, "artifact"), []byte("new"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, changeops.ChangeBase{}, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1121,7 +1121,7 @@ func TestDownloadChangeBundleHasNoTotalRequestDeadline(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(remote, "artifact"), []byte("new"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, changeops.ChangeBase{}, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1171,7 +1171,7 @@ func TestDownloadChangeBundleRefreshesCachedStaging(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(remote, "artifact"), []byte("new"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, changeops.ChangeBase{}, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1218,7 +1218,7 @@ func TestFetchChangesReplacesIncompleteStagingAndBindsReceipt(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(remote, "artifact"), []byte("new"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, changeops.ChangeBase{}, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1557,8 +1557,8 @@ func TestChangeGCDryRunDoesNotWidenRestrictiveDownloadedStaging(t *testing.T) {
 	}
 
 	result, err := ChangeGC(24*time.Hour, true)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil || !strings.HasPrefix(err.Error(), download+": ") {
+		t.Fatalf("dry-run did not name the unmeasurable download: %v", err)
 	}
 	if !result.DryRun || result.Failed != 1 || result.Removed != 0 {
 		t.Fatalf("dry-run result = %+v", result)
@@ -2136,7 +2136,7 @@ func TestApplyRefusesWorkspaceReplacedAtSamePath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(remote, "artifact"), []byte("remote"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := changeops.CollectWorkspaceChangesContext(context.Background(), remote, jobDir, changeops.ChangeBase{}, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}

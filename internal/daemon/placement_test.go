@@ -227,3 +227,20 @@ func TestWhereRuntimeDeadlinesAndProbeCapacity(t *testing.T) {
 		t.Fatalf("ignored probe capacity: %+v", f)
 	}
 }
+
+// GPU terms are matched against the GPUs the runner measures, both when a
+// client selects runners and again at admission.
+func TestWhereGPUTerms(t *testing.T) {
+	d, ts := testDaemon(t)
+	d.gpus = gpuCache{probe: func(context.Context) []proto.GPU {
+		return []proto.GPU{{Name: "NVIDIA H100 80GB HBM3", MemoryMiB: 81559}}
+	}}
+	info, err := client.ProbeWhereInfo(context.Background(), ts.URL, "gpu=h100,vram>=80", time.Second)
+	if err != nil || len(info.Facts.GPUs) != 1 {
+		t.Fatalf("info=%+v %v", info, err)
+	}
+	_, err = client.CreateWorkspace(client.RunOptions{Root: t.TempDir(), PeerURL: ts.URL, NoSnapshot: true, Where: "gpu=a100"}, "wrong")
+	if err == nil || !strings.Contains(err.Error(), "requires 1 GPU matching a100 (has 1x NVIDIA H100 80GB HBM3 (80 GiB))") {
+		t.Fatalf("created a workspace on the wrong GPU: %v", err)
+	}
+}

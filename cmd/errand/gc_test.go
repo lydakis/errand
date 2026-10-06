@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/config"
@@ -218,5 +221,95 @@ func TestGCChangesSkipsDeletedWorkspaceWithoutFailing(t *testing.T) {
 			stderr.String() != "errand: local change gc: skipped 1 workspace transfer record whose workspace was moved or deleted\n" {
 			t.Fatalf("gc %v = %d, stdout=%q stderr=%q", args, code, stdout.String(), stderr.String())
 		}
+	}
+}
+
+// Job records from an earlier errand (here the declared-output format that
+// change capture replaced) cannot be decoded and protect nothing, so gc
+// changes collects them by age like any other record.
+func TestGCChangesCollectsJobRecordsFromEarlierErrand(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	jobs := filepath.Join(state, "errand", "jobs")
+	downloads := filepath.Join(state, "errand", "downloads")
+	for _, dir := range []string{jobs, downloads} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	peer := "http://runner.test"
+	sum := sha256.Sum256([]byte(peer))
+	old := time.Now().Add(-48 * time.Hour)
+	writeRecord := func(modified time.Time) string {
+		id := proto.NewULID()
+		key := hex.EncodeToString(sum[:16]) + "-" + id
+		path := filepath.Join(jobs, key+".json")
+		record := fmt.Sprintf(`{"version":1,"job_id":%q,"peer_url":%q,"root":"/src/app","root_identity":{"device":1,"inode":2},"outputs":[{"path":"dist"}],"baselines":[]}`, id, peer)
+		if err := os.WriteFile(path, []byte(record), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		download := filepath.Join(downloads, key)
+		if err := os.Mkdir(download, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(download, "bundle.json"), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range []string{path, download} {
+			if err := os.Chtimes(p, modified, modified); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return path
+	}
+	var legacy []string
+	for range 4 {
+		legacy = append(legacy, writeRecord(old))
+	}
+	recent := writeRecord(time.Now())
+
+	gc := func(args ...string) (int, string, string) {
+		var stdout, stderr bytes.Buffer
+		code := cmdGCTo(append([]string{"changes", "--older-than", "1d"}, args...), &stdout, &stderr)
+		return code, stdout.String(), stderr.String()
+	}
+	if code, stdout, stderr := gc("--dry-run"); code != 0 || stderr != "" ||
+		!strings.HasPrefix(stdout, "local changes: would remove 4 records") || !strings.HasSuffix(stdout, "(0 protected, 0 failed)\n") {
+		t.Fatalf("dry run = %d, stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if code, stdout, stderr := gc(); code != 0 || stderr != "" ||
+		!strings.HasPrefix(stdout, "local changes: removed 4 records") || !strings.HasSuffix(stdout, "(0 protected, 0 failed)\n") {
+		t.Fatalf("gc = %d, stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	for _, path := range legacy {
+		key := strings.TrimSuffix(filepath.Base(path), ".json")
+		for _, p := range []string{path, filepath.Join(downloads, key)} {
+			if _, err := os.Lstat(p); !os.IsNotExist(err) {
+				t.Fatalf("%s survived gc: %v", p, err)
+			}
+		}
+	}
+	if _, err := os.Stat(recent); err != nil {
+		t.Fatalf("record newer than --older-than was collected: %v", err)
+	}
+
+	// A record gc cannot collect is named with the reason, not just counted.
+	stuck := writeRecord(old)
+	locks := filepath.Join(state, "errand", "locks")
+	if err := os.RemoveAll(locks); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(locks, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"--dry-run"}, nil} {
+		code, stdout, stderr := gc(args...)
+		if code != 1 || !strings.HasPrefix(stderr, "errand: local change gc: "+stuck+": ") ||
+			!strings.HasSuffix(stdout, "(0 protected, 1 failed)\n") {
+			t.Fatalf("gc %v with unusable locks = %d, stdout=%q stderr=%q", args, code, stdout, stderr)
+		}
+	}
+	if _, err := os.Stat(stuck); err != nil {
+		t.Fatalf("record that failed collection was removed: %v", err)
 	}
 }

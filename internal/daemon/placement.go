@@ -37,7 +37,7 @@ func placementTool(tool string, env []string) string {
 // only the daemon's base environment and executable. Submitted environment must
 // never control a pre-admission subprocess, even when its executable is trusted.
 func (d *Daemon) measurePlacementFacts(ctx context.Context, q placement.Requirements, env []string) proto.Facts {
-	f := measureFacts()
+	f := d.measureFacts()
 	f.ToolErrors = make(map[string]string)
 	baseEnv := (&Job{}).buildEnv()
 	ctx, cancel := context.WithTimeout(ctx, time.Second)

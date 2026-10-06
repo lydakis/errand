@@ -27,6 +27,9 @@ const (
 	ActionForwardOwn = "forward-own"
 	ActionCaches     = "manage-caches"
 	ActionGCJobs     = "gc-own"
+	// ActionLease acquires and releases cloud capacity. It is separate from
+	// submit because a lease can cost money.
+	ActionLease = "lease"
 
 	ErrorCodeSnapshotCacheMiss = "snapshot_cache_miss"
 
@@ -285,6 +288,11 @@ type LogFrame struct {
 	TUnixMS int64  `json:"t_unix_ms"`
 }
 
+// LogHeartbeatInterval is how often a runner writes an SSE comment on an open
+// log stream, whatever the job is doing. A follower that hears nothing for a
+// few intervals knows the connection, not the job, has gone quiet.
+const LogHeartbeatInterval = 5 * time.Second
+
 type LogStreamError struct {
 	Message   string `json:"message"`
 	Retryable bool   `json:"retryable"`
@@ -471,6 +479,14 @@ type Facts struct {
 	KVM        bool              `json:"kvm"`
 	Tools      map[string]string `json:"tools,omitempty"`       // name -> resolved path
 	ToolErrors map[string]string `json:"tool_errors,omitempty"` // requested tools that could not be attested
+	GPUs       []GPU             `json:"gpus,omitempty"`
+}
+
+// GPU is one device as the driver reports it. MemoryMiB is zero when the
+// driver reports none, as on unified-memory systems such as the GB10.
+type GPU struct {
+	Name      string `json:"name"`
+	MemoryMiB int    `json:"memory_mib,omitempty"`
 }
 
 type Info struct {
@@ -488,6 +504,83 @@ type Info struct {
 	MaxJobs      int   `json:"max_jobs"`
 	MaxQueued    int   `json:"max_queued"`
 	Facts        Facts `json:"facts"`
+	// Offers are machine shapes this runner can lease on demand. Leases are
+	// the caller's leases that may still hold a machine, without progress;
+	// clients find their leased machines here and keep no list of their own.
+	Offers []Offer `json:"offers,omitempty"`
+	Leases []Lease `json:"leases,omitempty"`
+}
+
+// Offer is a machine shape a cloud peer can acquire. Its facts are declared
+// in configuration; a leased machine's measured facts must still match.
+type Offer struct {
+	Name           string   `json:"name"`
+	Facts          Facts    `json:"facts"`
+	PricePerHour   *float64 `json:"price_per_hour,omitempty"` // USD, as configured; nil when unpriced
+	IdleTimeoutSec int64    `json:"idle_timeout_sec"`
+	MaxLifetimeSec int64    `json:"max_lifetime_sec"`
+}
+
+const (
+	LeaseLaunching = "launching"
+	LeaseReady     = "ready"
+	LeaseReleasing = "releasing"
+	LeaseReleased  = "released"
+	LeaseFailed    = "failed"
+)
+
+type LeaseRequest struct {
+	// RequestID is a ULID the client makes. Sending the same request again,
+	// as a client that lost the answer does, returns the same lease.
+	RequestID string `json:"request_id"`
+	Where     string `json:"where"`
+	// SSHKey is the caller's SSH public key. A leased machine reached over
+	// SSH admits the key of each of the owner's devices that asks for it.
+	SSHKey string `json:"ssh_key,omitempty"`
+}
+
+// LeaseTarget says how to reach a leased runner, with the same fields and
+// rules as a remote personal peer entry. Local sockets are not accepted: a
+// cloud peer must not be able to point a client at its own machine.
+type LeaseTarget struct {
+	URL           string `json:"url,omitempty"`
+	SSH           string `json:"ssh,omitempty"`
+	RemoteCommand string `json:"remote_command,omitempty"`
+	RemoteSocket  string `json:"remote_socket,omitempty"`
+	// HostKey pins an ssh target's host key ("ssh-ed25519 AAAA..."), so
+	// clients need no known_hosts entry for a machine that just booted.
+	HostKey string `json:"host_key,omitempty"`
+}
+
+type Lease struct {
+	ID     string       `json:"id"`
+	Offer  string       `json:"offer"`
+	Where  string       `json:"where"`
+	State  string       `json:"state"`
+	Target *LeaseTarget `json:"target,omitempty"`
+	// SSHKeys are the client keys a machine reached over SSH admits: one
+	// for each of the owner's devices that asked for the lease, once the
+	// cloud peer has added it. A client uses a lease once its key is here.
+	SSHKeys  []string `json:"ssh_keys,omitempty"`
+	Facts    *Facts   `json:"facts,omitempty"` // measured once ready
+	Progress []string `json:"progress,omitempty"`
+	// ProgressSeq counts every progress line the lease has had. Progress
+	// holds only the last of them, so a client following a launch prints
+	// the lines numbered after the last one it showed.
+	ProgressSeq int       `json:"progress_seq,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	ReadyAt     time.Time `json:"ready_at,omitzero"`
+	ReleasedAt  time.Time `json:"released_at,omitzero"`
+	// ExpiresAt is the hard stop from the offer's max lifetime. IdleUntil
+	// is when an idle ready lease will be released unless work arrives.
+	ExpiresAt time.Time `json:"expires_at"`
+	IdleUntil time.Time `json:"idle_until,omitzero"`
+}
+
+// Active reports whether the lease may still hold a machine.
+func (l Lease) Active() bool {
+	return l.State == LeaseLaunching || l.State == LeaseReady || l.State == LeaseReleasing
 }
 
 type Event struct {

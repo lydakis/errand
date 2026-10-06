@@ -42,20 +42,21 @@ peer = "mac"
 		name        string
 		cli         RunOverrides
 		where, peer string
+		mayLease    bool // only the workspace's own where may not rent
 	}{
-		{"workspace", RunOverrides{}, "os=linux", ""},
-		{"profile", RunOverrides{Profile: "mac"}, "os=darwin", ""},
-		{"profile pin", RunOverrides{Profile: "pin"}, "", "mac"},
-		{"CLI requirements", RunOverrides{Profile: "pin", Where: "*"}, "*", ""},
-		{"CLI pin", RunOverrides{Peer: "linux"}, "", "linux"},
-		{"CLI URL", RunOverrides{URL: "http://explicit:7443"}, "", "http://explicit:7443"},
+		{"workspace", RunOverrides{}, "os=linux", "", false},
+		{"profile", RunOverrides{Profile: "mac"}, "os=darwin", "", true},
+		{"profile pin", RunOverrides{Profile: "pin"}, "", "mac", false},
+		{"CLI requirements", RunOverrides{Profile: "pin", Where: "*"}, "*", "", true},
+		{"CLI pin", RunOverrides{Peer: "linux"}, "", "linux", false},
+		{"CLI URL", RunOverrides{URL: "http://explicit:7443"}, "", "http://explicit:7443", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e, err := ResolveRun(root, tc.cli)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if e.Where != tc.where || e.Peer != tc.peer {
+			if e.Where != tc.where || e.Peer != tc.peer || e.Where != "" && e.WhereMayLease != tc.mayLease {
 				t.Fatalf("resolved %+v", e)
 			}
 			if tc.where != "" && (e.URL != "" || len(e.Candidates) != 2 || e.Candidates[1].RemoteCommand != "/opt/bin/errand") {
@@ -95,7 +96,7 @@ func TestWhereLocalRequiresPersonalOptIn(t *testing.T) {
 }
 
 func TestWhereRejectsInvalidAndAmbiguousSettings(t *testing.T) {
-	for _, project := range []string{"[run]\nwhere=''", "[run]\nwhere='gpu'", "[run]\nwhere='*'\npeer='linux'"} {
+	for _, project := range []string{"[run]\nwhere=''", "[run]\nwhere='tpu'", "[run]\nwhere='*'\npeer='linux'"} {
 		root := runFixture(t, personalPeers, project)
 		if _, err := ResolveRun(root, RunOverrides{}); err == nil {
 			t.Fatalf("accepted %s", project)

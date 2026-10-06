@@ -59,7 +59,9 @@ type selectionEvidence struct {
 // and other selected files there whose stat evidence changed are re-observed. First use, directory and
 // control events or names, overflow and changed policy or tracked-set
 // evidence use full selection. Events arriving during preparation remain pending for the next
-// cycle. A failed preparation forces full reconciliation. Expiry is checked on
+// cycle. A failed preparation forces full reconciliation, unless every cause
+// is a file that changed while it was read: the retry rereads those files and
+// keeps this cycle's hints. Expiry is checked on
 // preparation; it does not schedule work while idle. When an expired
 // preparation has only content hints, those files are delivered first and the
 // owed full reconciliation runs as the immediately following cycle.
@@ -87,6 +89,7 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 	dirty, full, reset, owed := s.dirty, s.fullScan, s.resetHashes, s.owedFull
 	s.dirty, s.fullScan, s.resetHashes, s.owedFull = nil, false, false, false
 	s.dirtyMu.Unlock()
+	consumedFull := full
 	reason := "incremental"
 	switch {
 	case reset:
@@ -113,7 +116,7 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 	}
 	defer func() {
 		if err != nil {
-			s.InvalidatePreparation()
+			s.preparationFailed(err, dirty, consumedFull, reset, owed)
 		}
 	}()
 	prior := s.prepared
@@ -247,6 +250,17 @@ func (s *Watch) PrepareSnapshot(builder *Builder) (state *manifeststate.Snapshot
 	}
 	guard = &SelectionGuard{root: s.root, identity: s.identity, evidence: evidence}
 	return state, clonePolicy(prior.policy), guard, nil
+}
+
+// preparationFailed decides what the retry rereads. A file that changed while
+// it was read needs only rereading, with this cycle's consumed hints kept;
+// anything else reconciles fully.
+func (s *Watch) preparationFailed(err error, dirty map[string]dirtyKind, full, reset, owed bool) {
+	if files, ok := ChangedFiles(err); ok {
+		s.requeuePreparation(dirty, full, reset, owed, files)
+		return
+	}
+	s.InvalidatePreparation()
 }
 
 func (s *Watch) prepareFull(builder *Builder) (*manifeststate.Snapshot, proto.SelectionPolicy, *SelectionGuard, error) {

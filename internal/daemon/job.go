@@ -47,6 +47,8 @@ type Job struct {
 	workspaceLeaseID    string
 	workspaceLeaseErr   error
 	treeBaselines       map[string]string
+	basePins            *cachePins
+	changeBase          changeops.ChangeBase
 	cachePublicationErr error
 	publishTrees        bool
 	ID                  string
@@ -382,7 +384,8 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 	if err := os.Mkdir(workspace, 0o700); err != nil {
 		return false, err
 	}
-	extractOpts, cachedPaths := d.snapshotExtractOptions(stagingCtx)
+	pins := j.pinBase(d)
+	extractOpts, cachedPaths := d.snapshotExtractOptions(stagingCtx, pins)
 	extractErr := archive.ExtractWith(&contextReader{ctx: stagingCtx, r: workspaceTar}, workspace, manifest, j.Spec.Limits.MaxWorkspaceBytes, extractOpts)
 	if extractErr != nil {
 		j.markStagingDone()
@@ -399,13 +402,20 @@ func (j *Job) stage(d *Daemon, workspaceTar io.ReadCloser, manifest proto.Manife
 		}
 	}
 	j.event("workspace-extracted", fmt.Sprintf("root=%s cached=%d/%d", manifest.RootHash(), len(cachedPaths), totalFiles))
-	if err := changeops.CaptureWorkspaceBaseContext(stagingCtx, workspace, j.Dir, manifest); err != nil {
-		return false, fmt.Errorf("capturing submitted workspace for change merging: %w", err)
-	}
-	j.event("change-base-captured", manifest.RootHash())
-	if err := d.cacheSnapshotSource(stagingCtx, workspace, manifest, cachedPaths); err != nil && stagingCtx.Err() == nil {
+	// Cached bodies join the change base pinned; only the rest are copied.
+	if err := d.cacheSnapshotSource(stagingCtx, workspace, manifest, cachedPaths, pins); err != nil && stagingCtx.Err() == nil {
 		j.event("cache-insert-failed", err.Error())
 	}
+	if err := changeops.CaptureJobBaseContext(stagingCtx, workspace, j.Dir, manifest, pins.shared()); err != nil {
+		j.markStagingDone()
+		if res := j.cancelledBeforeStart(); res != nil {
+			j.finalize(d, res, true)
+			return true, nil
+		}
+		return false, fmt.Errorf("capturing submitted workspace for change merging: %w", err)
+	}
+	j.changeBase = changeops.StoredBase(pins.shared())
+	j.event("change-base-captured", baseCaptureDetail(manifest, pins.shared()))
 	if err := j.prepareNamedCacheTrees(stagingCtx, d); err != nil {
 		return false, err
 	}
@@ -647,7 +657,7 @@ func (j *Job) launch(d *Daemon) error {
 				collectErr = errors.New("process scope cleanup incomplete")
 			} else {
 				bundle, collected, collectErr = changeops.CollectWorkspaceChangesContext(
-					changeCtx, workspace, j.Dir, j.baseline, j.Spec.Selection, j.Spec.Limits.MaxChangeBytes)
+					changeCtx, workspace, j.Dir, j.changeBase, j.baseline, j.Spec.Selection, j.Spec.Limits.MaxChangeBytes)
 			}
 			j.mu.Lock()
 			ctxErr := changeCtx.Err()
@@ -1024,6 +1034,7 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 		j.event("named-cache-publication-failed", j.cachePublicationErr.Error())
 		res.TransactionError = appendTransactionError(res.TransactionError, j.cachePublicationErr.Error())
 	}
+	j.releaseBase()
 	baseErr := removeOwnedTree(filepath.Join(j.Dir, "change-base"))
 	// The scope record is runtime state, not receipt: once the job is
 	// settled there is nothing left for reconciliation to find. Retain it

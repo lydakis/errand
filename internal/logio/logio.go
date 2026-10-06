@@ -153,6 +153,12 @@ func (w *Writer) Close() error {
 	return err
 }
 
+func (w *Writer) isClosed() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.closed
+}
+
 // waitChange blocks until seq advances past cur or the writer closes.
 func (w *Writer) waitChange(ctx context.Context, cur int64) (closed bool, err error) {
 	w.mu.Lock()

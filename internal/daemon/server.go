@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/lydakis/errand/internal/archive"
 	changeops "github.com/lydakis/errand/internal/changes"
+	"github.com/lydakis/errand/internal/cloud"
 	"github.com/lydakis/errand/internal/durable"
 	"github.com/lydakis/errand/internal/filelock"
 	"github.com/lydakis/errand/internal/logio"
@@ -83,10 +85,19 @@ type Config struct {
 	// waiting capacity; zero disables queueing.
 	MaxJobs   int
 	MaxQueued int
+
+	// GPUProbe lists this machine's GPUs; nil asks nvidia-smi.
+	GPUProbe func(context.Context) []proto.GPU
+
+	// Cloud makes this runner a cloud peer that leases machines. Its
+	// StateDir is set from the runner's.
+	Cloud *cloud.Config
 }
 
 type Daemon struct {
 	placementSlots chan struct{}
+	gpus           gpuCache
+	broker         *cloud.Broker // nil unless offers are configured
 	workspaces     *workspaceStore
 	namedCaches    *namedcache.Store
 	cfg            Config
@@ -179,6 +190,10 @@ func New(cfg Config) (*Daemon, error) {
 		writeAdmissionReceipt: (*Job).writeJSON,
 		writeProcessScope:     replaceJSONDurable,
 	}
+	d.gpus.probe = cfg.GPUProbe
+	if d.gpus.probe == nil {
+		d.gpus.probe = probeNVIDIA
+	}
 	if err := d.lockStateDir(); err != nil {
 		return nil, err
 	}
@@ -212,6 +227,15 @@ func New(cfg Config) (*Daemon, error) {
 	if err := d.recoverNamedCaches(); err != nil {
 		_ = d.Close()
 		return nil, err
+	}
+	if cfg.Cloud != nil {
+		brokerCfg := *cfg.Cloud
+		brokerCfg.StateDir = cfg.StateDir
+		brokerCfg.Version = cfg.Version
+		if d.broker, err = cloud.New(brokerCfg); err != nil {
+			_ = d.Close()
+			return nil, fmt.Errorf("starting cloud broker: %w", err)
+		}
 	}
 	if !cfg.CacheDisabled {
 		cache, err := newBlobCache(filepath.Join(cfg.StateDir, "cache", "blobs"), cfg.CacheMaxBytes, cfg.CacheTTL)
@@ -259,6 +283,9 @@ var stateLockWait = func() time.Duration {
 // Close releases the process-wide ownership of the daemon state directory.
 func (d *Daemon) Close() error {
 	d.closeOnce.Do(func() {
+		if d.broker != nil {
+			d.broker.Close()
+		}
 		if d.workspaces != nil {
 			_ = d.workspaces.root.Close()
 		}
@@ -716,6 +743,12 @@ func (d *Daemon) Handler() http.Handler {
 	mux.HandleFunc("GET /v0/workspaces/{id}", d.auth(proto.ActionReadOwn, d.handleWorkspaceGet))
 	mux.HandleFunc("DELETE /v0/workspaces/{id}", d.auth(proto.ActionGCJobs, d.handleWorkspaceRemove))
 	mux.HandleFunc("GET /v0/info", d.auth("", d.handleInfo))
+	mux.HandleFunc("POST /v0/leases", d.auth(proto.ActionLease, d.handleLeaseAcquire))
+	mux.HandleFunc("GET /v0/leases", d.auth(proto.ActionLease, d.handleLeaseList))
+	mux.HandleFunc("GET /v0/leases/{id}", d.auth(proto.ActionLease, d.handleLeaseGet))
+	mux.HandleFunc("DELETE /v0/leases/{id}", d.auth(proto.ActionLease, d.handleLeaseRelease))
+	mux.HandleFunc("POST /v0/leases/{id}/ssh-keys", d.auth(proto.ActionLease, d.handleLeaseAdmit))
+	mux.HandleFunc("DELETE /v0/lease-requests/{id}", d.auth(proto.ActionLease, d.handleLeaseWithdraw))
 	mux.HandleFunc("POST /v0/setup/quiesce", d.auth("", d.handleSetupQuiesce))
 	mux.HandleFunc("DELETE /v0/setup/quiesce", d.auth("", d.handleSetupQuiesceRelease))
 	mux.HandleFunc("GET /v0/jobs", d.auth(proto.ActionReadOwn, d.handleList))
@@ -801,6 +834,11 @@ func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 			}
 		}
 		id, err := d.identifyRequest(r)
+		// Any request ends the leases of a caller that may no longer submit,
+		// whatever it asked for and even when it may ask for nothing at all.
+		if d.broker != nil && id.Owner() != "" {
+			d.checkLeaseAccess(id)
+		}
 		if err != nil {
 			httpError(w, http.StatusForbidden, err.Error())
 			return
@@ -822,8 +860,8 @@ func (d *Daemon) auth(action string, h handlerFunc) http.HandlerFunc {
 	}
 }
 
-func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) {
-	facts := measureFacts()
+func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity) {
+	facts := d.measureFacts()
 	if where := r.URL.Query().Get("where"); where != "" {
 		q, err := placement.Parse(where)
 		if err != nil {
@@ -833,6 +871,14 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) 
 		facts = d.measurePlacementFacts(r.Context(), q, (&Job{}).buildEnv())
 	}
 
+	var offers []proto.Offer
+	var leases []proto.Lease
+	// Clients reach their leased machines through this list, so it is the
+	// only record of them a client needs.
+	if d.broker != nil && id.Allowed(proto.ActionLease) {
+		offers = d.broker.Offers(r.Context())
+		leases = leaseView(id, d.broker.Active(leaseOwner(id)))
+	}
 	d.mu.Lock()
 	o := d.occupancyLocked()
 	busy := d.capacityFullLocked() || d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil)
@@ -850,6 +896,8 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, _ Identity) 
 		MaxJobs:      d.cfg.MaxJobs,
 		MaxQueued:    d.cfg.MaxQueued,
 		Facts:        facts,
+		Offers:       offers,
+		Leases:       leases,
 	})
 }
 
@@ -1083,7 +1131,7 @@ admissionCheck:
 		NodeID: id.NodeID, NodeName: id.Node,
 		RemoteAddr: r.RemoteAddr, Method: id.Method,
 		LocalUID: int64(id.LocalUID), LocalUser: id.LocalUser,
-		Project: project, ProjectTruncated: projectTruncated, Facts: measureFacts(),
+		Project: project, ProjectTruncated: projectTruncated, Facts: d.measureFacts(),
 	}
 	j.state = proto.StateStaging
 	if err = d.writeAdmissionReceipt(j, "spec.json", proto.NewReceiptSpec(spec)); err == nil {
@@ -1317,6 +1365,7 @@ func (r *stagingUpload) Close() error { return r.body.Close() }
 
 func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 	defer d.drainQueue() // a rollback can free a running slot
+	j.releaseBase()
 	cleanupErr := j.cleanupWorkspace()
 	if cleanupErr == nil {
 		cleanupErr = removeOwnedTree(j.Dir)
@@ -1580,10 +1629,37 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 		return
 	}
 	defer j.releaseLogReader()
-	from, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
+	query := r.URL.Query()
+	from, _ := strconv.ParseInt(query.Get("from"), 10, 64)
 	if lei, err := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64); err == nil && lei > from {
 		from = lei
 	}
+	if from < 0 || from == math.MaxInt64 {
+		httpError(w, http.StatusBadRequest, "from must be a log sequence number")
+		return
+	}
+	// follow=0 replays what is written so far and ends with an "end" event
+	// carrying the job's current status. tail=N and since=UNIX_MS narrow where
+	// a replay from the start begins; a resumed replay (from > 0) ignores them.
+	follow := query.Get("follow") != "0"
+	tail, sinceMS := -1, int64(0)
+	if v := query.Get("tail"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			httpError(w, http.StatusBadRequest, "tail must be a non-negative line count")
+			return
+		}
+		tail = n
+	}
+	if v := query.Get("since"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 0 {
+			httpError(w, http.StatusBadRequest, "since must be a Unix time in milliseconds")
+			return
+		}
+		sinceMS = n
+	}
+	windowed := from == 0 && (tail >= 0 || sinceMS > 0)
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		httpError(w, http.StatusInternalServerError, "streaming unsupported")
@@ -1593,9 +1669,25 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+	stream := startLogStream(w, logHeartbeatInterval)
+	defer stream.stop()
 
+	end := func() {
+		b, _ := json.Marshal(j.Status())
+		stream.write(fmt.Sprintf("event: end\ndata: %s\n\n", b))
+	}
+	if !follow {
+		select {
+		case <-j.logReady:
+		default:
+			end() // nothing has been logged yet
+			return
+		}
+	}
 	select {
 	case <-j.logReady:
+	case <-stream.broken:
+		return
 	case <-r.Context().Done():
 		return
 	}
@@ -1608,24 +1700,58 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	logPath := filepath.Join(j.Dir, "io.log")
 	if _, err := os.Stat(logPath); err == nil {
 		ctx := r.Context()
-		if err := logio.Follow(ctx, logPath, from, live, func(f proto.LogFrame) error {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			b, _ := json.Marshal(f)
-			fmt.Fprintf(w, "id: %d\nevent: log\ndata: %s\n\n", f.Seq, b)
-			flusher.Flush()
-			return nil
-		}); err != nil {
-			if ctx.Err() != nil {
-				return
-			}
+		replayErr := func(err error) {
 			b, _ := json.Marshal(proto.LogStreamError{
 				Message: err.Error(), Retryable: !logio.IsIntegrityError(err) && retryableLogFileError(err),
 			})
-			fmt.Fprintf(w, "event: error\ndata: %s\n\n", b)
-			flusher.Flush()
-			return
+			stream.write(fmt.Sprintf("event: error\ndata: %s\n\n", b))
+		}
+		window := logio.Window{Start: from + 1, Last: -1}
+		if windowed || !follow {
+			found, err := logio.FindWindow(logPath, sinceMS, tail, live)
+			if err != nil {
+				replayErr(err)
+				return
+			}
+			if windowed {
+				window.Start, window.Cut = found.Start, found.Cut
+			}
+			if !follow {
+				window.Last = found.Last
+			}
+		}
+		if follow || window.Start <= window.Last {
+			sent := false
+			if err := logio.Follow(ctx, logPath, window.Start-1, live, func(f proto.LogFrame) error {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				// A since later than everything written so far holds back
+				// live output until it reaches that time.
+				if !windowed || sent || f.TUnixMS >= sinceMS {
+					if f.Seq == window.Start {
+						var err error
+						if f, err = logio.TrimFrame(f, window.Cut); err != nil {
+							return err
+						}
+					}
+					b, _ := json.Marshal(f)
+					if err := stream.write(fmt.Sprintf("id: %d\nevent: log\ndata: %s\n\n", f.Seq, b)); err != nil {
+						return err
+					}
+					sent = true
+				}
+				if !follow && f.Seq >= window.Last {
+					return errReplayDone
+				}
+				return nil
+			}); err != nil && !errors.Is(err, errReplayDone) {
+				if ctx.Err() != nil || stream.failed() {
+					return
+				}
+				replayErr(err)
+				return
+			}
 		}
 	} else {
 		status := j.Status()
@@ -1634,19 +1760,110 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 			b, _ := json.Marshal(proto.LogStreamError{
 				Message: "opening persisted logs: " + err.Error(), Retryable: retryableLogFileError(err),
 			})
-			fmt.Fprintf(w, "event: error\ndata: %s\n\n", b)
-			flusher.Flush()
+			stream.write(fmt.Sprintf("event: error\ndata: %s\n\n", b))
 			return
 		}
 	}
+	if !follow {
+		end()
+		return
+	}
 	select {
 	case <-j.done:
+	case <-stream.broken:
+		return
 	case <-r.Context().Done():
 		return
 	}
 	b, _ := json.Marshal(j.Status())
-	fmt.Fprintf(w, "event: status\ndata: %s\n\n", b)
-	flusher.Flush()
+	stream.write(fmt.Sprintf("event: status\ndata: %s\n\n", b))
+}
+
+// errReplayDone stops a follow=0 replay once it has sent every frame that was
+// complete when the request began.
+var errReplayDone = errors.New("replay done")
+
+var (
+	logHeartbeatInterval = proto.LogHeartbeatInterval
+	// logWriteTimeout bounds each write to a follower. One that stops reading
+	// is dropped instead of holding its log-reader reservation forever; it
+	// resumes from its last frame when it reconnects.
+	logWriteTimeout = time.Minute
+)
+
+// logStream serializes SSE writes for one log follower and keeps the
+// connection audibly alive while the job is staging, queued, silent, or
+// settling, so the client can tell a quiet job from a dead runner.
+type logStream struct {
+	mu      sync.Mutex
+	w       io.Writer
+	rc      *http.ResponseController
+	err     error
+	broken  chan struct{} // closed on the first failed write
+	done    chan struct{}
+	stopped chan struct{}
+}
+
+func startLogStream(w http.ResponseWriter, interval time.Duration) *logStream {
+	s := &logStream{
+		w: w, rc: http.NewResponseController(w),
+		broken: make(chan struct{}), done: make(chan struct{}), stopped: make(chan struct{}),
+	}
+	go func() {
+		defer close(s.stopped)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.done:
+				return
+			case <-s.broken:
+				return
+			case <-ticker.C:
+				s.write(":\n\n")
+			}
+		}
+	}()
+	return s
+}
+
+// write sends one event. After a failure, including a write deadline the
+// follower did not drain in time, every later write fails at once.
+func (s *logStream) write(event string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return s.err
+	}
+	// Transports without deadlines still work; only the bound is lost.
+	_ = s.rc.SetWriteDeadline(time.Now().Add(logWriteTimeout))
+	_, err := io.WriteString(s.w, event)
+	if err == nil {
+		err = s.rc.Flush()
+	}
+	if err != nil {
+		s.err = err
+		close(s.broken)
+	}
+	return err
+}
+
+func (s *logStream) failed() bool {
+	select {
+	case <-s.broken:
+		return true
+	default:
+		return false
+	}
+}
+
+// stop ends heartbeats before the handler returns; nothing may write to the
+// response after that. Every write is bounded, so this cannot hang.
+func (s *logStream) stop() {
+	close(s.done)
+	<-s.stopped
+	// The connection may serve another request; don't leave it a deadline.
+	_ = s.rc.SetWriteDeadline(time.Time{})
 }
 
 // handleChanges streams one immutable change bundle while holding a receipt

@@ -21,6 +21,18 @@ transaction fails, Errand exits 120. A secondary transaction failure is
 reported without replacing a nonzero process exit code. Detaching successfully
 returns zero for the detach action, before the remote command has finished.
 
+If the runner stops answering while you follow a job, Errand does not wait out
+the job's runtime limit. A runner writes a heartbeat on every open log stream
+every few seconds, so a connection that goes quiet is noticed within 15
+seconds and Errand reconnects, resuming the log where it stopped. When it
+cannot get the stream back for 60 seconds it stops, says the runner is
+unavailable and the job's state is unknown, prints the `errand status` and
+`errand attach` commands for the job, and exits 120. It never reports that as
+the job failing: the job may still be running, may have finished, or may have
+been lost with the runner. If the runner still answers but cannot serve the
+log, Errand asks it for the job's state and reports that instead. A Ctrl-C the runner never confirmed is called out
+along with the `errand kill` command, so it is not mistaken for a stopped job.
+
 ## Workspace selection and run preferences
 
 Run errand from a Git worktree for automatic snapshot selection. A non-Git
@@ -457,6 +469,21 @@ remote command, and a second Ctrl-C force-kills it. Interactive detachment
 returns 0 for the detach action; it is not the unfinished job's exit status.
 Non-terminal EOF is ignored, so scripts remain attached unless they request
 `--detach` explicitly.
+
+To read a job's output without following it, add `--no-follow`: attach prints
+what the job has written so far and exits 0, leaving the job alone, with no
+Ctrl-C forwarding and no workspace apply. That answers "did the service start?"
+from a script or an agent:
+
+```sh
+errand attach --no-follow --tail 100 gb10/JOB_ID
+errand attach --no-follow --since 10m gb10/JOB_ID | grep "socket connected"
+```
+
+`--tail N` starts with the last N lines, counted across stdout and stderr in
+the order the runner saw them, and `--since` skips output written before a
+duration ago (`10m`) or an RFC 3339 time. Both also work on a followed
+`attach`, which then continues live from there.
 
 `--forward [LOCAL:]REMOTE` opens TCP listeners on IPv4 and IPv6 local loopback for the
 attached session. It is repeatable and can be added when initially running a

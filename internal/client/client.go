@@ -13,6 +13,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -34,13 +35,13 @@ const (
 	maintenanceTimeout    = 30 * time.Minute
 	submitRequestTimeout  = 31 * time.Minute
 	streamIdleTimeout     = 2 * time.Minute
-	streamDeadlineMargin  = 5 * time.Minute
 	maxProjectLabelBytes  = 128
 )
 
 var directTransport = func() *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.Proxy = nil
+	t.DialContext = dialPeer
 	t.ResponseHeaderTimeout = controlRequestTimeout
 	return t
 }()
@@ -55,6 +56,7 @@ var directHTTP = &http.Client{
 var maintenanceTransport = func() *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.Proxy = nil
+	t.DialContext = dialPeer
 	t.ResponseHeaderTimeout = maintenanceTimeout
 	return t
 }()
@@ -67,10 +69,13 @@ var maintenanceHTTP = &http.Client{
 }
 
 type RunOptions struct {
-	Where          string
-	Candidates     []RunTarget     // ordered eligible runners; used only with Where
-	OnSelected     func(RunTarget) // advisory before contacting each selected runner
-	Workspace      string          // explicitly selected existing persistent workspace
+	Where      string
+	Candidates []RunTarget     // ordered eligible runners; used only with Where
+	OnSelected func(RunTarget) // advisory before contacting each selected runner
+	// Resolve, when set, supplies Candidates once local preparation has
+	// succeeded, so a machine is rented only for a run that can start.
+	Resolve        func() ([]RunTarget, error)
+	Workspace      string // explicitly selected existing persistent workspace
 	workspaceID    string
 	Caches         []proto.CacheBinding
 	Artifacts      []string
@@ -89,9 +94,21 @@ type RunOptions struct {
 	Forwards       []PortForward
 	changeClientID string
 	selectionGuard *snapshot.SelectionGuard
+	logs           LogWindow
 	Stdout         io.Writer
 	Stderr         io.Writer
 }
+
+// LogWindow narrows which of a job's output attach shows.
+// The zero value shows all output and follows the job.
+type LogWindow struct {
+	Tail     bool      // start with only the last Lines lines
+	Lines    int       // with Tail; 0 starts with none and shows only new output
+	Since    time.Time // skip output written before this; zero shows everything
+	NoFollow bool      // stop after the output written so far
+}
+
+func (w LogWindow) narrowed() bool { return w.Tail || !w.Since.IsZero() }
 
 // Run performs one job transaction and returns the CLI exit code per the
 // two-layer rule: transaction success mirrors the remote process; a transaction
@@ -169,38 +186,57 @@ func runWithDetachNotifications(
 	}
 	defer forwarding.Close()
 	var prep *snapshotPreparation
+	prepare := func(opts RunOptions) (int, bool) {
+		prepared := make(chan snapshotPreparation, 1)
+		go func() {
+			if opts.Workspace != "" {
+				prepared <- prepareWorkspaceRun(opts)
+				return
+			}
+			prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot, opts.Caches...)
+		}()
+		var preparedSnapshot snapshotPreparation
+		select {
+		case <-sigCh:
+			errf("interrupted before submission")
+			return signalExit("interrupt", 2), false
+		case preparedSnapshot = <-prepared:
+		}
+		if preparedSnapshot.err != nil {
+			errf("%s: %v", preparedSnapshot.stage, preparedSnapshot.err)
+			return ExitTransaction, false
+		}
+		prep = &preparedSnapshot
+		files, snapshotBytes := snapshotSize(prep.manifest)
+		if opts.Workspace != "" {
+			fmt.Fprintf(opts.Stderr, "errand: using persistent workspace %s; local files are not uploaded\n", opts.Workspace)
+		} else if opts.NoSnapshot {
+			fmt.Fprintln(opts.Stderr, "errand: no snapshot; using an empty remote workspace")
+		} else {
+			fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
+		}
+		return 0, true
+	}
+	if opts.Resolve != nil {
+		// A persistent workspace is read from its runner, so only a
+		// snapshot can be prepared before there is one.
+		if opts.Workspace == "" {
+			if code, ok := prepare(opts); !ok {
+				return code
+			}
+		}
+		candidates, err := opts.Resolve()
+		if err != nil {
+			errf("%v", err)
+			return ExitTransaction
+		}
+		opts.Candidates = candidates
+	}
 	return tryCandidates(opts, func(attempt RunOptions) (int, bool) {
 		if prep == nil {
-			opts := attempt
-			prepared := make(chan snapshotPreparation, 1)
-			go func() {
-				if opts.Workspace != "" {
-					prepared <- prepareWorkspaceRun(opts)
-					return
-				}
-				prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot, opts.Caches...)
-			}()
-			var preparedSnapshot snapshotPreparation
-			select {
-			case <-sigCh:
-				errf("interrupted before submission")
-				return signalExit("interrupt", 2), false
-			case preparedSnapshot = <-prepared:
+			if code, ok := prepare(attempt); !ok {
+				return code, false
 			}
-			if preparedSnapshot.err != nil {
-				errf("%s: %v", preparedSnapshot.stage, preparedSnapshot.err)
-				return ExitTransaction, false
-			}
-			prep = &preparedSnapshot
-			files, snapshotBytes := snapshotSize(prep.manifest)
-			if opts.Workspace != "" {
-				fmt.Fprintf(opts.Stderr, "errand: using persistent workspace %s; local files are not uploaded\n", opts.Workspace)
-			} else if opts.NoSnapshot {
-				fmt.Fprintln(opts.Stderr, "errand: no snapshot; using an empty remote workspace")
-			} else {
-				fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
-			}
-
 		}
 		return runPrepared(attempt, *prep, env, envSources, forwarding, sigCh, interruptsControl, detach)
 	})
@@ -390,12 +426,17 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 	if detached {
 		return completeRunDetach(opts, jobID, handle, controller, interruptCtx, automaticWorkerStarted), false
 	}
+	outputLost := false
+	if terminal, ok := terminalWithoutLogs(err); ok {
+		reportStreamFailure(opts.Stderr, err, handle)
+		final, err, outputLost = terminal, nil, true
+	}
 	if err != nil {
 		if _, workerErr := ensureAutomaticApplyWorker(opts, jobID, automaticWorkerStarted); workerErr != nil {
 			errf("automatic workspace change application could not continue: %v", workerErr)
 		}
-		errf("%v", err)
-		errf("the job may still be running; resume with handle %s", handle)
+		reportStreamFailure(opts.Stderr, err, handle)
+		controller.reportUnconfirmedInterrupt()
 		return ExitTransaction, false
 	}
 	if !controller.releaseAtTerminal(interruptCtx) {
@@ -409,7 +450,16 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		return signalExit("interrupt", 2), false
 	}
 	forwarding.Close()
-	return finishTerminalChanges(opts, jobID, handle, final), false
+	return withLostOutput(finishTerminalChanges(opts, jobID, handle, final), outputLost), false
+}
+
+// withLostOutput applies the two-layer exit rule to output that never
+// arrived: it fails a successful transaction without hiding a remote failure.
+func withLostOutput(code int, lost bool) int {
+	if lost && code == 0 {
+		return ExitTransaction
+	}
+	return code
 }
 
 func reportAdmissionState(status proto.JobStatus, stderr io.Writer) {
@@ -531,12 +581,16 @@ type AttachOptions struct {
 	Stdout        io.Writer
 	Stderr        io.Writer
 	Forwards      []PortForward
+	Logs          LogWindow
 }
 
 // Attach resumes following an existing job: it streams the log from the
 // beginning, forwards Ctrl-C (twice force-kills), and exits per the same
 // two-layer rule as an attached run.
 func Attach(opts AttachOptions) int {
+	if opts.Logs.NoFollow {
+		return readLogs(opts)
+	}
 	sigCh := make(chan os.Signal, 2)
 	signal.Notify(sigCh, os.Interrupt)
 	defer signal.Stop(sigCh)
@@ -598,14 +652,19 @@ func attachWithDetachNotifications(
 		newInterruptTarget(opts.PeerURL, opts.JobID, handle, errf, interruptsControl),
 	)
 
-	runOpts := RunOptions{PeerURL: opts.PeerURL, Stdout: opts.Stdout, Stderr: opts.Stderr}
+	runOpts := RunOptions{PeerURL: opts.PeerURL, Stdout: opts.Stdout, Stderr: opts.Stderr, logs: opts.Logs}
 	final, err, detached := streamUntilDetach(runOpts, opts.JobID, status, detach)
 	if detached {
 		return controller.completeDetach(ctx)
 	}
+	outputLost := false
+	if terminal, ok := terminalWithoutLogs(err); ok {
+		reportStreamFailure(opts.Stderr, err, handle)
+		final, err, outputLost = terminal, nil, true
+	}
 	if err != nil {
-		errf("%v", err)
-		errf("the job may still be running; resume with handle %s", handle)
+		reportStreamFailure(opts.Stderr, err, handle)
+		controller.reportUnconfirmedInterrupt()
 		return ExitTransaction
 	}
 	if !controller.releaseAtTerminal(ctx) {
@@ -616,7 +675,34 @@ func attachWithDetachNotifications(
 		return signalExit("interrupt", 2)
 	}
 	forwarding.Close()
-	return finishTerminalChanges(runOpts, opts.JobID, handle, final)
+	return withLostOutput(finishTerminalChanges(runOpts, opts.JobID, handle, final), outputLost)
+}
+
+// readLogs prints the output a job has written so far and returns, leaving
+// the job alone: no interrupt forwarding, no detach, no workspace apply.
+func readLogs(opts AttachOptions) int {
+	if opts.Stdout == nil {
+		opts.Stdout = os.Stdout
+	}
+	if opts.Stderr == nil {
+		opts.Stderr = os.Stderr
+	}
+	handle := peerLabel(opts.PeerName, opts.PeerURL) + "/" + opts.JobID
+	if opts.BeforeContact != nil {
+		opts.BeforeContact()
+	}
+	status, err := getStatus(opts.PeerURL, opts.JobID)
+	if err != nil {
+		fmt.Fprintf(opts.Stderr, "errand: %v\n", err)
+		return ExitTransaction
+	}
+	runOpts := RunOptions{PeerURL: opts.PeerURL, Stdout: opts.Stdout, Stderr: opts.Stderr, logs: opts.Logs}
+	_, err = streamContext(context.Background(), runOpts, opts.JobID, status)
+	if err != nil {
+		fmt.Fprintf(opts.Stderr, "errand: reading the logs of %s: %v\n", handle, err)
+		return ExitTransaction
+	}
+	return 0
 }
 
 func finishTerminalChanges(opts RunOptions, jobID, handle string, final proto.JobStatus) int {
@@ -1028,31 +1114,6 @@ type streamResult struct {
 	err    error
 }
 
-type streamDeadlineTracker struct {
-	deadline time.Time
-	phase    string
-}
-
-func newStreamDeadlineTracker(now time.Time, status proto.JobStatus) streamDeadlineTracker {
-	t := streamDeadlineTracker{deadline: now.Add(time.Duration(proto.DefaultLimits().MaxRuntimeSec)*time.Second + streamDeadlineMargin)}
-	t.observe(now, status)
-	return t
-}
-
-func (t *streamDeadlineTracker) observe(now time.Time, status proto.JobStatus) {
-	window := time.Duration(proto.DefaultLimits().MaxRuntimeSec)*time.Second + streamDeadlineMargin
-	switch {
-	case status.Result != nil:
-		t.phase = "terminal"
-	case status.State == proto.StateStaging || status.State == proto.StateQueued:
-		t.phase = status.State
-		t.deadline = now.Add(window)
-	case status.State == proto.StateRunning && t.phase != proto.StateRunning:
-		t.phase = proto.StateRunning
-		t.deadline = now.Add(window)
-	}
-}
-
 func streamUntilDetach(
 	opts RunOptions,
 	jobID string,
@@ -1090,6 +1151,122 @@ func streamUntilDetach(
 	}
 }
 
+// A log follower hears from the runner at least every heartbeat interval.
+// Missing several in a row means the connection went quiet, so the follower
+// reconnects; reconnecting without success for runnerContactWindow means the
+// runner is unavailable, and the follower stops instead of waiting out the
+// job's whole runtime limit.
+var (
+	logStreamIdleTimeout = 3 * proto.LogHeartbeatInterval
+	runnerContactWindow  = 60 * time.Second
+	reconnectBackoff     = func(attempt int) time.Duration { return min(time.Duration(attempt)*time.Second, 5*time.Second) }
+)
+
+// RunnerUnavailableError reports that a job's runner could not be heard from
+// for runnerContactWindow. It says nothing about the job: the job may still
+// be running, may have finished, or may have been lost with the runner.
+type RunnerUnavailableError struct {
+	For time.Duration
+	Err error // the last reconnect failure
+}
+
+func (e *RunnerUnavailableError) Error() string {
+	return fmt.Sprintf("runner unavailable for %s (%s)", seconds(e.For), e.reason())
+}
+
+func (e *RunnerUnavailableError) Unwrap() error { return e.Err }
+
+// reason is the last failure without the request URL, which only repeats the
+// handle the user is about to be shown.
+func (e *RunnerUnavailableError) reason() string {
+	var urlErr *neturl.Error
+	if errors.As(e.Err, &urlErr) {
+		return urlErr.Err.Error()
+	}
+	return e.Err.Error()
+}
+
+func seconds(d time.Duration) string {
+	return fmt.Sprintf("%ds", int64((d+time.Second/2)/time.Second))
+}
+
+// LogStreamStalledError reports a runner that still answers requests but
+// could not serve the job's log stream for runnerContactWindow.
+type LogStreamStalledError struct {
+	For       time.Duration
+	Err       error            // the last stream failure
+	Status    *proto.JobStatus // what the runner reported, when it could
+	StatusErr error            // why it could not
+}
+
+func (e *LogStreamStalledError) Error() string {
+	return fmt.Sprintf("log stream failing for %s (%v)", seconds(e.For), e.Err)
+}
+
+func (e *LogStreamStalledError) Unwrap() error { return e.Err }
+
+const stalledStatusTimeout = 5 * time.Second
+
+// stalledStream decides what a follower that made no progress for the whole
+// window can honestly say. One status request tells a runner that is gone
+// from one that answers but cannot serve the log; only the first leaves the
+// job's state unknown.
+func stalledStream(ctx context.Context, peerURL, jobID string, quiet time.Duration, streamErr error) error {
+	statusCtx, cancel := context.WithTimeout(ctx, stalledStatusTimeout)
+	defer cancel()
+	status, err := getStatusContext(statusCtx, peerURL, jobID)
+	if err == nil {
+		return &LogStreamStalledError{For: quiet, Err: streamErr, Status: &status}
+	}
+	var answered *controlHTTPError
+	if errors.As(err, &answered) {
+		return &LogStreamStalledError{For: quiet, Err: streamErr, StatusErr: err}
+	}
+	return &RunnerUnavailableError{For: quiet, Err: streamErr}
+}
+
+// terminalWithoutLogs returns the job's terminal status when following
+// stopped only because its output could not be replayed. The caller then
+// finishes like any terminal job, keeping the remote exit code, and treats
+// the missing output as a secondary transaction failure.
+func terminalWithoutLogs(err error) (proto.JobStatus, bool) {
+	var stalled *LogStreamStalledError
+	if errors.As(err, &stalled) && stalled.Status != nil && stalled.Status.Result != nil {
+		return *stalled.Status, true
+	}
+	return proto.JobStatus{}, false
+}
+
+// reportStreamFailure explains a follower that stopped before the job's
+// terminal status arrived. When the runner went quiet nothing is known about
+// the job, so the message says so rather than calling it a failure.
+func reportStreamFailure(stderr io.Writer, err error, handle string) {
+	var unavailable *RunnerUnavailableError
+	var stalled *LogStreamStalledError
+	switch {
+	case errors.As(err, &unavailable):
+		fmt.Fprintf(stderr, "errand: lost contact with the runner for %s (%s)\n", seconds(unavailable.For), unavailable.reason())
+		fmt.Fprintln(stderr, "errand: job state unknown; it may still be running there")
+	case errors.As(err, &stalled) && stalled.Status != nil && stalled.Status.Result != nil:
+		fmt.Fprintf(stderr, "errand: the job finished, but its output could not be replayed for %s (%v)\n", seconds(stalled.For), stalled.Err)
+		fmt.Fprintf(stderr, "errand: see the full output with: errand attach %s\n", handle)
+		return
+	case errors.As(err, &stalled):
+		fmt.Fprintf(stderr, "errand: the runner answers, but the job's log stream kept failing for %s (%v)\n", seconds(stalled.For), stalled.Err)
+		if stalled.Status != nil {
+			fmt.Fprintf(stderr, "errand: the runner reports the job as %s\n", stalled.Status.State)
+		} else {
+			fmt.Fprintf(stderr, "errand: job state unknown (%v)\n", stalled.StatusErr)
+		}
+	default:
+		fmt.Fprintf(stderr, "errand: %v\n", err)
+		fmt.Fprintf(stderr, "errand: the job may still be running; resume with handle %s\n", handle)
+		return
+	}
+	fmt.Fprintf(stderr, "errand: check it with: errand status %s\n", handle)
+	fmt.Fprintf(stderr, "errand: reattach with: errand attach %s\n", handle)
+}
+
 func streamContext(
 	ctx context.Context,
 	opts RunOptions,
@@ -1098,9 +1275,11 @@ func streamContext(
 ) (proto.JobStatus, error) {
 	terminalReplay := initial.State != proto.StateRunning && initial.Result != nil
 	var last int64
-	tracker := newStreamDeadlineTracker(time.Now(), initial)
-	for attempt := 0; ; attempt++ {
-		final, err := followOnceContext(ctx, opts, jobID, &last)
+	var failingSince time.Time
+	attempt := 0
+	heard := func() { failingSince, attempt = time.Time{}, 0 }
+	for {
+		final, err := followOnceContext(ctx, opts, jobID, &last, heard)
 		if err == nil {
 			return final, nil
 		}
@@ -1116,24 +1295,18 @@ func streamContext(
 			return proto.JobStatus{}, err
 		}
 		now := time.Now()
-		if tracker.phase == proto.StateStaging || tracker.phase == proto.StateQueued {
-			statusCtx, cancelStatus := context.WithTimeout(ctx, controlRequestTimeout)
-			status, statusErr := getStatusContext(statusCtx, opts.PeerURL, jobID)
-			cancelStatus()
-			if statusErr == nil {
-				now = time.Now()
-				tracker.observe(now, status)
-				terminalReplay = status.Result != nil
-			}
+		if failingSince.IsZero() {
+			failingSince = now
 		}
-		if now.After(tracker.deadline) {
-			kind := "log stream"
+		if quiet := now.Sub(failingSince); quiet >= runnerContactWindow {
 			if terminalReplay {
-				kind = "terminal log replay"
+				// The job's outcome is already known; only its logs are missing.
+				return proto.JobStatus{}, &LogStreamStalledError{For: quiet, Err: err, Status: &initial}
 			}
-			return proto.JobStatus{}, fmt.Errorf("%s failed through transaction deadline: %w", kind, err)
+			return proto.JobStatus{}, stalledStream(ctx, opts.PeerURL, jobID, quiet, err)
 		}
-		timer := time.NewTimer(min(time.Duration(attempt+1)*time.Second, 5*time.Second))
+		attempt++
+		timer := time.NewTimer(reconnectBackoff(attempt))
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -1170,13 +1343,30 @@ func streamIntegrity(err error) error {
 	return &streamIntegrityError{err: err}
 }
 
+// followOnceContext follows one log connection. heard is called whenever the
+// runner proves it is serving this job: a heartbeat or a log frame.
 func followOnceContext(
 	ctx context.Context,
 	opts RunOptions,
 	jobID string,
 	last *int64,
+	heard func(),
 ) (proto.JobStatus, error) {
 	url := fmt.Sprintf("%s/v0/jobs/%s/logs?from=%d", opts.PeerURL, jobID, *last)
+	// A narrowed replay starts wherever the runner says; once a frame has
+	// arrived, resuming continues from it as usual.
+	narrowed := *last == 0 && opts.logs.narrowed()
+	if narrowed {
+		if opts.logs.Tail {
+			url += fmt.Sprintf("&tail=%d", opts.logs.Lines)
+		}
+		if !opts.logs.Since.IsZero() {
+			url += fmt.Sprintf("&since=%d", max(opts.logs.Since.UnixMilli(), 0))
+		}
+	}
+	if opts.logs.NoFollow {
+		url += "&follow=0"
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return proto.JobStatus{}, err
@@ -1196,7 +1386,7 @@ func followOnceContext(
 
 	var event string
 	var data bytes.Buffer
-	sc := bufio.NewScanner(&idleReadCloser{ReadCloser: resp.Body, timeout: streamIdleTimeout})
+	sc := bufio.NewScanner(&idleReadCloser{ReadCloser: resp.Body, timeout: logStreamIdleTimeout})
 	sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
 	for sc.Scan() {
 		line := sc.Text()
@@ -1208,7 +1398,7 @@ func followOnceContext(
 				if err := json.Unmarshal(data.Bytes(), &f); err != nil {
 					return proto.JobStatus{}, streamIntegrity(err)
 				}
-				if f.Seq != *last+1 {
+				if f.Seq != *last+1 && !(narrowed && *last == 0 && f.Seq > 0) {
 					return proto.JobStatus{}, streamIntegrity(fmt.Errorf("log sequence %d, expected %d", f.Seq, *last+1))
 				}
 				if f.Stream != "stdout" && f.Stream != "stderr" {
@@ -1233,7 +1423,9 @@ func followOnceContext(
 					return proto.JobStatus{}, streamIntegrity(io.ErrShortWrite)
 				}
 				*last = f.Seq
-			case "status":
+				heard()
+			case "status", "end":
+				// "end" closes a follow=0 replay with the job's current status.
 				var st proto.JobStatus
 				if err := json.Unmarshal(data.Bytes(), &st); err != nil {
 					return proto.JobStatus{}, streamIntegrity(err)
@@ -1252,6 +1444,8 @@ func followOnceContext(
 			}
 			event = ""
 			data.Reset()
+		case strings.HasPrefix(line, ":"):
+			heard() // heartbeat comment
 		case strings.HasPrefix(line, "event: "):
 			event = strings.TrimPrefix(line, "event: ")
 		case strings.HasPrefix(line, "data: "):

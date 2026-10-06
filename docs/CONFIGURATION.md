@@ -53,13 +53,32 @@ errand --where '*' -- make test
 ```
 
 Comma-separated requirements are combined with AND. Supported terms are
-`os=linux`, `os=darwin`, `arch=amd64`, `arch=arm64`, `cpus>=N`, `kvm`, and
-`git`, `nix`, `docker`, `podman`, `python3`, `go`, `cargo`, `node`.
+`os=linux`, `os=darwin`, `os=windows`, `arch=amd64`, `arch=arm64`, `cpus>=N`, `kvm`,
+`git`, `nix`, `docker`, `podman`, `python3`, `go`, `cargo`, `node`, and the
+GPU terms below.
 `*` alone accepts any eligible configured peer. Unknown terms are errors.
 CPU counts describe the machine, not reserved cores. Tool requirements check
 installed executables; Docker and Podman additionally must answer `info` as
 the runner's service user. These checks do not establish project dependencies,
-tool versions, GPU access, or the eventual command's success.
+tool versions, or the eventual command's success.
+
+GPU terms use what `nvidia-smi` reports on the runner, refreshed at most once
+a minute and rechecked at admission:
+
+| Term | Matches |
+| --- | --- |
+| `gpu` | at least one GPU |
+| `gpus>=N` | at least N GPUs |
+| `gpu=MODEL` | GPUs whose name contains MODEL, ignoring case, spaces and hyphens (`gpu=h100`, `gpu=rtx4090`, `gpu=gb10`) |
+| `vram>=N` | GPUs with at least N GiB each, rounded to the nearest GiB |
+
+Combined GPU terms count the GPUs that satisfy all of them, so
+`gpu=a100,vram>=80,gpus>=4` needs four 80 GiB A100s. Unified-memory parts
+such as the GB10 report no VRAM size and never satisfy `vram>=N`. GPUs from
+other vendors are not detected yet.
+
+When no runner of yours matches but a [cloud peer](CLOUD.md) offers a machine
+that does, `--where` leases one instead of failing.
 
 For workspace defaults or a selected profile:
 
