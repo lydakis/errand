@@ -513,6 +513,14 @@ type Info struct {
 	// Transfers counts workspace transfers in progress (creations, push
 	// uploads and applies): work the runner is doing that no job counts.
 	Transfers int `json:"transfers"`
+
+	// LatestAdmitted is when the runner admitted its most recent job, and
+	// LatestUnfetched when it admitted the most recent finished job whose
+	// retained workspace changes no client has downloaded yet: results that
+	// end with the machine. Both are by the runner's clock, and zero when
+	// there is no such job.
+	LatestAdmitted  time.Time `json:"latest_admitted,omitzero"`
+	LatestUnfetched time.Time `json:"latest_unfetched,omitzero"`
 }
 
 // Offer is a machine shape a cloud peer can acquire. Its facts are declared

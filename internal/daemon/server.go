@@ -126,6 +126,17 @@ type Daemon struct {
 	closeOnce         sync.Once
 	closeErr          error
 
+	// unfetched holds when the runner admitted each finished job whose
+	// retained workspace changes no client has downloaded yet (see
+	// noteResultsLocked), and lastAdmitted when it admitted its most recent
+	// job. Protected by mu.
+	unfetched    map[*Job]time.Time
+	lastAdmitted time.Time
+
+	// testHookResultPublished, when set, runs as soon as a job's terminal
+	// result can be seen by other requests.
+	testHookResultPublished func(*Job)
+
 	// transfers counts workspace transfers in progress: creations, push
 	// uploads and push applies. They are work the runner is doing for a
 	// client, though no job counts them. Protected by mu.
@@ -190,7 +201,7 @@ func New(cfg Config) (*Daemon, error) {
 	}
 	d := &Daemon{
 		placementSlots: make(chan struct{}, 4),
-		cfg:            cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{},
+		cfg:            cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{}, unfetched: map[*Job]time.Time{},
 		identity: identity, selfUID: currentUID(),
 		writeAdmissionReceipt: (*Job).writeJSON,
 		writeProcessScope:     replaceJSONDurable,
@@ -431,6 +442,9 @@ func (d *Daemon) loadExisting() error {
 		if admRaw, err := os.ReadFile(filepath.Join(dir, "admission.json")); err == nil {
 			json.Unmarshal(admRaw, &j.Admission)
 		}
+		if j.Admission.Time.After(d.lastAdmitted) {
+			d.lastAdmitted = j.Admission.Time
+		}
 		specRaw, err := os.ReadFile(filepath.Join(dir, "spec.json"))
 		if err != nil {
 			d.isolateUnreadableReceipt(j, "spec.json", err)
@@ -480,6 +494,8 @@ func (d *Daemon) loadExisting() error {
 			}
 		}
 		d.jobs[j.ID] = j
+		j.fetched = fetchRecorded(j)
+		d.noteResultsLocked(j, j.result)
 		if _, ok := d.collected[j.ID]; ok {
 			if err := os.Remove(filepath.Join(d.collectedDir(), j.ID+".json")); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("removing stale collection marker %s: %w", j.ID, err)
@@ -914,24 +930,27 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 	}
 	d.mu.Lock()
 	o := d.occupancyLocked()
+	latestAdmitted, latestUnfetched := d.lastAdmitted, d.latestUnfetchedLocked()
 	busy := d.capacityFullLocked() || d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil)
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, proto.Info{
-		SSHDisabled:  d.cfg.DisableSSH || d.cfg.LocalOnly,
-		LocalOnly:    d.cfg.LocalOnly,
-		Proto:        proto.ProtoVersion,
-		Version:      d.cfg.Version,
-		Busy:         busy,
-		StagingJobs:  o.staging,
-		StartingJobs: o.starting,
-		RunningJobs:  o.running,
-		QueuedJobs:   o.queued,
-		Transfers:    o.transfers,
-		MaxJobs:      d.cfg.MaxJobs,
-		MaxQueued:    d.cfg.MaxQueued,
-		Facts:        facts,
-		Offers:       offers,
-		Leases:       leases,
+		SSHDisabled:     d.cfg.DisableSSH || d.cfg.LocalOnly,
+		LocalOnly:       d.cfg.LocalOnly,
+		Proto:           proto.ProtoVersion,
+		Version:         d.cfg.Version,
+		Busy:            busy,
+		StagingJobs:     o.staging,
+		StartingJobs:    o.starting,
+		RunningJobs:     o.running,
+		QueuedJobs:      o.queued,
+		Transfers:       o.transfers,
+		MaxJobs:         d.cfg.MaxJobs,
+		MaxQueued:       d.cfg.MaxQueued,
+		Facts:           facts,
+		Offers:          offers,
+		Leases:          leases,
+		LatestAdmitted:  latestAdmitted.Round(0),
+		LatestUnfetched: latestUnfetched.Round(0),
 	})
 }
 
@@ -1183,6 +1202,9 @@ admissionCheck:
 	j.Dir = dir
 	d.jobs[jobID] = j
 	d.queue = append(d.queue, j)
+	if j.Admission.Time.After(d.lastAdmitted) {
+		d.lastAdmitted = j.Admission.Time
+	}
 	d.mu.Unlock()
 
 	// rejectPreExecution mirrors the pre-3.5 semantics for failures during
@@ -1409,6 +1431,7 @@ func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 	d.mu.Lock()
 	if cleanupErr == nil && d.jobs[j.ID] == j {
 		delete(d.jobs, j.ID)
+		d.forgetResultsLocked(j)
 	}
 	delete(d.running, j.ID)
 	d.removeQueuedLocked(j)
@@ -1975,7 +1998,9 @@ func (d *Daemon) handleChanges(w http.ResponseWriter, r *http.Request, id Identi
 	if err := mw.Close(); err != nil {
 		return
 	}
-	_ = stream.flush()
+	if stream.flush() == nil {
+		d.resultsFetched(j)
+	}
 }
 
 type idleDeadlineWriter struct {

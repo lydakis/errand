@@ -32,6 +32,31 @@ type fakeMachine struct {
 	mu       sync.Mutex
 	admitted []string // keys added after launch
 	refuse   atomic.Bool
+
+	// skew is how far the machine's clock is from this process's, which the
+	// cloud peer must never compare with its own. lastJob is when the
+	// machine admitted its most recent job, and results when it admitted the
+	// finished jobs whose results no client has fetched, by its clock.
+	// Protected by mu.
+	skew    time.Duration
+	lastJob time.Time
+	results []time.Time
+}
+
+// finishJob leaves the results of a job admitted now on the machine.
+func (m *fakeMachine) finishJob() time.Time {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lastJob = time.Now().Add(m.skew)
+	m.results = append(m.results, m.lastJob)
+	return m.lastJob
+}
+
+// fetch downloads the results of the job admitted at admitted.
+func (m *fakeMachine) fetch(admitted time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.results = slices.DeleteFunc(m.results, admitted.Equal)
 }
 
 func (m *fakeMachine) admit(_ context.Context, target proto.LeaseTarget, _ string, keys []string) error {
@@ -56,9 +81,14 @@ func (m *fakeMachine) probe(_ context.Context, target proto.LeaseTarget, _, _ st
 		return proto.Info{}, errors.New("connection refused")
 	}
 	m.mu.Lock()
-	gpus := m.gpus
-	m.mu.Unlock()
-	return proto.Info{MaxJobs: 1, RunningJobs: int(m.running.Load()), Transfers: int(m.uploads.Load()), Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: gpus}}, nil
+	defer m.mu.Unlock()
+	info := proto.Info{MaxJobs: 1, RunningJobs: int(m.running.Load()), Transfers: int(m.uploads.Load()), Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: m.gpus}, LatestAdmitted: m.lastJob}
+	for _, admitted := range m.results {
+		if admitted.After(info.LatestUnfetched) {
+			info.LatestUnfetched = admitted
+		}
+	}
+	return info, nil
 }
 
 func script(t *testing.T, dir, name, body string) string {
@@ -1963,6 +1993,94 @@ func TestLeasePastDeadlines(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if got, _ := b.Get("george", idle.ID); got.State != proto.LeaseReady {
 		t.Fatalf("released after it was handed out: %+v", got)
+	}
+}
+
+// A finished job's results that no client has fetched end with the machine,
+// so they keep the lease past its idle deadline; once fetched, the lease is
+// released at the next one. Its lifetime still ends it. The machine's clock
+// is behind this process's, which must not hide the lease's own jobs.
+func TestUnfetchedResultsKeepLease(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.machine.skew = -3 * time.Hour
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	h.cfg.Offers[0].MaxLifetime = time.Second
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	job := h.machine.finishJob()
+	time.Sleep(150 * time.Millisecond) // past the idle deadline
+	wake(b, l.ID)
+	time.Sleep(50 * time.Millisecond)
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
+		t.Fatalf("lease released with unfetched results: %+v", got)
+	}
+	h.machine.fetch(job)
+	time.Sleep(150 * time.Millisecond)
+	wake(b, l.ID)
+	if got := waitState(t, b, "george", l.ID, proto.LeaseReleased); !strings.Contains(strings.Join(got.Progress, "\n"), "idle for") {
+		t.Fatalf("progress %q", got.Progress)
+	}
+
+	// Results never fetched keep a lease only until its lifetime.
+	l, err = b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	h.machine.finishJob()
+	if got := waitState(t, b, "george", l.ID, proto.LeaseReleased); !strings.Contains(strings.Join(got.Progress, "\n"), "max lifetime") {
+		t.Fatalf("progress %q", got.Progress)
+	}
+}
+
+// A reused machine can hold results left by an earlier lease or by its own
+// users, which the new lease's owner cannot fetch. They do not hold the new
+// lease, across a restart of this cloud peer; the results of a job it
+// admitted during the lease do. The machine's clock is ahead of this
+// process's, which must not make old results look new.
+func TestEarlierResultsDoNotHoldLease(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.machine.skew = 3 * time.Hour
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	h.cfg.Offers[0].MaxLifetime = time.Hour
+	h.machine.finishJob() // left before the lease, never fetched
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	b.Close()
+	b = h.start(t)
+	time.Sleep(150 * time.Millisecond) // past the idle deadline
+	wake(b, l.ID)
+	if got := waitState(t, b, "george", l.ID, proto.LeaseReleased); !strings.Contains(strings.Join(got.Progress, "\n"), "idle for") {
+		t.Fatalf("progress %q", got.Progress)
+	}
+
+	l, err = b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	job := h.machine.finishJob()
+	time.Sleep(150 * time.Millisecond)
+	wake(b, l.ID)
+	time.Sleep(50 * time.Millisecond)
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
+		t.Fatalf("lease released with its own job's results unfetched: %+v", got)
+	}
+	h.machine.fetch(job)
+	time.Sleep(150 * time.Millisecond)
+	wake(b, l.ID)
+	if got := waitState(t, b, "george", l.ID, proto.LeaseReleased); !strings.Contains(strings.Join(got.Progress, "\n"), "idle for") {
+		t.Fatalf("progress %q", got.Progress)
 	}
 }
 

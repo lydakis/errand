@@ -85,6 +85,10 @@ type Job struct {
 	stagingOnce         sync.Once
 	changeCancel        context.CancelFunc
 	changeCancelRequest string
+	// fetched is whether a client has downloaded the job's retained changes
+	// whole, which fetched.json records across restarts. Protected by the
+	// daemon's mu.
+	fetched bool
 }
 
 func newJob(id, dir string) *Job {
@@ -1093,10 +1097,21 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	}
 	j.event("finished", state)
 
+	// The result is published and counted in one critical section of the
+	// daemon's lock, which every fetch, removal and info answer takes, so
+	// none of them sees the result before it is counted. It is counted
+	// before the job leaves the running set, so the runner never looks idle
+	// between the job's end and its client's download.
+	d.mu.Lock()
 	j.mu.Lock()
 	j.state = state
 	j.result = res
 	j.mu.Unlock()
+	d.noteResultsLocked(j, res)
+	d.mu.Unlock()
+	if hook := d.testHookResultPublished; hook != nil {
+		hook(j)
+	}
 	close(j.done)
 	d.release(j)
 }
