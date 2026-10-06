@@ -18,7 +18,8 @@ tokens, or unrelated private data.
 
 ## System and Scope
 
-Errand runs jobs only on explicitly selected or configured machines. Its
+Errand runs jobs only on explicitly selected or configured machines, or on a
+machine a configured cloud peer leases for the caller (see below). Its
 read-only discovery command may probe candidate runners returned by the
 caller's own tailscaled node list. Tailnet requests authenticate through
 Tailscale identity and are authorized by application capabilities or a
@@ -39,12 +40,32 @@ an `errand _stdio` bridge to the daemon's private Unix socket. They retain
 distinct ownership principals: a tailnet user or node and a local OS user
 are not interchangeable identities for access to an existing job.
 
+A runner with a `[cloud]` section is a cloud peer. When `--where` matches no
+reachable runner, the client asks configured cloud peers for a lease. The
+cloud peer rents a machine through a Lambda account or operator-written
+provider commands and reports how to reach it. The Lambda provider installs
+errand on the machine; a provider command must return a machine that already
+runs errand. Jobs
+then go from the client to the leased machine directly, as to any runner; the
+cloud peer never relays jobs. Leases belong to the ownership principal that
+asked for them, not to one device. The cloud peer watches each leased machine
+and releases it by its idle and lifetime rules.
+
+Windows runners are experimental and take remote requests over the tailnet
+only; SSH bridging is not supported there. On
+Windows, the local socket identifies peers by their process token's user SID
+instead of a numeric UID, and jobs run in a Job Object instead of a process
+group.
+
 This policy covers the CLI, daemon, HTTP protocol, authorization, snapshots,
 archives, caches, receipts, retained changes, local change application, process
 cleanup, attached TCP forwarding, configuration and profiles, local access
-management, diagnostics, and release packaging and publication workflows.
-The product and configuration contracts are in [docs/DESIGN.md](docs/DESIGN.md)
-and [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+management, diagnostics, cloud peers and leases (the lease endpoints, lease
+records, provider commands, the Lambda provider and what it installs on
+leased machines), the experimental Windows runner, and release packaging and
+publication workflows. The product and configuration contracts are in
+[docs/DESIGN.md](docs/DESIGN.md), [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+and [docs/CLOUD.md](docs/CLOUD.md).
 
 ## Threat Model and Security Invariants
 
@@ -86,6 +107,8 @@ The following properties must hold:
   Durable membership tracks each job and prevents deletion during use.
   Cleanup and signals must target the individual job's process group and marker,
   never processes selected by shared workspace or cache directory alone.
+  On Windows that scope is a Job Object the job's processes cannot leave,
+  and which ends them when the daemon exits.
   Restart verifies the boot and group leader's birth identity before signalling.
   A recorded group from a previous boot is gone; missing or ambiguous identity
   within the same boot must leave cleanup unresolved. Escaped descendants
@@ -118,7 +141,13 @@ The following properties must hold:
   conflict-safe application path. They cannot silently widen their destination.
 - No initiator environment value or credential is forwarded implicitly. Jobs
   receive a small runner-side allowlist (`PATH`, `HOME`, `USER`, `LOGNAME`,
-  `LANG`, and `TMPDIR`) plus values explicitly declared by the caller. Receipt
+  `LANG`, and `TMPDIR`) plus values explicitly declared by the caller. On
+  Windows the allowlist is instead `PATH`, `PATHEXT`, `LANG`, the profile,
+  temporary and system folder variables (`USERPROFILE`, `HOMEDRIVE`,
+  `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `SystemRoot`,
+  `SystemDrive`, `windir`, `ComSpec`, `ProgramData` and the `ProgramFiles`
+  and `CommonProgramFiles` variants), and `USERNAME`, `USERDOMAIN`, `OS`,
+  `COMPUTERNAME`, `NUMBER_OF_PROCESSORS` and `PROCESSOR_ARCHITECTURE`. Receipt
   metadata does not retain the declared values. Ambient variable forwarding
   requires personal configuration, an explicitly selected profile, or CLI
   `--passenv`; nonempty top-level workspace `env.pass` is rejected.
@@ -132,12 +161,100 @@ The following properties must hold:
   Attachment profiles cannot retarget a job or
   apply run environment, workdir, or apply preferences to it.
 - Retries cannot execute an admitted job twice. Ambiguous state is reported and
-  is never treated as permission to replay execution.
+  is never treated as permission to replay execution. A client that stops
+  hearing a running job's heartbeat does not resubmit it: it reports the
+  state the runner returns, or that the state is unknown when it gets none.
+- On Windows, the runner refuses to start a `.bat` or `.cmd` program with an
+  argument that `cmd.exe` would reinterpret (`"`, `%`, `^`, `&`, `|`, `<`,
+  `>` or a line break), so argv cannot become a different command.
+- Output that a cloud peer captures from provider commands and from the SSH
+  commands that install and admit keys on leased machines is size-limited.
 - Attached TCP forwarding requires the appropriate action and ownership of a
   running job, and creates only client-local loopback listeners.
 - Peer discovery probes only online nodes returned by the caller's own tailnet
   at the fixed Errand port. It must not scan arbitrary hosts or write client
   configuration.
+
+Cloud peers and leases:
+
+- Leasing needs both the `lease` and `submit` actions on the cloud peer, and
+  the cloud peer refuses `--where '*'`. Whether to lease is the client's
+  choice: the errand CLI asks only when no reachable runner matches, but the
+  cloud peer cannot check that, so a caller with `lease` can rent whenever
+  it asks. Clients ask only configured peers (and
+  the local runner) for offers and leases, never discovered or unconfigured
+  hosts.
+- Lease requests and device key admissions must be `application/json` and
+  are refused when they carry an `Origin` header, so a web page cannot start
+  a rental.
+- A lease belongs to the ownership principal that requested it: a tailnet
+  user, a tagged node, or the cloud peer's local OS user for requests over
+  SSH or the socket. Listing, reading, admitting a device key to,
+  withdrawing and releasing a lease all require that principal. A caller
+  without `submit` is shown no lease targets, progress or errors.
+- Any request from a principal that has lost `submit` on the cloud peer ends
+  all of that principal's leases, whatever the request asked for. If the
+  cloud peer cannot record that, the leases stay as they were, and the
+  principal's next request tries again.
+- A Lambda machine admits only the lease's owner, the cloud peer, any
+  logins the operator lists in the offer's `allow_users`, and, on the
+  tailnet, callers that the tailnet policy grants the errand capability on
+  the machine's tag. On the tailnet, its runner allows the tailnet login
+  that asked for the lease plus `allow_users`; a Lambda lease requested without a tailnet
+  login and without `allow_users` is refused before anything is rented. For
+  a machine reached over SSH, the cloud peer adds the public key of each of
+  the owner's devices that asks for the lease, and a Lambda machine admits
+  only those keys and the cloud peer's own. A provider command receives the
+  first device's public key, and its machine's admission policy is the
+  operator's. No private key leaves its device.
+- A lease that carries an SSH host key is reached only with that key pinned,
+  by the client and by the cloud peer. The Lambda provider generates a fresh
+  host key for every lease. Without a host key, the user's own SSH
+  configuration and `known_hosts` apply.
+- Provider-command and Lambda targets reach a runner by `url` or `ssh`
+  only; a lease cannot name a local socket. The cloud peer checks a target
+  as soon as acquire returns, with the same rules as configured peers, and a
+  target that fails fails the launch and releases the machine.
+- An offer's facts are a claim. A lease becomes ready only once its machine
+  answers as an errand runner whose measured facts match the request, and
+  the client checks them again before using it.
+- Values from the caller (`where`, login, SSH public key) reach provider
+  commands only as environment variables, never as arguments or shell text,
+  and an SSH key must parse as one public key. The Lambda provider sends
+  errand, the runner configuration and keys as file contents in one archive
+  over SSH, so none of them is quoted into a shell or unit file. (The
+  machine's host key travels separately, in its Lambda launch data.)
+- The Lambda API key and the tailnet auth key are read only from regular
+  files owned by the cloud peer's user that no other user can read (mode
+  `600` on Unix; on Windows, readable only by that user, SYSTEM and
+  Administrators). Errors name these files by what they hold, not by path.
+  The tailnet auth key goes to the machine only over its pinned SSH
+  connection, never in Lambda launch metadata or a command line. The install
+  script deletes it when it exits, which is after the runner has started, so
+  jobs admitted during that window, or after an install that crashed, can
+  read it.
+- The errand build installed on a Lambda machine is checked to be a Linux
+  errand build for the machine's architecture before anything is rented. A
+  downloaded release must match the release's published checksums, and the
+  machine receives the private copy that was checked.
+- A lease is recorded in the cloud peer's state directory, with how to
+  release it, before anything is acquired. While the cloud peer runs, every
+  ready lease is released once its runner has been idle for the offer's
+  `idle_timeout` (an unreachable runner counts as idle), or at its
+  `max_lifetime` even with a job running, and a failed release is retried
+  until it succeeds. The idle and lifetime rules start a release; they do not
+  cut off access to a machine whose release keeps failing. A restart releases launches it interrupted and starts a
+  full idle window for each ready lease, so restarts can extend a lease up
+  to its `max_lifetime`. Removing an offer only stops new leases.
+- A cloud peer starts a new lease only while fewer than `max_leases` leases
+  are active across all callers; lowering the setting does not end leases
+  already active. For offers from `[cloud.lambda]`, unless
+  `max_price_per_hour` is `0`, the Lambda provider refuses a type whose
+  listed price is above that cap. A configured `[[cloud.offers]]` entry with
+  a `[cloud.offers.lambda]` table has no price cap; its `price_per_hour` is
+  only shown and used for ranking. The price is checked
+  once per lease, before the launch waits its turn behind Lambda's launch
+  rate limit, and is not checked again while it waits or retries.
 
 ## Reportable Findings and Severity
 
@@ -145,7 +262,13 @@ Report authentication or authorization bypasses, cross-owner access or control,
 unexpected command execution without an equivalent execution grant, secret
 disclosure, replay of an admitted job, unsafe archive or path handling, writes
 outside protected roots, unsafe local change application, or bypasses of
-documented resource and forwarding boundaries.
+documented resource and forwarding boundaries. For cloud peers, that includes
+starting a lease without the `lease` and `submit` actions or from a browser
+page, seeing or using another principal's lease, a Lambda machine admitting
+anyone but its owner, the cloud peer, the offer's `allow_users` and callers
+the tailnet policy grants on its tag, a provider or Lambda secret leaving
+the cloud peer other than as documented, and a lease outliving its idle and
+lifetime rules while the cloud peer runs.
 
 Assess severity from realistic reachability and additional authority gained.
 Unauthenticated execution, cross-owner access, credential disclosure, or writes
@@ -174,6 +297,33 @@ outside a protected client or runner boundary are high-impact findings.
 - Resource consumption inherent in an authorized arbitrary command is not
   independently reportable unless it bypasses an Errand-enforced limit or
   crosses another caller's boundary.
+- A `lease` grant intentionally lets the caller spend money on the cloud
+  peer's provider account. `max_leases` and, for `[cloud.lambda]` offers,
+  `max_price_per_hour` limit only new launches, and only while the cloud
+  peer runs; they are not a spending cap on the provider account.
+- Configuring a cloud peer trusts it as much as a configured peer: it chooses
+  the machines that receive jobs, workspace snapshots and `--passenv`
+  values. The cloud peer has root on the Lambda machines it leases, and it
+  logs into them with its own key to install and watch them.
+- A device key admitted to a leased machine reached over SSH gets a shell
+  as the machine's login, the same authority as `submit` there. A Lambda
+  machine's runner and jobs run as that login, which can use `sudo`, so
+  anyone who can run a job on a Lambda machine, or reach it over SSH, has
+  root on it.
+- Taking `submit` away on the cloud peer does not reach into machines
+  already leased. The owner's leases end at its next request to the cloud
+  peer, and until then a leased machine still admits it, until the cloud
+  peer releases the machine by its idle or lifetime rules. Taking only `lease` away leaves existing
+  leases to their idle and lifetime rules.
+- Provider commands are operator configuration. They run as the cloud peer's
+  user with its full environment, and separating successive owners of one
+  machine is their responsibility. The bundled `docs/cloud/static-pool.sh`
+  frees a claim without stopping jobs still running or removing files.
+- Anyone with access to the Lambda account can read a lease's launch data,
+  which holds that machine's SSH host private key, and can control or
+  impersonate its machines. Downloaded release builds are trusted as far as
+  the GitHub release and its checksum file are. A Lambda machine reached over
+  the tailnet installs Tailscale from `tailscale.com` if its image lacks it.
 - `errand serve --insecure-no-auth` is an explicitly dangerous, test-only mode.
   A finding that requires this flag alone is outside the supported security
   model. Secure operation must remain fail-closed when the flag is absent.
