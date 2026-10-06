@@ -1571,6 +1571,13 @@ func (r *idleReadCloser) Read(p []byte) (int, error) {
 	case got := <-ch:
 		return got.n, got.err
 	case <-expired:
+		// The read may have finished just as the wait ran out; its bytes
+		// arrived in time and are kept.
+		select {
+		case got := <-ch:
+			return got.n, got.err
+		default:
+		}
 		_ = r.ReadCloser.Close()
 		return 0, &streamIdleError{timeout: r.timeout}
 	}

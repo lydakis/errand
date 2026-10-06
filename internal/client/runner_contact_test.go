@@ -15,6 +15,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/iotest"
+	"testing/synctest"
 	"time"
 
 	"github.com/lydakis/errand/internal/proto"
@@ -170,6 +172,48 @@ func TestStreamClockEndsASilentStream(t *testing.T) {
 	if err != nil || final.State != proto.StateExited || requests.Load() != 2 {
 		t.Fatalf("final = %+v, %v after %d connections, want a reconnect", final, err, requests.Load())
 	}
+}
+
+// A read that finishes just as its idle wait runs out arrived in time: its
+// bytes are kept and the stream stays open. Every read of this stream
+// finishes, one byte at a time, at the very moment its wait expires.
+func TestReadFinishingAsTheWaitExpiresIsKept(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		shortRunnerContact(t, 100*time.Millisecond, time.Hour)
+		clock := useStreamClock(t)
+		idleTimer = func(d time.Duration) (<-chan time.Time, func() bool) {
+			expired, stop := clock.wait(d)
+			synctest.Wait() // the read has finished and its result is waiting
+			clock.advance(d)
+			return expired, stop
+		}
+		const out = "every byte of this line\n"
+		body := logFrame(1, out) + "event: status\ndata: {\"id\":\"job\",\"state\":\"exited\",\"result\":{}}\n\n"
+		var requests atomic.Int32
+		previous := directHTTP
+		directHTTP = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if requests.Add(1) > 1 {
+				return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader("{}")), Request: r}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": {"text/event-stream"}},
+				Body:       io.NopCloser(iotest.OneByteReader(strings.NewReader(body))),
+				Request:    r,
+			}, nil
+		})}
+		t.Cleanup(func() { directHTTP = previous })
+
+		var stdout bytes.Buffer
+		final, err := streamContext(context.Background(), RunOptions{PeerURL: "http://runner", Stdout: &stdout}, "job",
+			proto.JobStatus{ID: "job", State: proto.StateRunning})
+		if err != nil || final.State != proto.StateExited || requests.Load() != 1 {
+			t.Fatalf("final = %+v, %v after %d connections, want one uninterrupted stream", final, err, requests.Load())
+		}
+		if stdout.String() != out {
+			t.Fatalf("output = %q, want %q", stdout.String(), out)
+		}
+	})
 }
 
 func TestRunnerThatGoesSilentIsReportedUnavailable(t *testing.T) {
