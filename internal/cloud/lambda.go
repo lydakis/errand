@@ -258,15 +258,19 @@ func (p *LambdaProvider) Release(ctx context.Context, req ReleaseRequest) error 
 	if len(terminating) > 0 {
 		return &ReleasePending{"waiting for Lambda to finish terminating " + strings.Join(terminating, ", ")}
 	}
-	// An instance Lambda has shown and no longer lists has been terminated.
-	// Only one never seen may still be registering.
+	// Absence means something only to the key that launched: another key
+	// may belong to another account. To that key, an instance Lambda has
+	// shown and no longer lists has been terminated. Only one never seen may
+	// still be registering.
 	switch {
-	case ended || state.Seen:
+	case ended:
+		return nil
+	case state.KeyID != keyID(key):
+		return fmt.Errorf("the Lambda API key changed since %s was launched and this key does not see it; restore the old key in api_key_file, or terminate %s in the Lambda console", name, name)
+	case state.Seen:
 		return nil
 	case p.now().Sub(state.Sent) < lambdaLaunchSettle:
 		return fmt.Errorf("no instance named %s yet; checking again in case its launch is still registering", name)
-	case state.KeyID != keyID(key):
-		return fmt.Errorf("the Lambda API key changed since %s was launched and this key does not see it; restore the old key in api_key_file, or terminate %s in the Lambda console", name, name)
 	}
 	return nil
 }

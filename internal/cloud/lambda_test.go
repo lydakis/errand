@@ -566,6 +566,13 @@ func TestLambdaReleaseOfUnlistedSeenInstance(t *testing.T) {
 	if err := restarted.Release(context.Background(), req); err != nil {
 		t.Fatalf("release after a restart: %v", err)
 	}
+	// To another key, perhaps another account's, absence proves nothing.
+	json.Unmarshal(lambdaStateJSON(now.Add(-time.Minute), "another-key", "inst-z"), &state)
+	state.Seen = true
+	req.State, _ = json.Marshal(state)
+	if err := restarted.Release(context.Background(), req); err == nil || !strings.Contains(err.Error(), "key changed") {
+		t.Fatalf("release of an instance seen under another key: %v", err)
+	}
 	// Without Seen, not finding the instance proves nothing yet.
 	req.State = lambdaStateJSON(now.Add(-time.Minute), "secret-key", "inst-z")
 	if err := restarted.Release(context.Background(), req); err == nil || !strings.Contains(err.Error(), "checking again") {
