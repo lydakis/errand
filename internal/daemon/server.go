@@ -125,6 +125,10 @@ type Daemon struct {
 	lockFile          *os.File
 	closeOnce         sync.Once
 	closeErr          error
+
+	// unfetched counts finished jobs whose retained workspace changes no
+	// client has downloaded yet (see noteResultsLocked). Protected by mu.
+	unfetched int
 }
 
 func New(cfg Config) (*Daemon, error) {
@@ -475,6 +479,7 @@ func (d *Daemon) loadExisting() error {
 			}
 		}
 		d.jobs[j.ID] = j
+		d.noteResultsLocked(j, j.result, resultsWereFetched(j))
 		if _, ok := d.collected[j.ID]; ok {
 			if err := os.Remove(filepath.Join(d.collectedDir(), j.ID+".json")); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("removing stale collection marker %s: %w", j.ID, err)
@@ -894,6 +899,7 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 		RunningJobs:  o.running,
 		QueuedJobs:   o.queued,
 		MaxJobs:      d.cfg.MaxJobs,
+		Unfetched:    o.unfetched,
 		MaxQueued:    d.cfg.MaxQueued,
 		Facts:        facts,
 		Offers:       offers,
@@ -1302,10 +1308,11 @@ func (d *Daemon) removeQueuedLocked(j *Job) bool {
 }
 
 type occupancy struct {
-	staging  int
-	queued   int
-	starting int
-	running  int
+	staging   int
+	queued    int
+	starting  int
+	running   int
+	unfetched int // finished jobs' changes not downloaded yet, which are no active job's
 }
 
 func activeJobSummary(o occupancy) string {
@@ -1330,7 +1337,7 @@ func activeJobSummary(o occupancy) string {
 // occupancyLocked derives the public phase counts from scheduler ownership.
 // d.mu must be held so queue and running membership cannot change mid-snapshot.
 func (d *Daemon) occupancyLocked() occupancy {
-	var o occupancy
+	o := occupancy{unfetched: d.unfetched}
 	for _, j := range d.queue {
 		j.mu.Lock()
 		if j.state == proto.StateStaging {
@@ -1374,6 +1381,7 @@ func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 	d.mu.Lock()
 	if cleanupErr == nil && d.jobs[j.ID] == j {
 		delete(d.jobs, j.ID)
+		d.forgetResultsLocked(j)
 	}
 	delete(d.running, j.ID)
 	d.removeQueuedLocked(j)
@@ -1940,7 +1948,9 @@ func (d *Daemon) handleChanges(w http.ResponseWriter, r *http.Request, id Identi
 	if err := mw.Close(); err != nil {
 		return
 	}
-	_ = stream.flush()
+	if stream.flush() == nil {
+		d.resultsFetched(j)
+	}
 }
 
 type idleDeadlineWriter struct {

@@ -140,8 +140,10 @@ before it submits, and the cloud peer decides that and the idle release one at
 a time: a run that asks first keeps the lease for a full idle window, and one
 that asks once the release is recorded, or at the lease's lifetime, is
 refused before it submits anything. A cloud peer keeps its 32 most recent ended leases, for up to a
-week, for `errand leases` to list. Persistent workspaces and retained results
-on a leased machine end with the lease, so fetch what you need first.
+week, for `errand leases` to list. A finished job's changes that no client has
+fetched yet (with `errand fetch`, `--apply`, or a run that applies them) keep
+the lease up as a running job does, until `max_lifetime`. Persistent
+workspaces do not, and they end with the lease, so fetch what you need first.
 
 Leases are recorded in the cloud peer's state directory before anything is
 acquired, and each record keeps how to release its machine: the release

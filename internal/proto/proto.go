@@ -509,6 +509,10 @@ type Info struct {
 	// clients find their leased machines here and keep no list of their own.
 	Offers []Offer `json:"offers,omitempty"`
 	Leases []Lease `json:"leases,omitempty"`
+
+	// Unfetched counts finished jobs whose retained workspace changes no
+	// client has downloaded yet: results that end with the machine.
+	Unfetched int `json:"unfetched"`
 }
 
 // Offer is a machine shape a cloud peer can acquire. Its facts are declared

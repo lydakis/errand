@@ -444,6 +444,7 @@ func (d *Daemon) removeJobReceipt(j *Job) (jobRemovalOutcome, error, error) {
 		return jobRemovalSkipped, nil, err
 	}
 	delete(d.jobs, j.ID)
+	d.forgetResultsLocked(j)
 	j.mu.Unlock()
 	d.mu.Unlock()
 	if err := removeOwnedTree(tombstone); err != nil {

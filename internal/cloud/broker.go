@@ -1014,7 +1014,8 @@ func (b *Broker) stopped(l *lease) bool {
 	return l.State != proto.LeaseReady
 }
 
-// busy reports whether the machine has work, asking no later than the
+// busy reports whether the machine has work, jobs or finished jobs' results
+// that no client has fetched yet, asking no later than the
 // lease's hard stop, and why it cannot be handed out, if it cannot: it did
 // not answer, or its facts no longer match the lease's where.
 func (b *Broker) busy(l *lease, r record) (busy bool, failed string) {
@@ -1030,7 +1031,7 @@ func (b *Broker) busy(l *lease, r record) (busy bool, failed string) {
 	} else if missing := q.Missing(info.Facts); len(missing) > 0 {
 		failed = "it no longer matches " + r.Where + ": " + strings.Join(missing, "; ")
 	}
-	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0, failed
+	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs+info.Unfetched > 0, failed
 }
 
 // release tries once to destroy the machine and records the outcome.

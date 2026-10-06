@@ -25,6 +25,7 @@ import (
 type fakeMachine struct {
 	gpus    []proto.GPU
 	running atomic.Int32
+	results atomic.Int32 // finished jobs' results no client has fetched
 	down    atomic.Bool
 	probes  atomic.Int32
 
@@ -57,7 +58,7 @@ func (m *fakeMachine) probe(_ context.Context, target proto.LeaseTarget, _, _ st
 	m.mu.Lock()
 	gpus := m.gpus
 	m.mu.Unlock()
-	return proto.Info{MaxJobs: 1, RunningJobs: int(m.running.Load()), Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: gpus}}, nil
+	return proto.Info{MaxJobs: 1, RunningJobs: int(m.running.Load()), Unfetched: int(m.results.Load()), Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: gpus}}, nil
 }
 
 func script(t *testing.T, dir, name, body string) string {
@@ -1962,5 +1963,45 @@ func TestLeasePastDeadlines(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if got, _ := b.Get("george", idle.ID); got.State != proto.LeaseReady {
 		t.Fatalf("released after it was handed out: %+v", got)
+	}
+}
+
+// A finished job's results that no client has fetched end with the machine,
+// so they keep the lease past its idle deadline; once fetched, the lease is
+// released at the next one. Its lifetime still ends it.
+func TestUnfetchedResultsKeepLease(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	h.cfg.Offers[0].MaxLifetime = time.Second
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	h.machine.results.Store(1)
+	time.Sleep(150 * time.Millisecond) // past the idle deadline
+	wake(b, l.ID)
+	time.Sleep(50 * time.Millisecond)
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
+		t.Fatalf("lease released with unfetched results: %+v", got)
+	}
+	h.machine.results.Store(0) // fetched
+	time.Sleep(150 * time.Millisecond)
+	wake(b, l.ID)
+	if got := waitState(t, b, "george", l.ID, proto.LeaseReleased); !strings.Contains(strings.Join(got.Progress, "\n"), "idle for") {
+		t.Fatalf("progress %q", got.Progress)
+	}
+
+	// Results never fetched keep a lease only until its lifetime.
+	l, err = b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	h.machine.results.Store(1)
+	if got := waitState(t, b, "george", l.ID, proto.LeaseReleased); !strings.Contains(strings.Join(got.Progress, "\n"), "max lifetime") {
+		t.Fatalf("progress %q", got.Progress)
 	}
 }
