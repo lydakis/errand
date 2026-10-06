@@ -20,14 +20,29 @@ func drainLeaseTarget(ctx context.Context, t proto.LeaseTarget, identity, token 
 	if err != nil {
 		return err
 	}
-	_, err = client.QuiesceRunner(ctx, target, token)
+	return holdRunner(ctx, target, token)
+}
+
+// holdRunner has the runner at peerURL take, or renew, the hold named by
+// token. A runner that holds under any other token gives a hold the cloud
+// peer can neither renew nor lift by its own, which is no hold to it: that
+// hold is given back and the drain fails.
+func holdRunner(ctx context.Context, peerURL, token string) error {
+	got, err := client.QuiesceRunner(ctx, peerURL, token)
 	switch {
 	case errors.Is(err, client.ErrRunnerNotIdle):
 		return fmt.Errorf("%w: %v", cloud.ErrRunnerBusy, err)
 	case errors.Is(err, client.ErrQuiesceRefused):
 		return fmt.Errorf("%w: %v", cloud.ErrUndrainable, err)
+	case err != nil:
+		return err
+	case got != token:
+		if err := client.ResumeRunner(ctx, peerURL, got); err != nil && !errors.Is(err, client.ErrNotHeld) {
+			return fmt.Errorf("runner held under token %s instead of %s, and could not lift it: %w", got, token, err)
+		}
+		return fmt.Errorf("runner held under token %s instead of %s", got, token)
 	}
-	return err
+	return nil
 }
 
 // resumeLeaseTarget lifts a hold drainLeaseTarget took; a runner without

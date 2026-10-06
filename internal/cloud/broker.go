@@ -435,9 +435,13 @@ func (b *Broker) acquire(owner, login, where string, q placement.Requirements, s
 		return proto.Lease{}, true, &Error{http.StatusServiceUnavailable, "cloud broker is shutting down"}
 	}
 	// A request asked again, after its answer was lost, gets the same lease,
-	// even once the offers are gone.
+	// even once the offers are gone, but a ready one only as any hand-out
+	// would: one refused now is passed over below like any other.
 	for _, l := range b.sorted() {
 		if l.Owner == owner && slices.Contains(l.Requests, requestID) {
+			if l.State == proto.LeaseReady && l.refusal(time.Now()) != "" {
+				break
+			}
 			return l.view(), true, nil
 		}
 	}
@@ -1085,8 +1089,8 @@ func (b *Broker) retire(l *lease, reached bool) bool {
 
 // recordHold records the token of the hold an idle release is about to
 // take on a ready lease's runner, reusing one recorded by an attempt whose
-// outcome is unknown, and when, so that the hold is known to lapse
-// runnerHoldTTL later.
+// outcome is unknown, and when, from which holdLapses bounds when the
+// runner lets it go.
 func (b *Broker) recordHold(l *lease) (string, error) {
 	token := ""
 	err := b.update(l, func(r *record) bool {
@@ -1131,11 +1135,19 @@ func (b *Broker) liftHold(l *lease) {
 	ctx, cancel := context.WithTimeout(b.ctx, probeTimeout)
 	err := b.cfg.Resume(ctx, r.drainTarget(), r.Identity, r.HoldToken)
 	cancel()
-	if err == nil || !time.Now().Before(r.HoldSince.Add(runnerHoldTTL)) {
+	if err == nil || !time.Now().Before(r.holdLapses()) {
 		b.dropHold(l, r.HoldToken)
 		return
 	}
-	b.note(l, "could not lift the hold on the machine, which may refuse new jobs until "+r.HoldSince.Add(runnerHoldTTL).Format(time.RFC3339)+": "+err.Error())
+	b.note(l, "could not lift the hold on the machine, which may refuse new jobs until "+r.holdLapses().Format(time.RFC3339)+": "+err.Error())
+}
+
+// holdLapses is when the hold recorded at HoldSince has lapsed on the
+// runner for certain: the drain asking for it may reach the runner as late
+// as its timeout after HoldSince, and the runner keeps it runnerHoldTTL
+// from then.
+func (r *record) holdLapses() time.Time {
+	return r.HoldSince.Add(probeTimeout + runnerHoldTTL)
 }
 
 // refusal says why a lease cannot be handed out as a ready machine, to a
@@ -1149,8 +1161,8 @@ func (l *lease) refusal(now time.Time) string {
 	switch {
 	case l.State != proto.LeaseReady:
 		return "it is " + l.State
-	case l.HoldToken != "" && now.Before(l.HoldSince.Add(runnerHoldTTL)):
-		return "this cloud peer may be holding it idle, until " + l.HoldSince.Add(runnerHoldTTL).Format(time.RFC3339)
+	case l.HoldToken != "" && now.Before(l.holdLapses()):
+		return "this cloud peer may be holding it idle, until " + l.holdLapses().Format(time.RFC3339)
 	case l.checkFailed != "":
 		return l.checkFailed
 	}
@@ -1277,7 +1289,11 @@ func (b *Broker) release(l *lease) {
 	}
 	var pending *ReleasePending
 	if errors.As(err, &pending) {
-		b.note(l, "release: "+pending.Msg)
+		// Polled until the machine is gone: the same answer to each poll is
+		// shown, and written, once.
+		if line := "release: " + pending.Msg; len(r.Progress) == 0 || r.Progress[len(r.Progress)-1] != line {
+			b.note(l, line)
+		}
 		b.sleep(l, b.cfg.ReadyPoll)
 		return
 	}

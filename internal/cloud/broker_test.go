@@ -31,8 +31,8 @@ type fakeMachine struct {
 	mu        sync.Mutex
 	admitted  []string  // keys added after launch
 	hold      string    // the token of the hold refusing new jobs
-	heldUntil time.Time // when that hold lapses
-	holdTTL   time.Duration
+	heldUntil time.Time // when that hold lapses, an hour after it was last renewed
+	renewals  int       // live holds renewed under their token
 	refuse    atomic.Bool
 }
 
@@ -1070,7 +1070,7 @@ func waitProgress(t *testing.T, b *Broker, id, line string) {
 }
 
 // drain holds an idle machine under token, as a runner refuses new jobs
-// once quiesced, for holdTTL (default an hour); a live hold with that token
+// once quiesced, for an hour; a live hold with that token
 // is renewed.
 func (m *fakeMachine) drain(_ context.Context, _ proto.LeaseTarget, _, token string) error {
 	if m.down.Load() {
@@ -1078,15 +1078,14 @@ func (m *fakeMachine) drain(_ context.Context, _ proto.LeaseTarget, _, token str
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	ttl := m.holdTTL
-	if ttl == 0 {
-		ttl = time.Hour
-	}
 	held := time.Now().Before(m.heldUntil)
 	if !(held && token == m.hold) && (m.running.Load() > 0 || held) {
 		return fmt.Errorf("%w: 1 running", ErrRunnerBusy)
 	}
-	m.hold, m.heldUntil = token, time.Now().Add(ttl)
+	if held {
+		m.renewals++
+	}
+	m.hold, m.heldUntil = token, time.Now().Add(time.Hour)
 	return nil
 }
 
@@ -1302,12 +1301,62 @@ func TestRepeatedRequestAfterOffersRemoved(t *testing.T) {
 	b.Close()
 	h.cfg.Offers = nil
 	b2 := h.start(t)
+	waitUnusable(t, b2, l.ID, false) // checked since the restart
 	if again, err := b2.Acquire("george", "", "gpu", "", request); err != nil || again.ID != l.ID {
 		t.Fatalf("repeated request: %+v %v", again, err)
 	}
 	var refused *Error
 	if _, err := b2.Acquire("george", "", "gpu", "", proto.NewULID()); !errors.As(err, &refused) || refused.Status != http.StatusNotFound {
 		t.Fatalf("new request without offers: %v", err)
+	}
+}
+
+// A request asked again is handed its ready lease only as any request
+// would be: not before the lease has been checked since a restart, nor
+// while its runner may be held. It is passed over, and the request gets
+// another.
+func TestRepeatedRequestFollowsHandOutRule(t *testing.T) {
+	for _, held := range []bool{false, true} {
+		t.Run(fmt.Sprintf("held=%v", held), func(t *testing.T) {
+			h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+			h.cfg.MaxLeases = 3
+			b := h.start(t)
+			request := proto.NewULID()
+			l, err := b.Acquire("george", "", "gpu", "", request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			waitState(t, b, "george", l.ID, proto.LeaseReady)
+			if held {
+				crashWithHold(t, h, b, l.ID, time.Now())
+				h.cfg.Resume = func(context.Context, proto.LeaseTarget, string, string) error {
+					return errors.New("ssh: connection timed out")
+				}
+			} else {
+				b.Close()
+			}
+			// The restored lease's first check waits until the test ends.
+			checking, checked := make(chan struct{}), make(chan struct{})
+			var first atomic.Bool
+			first.Store(true)
+			h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
+				if first.CompareAndSwap(true, false) {
+					close(checking)
+					<-checked
+				}
+				return h.machine.probe(ctx, target, identity, where)
+			}
+			b2 := h.start(t)
+			t.Cleanup(func() { close(checked) }) // before the broker closes
+			<-checking
+			again, err := b2.Acquire("george", "", "gpu", "", request)
+			if err != nil || again.ID == l.ID {
+				t.Fatalf("repeated request handed a lease no request may have: %+v %v", again, err)
+			}
+			if third, err := b2.Acquire("george", "", "gpu", "", request); err != nil || third.ID != again.ID {
+				t.Fatalf("asked a third time: %+v %v, want %s", third, err, again.ID)
+			}
+		})
 	}
 }
 
@@ -2223,7 +2272,6 @@ func holdingThroughRelease(t *testing.T) (*harness, *Broker, proto.Lease, *atomi
 	h.cfg.IdlePoll = time.Hour // check only when woken
 	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
 	h.cfg.HoldRenew = 50 * time.Millisecond
-	h.machine.holdTTL = 200 * time.Millisecond
 	pending := new(atomic.Bool)
 	pending.Store(true)
 	h.cfg.Offers[0].Provider = pendingRelease{h.cfg.Offers[0].Provider.(CommandProvider), pending}
@@ -2239,12 +2287,25 @@ func holdingThroughRelease(t *testing.T) (*harness, *Broker, proto.Lease, *atomi
 	return h, b, l, pending
 }
 
-// stayHeld fails unless the runner refuses jobs throughout d.
-func stayHeld(t *testing.T, h *harness, d time.Duration) {
+// keepsRenewing fails unless the runner's hold, under token, is renewed
+// again and again, and never lifted.
+func keepsRenewing(t *testing.T, h *harness, token string) {
 	t.Helper()
-	for end := time.Now().Add(d); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
-		if !h.machine.held() {
+	h.machine.mu.Lock()
+	from := h.machine.renewals
+	h.machine.mu.Unlock()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		h.machine.mu.Lock()
+		hold, renewed := h.machine.hold, h.machine.renewals-from
+		h.machine.mu.Unlock()
+		if !h.machine.held() || hold != token {
 			t.Fatal("the runner took jobs again while its machine was being released")
+		}
+		if renewed >= 3 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the hold was renewed %d times", renewed)
 		}
 	}
 }
@@ -2254,10 +2315,17 @@ func stayHeld(t *testing.T, h *harness, d time.Duration) {
 // across a restart of the cloud peer.
 func TestReleaseKeepsTheRunnerHeld(t *testing.T) {
 	h, b, l, pending := holdingThroughRelease(t)
-	stayHeld(t, h, 3*h.machine.holdTTL)
+	h.machine.mu.Lock()
+	token := h.machine.hold
+	h.machine.mu.Unlock()
+	keepsRenewing(t, h, token)
 	b.Close()
 	b2 := h.start(t)
-	stayHeld(t, h, 3*h.machine.holdTTL)
+	keepsRenewing(t, h, token)
+	got, _ := b2.Get("george", l.ID)
+	if n := slices.Index(got.Progress, "release: still terminating"); n < 0 || slices.Contains(got.Progress[n+1:], "release: still terminating") {
+		t.Fatalf("each poll of the release was shown: %q", got.Progress)
+	}
 	pending.Store(false)
 	waitState(t, b2, "george", l.ID, proto.LeaseReleased)
 }
@@ -2381,7 +2449,7 @@ func TestUnliftedHoldWithholdsTheLeaseUntilItLapses(t *testing.T) {
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	lapses := time.Now().Add(500 * time.Millisecond)
-	crashWithHold(t, h, b, l.ID, lapses.Add(-runnerHoldTTL))
+	crashWithHold(t, h, b, l.ID, lapses.Add(-probeTimeout-runnerHoldTTL))
 	h.cfg.Resume = func(context.Context, proto.LeaseTarget, string, string) error {
 		return errors.New("ssh: connection timed out")
 	}
