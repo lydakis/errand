@@ -294,8 +294,8 @@ cloud peer keeps the only lease record. See [cloud peers](CLOUD.md).
 #### Lease guarantees
 
 1. A lease is recorded, with how to release its machine, before anything is acquired; only its own worker calls the provider.
-2. A lease ends only when its owner releases it or loses `submit`, when every run handed it withdraws before any job used it and before it was handed out ready, after `idle_timeout` with no work and no new run handed it, at `max_lifetime`, or when its launch fails or a restart interrupts it.
-3. A run holds the lease from hand-out until it settles: it withdraws if it admitted no job there; otherwise it keeps holding until a job is seen on the machine or the ready lease is handed to another run, after which holders no longer matter.
+2. A lease ends only when its owner releases it or loses `submit`, when every run handed it withdraws while it is launching, after `idle_timeout` with no work and no new run handed it, at `max_lifetime`, or when its launch fails or a restart interrupts it.
+3. Withdrawing only cancels a launch: a run that gives up while its lease is launching withdraws, and the launch stops once no run is waiting for it. A ready lease belongs to no run.
 4. Every automatic release is decided against the lease record when the release is recorded, never against an earlier observation.
 5. A run handed a ready lease may use it for at least `idle_timeout` unless its owner releases it or `max_lifetime` passes. Nothing on the machine survives the lease.
 6. A lease counts as released only once the provider confirms the machine is gone; until then the release is retried.
@@ -939,8 +939,8 @@ collection markers so local change GC can reconcile after a lost deletion
 response; `POST /v0/change-reconciliation/ack` releases the change hold after that
 reconciliation while preserving the replay-prevention lifetime;
 `POST /v0/leases` hands a cloud peer's caller a lease for one run, named by
-the run's request ID; `DELETE /v0/lease-requests/<request id>` withdraws only
-that run's hold on the lease it was handed (lease guarantee 3), and is not a
+the run's request ID; `DELETE /v0/lease-requests/<request id>` withdraws that
+run from a lease that is still launching (lease guarantee 3), and is not a
 user-facing command; `GET /v0/leases` and `DELETE /v0/leases/<id>` list and
 release the caller's leases; `POST /v0/leases/<id>/ssh-keys` lets another
 of the caller's devices into a leased machine reached over SSH; and

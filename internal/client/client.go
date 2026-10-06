@@ -75,7 +75,6 @@ type RunOptions struct {
 	// Resolve, when set, supplies Candidates once local preparation has
 	// succeeded, so a machine is rented only for a run that can start.
 	Resolve        func() ([]RunTarget, error)
-	claim          *Claim // the current target's, settled by the attempt
 	Workspace      string // explicitly selected existing persistent workspace
 	workspaceID    string
 	Caches         []proto.CacheBinding
@@ -249,12 +248,9 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		}
 	}
 	changeStateInitialized := true
-	// What became of the job on this runner decides both whether its change
-	// state is discarded and whether a machine held for this run is kept.
-	outcome := notAdmitted
+	submissionStarted := false
 	defer func() {
-		opts.claim.settle(outcome)
-		if changeStateInitialized && outcome == notAdmitted {
+		if changeStateInitialized && !submissionStarted {
 			if err := discardUnsubmittedChangeState(opts.PeerURL, jobID); err != nil {
 				errf("removing unsubmitted change state: %v", err)
 			}
@@ -361,12 +357,12 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		<-controller.done // release the shared signal channel before a fallback attempt
 	}()
 
-	outcome = maybeAdmitted
+	submissionStarted = true
 	status, admissionUncertain, err := submit(opts, jobID, spec, manifest, plan)
 	if err != nil {
 		errf("%v", err)
 		if !admissionUncertain && submitDefinitelyRejected(err) {
-			outcome = notAdmitted
+			submissionStarted = false
 			stopInterrupts()
 			<-controller.done
 			select {
@@ -384,8 +380,6 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		errf("the job may have been admitted; handle %s", handle)
 		return ExitTransaction, false
 	}
-	outcome = admitted
-	opts.claim.settle(outcome)
 	if opts.ApplyOnSuccess {
 		if err := confirmAutomaticApplyAdmission(opts.PeerURL, jobID); err != nil {
 			errf("recording automatic apply admission: %v", err)

@@ -30,11 +30,10 @@ func TestLeaseInterruptedDuringRequestIsWithdrawn(t *testing.T) {
 	id := proto.NewULID()
 	for _, tc := range []struct {
 		state, withdrawn, want string
-		shared                 bool
 	}{
-		{proto.LeaseLaunching, proto.LeaseReleasing, "released lease " + id, false},
-		{proto.LeaseReady, proto.LeaseReady, "will be released unless a job is running on it", false},
-		{proto.LeaseLaunching, proto.LeaseLaunching, "held by another run or was used by a job", true},
+		{proto.LeaseLaunching, proto.LeaseReleasing, "released lease " + id},
+		{proto.LeaseReady, proto.LeaseReady, "stays until idle"},
+		{proto.LeaseLaunching, proto.LeaseLaunching, "keeps launching for another run"},
 	} {
 		var requested, withdrawn atomic.Value
 		requested.Store("")
@@ -47,16 +46,16 @@ func TestLeaseInterruptedDuringRequestIsWithdrawn(t *testing.T) {
 				requested.Store(req.RequestID)
 				syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 				time.Sleep(200 * time.Millisecond) // the interrupt lands before the answer
-				json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "h100", State: tc.state, Shared: tc.shared})
+				json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "h100", State: tc.state})
 			case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/v0/lease-requests/"):
 				withdrawn.Store(strings.TrimPrefix(r.URL.Path, "/v0/lease-requests/"))
-				json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "h100", State: tc.withdrawn, Shared: tc.shared})
+				json.NewEncoder(w).Encode(proto.Lease{ID: id, Offer: "h100", State: tc.withdrawn})
 			default:
 				http.NotFound(w, r)
 			}
 		}))
 		opt := leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: "cloud"}, Target: srv.URL}, Offer: proto.Offer{Name: "h100"}}
-		_, _, err := leaseRunner([]leaseOption{opt}, "gpu", io.Discard)
+		_, err := leaseRunner([]leaseOption{opt}, "gpu", io.Discard)
 		srv.Close()
 		if err == nil || !strings.Contains(err.Error(), tc.want) || withdrawn.Load() == "" || withdrawn.Load() != requested.Load() {
 			t.Fatalf("%s: err %v, requested %q, withdrawn %q", tc.state, err, requested.Load(), withdrawn.Load())
@@ -153,21 +152,19 @@ func TestLeasePeerNames(t *testing.T) {
 	}
 }
 
-// A run on a lease withdraws its request exactly when no job was admitted
-// there; a job that was admitted, or whose answer was lost, leaves the lease
-// to the cloud peer's idle rule.
-func TestLeasedRunWithdrawsOnlyWhenNothingWasAdmitted(t *testing.T) {
+// Once its lease is ready, a run leaves it to the cloud peer's idle rule
+// whatever becomes of its job there.
+func TestLeasedRunLeavesAReadyLeaseToTheIdleRule(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		answer   func(http.ResponseWriter)
-		withdraw bool
+		name   string
+		answer func(http.ResponseWriter)
 	}{
-		{"refused", func(w http.ResponseWriter) { http.Error(w, "refused", http.StatusForbidden) }, true},
-		{"answer lost", func(http.ResponseWriter) { panic(http.ErrAbortHandler) }, false},
+		{"refused", func(w http.ResponseWriter) { http.Error(w, "refused", http.StatusForbidden) }},
+		{"answer lost", func(http.ResponseWriter) { panic(http.ErrAbortHandler) }},
 		{"admitted", func(w http.ResponseWriter) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateQueued})
-		}, false},
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("XDG_STATE_HOME", t.TempDir())
@@ -201,11 +198,11 @@ func TestLeasedRunWithdrawsOnlyWhenNothingWasAdmitted(t *testing.T) {
 			var stderr strings.Builder
 			opts := client.RunOptions{Where: "gpu", Root: t.TempDir(), NoSnapshot: true, Detach: true, Argv: []string{"true"}, Stdout: io.Discard, Stderr: &stderr}
 			option := leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: "cloud"}, Target: srv.URL}, Offer: proto.Offer{Name: "a10"}}
-			configurePlacement(&opts, nil, func() (placementChoice, *client.Claim, error) {
+			configurePlacement(&opts, nil, func() (placementChoice, error) {
 				return leaseRunner([]leaseOption{option}, "gpu", &stderr)
 			}, &stderr, func(placementChoice) {})
 			client.Run(opts)
-			if requested.Load() == "" || (withdrawn.Load() == requested.Load()) != tc.withdraw || (withdrawn.Load() != "") != tc.withdraw {
+			if requested.Load() == "" || withdrawn.Load() != "" {
 				t.Fatalf("requested %q, withdrawn %q\n%s", requested.Load(), withdrawn.Load(), stderr.String())
 			}
 		})
@@ -255,7 +252,7 @@ func TestLeaseFallsBackOnlyAfterARefusal(t *testing.T) {
 		opt := func(name, url string) leaseOption {
 			return leaseOption{Broker: placementChoice{RunCandidate: config.RunCandidate{Name: name}, Target: url}, Offer: proto.Offer{Name: "h100"}}
 		}
-		_, _, err := leaseRunner([]leaseOption{opt("cabal", first.URL), opt("mini", second.URL)}, "gpu", io.Discard)
+		_, err := leaseRunner([]leaseOption{opt("cabal", first.URL), opt("mini", second.URL)}, "gpu", io.Discard)
 		first.Close()
 		second.Close()
 		if err == nil || (asked.Load() == 1) != tc.fallBack {
