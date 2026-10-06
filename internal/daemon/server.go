@@ -831,10 +831,17 @@ func (d *Daemon) handleSetupQuiesceRelease(w http.ResponseWriter, r *http.Reques
 type handlerFunc func(http.ResponseWriter, *http.Request, Identity)
 
 // transferring counts a workspace transfer as in progress while h runs, so
-// that /v0/info reports it.
+// that /v0/info reports it. Like a job, a transfer is refused while setup
+// holds the runner for a restart, which it took only once nothing was in
+// progress.
 func (d *Daemon) transferring(h handlerFunc) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, id Identity) {
 		d.mu.Lock()
+		if d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil) {
+			d.mu.Unlock()
+			httpError(w, http.StatusServiceUnavailable, "runner is being reconfigured; retry on another peer")
+			return
+		}
 		d.transfers++
 		d.mu.Unlock()
 		defer func() {

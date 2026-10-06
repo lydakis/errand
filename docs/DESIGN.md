@@ -886,9 +886,10 @@ transport details, workspace mutation, and snapshot-boundary options remain
 long-form.
 
 `errand setup` acquires an expiring lease from the local daemon before changing
-config or service files. The daemon grants it only while idle and atomically
-refuses new admissions until restart, so setup cannot race a newly submitted
-job. If an existing local socket cannot be reserved, setup refuses the
+config or service files. The daemon grants it only while idle, with no job or
+workspace transfer in progress, and atomically refuses new admissions and
+workspace transfers until restart, so setup cannot race a newly submitted job
+or upload. If an existing local socket cannot be reserved, setup refuses the
 restart. Its generated SSH peer block includes the effective `remote_socket`
 and an absolute `remote_command` unless setup proved that
 `/usr/local/bin/errand` resolves to the installed executable.
