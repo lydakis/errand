@@ -36,19 +36,15 @@ var (
 	ErrEntryLimitExceeded = fmt.Errorf("%w: entry limit exceeded", ErrLimitExceeded)
 )
 
-func commitBundle(baseRoot, remoteRoot, jobDir string, bundle proto.ChangeBundle) error {
-	return commitBundleContext(context.Background(), baseRoot, remoteRoot, jobDir, bundle)
-}
-
-func commitBundleContext(ctx context.Context, baseRoot, remoteRoot, jobDir string, bundle proto.ChangeBundle) error {
-	return commitBundleWithPhysicalModesContext(ctx, baseRoot, remoteRoot, jobDir, bundle, nil, nil)
-}
+// bundleBase writes a bundle's base archive for manifest m into dir.
+type bundleBase func(ctx context.Context, dir string, m proto.Manifest) error
 
 func commitBundleWithPhysicalModesContext(
 	ctx context.Context,
-	baseRoot, remoteRoot, jobDir string,
+	base bundleBase,
+	remoteRoot, jobDir string,
 	bundle proto.ChangeBundle,
-	basePhysical, remotePhysical map[string]uint32,
+	remotePhysical map[string]uint32,
 ) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -62,22 +58,7 @@ func commitBundleWithPhysicalModesContext(
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	var baseAccess *treeAccess
-	if len(bundle.BaseManifest.Entries) != 0 {
-		baseAccess, err = makeManifestAccessibleContext(ctx, baseRoot, bundle.BaseManifest)
-		if err != nil {
-			return err
-		}
-		if basePhysical == nil {
-			basePhysical = baseAccess.physical
-		}
-	}
-	basePackErr := packBundleArchive(ctx, tmp, baseArchiveFile, baseRoot, bundle.BaseManifest, basePhysical)
-	var baseRestoreErr error
-	if baseAccess != nil {
-		baseRestoreErr = baseAccess.restore()
-	}
-	if err := errors.Join(basePackErr, baseRestoreErr); err != nil {
+	if err := base(ctx, tmp, bundle.BaseManifest); err != nil {
 		return err
 	}
 	if err := packBundleArchive(ctx, tmp, remoteArchiveFile, remoteRoot, bundle.RemoteManifest, remotePhysical); err != nil {
@@ -109,6 +90,12 @@ func publishBundleDirectory(tmp, dest, parent string, syncParent func(string) er
 }
 
 func packBundleArchive(ctx context.Context, dir, name, root string, manifest proto.Manifest, physicalModes map[string]uint32) error {
+	return writeBundleArchive(ctx, dir, name, manifest, func(w io.Writer) error {
+		return snapshot.PackContextWithPhysicalModes(ctx, w, root, manifest, physicalModes)
+	})
+}
+
+func writeBundleArchive(ctx context.Context, dir, name string, manifest proto.Manifest, pack func(io.Writer) error) error {
 	archiveLimit, err := ArchiveByteLimit(manifestBytes(manifest))
 	if err != nil {
 		return err
@@ -118,8 +105,7 @@ func packBundleArchive(ctx context.Context, dir, name, root string, manifest pro
 	if err != nil {
 		return err
 	}
-	limited := &boundedWriter{w: f, remaining: archiveLimit}
-	if err := snapshot.PackContextWithPhysicalModes(ctx, limited, root, manifest, physicalModes); err != nil {
+	if err := pack(&boundedWriter{w: f, remaining: archiveLimit}); err != nil {
 		f.Close()
 		return err
 	}
@@ -129,10 +115,7 @@ func packBundleArchive(ctx context.Context, dir, name, root string, manifest pro
 		f.Close()
 		return err
 	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return nil
+	return f.Close()
 }
 
 // ArchiveByteLimit includes a fixed metadata/header allowance beyond logical

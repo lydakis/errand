@@ -23,6 +23,7 @@ func TestWatchSourceRetryBudget(t *testing.T) {
 	}{
 		{"mutation without notifications", 0, []error{snapshot.ErrSourceChanged}, true, 6},
 		{"mutation with notifications", 5, []error{snapshot.ErrSourceChanged}, true, 6},
+		{"file change with notifications", 5, []error{snapshot.FileChanged(filepath.Join(os.TempDir(), "value"), snapshot.ErrSourceChanged)}, true, 6},
 		{"unknown failure during edits", 5, []error{errors.New("invalid source")}, false, 4},
 		{"unknown failure without edits", 0, []error{errors.New("invalid source")}, false, 4},
 		{"permission failure during edits", 5, []error{os.ErrPermission}, false, 4},

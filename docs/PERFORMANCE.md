@@ -1,5 +1,8 @@
 # Performance baseline
 
+The [whole-loop scoreboard](SCOREBOARD.md) is the current reference for what a
+user waits on across saves and jobs on `main`.
+
 The latest watch, push, fetch and creation comparison is in
 [the shared-transfer performance report](TRANSFER_PERFORMANCE.md). The measurements
 below are earlier baselines.

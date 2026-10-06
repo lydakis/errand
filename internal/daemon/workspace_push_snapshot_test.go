@@ -64,7 +64,7 @@ func TestSnapshotIngestionContinuesAfterSourceFailure(t *testing.T) {
 	if err := os.Remove(filepath.Join(root, "a")); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.cacheSnapshotSource(context.Background(), root, manifest, nil); err == nil {
+	if err := d.cacheSnapshotSource(context.Background(), root, manifest, nil, nil); err == nil {
 		t.Fatal("missing source was not reported")
 	}
 	for _, e := range manifest.Entries {

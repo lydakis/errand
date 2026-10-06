@@ -120,7 +120,7 @@ func (d *Daemon) createWorkspaceUpload(w http.ResponseWriter, r *http.Request, i
 	var extractOptions archive.ExtractOptions
 	var restored map[string]bool
 	if partial {
-		extractOptions, restored = d.snapshotExtractOptions(r.Context())
+		extractOptions, restored = d.snapshotExtractOptions(r.Context(), nil)
 	}
 	if err := archive.ExtractWith(&contextReader{ctx: r.Context(), r: input}, data, request.Manifest, d.cfg.MaxLimits.MaxWorkspaceBytes, extractOptions); err != nil {
 		if partial && errors.Is(err, archive.ErrCacheMiss) {

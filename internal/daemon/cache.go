@@ -52,6 +52,7 @@ type blobCache struct {
 	maxBytes int64
 	ttl      time.Duration
 	bytes    int64
+	pins     map[string]int // job change bases; see cache_pins.go
 }
 
 func newBlobCache(dir string, maxBytes int64, ttl time.Duration) (*blobCache, error) {
@@ -61,6 +62,7 @@ func newBlobCache(dir string, maxBytes int64, ttl time.Duration) (*blobCache, er
 	c := &blobCache{
 		insertMu: newContextMutex(), mu: newContextMutex(),
 		dir: dir, maxBytes: maxBytes, ttl: ttl,
+		pins: make(map[string]int),
 	}
 	if _, err := c.GC(); err != nil {
 		return nil, err
@@ -120,7 +122,7 @@ func (c *blobCache) MissingContext(ctx context.Context, blobs []proto.BlobRef) (
 		}
 		p := c.path(b.SHA256)
 		if fi, err := os.Lstat(p); err == nil && fi.Mode().IsRegular() && fi.Size() == b.Size {
-			if c.expired(fi, now) {
+			if c.expired(fi, now) && !c.pinnedLocked(b.SHA256) {
 				if err := os.Remove(p); err == nil {
 					c.bytes -= fi.Size()
 				}
@@ -135,8 +137,9 @@ func (c *blobCache) MissingContext(ctx context.Context, blobs []proto.BlobRef) (
 	return missing, nil
 }
 
-// Materialize verifies content while copying; corruption becomes a miss.
-func (c *blobCache) Materialize(ctx context.Context, dest string, e proto.ManifestEntry) (bool, error) {
+// Materialize verifies content while copying; corruption becomes a miss. A hit
+// whose blob is still the one copied is pinned in pins, if any.
+func (c *blobCache) Materialize(ctx context.Context, dest string, e proto.ManifestEntry, pins *cachePins) (bool, error) {
 	if !validBlobHash(e.SHA256) {
 		return false, nil
 	}
@@ -149,7 +152,7 @@ func (c *blobCache) Materialize(ctx context.Context, dest string, e proto.Manife
 		c.mu.Unlock()
 		return false, nil
 	}
-	if c.expired(fi, time.Now()) {
+	if c.expired(fi, time.Now()) && !c.pinnedLocked(e.SHA256) {
 		if err := os.Remove(p); err == nil {
 			c.bytes -= fi.Size()
 		}
@@ -225,11 +228,19 @@ func (c *blobCache) Materialize(ctx context.Context, dest string, e proto.Manife
 		return false, err
 	}
 	os.Chtimes(p, now, now)
+	// Eviction may have taken the path while it was copied; a job base then
+	// keeps its own copy of this body.
+	if pins != nil {
+		if identity, _, err := fsidentity.Lstat(p); err == nil && identity == blobIdentity {
+			c.pinLocked(pins, e.SHA256)
+		}
+	}
 	c.mu.Unlock()
 	return true, nil
 }
 
-func (c *blobCache) Insert(ctx context.Context, src, sha string, size int64) error {
+// Insert publishes src's content under sha and pins it in pins, if any.
+func (c *blobCache) Insert(ctx context.Context, src, sha string, size int64, pins *cachePins) error {
 	if !validBlobHash(sha) || size < 0 || size > c.maxBytes {
 		return nil // never cache what could not fit or be addressed
 	}
@@ -288,7 +299,14 @@ func (c *blobCache) Insert(ctx context.Context, src, sha string, size int64) err
 		return err
 	}
 	c.bytes += size - replacedBytes
+	// Pin before enforcing the budget so eviction cannot take the new blob.
+	c.pinLocked(pins, sha)
 	if err := c.enforceSizeLocked(ctx); err != nil {
+		c.dropPinLocked(pins, sha)
+		if c.pinnedLocked(sha) {
+			// Another job's change base reads this verified body.
+			return err
+		}
 		fi, statErr := os.Lstat(p)
 		if statErr == nil {
 			if removeErr := os.Remove(p); removeErr != nil {
@@ -307,8 +325,9 @@ func (c *blobCache) remove(sha string) {
 	_ = c.removeIfCurrent(context.Background(), sha, fsidentity.Identity{})
 }
 
-// removeIfCurrent removes the blob at sha's path. A non-zero expected identity
-// limits removal to that file, sparing a replacement published meanwhile.
+// removeIfCurrent removes the blob at sha's path, even a pinned one. A non-zero
+// expected identity limits removal to that file, sparing a replacement
+// published meanwhile.
 func (c *blobCache) removeIfCurrent(ctx context.Context, sha string, expected fsidentity.Identity) error {
 	if !validBlobHash(sha) {
 		return fmt.Errorf("cache: invalid blob hash %q", sha)
@@ -379,7 +398,7 @@ func (c *blobCache) GCContext(ctx context.Context, dryRun bool) (proto.CacheGCRe
 	result.FreedBytes = tempBytes
 	cutoff := time.Now().Add(-c.ttl)
 	_, bytes, err := c.walkLocked(ctx, func(path string, fi fs.FileInfo) error {
-		if fi.ModTime().Before(cutoff) {
+		if fi.ModTime().Before(cutoff) && !c.pinnedLocked(filepath.Base(path)) {
 			if err := os.Remove(path); err != nil {
 				return err
 			}
@@ -415,6 +434,9 @@ func (c *blobCache) planGCLocked(ctx context.Context) (proto.CacheGCResult, erro
 	var retained []blob
 	cutoff := time.Now().Add(-c.ttl)
 	_, total, err := c.walkLocked(ctx, func(path string, fi fs.FileInfo) error {
+		if c.pinnedLocked(filepath.Base(path)) {
+			return nil
+		}
 		if fi.ModTime().Before(cutoff) {
 			result.RemovedBlobs++
 			result.FreedBytes += fi.Size()
@@ -502,7 +524,9 @@ func (c *blobCache) evictOverLocked(ctx context.Context) (int, int64, error) {
 	}
 	var blobs []blob
 	_, total, err := c.walkLocked(ctx, func(path string, fi fs.FileInfo) error {
-		blobs = append(blobs, blob{path: path, size: fi.Size(), used: fi.ModTime()})
+		if !c.pinnedLocked(filepath.Base(path)) {
+			blobs = append(blobs, blob{path: path, size: fi.Size(), used: fi.ModTime()})
+		}
 		return nil
 	})
 	if err != nil {

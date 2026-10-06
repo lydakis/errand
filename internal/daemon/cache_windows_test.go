@@ -22,7 +22,7 @@ func TestCorruptBlobIsDeletedOnWindows(t *testing.T) {
 	}
 	hit, err := c.Materialize(context.Background(), filepath.Join(t.TempDir(), "f"), proto.ManifestEntry{
 		Path: "f", Type: proto.EntryFile, Mode: 0o644, Size: size, SHA256: sha,
-	})
+	}, nil)
 	if err != nil || hit {
 		t.Fatalf("corrupt blob materialized: hit=%v err=%v", hit, err)
 	}

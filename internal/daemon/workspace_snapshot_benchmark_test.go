@@ -43,12 +43,12 @@ func BenchmarkSnapshotCacheIngestion(b *testing.B) {
 				}
 				d := &Daemon{cache: cache}
 				if state == "warm" {
-					if err := d.cacheSnapshotSource(context.Background(), root, manifest, nil); err != nil {
+					if err := d.cacheSnapshotSource(context.Background(), root, manifest, nil, nil); err != nil {
 						b.Fatal(err)
 					}
 				}
 				b.StartTimer()
-				if err := d.cacheSnapshotSource(context.Background(), root, manifest, nil); err != nil {
+				if err := d.cacheSnapshotSource(context.Background(), root, manifest, nil, nil); err != nil {
 					b.Fatal(err)
 				}
 			}

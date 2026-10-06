@@ -457,7 +457,7 @@ func TestRestartPublishesBundleCommittedBeforeResult(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "result.txt"), []byte("durable"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, collected, err := changeops.CollectWorkspaceChangesContext(context.Background(), workspace, dir, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
+	bundle, collected, err := changeops.CollectWorkspaceChangesContext(context.Background(), workspace, dir, changeops.ChangeBase{}, proto.Manifest{}, proto.SelectionPolicy{}, 1<<20)
 	if err != nil || !collected {
 		t.Fatalf("collect = %+v, %t, %v", bundle, collected, err)
 	}

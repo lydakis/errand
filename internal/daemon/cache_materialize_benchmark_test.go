@@ -29,7 +29,7 @@ func BenchmarkCachedSourceStaging(b *testing.B) {
 	if err := os.WriteFile(source, body, 0600); err != nil {
 		b.Fatal(err)
 	}
-	if err := cache.Insert(ctx, source, sum, int64(len(body))); err != nil {
+	if err := cache.Insert(ctx, source, sum, int64(len(body)), nil); err != nil {
 		b.Fatal(err)
 	}
 	var manifest proto.Manifest
@@ -46,7 +46,7 @@ func BenchmarkCachedSourceStaging(b *testing.B) {
 		}
 		b.StartTimer()
 		for _, e := range manifest.Entries {
-			hit, err := cache.Materialize(ctx, filepath.Join(dest, e.Path), e)
+			hit, err := cache.Materialize(ctx, filepath.Join(dest, e.Path), e, nil)
 			if err != nil || !hit {
 				b.Fatalf("materialize hit=%v: %v", hit, err)
 			}

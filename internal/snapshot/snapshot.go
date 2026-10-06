@@ -816,6 +816,58 @@ func PackContextWithPhysicalModes(ctx context.Context, w io.Writer, root string,
 	return packPartialContext(ctx, w, root, m, nil, physicalModes)
 }
 
+// PackContent writes the manifest's entries as a tar stream like Pack, taking
+// directories and symlinks from the manifest and file bodies from open, a
+// content store addressed by each entry's hash. Every body must match its
+// recorded size and hash.
+func PackContent(ctx context.Context, w io.Writer, m proto.Manifest, open func(proto.ManifestEntry) (io.ReadCloser, error)) error {
+	tw := tar.NewWriter(w)
+	for _, e := range m.Entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		hdr := &tar.Header{Name: e.Path, Mode: int64(e.Mode)}
+		switch e.Type {
+		case proto.EntryDir:
+			hdr.Typeflag = tar.TypeDir
+			hdr.Name += "/"
+			if err := tw.WriteHeader(hdr); err != nil {
+				return err
+			}
+		case proto.EntrySymlink:
+			hdr.Typeflag = tar.TypeSymlink
+			hdr.Linkname = e.Target
+			if err := tw.WriteHeader(hdr); err != nil {
+				return err
+			}
+		case proto.EntryFile:
+			body, err := open(e)
+			if err != nil {
+				return fmt.Errorf("snapshot: opening the content of %s: %w", e.Path, err)
+			}
+			hdr.Typeflag = tar.TypeReg
+			hdr.Size = e.Size
+			if err := tw.WriteHeader(hdr); err != nil {
+				return errors.Join(err, body.Close())
+			}
+			h := sha256.New()
+			n, copyErr := io.Copy(io.MultiWriter(tw, h), io.LimitReader(&contextReader{ctx: ctx, r: body}, e.Size))
+			var extra [1]byte
+			extraN, extraErr := io.ReadFull(body, extra[:])
+			if err := errors.Join(copyErr, body.Close()); err != nil {
+				return err
+			}
+			if extraErr != nil && extraErr != io.EOF {
+				return extraErr
+			}
+			if n != e.Size || extraN != 0 || hex.EncodeToString(h.Sum(nil)) != e.SHA256 {
+				return fmt.Errorf("snapshot: the content of %s does not match its recorded size and hash", e.Path)
+			}
+		}
+	}
+	return tw.Close()
+}
+
 // PackPartial revalidates every entry but writes only selected files.
 // Directories and symlinks are always written.
 func PackPartial(w io.Writer, root string, m proto.Manifest, shipFile func(proto.ManifestEntry) bool) error {
@@ -888,8 +940,15 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if err != nil {
 				return fmt.Errorf("snapshot: %s vanished during pack: %w", e.Path, sourceReadError(err))
 			}
-			if !fi.Mode().IsRegular() || fi.Size() != e.Size || !fsmode.Matches(fi, expectedMode) {
+			if !fi.Mode().IsRegular() {
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
+			}
+			// A regular file whose bytes or mode changed needs only rereading.
+			changed := func() error {
+				return fileChangedf(filepath.Join(root, filepath.FromSlash(e.Path)), "snapshot: %s changed during pack; retry", e.Path)
+			}
+			if fi.Size() != e.Size || !fsmode.Matches(fi, expectedMode) {
+				return changed()
 			}
 			f, err := rootFS.Open(e.Path)
 			if err != nil {
@@ -899,9 +958,13 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if err != nil {
 				return errors.Join(err, f.Close())
 			}
-			if !opened.Mode().IsRegular() || opened.Size() != e.Size || !fsmode.Matches(opened, expectedMode) {
+			if !opened.Mode().IsRegular() {
 				f.Close()
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
+			}
+			if opened.Size() != e.Size || !fsmode.Matches(opened, expectedMode) {
+				f.Close()
+				return changed()
 			}
 			h := sha256.New()
 			var dest io.Writer = h
@@ -932,10 +995,12 @@ func packPartialContext(ctx context.Context, w io.Writer, root string, m proto.M
 			if statErr != nil {
 				return statErr
 			}
-			if n != e.Size || hex.EncodeToString(h.Sum(nil)) != e.SHA256 ||
-				extraN != 0 || extraErr != io.EOF || !closed.Mode().IsRegular() ||
-				closed.Size() != e.Size || !fsmode.Matches(closed, expectedMode) {
+			if !closed.Mode().IsRegular() {
 				return sourceChangedf("snapshot: %s changed during pack; retry", e.Path)
+			}
+			if n != e.Size || hex.EncodeToString(h.Sum(nil)) != e.SHA256 ||
+				extraN != 0 || extraErr != io.EOF || closed.Size() != e.Size || !fsmode.Matches(closed, expectedMode) {
+				return changed()
 			}
 		}
 	}
@@ -970,7 +1035,10 @@ func hashFileSizedContext(ctx context.Context, path string, size int64, mode fs.
 		return "", statErr
 	}
 	if n != size || after.Size() != size || after.Mode() != mode {
-		return "", sourceChangedf("snapshot: %s changed during hashing; retry", path)
+		if !after.Mode().IsRegular() {
+			return "", sourceChangedf("snapshot: %s changed during hashing; retry", path)
+		}
+		return "", fileChangedf(path, "snapshot: %s changed during hashing; retry", path)
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }

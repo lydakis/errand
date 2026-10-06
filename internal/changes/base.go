@@ -17,9 +17,10 @@ func workspaceBasePath(jobDir string) string {
 	return filepath.Join(jobDir, workspaceBaseDirectory)
 }
 
-// CaptureWorkspaceBaseContext preserves the submitted tree before the command
-// can mutate it. Filesystems with copy-on-write cloning keep this inexpensive;
-// other filesystems fall back to verified copies.
+// CaptureWorkspaceBaseContext preserves a persistent workspace's creation tree
+// as dir/change-base. Filesystems with copy-on-write cloning keep this
+// inexpensive; other filesystems fall back to verified copies. Jobs keep their
+// base as content instead; see CaptureJobBaseContext.
 func CaptureWorkspaceBaseContext(ctx context.Context, workspace, jobDir string, manifest proto.Manifest) error {
 	return captureWorkspaceBaseContext(ctx, workspace, jobDir, manifest, syncStagedData, syncDirectory)
 }
