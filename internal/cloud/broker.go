@@ -124,6 +124,10 @@ type lease struct {
 	record
 	stop context.CancelFunc // cancels the running acquire or probe
 	wake chan struct{}
+	// unusable is why the worker's latest probe of a ready lease found its
+	// machine unreachable or no longer matching the lease's where, or empty.
+	// A lease just made ready was checked by its launch.
+	unusable string
 }
 
 type Broker struct {
@@ -272,10 +276,10 @@ func (o *Offer) Offer() proto.Offer {
 // reached over SSH admits the key of each of the owner's devices that asks
 // for it.
 //
-// A ready lease is handed out only once this cloud peer has reached its
-// runner and found that it still matches where. One that fails the check
-// is passed over without restarting its idle clock, so unless something
-// keeps it busy the idle rule ends it.
+// A ready lease is handed out only if its worker's latest probe reached the
+// machine and found it still matching. One that failed is passed over
+// without restarting its idle clock, so unless something keeps it busy the
+// idle rule ends it.
 func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.Lease, error) {
 	q, err := placement.Parse(where)
 	if err != nil {
@@ -290,44 +294,23 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	if sshKey != "" && !ValidSSHPublicKey(sshKey) {
 		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
-	if requestID == "" {
-		requestID = proto.NewULID()
-	}
-	checked, failed := "", map[string]bool{}
-	for {
-		lease, check, err := b.acquire(owner, login, where, q, sshKey, requestID, checked, failed)
-		if check == nil {
-			return lease, err
-		}
-		if reason := b.unusable(check, q, where); reason != "" {
-			failed[check.ID] = true
-			if b.ctx.Err() == nil {
-				b.note(check, "not handed out: "+reason)
-			}
-		} else {
-			checked = check.ID
-		}
-	}
-}
-
-// acquire is one attempt at Acquire. It returns check, without handing out
-// anything, when a ready lease would be handed out that has not passed its
-// check: checked is the one that has, and failed are those that have not.
-func (b *Broker) acquire(owner, login, where string, q placement.Requirements, sshKey, requestID, checked string, failed map[string]bool) (proto.Lease, *lease, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return proto.Lease{}, nil, &Error{http.StatusServiceUnavailable, "cloud broker is shutting down"}
+		return proto.Lease{}, &Error{http.StatusServiceUnavailable, "cloud broker is shutting down"}
+	}
+	if requestID == "" {
+		requestID = proto.NewULID()
 	}
 	// A request asked again, after its answer was lost, gets the same lease,
 	// even once the offers are gone.
 	for _, l := range b.sorted() {
 		if l.Owner == owner && slices.Contains(l.Requests, requestID) {
-			return l.view(), nil, nil
+			return l.view(), nil
 		}
 	}
 	if len(b.offers) == 0 {
-		return proto.Lease{}, nil, &Error{http.StatusNotFound, "this runner has no cloud offers"}
+		return proto.Lease{}, &Error{http.StatusNotFound, "this runner has no cloud offers"}
 	}
 	var launching *lease
 	active := 0
@@ -342,19 +325,18 @@ func (b *Broker) acquire(owner, login, where string, q placement.Requirements, s
 			continue
 		}
 		switch {
-		case l.State == proto.LeaseReady && !failed[l.ID] && l.Facts != nil && len(q.Missing(*l.Facts)) == 0:
-			if l.ID != checked {
-				return proto.Lease{}, l, nil
+		case l.State == proto.LeaseReady && l.Facts != nil && len(q.Missing(*l.Facts)) == 0:
+			if l.unusable != "" {
+				b.noteLocked(l, "not handed out: "+l.unusable)
+				continue
 			}
-			lease, err := b.shareLocked(l, requestID, sshKey)
-			return lease, nil, err
+			return b.shareLocked(l, requestID, sshKey)
 		case l.State == proto.LeaseLaunching && launching == nil && len(q.Missing(b.offers[l.Offer].Facts)) == 0:
 			launching = l
 		}
 	}
 	if launching != nil {
-		lease, err := b.shareLocked(launching, requestID, sshKey)
-		return lease, nil, err
+		return b.shareLocked(launching, requestID, sshKey)
 	}
 	var offer *Offer
 	var reasons []string
@@ -370,10 +352,10 @@ func (b *Broker) acquire(owner, login, where string, q placement.Requirements, s
 		reasons = append(reasons, o.Name+": "+strings.Join(missing, "; "))
 	}
 	if offer == nil {
-		return proto.Lease{}, nil, &Error{http.StatusPreconditionFailed, fmt.Sprintf("no offer matches %q: %s", where, strings.Join(reasons, "; "))}
+		return proto.Lease{}, &Error{http.StatusPreconditionFailed, fmt.Sprintf("no offer matches %q: %s", where, strings.Join(reasons, "; "))}
 	}
 	if active >= b.cfg.MaxLeases {
-		return proto.Lease{}, nil, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease limit reached (%d active, max_leases = %d)", active, b.cfg.MaxLeases)}
+		return proto.Lease{}, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease limit reached (%d active, max_leases = %d)", active, b.cfg.MaxLeases)}
 	}
 	now := time.Now()
 	l := &lease{wake: make(chan struct{}, 1), record: record{
@@ -383,12 +365,12 @@ func (b *Broker) acquire(owner, login, where string, q placement.Requirements, s
 	l.addProgress("launching " + offer.Name)
 	// Recorded before acquiring, so a crash cannot forget a machine being paid for.
 	if err := b.persist(&l.record); err != nil {
-		return proto.Lease{}, nil, &Error{http.StatusInternalServerError, "recording lease: " + err.Error()}
+		return proto.Lease{}, &Error{http.StatusInternalServerError, "recording lease: " + err.Error()}
 	}
 	log.Printf("lease %s (%s): launching for where %q", l.ID, l.Offer, where)
 	b.leases[l.ID] = l
 	b.start(l)
-	return l.view(), nil, nil
+	return l.view(), nil
 }
 
 // shareLocked hands a lease to another request. A launching lease is then
@@ -419,24 +401,6 @@ func (b *Broker) shareLocked(l *lease, requestID, sshKey string) (proto.Lease, e
 	}
 	b.wakeLocked(l)
 	return l.view(), nil
-}
-
-// unusable checks a ready lease's runner before the lease is handed to a
-// request for where, and says why it cannot be, or nothing.
-func (b *Broker) unusable(l *lease, q placement.Requirements, where string) string {
-	b.mu.Lock()
-	target, identity := *l.Target, l.Identity
-	b.mu.Unlock()
-	ctx, cancel := context.WithTimeout(b.ctx, probeTimeout)
-	defer cancel()
-	info, err := b.cfg.Probe(ctx, target, identity, where)
-	if err != nil {
-		return "this cloud peer cannot reach it: " + err.Error()
-	}
-	if missing := q.Missing(info.Facts); len(missing) > 0 {
-		return "it no longer matches " + where + ": " + strings.Join(missing, "; ")
-	}
-	return ""
 }
 
 // Release ends an owner's lease. A launching lease stops its acquire first.
@@ -621,11 +585,17 @@ func canMove(from, to string) bool {
 
 // note shows a line to clients following the lease.
 func (b *Broker) note(l *lease, line string) {
-	b.advance(l, func(r *record) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.noteLocked(l, line)
+}
+
+func (b *Broker) noteLocked(l *lease, line string) {
+	_ = b.applyLocked(l, func(r *record) bool {
 		log.Printf("lease %s (%s): %s", r.ID, r.Offer, line)
 		r.addProgress(line)
 		return true
-	})
+	}, false)
 }
 
 func (b *Broker) start(l *lease) {
@@ -929,14 +899,25 @@ func (b *Broker) stopped(l *lease) bool {
 }
 
 // busy reports whether the machine has work, asking no later than the
-// lease's hard stop.
+// lease's hard stop. It also records whether the machine can be handed out:
+// whether it answered, with facts that still match the lease's where.
 func (b *Broker) busy(l *lease, r record) bool {
-	ctx, cancel, ok := b.readyCall(l, r, 5*time.Second)
+	ctx, cancel, ok := b.readyCall(l, r, probeTimeout)
 	defer cancel()
 	if !ok {
 		return false
 	}
-	info, err := b.cfg.Probe(ctx, *r.Target, r.Identity, "")
+	info, err := b.cfg.Probe(ctx, *r.Target, r.Identity, r.Where)
+	unusable := ""
+	q, _ := placement.Parse(r.Where)
+	if err != nil {
+		unusable = "this cloud peer cannot reach it: " + err.Error()
+	} else if missing := q.Missing(info.Facts); len(missing) > 0 {
+		unusable = "it no longer matches " + r.Where + ": " + strings.Join(missing, "; ")
+	}
+	b.mu.Lock()
+	l.unusable = unusable
+	b.mu.Unlock()
 	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0
 }
 

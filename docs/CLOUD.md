@@ -63,10 +63,10 @@ run is waiting for the same lease. Once a lease is ready, only the idle and
 lifetime rules below or `errand leases release` end it. A run that stops after
 that, with or without a job, leaves the machine up for at most one idle
 window. Being given to a run counts as work, so a reused ready lease starts a
-full idle window; so does naming it with `--on` from another device. Before
-handing out a ready lease, the cloud peer checks that it can still reach the
-machine and that the machine still matches. One that fails is not handed
-out, and its idle window is not renewed, so it ends once idle.
+full idle window; so does naming it with `--on` from another device. Each
+idle check also confirms that the cloud peer can still reach the machine and
+that it still matches. A lease whose latest check failed is not handed out,
+and its idle window is not renewed, so it ends once idle.
 
 ## Leases
 

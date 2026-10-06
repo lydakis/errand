@@ -53,7 +53,10 @@ func (m *fakeMachine) probe(_ context.Context, target proto.LeaseTarget, _, _ st
 	if m.down.Load() {
 		return proto.Info{}, errors.New("connection refused")
 	}
-	return proto.Info{MaxJobs: 1, RunningJobs: int(m.running.Load()), Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: m.gpus}}, nil
+	m.mu.Lock()
+	gpus := m.gpus
+	m.mu.Unlock()
+	return proto.Info{MaxJobs: 1, RunningJobs: int(m.running.Load()), Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: gpus}}, nil
 }
 
 func script(t *testing.T, dir, name, body string) string {
@@ -907,12 +910,11 @@ func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	h.cfg.IdlePoll = time.Hour // probe only when woken
 	h.cfg.Offers[0].IdleTimeout = 200 * time.Millisecond
-	// Each idle probe (not the readiness check) waits for the test.
+	// Once the lease is ready, each idle probe waits for the test.
 	var hold atomic.Bool
-	hold.Store(true)
 	probing, answer := make(chan struct{}), make(chan struct{})
 	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
-		if where == "" && hold.Load() {
+		if hold.Load() {
 			probing <- struct{}{}
 			<-answer
 		}
@@ -924,7 +926,9 @@ func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	<-probing                          // the first idle probe, which will find the machine idle
+	hold.Store(true)
+	wake(b, l.ID)
+	<-probing                          // an idle probe, which will find the machine idle
 	time.Sleep(300 * time.Millisecond) // past the idle deadline
 	if again, err := b.Acquire("george", "", "gpu", "", proto.NewULID()); err != nil || again.ID != l.ID {
 		t.Fatalf("reuse: %+v %v", again, err)
@@ -1139,6 +1143,7 @@ func TestEndedLeasesAreBounded(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	time.Sleep(2 * time.Millisecond) // later leases have later IDs
 	before := runtime.NumGoroutine()
 	b := h.start(t)
 	if n := len(b.List("george")); n != maxEndedLeases {
@@ -1222,42 +1227,81 @@ func TestRepeatedRequestForReadyLease(t *testing.T) {
 	}
 }
 
-// A ready lease is handed out only once the cloud peer reaches it and it
-// still matches; one that fails is passed over without a new idle window.
+// A ready lease is handed out only if the worker's latest probe reached it
+// and found it still matching. One that failed is passed over without a new
+// idle window, and handed out again once a probe succeeds.
 func TestUnusableReadyLeaseNotHandedOut(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		break_ func(*fakeMachine)
-		reason string
+		name         string
+		break_, mend func(*fakeMachine)
+		reason       string
 	}{
-		{"unreachable", func(m *fakeMachine) { m.down.Store(true) }, "this cloud peer cannot reach it"},
-		{"mismatched", func(m *fakeMachine) { m.gpus = nil }, "it no longer matches gpu"},
+		{"unreachable", func(m *fakeMachine) { m.down.Store(true) }, func(m *fakeMachine) { m.down.Store(false) }, "this cloud peer cannot reach it"},
+		{"mismatched", func(m *fakeMachine) { m.gpus = nil }, func(m *fakeMachine) { m.gpus = []proto.GPU{{Name: "NVIDIA H100 80GB HBM3", MemoryMiB: 81559}} }, "it no longer matches gpu"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t, okAcquire)
-			h.cfg.IdlePoll = time.Hour
+			h.cfg.IdlePoll = time.Hour // probe only when woken
 			h.cfg.MaxLeases = 3
 			b := h.start(t)
 			l, err := b.Acquire("george", "", "gpu", "", proto.NewULID())
 			if err != nil {
 				t.Fatal(err)
 			}
-			ready := waitState(t, b, "george", l.ID, proto.LeaseReady)
+			waitState(t, b, "george", l.ID, proto.LeaseReady)
+			// A lease just made ready is handed out without another probe.
+			probes := h.machine.probes.Load()
+			if again, err := b.Acquire("george", "", "gpu", "", proto.NewULID()); err != nil || again.ID != l.ID {
+				t.Fatalf("fresh lease not handed out: %+v %v", again, err)
+			}
+			if h.machine.probes.Load() > probes+1 { // at most the worker's own
+				t.Fatal("hand-out probed the machine")
+			}
 			h.machine.mu.Lock()
 			tc.break_(h.machine)
 			h.machine.mu.Unlock()
+			waitUnusable(t, b, l.ID, true)
+			before, _ := b.Get("george", l.ID)
 			other, err := b.Acquire("george", "", "gpu", "", proto.NewULID())
 			if err != nil || other.ID == l.ID {
 				t.Fatalf("handed out an unusable lease: %+v %v", other, err)
 			}
 			got, _ := b.Get("george", l.ID)
-			if !got.IdleUntil.Equal(ready.IdleUntil) {
-				t.Fatalf("idle window restarted: %s, was %s", got.IdleUntil, ready.IdleUntil)
+			if !got.IdleUntil.Equal(before.IdleUntil) {
+				t.Fatalf("idle window restarted: %s, was %s", got.IdleUntil, before.IdleUntil)
 			}
 			if !strings.Contains(strings.Join(got.Progress, "\n"), "not handed out: "+tc.reason) {
 				t.Fatalf("progress %q", got.Progress)
 			}
+			h.machine.mu.Lock()
+			tc.mend(h.machine)
+			h.machine.mu.Unlock()
+			waitUnusable(t, b, l.ID, false)
+			if _, err := b.Release("george", other.ID); err != nil { // newer, so it would be handed out first
+				t.Fatal(err)
+			}
+			if again, err := b.Acquire("george", "", "gpu", "", proto.NewULID()); err != nil || again.ID != l.ID {
+				t.Fatalf("mended lease not handed out: %+v %v", again, err)
+			}
 		})
+	}
+}
+
+// waitUnusable wakes a lease's worker until its latest probe found the
+// machine unusable, or usable.
+func waitUnusable(t *testing.T, b *Broker, id string, unusable bool) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		b.mu.Lock()
+		got := b.leases[id].unusable != ""
+		b.mu.Unlock()
+		if got == unusable {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("lease unusable = %v, want %v", got, unusable)
+		}
+		wake(b, id)
 	}
 }
 
@@ -1271,7 +1315,7 @@ func TestJobAdmittedAtIdleDeadlineKeepsLease(t *testing.T) {
 	var admitLate atomic.Bool
 	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
 		info, err := h.machine.probe(ctx, target, identity, where)
-		if where == "" && admitLate.Load() {
+		if admitLate.Load() {
 			h.machine.running.Store(1) // admitted just after this answer
 		}
 		return info, err
