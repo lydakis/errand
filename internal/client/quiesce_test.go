@@ -12,10 +12,15 @@ import (
 )
 
 func TestQuiesceRunner(t *testing.T) {
-	jobs, token := 0, ""
+	jobs, token, refuse := 0, "", false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v0/setup/quiesce" {
 			http.NotFound(w, r)
+			return
+		}
+		if refuse {
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(proto.APIError{Error: "runner setup is available only through the local Unix socket"})
 			return
 		}
 		switch {
@@ -39,6 +44,11 @@ func TestQuiesceRunner(t *testing.T) {
 	}))
 	defer server.Close()
 	ctx := context.Background()
+	refuse = true
+	if _, err := QuiesceRunner(ctx, server.URL); !errors.Is(err, ErrQuiesceRefused) {
+		t.Fatalf("refusing runner: %v", err)
+	}
+	refuse = false
 	jobs = 1
 	if _, err := QuiesceRunner(ctx, server.URL); !errors.Is(err, ErrRunnerNotIdle) {
 		t.Fatalf("busy runner: %v", err)

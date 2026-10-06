@@ -16,6 +16,10 @@ import (
 // is already held idle.
 var ErrRunnerNotIdle = errors.New("runner is not idle")
 
+// ErrQuiesceRefused is QuiesceRunner's answer when the runner does not let
+// the caller hold it, such as a caller that is not its own user.
+var ErrQuiesceRefused = errors.New("runner refused to be held idle")
+
 // QuiesceRunner has an idle runner refuse new jobs for a few minutes, as
 // errand setup does before a restart, and returns the token that ends it
 // early. A runner admits this only from its own user over its local socket,
@@ -38,6 +42,8 @@ func QuiesceRunner(ctx context.Context, peerURL string) (string, error) {
 	case http.StatusCreated:
 	case http.StatusConflict:
 		return "", fmt.Errorf("%w: %s", ErrRunnerNotIdle, apiError(body))
+	case http.StatusForbidden, http.StatusNotFound:
+		return "", fmt.Errorf("%w: %s", ErrQuiesceRefused, apiError(body))
 	default:
 		return "", &controlHTTPError{statusCode: res.StatusCode, err: errors.New(apiError(body))}
 	}

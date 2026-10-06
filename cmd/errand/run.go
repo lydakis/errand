@@ -70,6 +70,8 @@ func cmdRun(args []string) int {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)
 		return client.ExitTransaction
 	}
+	useNamedLeases = true
+	defer func() { useNamedLeases = false }()
 	effective, err := config.ResolveRun(cwd, overrides)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errand: %v\n", err)

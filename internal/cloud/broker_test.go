@@ -1128,41 +1128,40 @@ func TestLeaseKeysAreBounded(t *testing.T) {
 	}
 }
 
-// Ended leases have no worker, and only the newest are kept, so churn
-// grows neither goroutines nor the lease list.
+// Ended leases have no worker, and only those that ended last are kept, so
+// churn grows neither goroutines nor the lease list. A lease made long ago
+// that ends now is kept over newer ones that ended before it.
 func TestEndedLeasesAreBounded(t *testing.T) {
 	h := newHarness(t, okAcquire)
-	dir := filepath.Join(h.cfg.StateDir, "leases")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	for range maxEndedLeases + 8 {
-		r := record{Owner: "george", Release: h.cfg.Offers[0].Provider.ReleaseSpec(), Lease: proto.Lease{ID: proto.NewULID(), Offer: "h100", State: proto.LeaseReleased, ReleasedAt: time.Now()}}
-		data, _ := json.Marshal(r)
-		if err := os.WriteFile(filepath.Join(dir, r.ID+".json"), data, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	time.Sleep(2 * time.Millisecond) // later leases have later IDs
-	before := runtime.NumGoroutine()
 	b := h.start(t)
-	if n := len(b.List("george")); n != maxEndedLeases {
-		t.Fatalf("%d ended leases kept", n)
-	}
-	if n := runtime.NumGoroutine() - before; n > 2 {
-		t.Fatalf("%d goroutines for ended leases", n)
-	}
 	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	b.Release("george", l.ID)
-	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+	b.Close()
+	dir := filepath.Join(h.cfg.StateDir, "leases")
+	for range maxEndedLeases + 8 {
+		r := record{Owner: "george", Release: h.cfg.Offers[0].Provider.ReleaseSpec(), Lease: proto.Lease{ID: proto.NewULID(), Offer: "h100", State: proto.LeaseReleased, ReleasedAt: time.Now().Add(-time.Hour)}}
+		data, _ := json.Marshal(r)
+		if err := os.WriteFile(filepath.Join(dir, r.ID+".json"), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := runtime.NumGoroutine()
+	b2 := h.start(t)
+	if n := len(b2.List("george")); n != maxEndedLeases+1 {
+		t.Fatalf("%d leases kept, want %d ended and the ready one", n, maxEndedLeases)
+	}
+	if n := runtime.NumGoroutine() - before; n > 3 {
+		t.Fatalf("%d goroutines for one ready lease", n)
+	}
+	b2.Release("george", l.ID)
+	waitState(t, b2, "george", l.ID, proto.LeaseReleased)
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
 		files, _ := os.ReadDir(dir)
-		listed := b.List("george")
-		if len(listed) == maxEndedLeases && len(files) == maxEndedLeases && listed[0].ID == l.ID {
+		listed := b2.List("george")
+		if len(listed) == maxEndedLeases && len(files) == maxEndedLeases && slices.ContainsFunc(listed, func(x proto.Lease) bool { return x.ID == l.ID }) {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -1273,6 +1272,13 @@ func TestUnusableReadyLeaseNotHandedOut(t *testing.T) {
 			if !strings.Contains(strings.Join(got.Progress, "\n"), "not handed out: "+tc.reason) {
 				t.Fatalf("progress %q", got.Progress)
 			}
+			var refused *Error
+			if _, err := b.Admit("george", "", l.ID, ""); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, tc.reason) {
+				t.Fatalf("admission by name: %v", err)
+			}
+			if got, _ := b.Get("george", l.ID); !got.IdleUntil.Equal(before.IdleUntil) {
+				t.Fatalf("admission by name restarted the idle window")
+			}
 			h.machine.mu.Lock()
 			tc.mend(h.machine)
 			h.machine.mu.Unlock()
@@ -1309,7 +1315,7 @@ func waitUnusable(t *testing.T, b *Broker, id string, unusable bool) {
 // runner is asked to refuse new jobs before the release, and one that has
 // taken a job since keeps running.
 func TestJobAdmittedAtIdleDeadlineKeepsLease(t *testing.T) {
-	h := newHarness(t, okAcquire)
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	h.cfg.IdlePoll = time.Hour // check only when woken
 	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
 	var admitLate atomic.Bool
@@ -1348,7 +1354,7 @@ func TestJobAdmittedAtIdleDeadlineKeepsLease(t *testing.T) {
 // A lease handed out while its runner is being drained keeps the runner,
 // which takes jobs again.
 func TestHandOutDuringDrainResumesRunner(t *testing.T) {
-	h := newHarness(t, okAcquire)
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	h.cfg.IdlePoll = time.Hour
 	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
 	draining, proceed := make(chan struct{}), make(chan struct{})
@@ -1387,20 +1393,62 @@ func TestHandOutDuringDrainResumesRunner(t *testing.T) {
 	}
 }
 
-// A runner that cannot be drained, such as one reached over the tailnet,
-// is still released when idle.
-func TestUndrainableRunnerReleasedWhenIdle(t *testing.T) {
-	h := newHarness(t, okAcquire)
-	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
-	h.cfg.Drain = func(context.Context, proto.LeaseTarget, string) (func(context.Context) error, error) {
-		return nil, errors.New("runner setup is available only through the local Unix socket")
+// An idle release goes ahead without the hold only when no one can be
+// holding the machine: it has no SSH route, its runner refuses the hold, or
+// the cloud peer could not reach it. A drain that fails otherwise keeps the
+// lease and is retried at the next idle check.
+func TestIdleReleaseWhenDrainFails(t *testing.T) {
+	ssh := `echo '{"ssh":"ubuntu@box"}'`
+	for _, tc := range []struct {
+		name, acquire string
+		down          bool
+		drain         error
+		released      bool
+	}{
+		{"no SSH route", okAcquire, false, errors.New("not asked"), true},
+		{"runner refuses", ssh, false, fmt.Errorf("%w: not the runner's user", ErrUndrainable), true},
+		{"machine unreachable", ssh, true, errors.New("connection refused"), true},
+		{"drain fails", ssh, false, errors.New("ssh: connection timed out"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, tc.acquire)
+			h.cfg.IdlePoll = time.Hour // check only when woken
+			h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+			var drains atomic.Int32
+			var failing atomic.Bool
+			failing.Store(true)
+			h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity string) (func(context.Context) error, error) {
+				drains.Add(1)
+				if failing.Load() {
+					return nil, tc.drain
+				}
+				return h.machine.drain(ctx, target, identity)
+			}
+			b := h.start(t)
+			l, err := b.Acquire("george", "", "gpu", testKey(0), "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			waitState(t, b, "george", l.ID, proto.LeaseReady)
+			h.machine.down.Store(tc.down)
+			time.Sleep(150 * time.Millisecond)
+			wake(b, l.ID)
+			if tc.released {
+				waitState(t, b, "george", l.ID, proto.LeaseReleased)
+				if tc.acquire == okAcquire && drains.Load() != 0 {
+					t.Fatal("asked a runner with no SSH route to hold")
+				}
+				return
+			}
+			waitProgress(t, b, l.ID, "could not hold the machine idle before releasing it; retrying: ssh: connection timed out")
+			if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
+				t.Fatalf("released after a failed drain: %+v", got)
+			}
+			failing.Store(false)
+			wake(b, l.ID)
+			waitState(t, b, "george", l.ID, proto.LeaseReleased)
+		})
 	}
-	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 }
 
 // drainProvider reaches its machines' runners over SSH to hold them idle,
@@ -1441,5 +1489,42 @@ func TestDrainUsesProvidersDrainTarget(t *testing.T) {
 	waitState(t, b2, "george", l.ID, proto.LeaseReleased)
 	if got := <-drained; got.SSH != "ubuntu@box" || got.URL != "" {
 		t.Fatalf("drained through %+v", got)
+	}
+}
+
+// A ready lease restored after a restart is handed out, by request or by
+// name, only once the worker's first probe has reached it.
+func TestRestoredLeaseWaitsForProbe(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.MaxLeases = 3
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	b.Close()
+	answer := make(chan struct{})
+	probe := h.cfg.Probe
+	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
+		select {
+		case <-answer:
+		case <-ctx.Done():
+			return proto.Info{}, ctx.Err()
+		}
+		return probe(ctx, target, identity, where)
+	}
+	b2 := h.start(t)
+	var refused *Error
+	if _, err := b2.Admit("george", "", l.ID, ""); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, "not checked since the cloud peer restarted") {
+		t.Fatalf("admission before the first probe: %v", err)
+	}
+	if other, err := b2.Acquire("george", "", "gpu", "", ""); err != nil || other.ID == l.ID {
+		t.Fatalf("handed out before the first probe: %+v %v", other, err)
+	}
+	close(answer)
+	waitUnusable(t, b2, l.ID, false)
+	if again, err := b2.Admit("george", "", l.ID, ""); err != nil || again.ID != l.ID {
+		t.Fatalf("admission after the first probe: %+v %v", again, err)
 	}
 }

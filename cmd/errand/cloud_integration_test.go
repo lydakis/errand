@@ -80,7 +80,15 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer broker.Close()
-	brokerServer := httptest.NewServer(broker.Handler())
+	// Naming a lease to run on asks the cloud peer for it; reads do not.
+	var admissions atomic.Int32
+	brokerHandler := broker.Handler()
+	brokerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ssh-keys") {
+			admissions.Add(1)
+		}
+		brokerHandler.ServeHTTP(w, r)
+	}))
 	defer brokerServer.Close()
 
 	writeClientConfig(t, fmt.Sprintf("[peers.cloud]\nurl=%q\n", brokerServer.URL))
@@ -142,6 +150,9 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	if out, err = cli("--on", name[1], "--no-apply", "--", "/bin/cat", "input.txt"); err != nil || !strings.Contains(out, "trained on the leased box") {
 		t.Fatalf("--on lease peer: %v\n%s", err, out)
 	}
+	if n := admissions.Load(); n != 1 {
+		t.Fatalf("--on run asked the cloud peer for its lease %d times", n)
+	}
 	if out, err = cli("peers"); err != nil || !strings.Contains(out, "lease: h100 from cloud") || !strings.Contains(out, "1x NVIDIA H100 80GB HBM3 (80 GiB)") {
 		t.Fatalf("peers: %v\n%s", err, out)
 	}
@@ -155,6 +166,9 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	// Fleet reads include the leased machine.
 	if out, err = cli("ps", "-a"); err != nil || !strings.Contains(out, name[1]) {
 		t.Fatalf("ps: %v\n%s", err, out)
+	}
+	if n := admissions.Load(); n != 1 {
+		t.Fatalf("reads asked the cloud peer for the lease (%d asks)", n)
 	}
 	// The cloud peer ends the lease on its own (idle, lifetime) while its
 	// machine still answers: the run must not go to the ended lease.

@@ -50,6 +50,11 @@ type DrainFunc func(ctx context.Context, target proto.LeaseTarget, identity stri
 // ErrRunnerBusy is a DrainFunc's answer for a runner that has work.
 var ErrRunnerBusy = errors.New("runner has work")
 
+// ErrUndrainable is a DrainFunc's answer for a runner that answered but
+// does not let this cloud peer hold it, such as one whose SSH login is not
+// the runner's user. Its idle release goes ahead without the hold.
+var ErrUndrainable = errors.New("runner does not let the cloud peer hold it idle")
+
 const (
 	admitTimeout = 30 * time.Second
 	probeTimeout = 10 * time.Second
@@ -217,6 +222,9 @@ func New(cfg Config) (*Broker, error) {
 			}
 		case proto.LeaseReady:
 			l.LastBusy = now // a full idle window after a restart
+			// Nothing about the machine is known until the worker's first
+			// probe, which comes as the worker starts.
+			l.unusable = "not checked since the cloud peer restarted"
 		}
 		b.leases[r.ID] = l
 	}
@@ -460,11 +468,12 @@ func (b *Broker) end(owner, id, note string) (proto.Lease, error) {
 // Admit has an active lease of the owner's let in another of the owner's
 // devices by its SSH key, for a device that names the lease rather than
 // asking for a machine. The worker adds the key; the answer lists it in
-// SSHKeys once it has. Naming a ready lease to use it counts as a hand-out:
+// SSHKeys once it has; a device already let in, or a lease not reached over
+// SSH, needs no key. Naming a ready lease to use it counts as a hand-out:
 // it starts a full idle window, so the lease is not released while the
 // machine admits the device.
 func (b *Broker) Admit(owner, login, id, sshKey string) (proto.Lease, error) {
-	if !ValidSSHPublicKey(sshKey) {
+	if sshKey != "" && !ValidSSHPublicKey(sshKey) {
 		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
 	b.mu.Lock()
@@ -472,6 +481,10 @@ func (b *Broker) Admit(owner, login, id, sshKey string) (proto.Lease, error) {
 	l := b.leases[id]
 	if l == nil || l.Owner != owner || l.Login != login || !l.Active() {
 		return proto.Lease{}, &Error{http.StatusNotFound, "no active lease of yours has that ID"}
+	}
+	// A lease Acquire would pass over is not handed out by name either.
+	if l.State == proto.LeaseReady && l.unusable != "" {
+		return proto.Lease{}, &Error{http.StatusConflict, fmt.Sprintf("lease %s cannot be used now: %s; it ends once idle", l.ID, l.unusable)}
 	}
 	var refused error
 	if err := b.applyLocked(l, func(r *record) bool {
@@ -758,14 +771,17 @@ func (b *Broker) watch(l *lease) {
 		if len(r.PendingKeys) > 0 {
 			b.admitPending(l, r)
 		}
-		busy := time.Now().Before(r.ExpiresAt) && b.busy(l, r)
+		busy, reached := false, false
+		if time.Now().Before(r.ExpiresAt) {
+			busy, reached = b.busy(l, r)
+		}
 		b.mu.Lock()
 		if busy {
 			l.LastBusy = time.Now()
 		}
 		due := l.State == proto.LeaseReady && l.releaseReason(time.Now()) != ""
 		b.mu.Unlock()
-		if due && b.retire(l) {
+		if due && b.retire(l, reached) {
 			return
 		}
 		wait := b.cfg.IdlePoll
@@ -784,32 +800,43 @@ func (b *Broker) watch(l *lease) {
 // lease, and once it has agreed no job can start there. The runner agrees
 // only to its own user over its local socket, so the cloud peer asks over
 // SSH: through the lease's target, or its DrainTarget for a machine clients
-// reach on the tailnet. A runner that cannot be asked, such as a provider
-// command's machine reached only over the tailnet, is released on the idle
-// check alone.
+// reach on the tailnet. A drain that fails is retried at the next idle
+// check, and the lease kept until then. The release goes ahead without the
+// hold only when no one can be holding it: the machine has no SSH route
+// (a provider command's machine reached only over the tailnet), its runner
+// refuses the hold, or the cloud peer's probe could not reach it (reached
+// is false), which counts as idle.
 //
 // The probe and the drain took time, and requests may have changed the
 // record meanwhile, so the decision is made against the record as it is
 // now. The machine is destroyed only once the release is recorded;
 // otherwise a restart would hand out a lease whose machine is gone.
-func (b *Broker) retire(l *lease) bool {
+func (b *Broker) retire(l *lease, reached bool) bool {
 	b.mu.Lock()
 	r := l.record
 	b.mu.Unlock()
+	target := *r.Target
+	if r.DrainTarget != nil {
+		target = *r.DrainTarget
+	}
 	var resume func(context.Context) error
-	if time.Now().Before(r.ExpiresAt) {
+	if reached && target.SSH != "" && time.Now().Before(r.ExpiresAt) {
 		ctx, cancel, ok := b.readyCall(l, r, probeTimeout)
-		var err error
-		if ok {
-			target := *r.Target
-			if r.DrainTarget != nil {
-				target = *r.DrainTarget
-			}
-			resume, err = b.cfg.Drain(ctx, target, r.Identity)
+		if !ok {
+			cancel()
+			return false
 		}
+		var err error
+		resume, err = b.cfg.Drain(ctx, target, r.Identity)
 		cancel()
-		if errors.Is(err, ErrRunnerBusy) {
+		switch {
+		case errors.Is(err, ErrRunnerBusy):
 			return false // the next check sees its work
+		case err != nil && !errors.Is(err, ErrUndrainable):
+			if !b.stopped(l) {
+				b.note(l, "could not hold the machine idle before releasing it; retrying: "+err.Error())
+			}
+			return false
 		}
 	}
 	released := false
@@ -907,14 +934,15 @@ func (b *Broker) stopped(l *lease) bool {
 	return l.State != proto.LeaseReady
 }
 
-// busy reports whether the machine has work, asking no later than the
-// lease's hard stop. It also records whether the machine can be handed out:
-// whether it answered, with facts that still match the lease's where.
-func (b *Broker) busy(l *lease, r record) bool {
+// busy reports whether the machine has work, and whether it answered,
+// asking no later than the lease's hard stop. It also records whether the
+// machine can be handed out: whether it answered, with facts that still
+// match the lease's where.
+func (b *Broker) busy(l *lease, r record) (busy, reached bool) {
 	ctx, cancel, ok := b.readyCall(l, r, probeTimeout)
 	defer cancel()
 	if !ok {
-		return false
+		return false, false
 	}
 	info, err := b.cfg.Probe(ctx, *r.Target, r.Identity, r.Where)
 	unusable := ""
@@ -927,7 +955,7 @@ func (b *Broker) busy(l *lease, r record) bool {
 	b.mu.Lock()
 	l.unusable = unusable
 	b.mu.Unlock()
-	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0
+	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0, err == nil
 }
 
 // release tries once to destroy the machine and records the outcome.
@@ -979,13 +1007,23 @@ func (b *Broker) releaser(r record) (Provider, error) {
 }
 
 // pruneLocked forgets ended leases past their history: those that ended
-// more than endedLeaseHistory ago, and all but the newest maxEndedLeases.
+// more than endedLeaseHistory ago, and all but the maxEndedLeases that
+// ended last.
 func (b *Broker) pruneLocked() {
-	kept := 0
-	for _, l := range b.sorted() {
-		if l.Active() {
-			continue
+	var ended []*lease
+	for _, l := range b.leases {
+		if !l.Active() {
+			ended = append(ended, l)
 		}
+	}
+	slices.SortFunc(ended, func(x, y *lease) int {
+		if c := y.ReleasedAt.Compare(x.ReleasedAt); c != 0 {
+			return c
+		}
+		return strings.Compare(y.ID, x.ID)
+	})
+	kept := 0
+	for _, l := range ended {
 		if kept < maxEndedLeases && time.Since(l.ReleasedAt) <= endedLeaseHistory {
 			kept++
 			continue

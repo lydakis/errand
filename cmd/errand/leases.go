@@ -190,18 +190,38 @@ func leasePeerNamed(cfg config.Client, name string) (leasePeer, bool, error) {
 	if match == nil {
 		return leasePeer{}, false, fmt.Errorf("%s has no ready lease of yours whose ID ends in %s; see errand leases", broker, suffix)
 	}
+	_, publicKey := clientLeaseIdentity()
+	if !admits(*match, publicKey) {
+		// One of the owner's other devices asked for it: this one is let in
+		// by naming it.
+		return admitThisDevice(cfg, broker, target, match.ID, info)
+	}
+	if useNamedLeases {
+		// Naming a lease to run on counts as a hand-out: the cloud peer
+		// starts a full idle window, or refuses a lease it found unusable.
+		ctx, cancel := context.WithTimeout(context.Background(), leaseRequestTimeout)
+		lease, err := client.AdmitLeaseKey(ctx, target, match.ID, publicKey)
+		cancel()
+		if err != nil {
+			return leasePeer{}, false, fmt.Errorf("using lease %s: %w", match.ID, err)
+		}
+		*match = lease
+	}
 	for _, lp := range leasePeersOf(cfg, broker, info) {
 		if lp.Lease.ID == match.ID {
 			return lp, true, nil
 		}
 	}
-	if _, publicKey := clientLeaseIdentity(); admits(*match, publicKey) {
-		return leasePeer{}, false, fmt.Errorf("lease %s has an unusable target", match.ID)
+	if match.State != proto.LeaseReady {
+		return leasePeer{}, false, fmt.Errorf("lease %s is %s", match.ID, match.State)
 	}
-	// One of the owner's other devices asked for it: this one is let in by
-	// naming it.
-	return admitThisDevice(cfg, broker, target, match.ID, info)
+	return leasePeer{}, false, fmt.Errorf("lease %s has an unusable target", match.ID)
 }
+
+// useNamedLeases is set by commands that place work. A lease they name is
+// asked for through the cloud peer, as a hand-out, rather than only looked
+// up.
+var useNamedLeases bool
 
 // admitThisDevice asks a cloud peer to let this device into the owner's
 // ready lease id, and waits until it has.
