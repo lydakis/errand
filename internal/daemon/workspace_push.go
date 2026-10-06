@@ -94,8 +94,12 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		httpError(w, 400, "invalid push identity")
 		return
 	}
+	if request.Delta == nil {
+		httpError(w, 400, "push is missing its source delta")
+		return
+	}
 	var prepared changeops.PreparedTransferSource
-	if request.Delta != nil {
+	{
 		unlock, err := d.workspaces.lockWorkspaceContext(r.Context(), row.ID)
 		if err != nil {
 			return
@@ -106,9 +110,6 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		// outside the apply gate; StagePrepared rechecks the baseline under it.
 		if err == nil {
 			prepared, err = changeops.ExpandTransferSourceBase(r.Context(), base, *request.Delta, request.SourceRoot, d.cfg.MaxLimits.MaxChangeBytes)
-			if err == nil {
-				request.Manifest = prepared.Manifest()
-			}
 		}
 		if err != nil {
 			if errors.Is(err, changeops.ErrCheckpointChanged) {
@@ -119,14 +120,9 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 			return
 		}
 	}
-	if request.Delta == nil {
-		if err := archive.Validate(request.Manifest); err != nil {
-			httpError(w, 400, err.Error())
-			return
-		}
-	}
+	fullManifest := prepared.Manifest()
 	var total int64
-	for _, e := range request.Manifest.Entries {
+	for _, e := range fullManifest.Entries {
 		if e.Type == proto.EntryFile {
 			if e.Size > d.cfg.MaxLimits.MaxWorkspaceBytes-total {
 				httpError(w, 400, "workspace source exceeds byte limit")
@@ -139,17 +135,14 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 			return
 		}
 	}
-	sourceManifest := request.Manifest
-	if request.Delta != nil {
-		sourceManifest = request.Delta.RemoteManifest
-	}
+	sourceManifest := request.Delta.RemoteManifest
 	part, err := nextPart(mr, "workspace")
 	if err != nil {
 		httpError(w, 400, err.Error())
 		return
 	}
 	extractOpts, restored := d.snapshotExtractOptions(r.Context(), nil)
-	extractOpts.SymlinkManifest = &request.Manifest
+	extractOpts.SymlinkManifest = &fullManifest
 	if err := archive.ExtractWith(&contextReader{ctx: r.Context(), r: part}, source, sourceManifest, d.cfg.MaxLimits.MaxWorkspaceBytes, extractOpts); err != nil {
 		if errors.Is(err, archive.ErrCacheMiss) {
 			httpErrorCode(w, http.StatusConflict, proto.ErrorCodeSnapshotCacheMiss, err.Error())
@@ -194,12 +187,7 @@ func (d *Daemon) handleWorkspacePush(w http.ResponseWriter, r *http.Request, id 
 		httpError(w, 500, err.Error())
 		return
 	}
-	var bundle proto.ChangeBundle
-	if request.Delta != nil {
-		_, bundle, err = session.StagePrepared(r.Context(), request.ID, source, prepared)
-	} else {
-		_, bundle, err = session.Stage(r.Context(), request.ID, source, request.Manifest)
-	}
+	_, bundle, err := session.StagePrepared(r.Context(), request.ID, source, prepared)
 	if err != nil {
 		if errors.Is(err, changeops.ErrCheckpointChanged) {
 			httpErrorCode(w, http.StatusConflict, proto.ErrorCodePushCheckpointChanged, err.Error())

@@ -49,7 +49,7 @@ func TestUploadsUseAdmissionDeadlineAndPreserveOrigins(t *testing.T) {
 				canceled := 0
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if strings.HasSuffix(r.URL.Path, "/diff") {
-						http.NotFound(w, r)
+						replyMissingSnapshotBlobs(t, w, r)
 						return
 					}
 					if _, err := io.Copy(io.Discard, r.Body); err != nil {

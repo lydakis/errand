@@ -733,14 +733,12 @@ func (d *Daemon) runQueue() {
 func (d *Daemon) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v0/gc/changes", d.auth(proto.ActionGCJobs, d.handleTransferGC))
-	mux.HandleFunc("POST /v0/workspaces/{id}/push/delta-v1", d.auth(proto.ActionSubmit, d.handleWorkspacePush))
 	mux.HandleFunc("POST /v0/workspaces/{id}/push", d.auth(proto.ActionSubmit, d.handleWorkspacePush))
 	mux.HandleFunc("POST /v0/workspaces/{id}/push/diff", d.auth(proto.ActionSubmit, d.handleWorkspacePushDiff))
 	mux.HandleFunc("GET /v0/workspaces/{id}/push/base", d.auth(proto.ActionSubmit, d.handleWorkspacePushBase))
 	mux.HandleFunc("POST /v0/workspaces/{id}/push/{transfer}/apply", d.auth(proto.ActionSubmit, d.handleWorkspacePushApply))
 	mux.HandleFunc("POST /v0/workspaces/{id}", d.auth(proto.ActionSubmit, d.handleWorkspaceCreate))
 	mux.HandleFunc("POST /v0/workspaces/{id}/snapshot/diff", d.auth(proto.ActionSubmit, d.handleWorkspaceCreateDiff))
-	mux.HandleFunc("POST /v0/workspaces/{id}/snapshot", d.auth(proto.ActionSubmit, d.handleWorkspaceCreateSnapshot))
 	mux.HandleFunc("GET /v0/workspaces", d.auth(proto.ActionReadOwn, d.handleWorkspaceList))
 	mux.HandleFunc("GET /v0/workspaces/{id}", d.auth(proto.ActionReadOwn, d.handleWorkspaceGet))
 	mux.HandleFunc("DELETE /v0/workspaces/{id}", d.auth(proto.ActionGCJobs, d.handleWorkspaceRemove))
@@ -902,7 +900,6 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 	busy := d.capacityFullLocked() || d.setupQuiesceToken != "" && time.Now().Before(d.setupQuiesceUntil)
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, proto.Info{
-		Placement:    true,
 		SSHDisabled:  d.cfg.DisableSSH || d.cfg.LocalOnly,
 		LocalOnly:    d.cfg.LocalOnly,
 		Proto:        proto.ProtoVersion,
@@ -922,13 +919,17 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 
 // Negotiation is advisory; extraction detects blobs evicted before submission.
 func (d *Daemon) handleSnapshotDiff(w http.ResponseWriter, r *http.Request, _ Identity) {
-	if d.cache == nil {
-		httpError(w, http.StatusNotFound, "snapshot cache is disabled on this runner")
-		return
-	}
 	var req proto.SnapshotDiffRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, maxManifestBytes)).Decode(&req); err != nil {
 		httpError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if d.cache == nil {
+		missing := make([]string, 0, len(req.Blobs))
+		for _, blob := range req.Blobs {
+			missing = append(missing, blob.SHA256)
+		}
+		writeJSON(w, http.StatusOK, proto.SnapshotDiffResponse{Missing: missing})
 		return
 	}
 	missing, err := d.cache.MissingContext(r.Context(), req.Blobs)

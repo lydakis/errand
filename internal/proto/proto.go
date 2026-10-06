@@ -497,7 +497,6 @@ type GPU struct {
 }
 
 type Info struct {
-	Placement   bool   `json:"placement"`            // admission-time requirement validation
 	LocalOnly   bool   `json:"local_only,omitempty"` // confirms network requests and SSH bridging are disabled
 	SSHDisabled bool   `json:"ssh_disabled"`
 	Proto       int    `json:"proto"`

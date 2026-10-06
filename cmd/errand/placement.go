@@ -144,10 +144,8 @@ func probeCandidates(ctx context.Context, candidates []config.RunCandidate, wher
 			}
 			r.info = &info
 			missing := q.Missing(info.Facts)
-			r.matched = info.Placement && len(missing) == 0
+			r.matched = len(missing) == 0
 			switch {
-			case !info.Placement:
-				r.reason = "runner does not support requirement validation; upgrade it"
 			case info.Busy:
 				r.reason = "runner is full or unavailable"
 			case info.MaxJobs <= 0 || info.MaxQueued < 0 || info.RunningJobs < 0 || info.StartingJobs < 0 || info.StagingJobs < 0 || info.QueuedJobs < 0:

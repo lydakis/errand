@@ -85,7 +85,13 @@ func TestRejectedWorkspaceCreationReclaimsOrigin(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(root, "data"), []byte(strings.Repeat("x", 32768)), 0600); err != nil {
 				t.Fatal(err)
 			}
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "creation failed", status) }))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/diff") {
+					replyMissingSnapshotBlobs(t, w, r)
+					return
+				}
+				http.Error(w, "creation failed", status)
+			}))
 			defer server.Close()
 			if _, err := CreateWorkspace(RunOptions{PeerURL: server.URL, Root: root, IncludeAll: true}, "duplicate"); err == nil {
 				t.Fatal("expected failure")

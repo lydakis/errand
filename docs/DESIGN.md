@@ -937,12 +937,13 @@ details used by `errand status`; SSE with event IDs powers
 `GET /v0/jobs/<ulid>/logs?from=<sequence>`; the signal and kill routes control owned
 jobs and return `204 No Content` on success; `POST /v0/snapshot/diff` negotiates missing snapshot blobs;
 `POST /v0/workspaces/<id>/push/diff` negotiates the same cache for an owned
-workspace and establishes support for partial push archives. Push reconstructs
+workspace. Push reconstructs
 and verifies the complete source before staging its delta; a missing cached
 body returns `snapshot_cache_miss` before staging, allowing a full-upload retry.
-Runners without this endpoint, or with snapshot caching disabled, return 404
-and receive full archives. Both submission and push share the negotiation and
-single full-upload fallback policy. Negotiation deduplicates content hashes;
+All snapshot negotiation endpoints are required. A disabled cache returns
+`200 OK` with all requested hashes missing, so the client sends every body.
+Both submission and push share the negotiation and single full-upload retry
+policy. Negotiation deduplicates content hashes;
 its response limit scales with the requested hashes so a valid cold manifest
 does not exceed an unrelated fixed response cap. Cache corruption is a miss
 even if deleting the bad cache entry fails; destination failures and cancellation
@@ -974,9 +975,9 @@ the client can retry the same job ID with a complete snapshot. Curl-debuggable;
 the route prefix is the request-protocol version; receipt and change-bundle
 versions apply only to their persisted formats. Executable versions are
 diagnostic information. Peers, doctor, and setup report version differences
-without blocking commands. Matching versions are recommended when diagnosing
-unexpected behavior. There is no version negotiation or alternate behavior for
-older formats. Updating the executable requires restarting the daemon.
+without blocking commands. The CLI and daemon must run the same version.
+Mixed versions are unsupported; there is no version negotiation or alternate
+protocol behavior. Updating the executable requires restarting the daemon.
 Development builds can use an explicit version label to identify them
 (`go build -ldflags "-X main.version=LABEL" ./cmd/errand`).
 
@@ -1074,21 +1075,19 @@ Cancellation drains the active transaction. A recovered apply is completed with
 its original identity before reconciling current files. Conflicts and policy or
 workspace identity changes stop the session; transient transport failures back off.
 
-`GET /v0/workspaces/<id>/push/base?client=<id>` negotiates incremental source
-uploads and returns that owner's retained directional source checkpoint. Both
-ordinary push and watch can send a `PushRequest.delta` with `source_root` instead
-of the full manifest through the versioned `/push/delta-v1` endpoint.
+`GET /v0/workspaces/<id>/push/base?client=<id>` returns that owner's retained
+directional source checkpoint. Ordinary push and watch send `PushRequest.delta`
+with `source_root` to `/v0/workspaces/<id>/push`.
 The daemon reconstructs metadata from the retained checkpoint, verifies the full
 root and canonical delta, and checks the complete source against workspace limits.
 Only changed source bodies are frozen and uploaded. Small deltas (up to 64 KiB
 of file bodies) skip blob negotiation to save a round trip. The upload gate is
 released during network I/O; staging rechecks the checkpoint under the apply gate
 and rejects a stale baseline. Live runner contents never supply unchanged source
-entries or merge bases. Local retry state retains the full manifest and frozen
-delta bodies; publication and apply retain the existing durable receipts.
-Runners without the base endpoint receive ordinary full-manifest push requests.
-A runner that loses delta support after negotiation rejects the versioned upload;
-the client never sends that partial source to the legacy full-snapshot endpoint.
+entries or merge bases. Local retry state retains the delta, complete source
+identity and frozen delta bodies; publication and apply retain the existing durable receipts.
+Every push requires the source checkpoint endpoint and sends a delta to the
+single push endpoint. Missing endpoints fail the operation.
 A typed checkpoint rejection before staging permits one fresh-source retry.
 Uncertain apply replies retain the original request identity.
 
@@ -1097,9 +1096,9 @@ reuses them only after recovery and a fresh checkpoint check, retaining normal
 body verification, source quotas and durable publication. Persistent fetch uses
 the same plan to materialize only changed remote bodies. Workspace descriptor
 requests may omit the creation manifest; full reads keep their existing contract.
-Creation uploads negotiate the shared verified body cache through separate
-snapshot routes, with a full-upload fallback for older runners or explicit cache
-misses. Long creation and job uploads use the admission timeout budget.
+Creation uploads negotiate the shared verified body cache and use one creation
+endpoint for both partial and complete archives. Only an explicit cache miss
+permits a complete-archive retry. Long creation and job uploads use the admission timeout budget.
 
 An internal receiver-side apply receipt records each application.
 It binds one application to its owner, destination directory identity, immutable

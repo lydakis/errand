@@ -10,8 +10,8 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
-func TestWorkspaceDescriptorSupportsLegacyServersAndSharedValidation(t *testing.T) {
-	for _, scenario := range []string{"compact", "legacy", "invalid-id", "invalid-name"} {
+func TestWorkspaceDescriptorUsesCompactResponseAndSharedValidation(t *testing.T) {
+	for _, scenario := range []string{"compact", "invalid-id", "invalid-name", "ignored-omit"} {
 		t.Run(scenario, func(t *testing.T) {
 			want := proto.Workspace{ID: proto.NewULID(), Name: "descriptor", Selection: proto.SelectionPolicy{Artifacts: []string{"output"}}, Manifest: proto.Manifest{Entries: []proto.ManifestEntry{{Path: "dir", Type: proto.EntryDir, Mode: 0755}}}}
 			if scenario == "invalid-id" {
@@ -26,7 +26,7 @@ func TestWorkspaceDescriptorSupportsLegacyServersAndSharedValidation(t *testing.
 					if query != "omit" {
 						t.Errorf("unexpected manifest query: %q", query)
 					}
-					if scenario != "legacy" {
+					if scenario != "ignored-omit" {
 						response.Manifest = proto.Manifest{}
 					}
 				}
@@ -35,6 +35,12 @@ func TestWorkspaceDescriptorSupportsLegacyServersAndSharedValidation(t *testing.
 			defer server.Close()
 			descriptor, descriptorErr := getWorkspaceDescriptor(server.URL, "descriptor")
 			full, fullErr := GetWorkspace(server.URL, "descriptor")
+			if scenario == "ignored-omit" {
+				if descriptorErr == nil || fullErr != nil {
+					t.Fatalf("ignored descriptor query: descriptor=%v full=%v", descriptorErr, fullErr)
+				}
+				return
+			}
 			if scenario == "invalid-id" || scenario == "invalid-name" {
 				if descriptorErr == nil || fullErr == nil {
 					t.Fatalf("invalid identity accepted: descriptor=%v full=%v", descriptorErr, fullErr)

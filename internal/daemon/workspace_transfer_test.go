@@ -26,7 +26,7 @@ func TestPushRecoversCollectedStageFromFrozenSource(t *testing.T) {
 	var uploads atomic.Int32
 	var interrupted atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" && (strings.HasSuffix(r.URL.Path, "/push") || strings.HasSuffix(r.URL.Path, "/push/delta-v1")) {
+		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/push") {
 			uploads.Add(1)
 		}
 		if strings.HasSuffix(r.URL.Path, "/apply") && !interrupted.Swap(true) {

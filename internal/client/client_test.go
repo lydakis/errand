@@ -103,7 +103,7 @@ func TestOutputlessRunSendsCanonicalLimits(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff":
-			http.NotFound(w, r)
+			replyMissingSnapshotBlobs(t, w, r)
 		case r.Method == http.MethodPut:
 			mr, err := r.MultipartReader()
 			if err != nil {
@@ -188,7 +188,7 @@ func TestAdmissionBookkeepingFailureDoesNotAbandonAdmittedJob(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff":
-			http.NotFound(w, r)
+			replyMissingSnapshotBlobs(t, w, r)
 		case r.Method == http.MethodPut:
 			_, _ = io.Copy(io.Discard, r.Body)
 			_ = json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
@@ -238,7 +238,7 @@ func TestAttachedApplyStartsCompletionWorkerAtAdmission(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff":
-			http.NotFound(w, r)
+			replyMissingSnapshotBlobs(t, w, r)
 		case r.Method == http.MethodPut:
 			_, _ = io.Copy(io.Discard, r.Body)
 			_ = json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
@@ -404,6 +404,8 @@ func TestInterruptIsForwardedBeforeSubmitResponse(t *testing.T) {
 	var controlAttempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/v0/snapshot/diff":
+			replyMissingSnapshotBlobs(t, w, r)
 		case r.Method == http.MethodPut:
 			if _, err := io.Copy(io.Discard, r.Body); err != nil {
 				t.Errorf("reading submit body: %v", err)
@@ -479,6 +481,8 @@ func TestDetachedInterruptWaitsForForwardingAndDoesNotReportSuccess(t *testing.T
 	var controlAttempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/v0/snapshot/diff":
+			replyMissingSnapshotBlobs(t, w, r)
 		case r.Method == http.MethodPut:
 			if _, err := io.Copy(io.Discard, r.Body); err != nil {
 				t.Errorf("reading submit body: %v", err)
@@ -582,6 +586,8 @@ func TestInteractiveDetachRequestedBeforeAdmissionSkipsLogFollowing(t *testing.T
 	var logRequests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/v0/snapshot/diff":
+			replyMissingSnapshotBlobs(t, w, r)
 		case r.Method == http.MethodPut:
 			_, _ = io.Copy(io.Discard, r.Body)
 			json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
@@ -634,7 +640,7 @@ func TestDetachedApplyReportsWorkerLaunchFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/snapshot/diff"):
-			http.NotFound(w, r)
+			replyMissingSnapshotBlobs(t, w, r)
 		case r.Method == http.MethodPut:
 			_, _ = io.Copy(io.Discard, r.Body)
 			_ = json.NewEncoder(w).Encode(proto.JobStatus{State: proto.StateRunning})
@@ -1138,7 +1144,7 @@ func TestInteractiveDetachCancelsOnlyTheLocalLogFollow(t *testing.T) {
 			<-r.Context().Done()
 			close(logCanceled)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/snapshot/diff"):
-			http.NotFound(w, r)
+			replyMissingSnapshotBlobs(t, w, r)
 		case r.Method == http.MethodPost:
 			controlRequests.Add(1)
 			w.WriteHeader(http.StatusOK)

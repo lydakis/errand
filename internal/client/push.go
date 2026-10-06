@@ -32,12 +32,11 @@ type PushOptions struct {
 }
 
 type pushWatchState struct {
-	manifest    string
-	base        *manifeststate.Snapshot
-	baseChecked bool
-	generation  string
-	builder     snapshot.Builder
-	watcher     *snapshot.Watch
+	manifest   string
+	base       *manifeststate.Snapshot
+	generation string
+	builder    snapshot.Builder
+	watcher    *snapshot.Watch
 }
 
 var errWatchUnchanged = errors.New("watched source is unchanged")
@@ -127,6 +126,9 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	} else if !os.IsNotExist(err) {
 		return err
 	}
+	if pending.Request.ID != "" && pending.Request.Delta == nil {
+		return fmt.Errorf("pending push is missing its source delta")
+	}
 	if pending.Applying {
 		// Complete the exact interrupted request before accepting another one. The
 		// remote receipt makes a lost response safe to retry despite later job edits.
@@ -135,7 +137,6 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 		if opts.watchState != nil {
 			opts.watchState.manifest = ""
 			opts.watchState.base = nil
-			opts.watchState.baseChecked = false
 		}
 		return err
 	}
@@ -174,7 +175,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if opts.watchState != nil && opts.watchState.manifest == manifestHash {
 		return errWatchUnchanged
 	}
-	if opts.refreshSource || pending.Request.ID == "" || pushManifestRoot(pending.Request) != manifestHash {
+	if opts.refreshSource || pending.Request.ID == "" || pending.Request.SourceRoot != manifestHash {
 		clientID, err := localChangeClientID()
 		if err != nil {
 			return err
@@ -187,43 +188,31 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 			if state == nil {
 				state = &pushWatchState{}
 			}
-			if !state.baseChecked {
+			if state.base == nil {
 				base, err := pushBase(opts.PeerURL, ws.ID, clientID)
 				if err != nil {
 					return err
 				}
-				if base != nil {
-					state.base, err = manifeststate.New(context.Background(), *base)
-					if err != nil {
-						return err
-					}
-					if opts.watchState != nil {
-						if err := state.base.PrepareUpdates(context.Background()); err != nil {
-							return err
-						}
-					}
-				}
-				state.baseChecked = true
-			}
-			base := state.base
-			if base != nil {
-				plan, err := changeops.PrepareSnapshotDelta(context.Background(), base, sourceState, proto.DefaultLimits().MaxChangeBytes)
+				accepted, err := manifeststate.New(context.Background(), base)
 				if err != nil {
 					return err
 				}
-				preparedDelta = plan
-				delta := plan.Bundle()
-				pending.Request.Delta = &delta
-				pending.Request.SourceRoot = manifestHash
+				if opts.watchState != nil {
+					if err := accepted.PrepareUpdates(context.Background()); err != nil {
+						return err
+					}
+				}
+				state.base = accepted
 			}
-		}
-		// Delta recovery uses its frozen changed bodies and SourceRoot. Keeping
-		// the full inventory here would encode and fsync it on every state write.
-		if pending.Request.Delta == nil {
-			pending.Request.Manifest, err = sourceState.Manifest(context.Background())
+			base := state.base
+			plan, err := changeops.PrepareSnapshotDelta(context.Background(), base, sourceState, proto.DefaultLimits().MaxChangeBytes)
 			if err != nil {
 				return err
 			}
+			preparedDelta = plan
+			delta := plan.Bundle()
+			pending.Request.Delta = &delta
+			pending.Request.SourceRoot = manifestHash
 		}
 		parent := filepath.Join(dir, "push-sources")
 		if err := ensurePrivateLocalDirectory(parent); err != nil {
@@ -259,7 +248,6 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 				opts.retryCheckpoint, opts.refreshSource = true, true
 				if opts.watchState != nil {
 					opts.watchState.base = nil
-					opts.watchState.baseChecked = false
 					opts.watchState.manifest = ""
 				}
 				return pushChangesLocked(opts, ws, origin, dir, result)
@@ -293,7 +281,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	err = finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter)
 	if err == nil && opts.watchState != nil {
 		opts.watchState.generation = pending.Request.ID
-		if opts.watchState.base != nil && pending.Request.Delta != nil {
+		if opts.watchState.base != nil {
 			var base *manifeststate.Snapshot
 			var err error
 			if preparedDelta != nil {
@@ -326,9 +314,12 @@ func prunePushSources(parent, keep string) error {
 	return nil
 }
 func uploadPush(peer, workspace, source string, request proto.PushRequest, meter *transferMeter) (proto.PushResult, error) {
+	if request.Delta == nil {
+		return proto.PushResult{}, fmt.Errorf("push is missing its source delta")
+	}
 	// A small delta costs less to send directly than another network round trip
 	// to discover whether its bodies are cached. Larger deltas still negotiate.
-	if request.Delta != nil && smallPushDelta(request.Delta.RemoteManifest) {
+	if smallPushDelta(request.Delta.RemoteManifest) {
 		return uploadPushOnce(peer, workspace, source, request, meter, shipPlan{})
 	}
 	endpoint := strings.TrimSuffix(peer, "/") + "/v0/workspaces/" + workspace + "/push/diff"
@@ -347,6 +338,9 @@ func uploadPush(peer, workspace, source string, request proto.PushRequest, meter
 
 func uploadPushOnce(peer, workspace, source string, request proto.PushRequest, meter *transferMeter, plan shipPlan) (proto.PushResult, error) {
 	var result proto.PushResult
+	if request.Delta == nil {
+		return result, fmt.Errorf("push is missing its source delta")
+	}
 	pr, pw := io.Pipe()
 	defer pr.Close()
 	mw := multipart.NewWriter(pw)
@@ -358,11 +352,7 @@ func uploadPushOnce(peer, workspace, source string, request proto.PushRequest, m
 			if err != nil {
 				return err
 			}
-			wire := request
-			if wire.Delta != nil {
-				wire.Manifest = proto.Manifest{}
-			}
-			if err := json.NewEncoder(part).Encode(wire); err != nil {
+			if err := json.NewEncoder(part).Encode(request); err != nil {
 				return err
 			}
 			part, err = mw.CreateFormFile("workspace", "workspace.tar")
@@ -377,11 +367,6 @@ func uploadPushOnce(peer, workspace, source string, request proto.PushRequest, m
 		pw.CloseWithError(err)
 	}()
 	endpoint := strings.TrimSuffix(peer, "/") + "/v0/workspaces/" + workspace + "/push"
-	if request.Delta != nil {
-		// Old decoders ignore unknown JSON fields, so capability negotiation
-		// alone cannot protect a long-running client from a daemon rollback.
-		endpoint += "/delta-v1"
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, meter.readCloser(pr))
 	if err != nil {
 		return result, err

@@ -766,7 +766,7 @@ func TestDefiniteSubmitRejectionRemovesChangeState(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff" {
-			http.NotFound(w, r)
+			replyMissingSnapshotBlobs(t, w, r)
 			return
 		}
 		if r.Method == http.MethodPut {
@@ -811,7 +811,7 @@ func TestSelectionChangeBeforeSubmitDoesNotClaimPossibleAdmission(t *testing.T) 
 			if err := os.WriteFile(filepath.Join(root, "late"), []byte("changed"), 0o600); err != nil {
 				t.Error(err)
 			}
-			http.NotFound(w, r)
+			replyMissingSnapshotBlobs(t, w, r)
 			return
 		}
 		if r.Method == http.MethodPut {
@@ -860,7 +860,7 @@ func TestSubmitRetryConflictRetainsChangeStateAndHandle(t *testing.T) {
 	var puts int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff" {
-			http.NotFound(w, r)
+			replyMissingSnapshotBlobs(t, w, r)
 			return
 		}
 		if r.Method == http.MethodPut {
@@ -1068,7 +1068,7 @@ func TestInterruptedSnapshotNegotiationRemovesUnsubmittedChangeState(t *testing.
 	release := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/v0/snapshot/diff" {
-			http.NotFound(w, r)
+			replyMissingSnapshotBlobs(t, w, r)
 			return
 		}
 		close(entered)

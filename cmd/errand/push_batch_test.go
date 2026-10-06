@@ -15,18 +15,18 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
-func TestPushBatchUsesDeltaAndFailsClosedAfterRollback(t *testing.T) {
-	var rollback atomic.Bool
-	var legacyUploads, negotiations atomic.Int32
+func TestPushBatchUsesDeltaAndDoesNotRetryMissingEndpoint(t *testing.T) {
+	var missingEndpoint atomic.Bool
+	var uploads, negotiations atomic.Int32
 	root, destination, peer, ws := watchFixtureHandler(t, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/push") {
-				legacyUploads.Add(1)
+				uploads.Add(1)
 			}
 			if strings.HasSuffix(r.URL.Path, "/push/diff") {
 				negotiations.Add(1)
 			}
-			if strings.HasSuffix(r.URL.Path, "/push/delta-v1") && rollback.Load() {
+			if strings.HasSuffix(r.URL.Path, "/push") && missingEndpoint.Load() {
 				http.NotFound(w, r)
 				return
 			}
@@ -49,24 +49,24 @@ func TestPushBatchUsesDeltaAndFailsClosedAfterRollback(t *testing.T) {
 	if _, err := client.PushChanges(opts); err != nil {
 		t.Fatal(err)
 	}
-	if stats.TransferredBytes > 16<<10 || negotiations.Load() != 0 || legacyUploads.Load() != 0 {
-		t.Fatalf("small batch failed delta path: %+v negotiations=%d legacy=%d", stats, negotiations.Load(), legacyUploads.Load())
+	if stats.TransferredBytes > 16<<10 || negotiations.Load() != 0 || uploads.Load() != 2 {
+		t.Fatalf("small batch failed delta path: %+v negotiations=%d uploads=%d", stats, negotiations.Load(), uploads.Load())
 	}
-	rollback.Store(true)
+	missingEndpoint.Store(true)
 	if err := os.Remove(filepath.Join(root, "value")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := client.PushChanges(opts); err == nil {
-		t.Fatal("rollback unexpectedly accepted delta")
+		t.Fatal("missing endpoint unexpectedly accepted delta")
 	}
 	if _, err := os.Stat(filepath.Join(destination, "keep")); err != nil {
 		t.Fatalf("unrelated file lost: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(destination, "value")); err != nil {
-		t.Fatalf("rollback applied deletion: %v", err)
+		t.Fatalf("missing endpoint applied deletion: %v", err)
 	}
-	if legacyUploads.Load() != 0 {
-		t.Fatal("delta fell back to unsafe legacy endpoint")
+	if uploads.Load() != 3 {
+		t.Fatal("push retried a missing endpoint")
 	}
 }
 
@@ -80,7 +80,7 @@ func TestPushBatchRebuildsOnlyTypedUnstagedCheckpointRejection(t *testing.T) {
 					if strings.HasSuffix(r.URL.Path, "/push/base") {
 						bases.Add(1)
 					}
-					if strings.HasSuffix(r.URL.Path, "/push/delta-v1") {
+					if strings.HasSuffix(r.URL.Path, "/push") {
 						uploads.Add(1)
 						if !rejected.Swap(true) {
 							w.WriteHeader(http.StatusConflict)

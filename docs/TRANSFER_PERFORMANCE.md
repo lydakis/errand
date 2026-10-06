@@ -57,11 +57,10 @@ receipts, and watches stopped cleanly. Each three-second idle probe reported
 
 ## What changed
 
-- Ordinary push freezes and sends delta bodies using a versioned endpoint.
-  Rollbacks fail closed; only definite checkpoint rejection permits one new
-  request. Lost apply replies recover the original request first.
+- Ordinary push freezes and sends delta bodies using the single push endpoint.
+  Only definite checkpoint rejection permits one new request. Lost apply replies recover the original request first.
 - Push resolves a compact workspace descriptor instead of downloading its full
-  creation manifest. Older servers may still return the full descriptor.
+  creation manifest.
 - Watch refreshes hinted files under explicit `.errandignore` policies, with
   live policy and native directory evidence. Git-driven selection, atomic saves,
   structural changes and overflow use full reconciliation. Frozen bodies retain
