@@ -23,12 +23,9 @@ func hasResults(res *proto.Result) bool {
 	return res != nil && res.Changes != nil && res.Changes.PathCount > 0
 }
 
-// resultsWereFetched reports whether a client has downloaded j's retained
-// changes, by the record a download leaves.
-func resultsWereFetched(j *Job) bool {
-	if !hasResults(j.result) {
-		return false
-	}
+// fetchRecorded reports whether j's receipt directory holds the record a
+// download of its retained changes leaves.
+func fetchRecorded(j *Job) bool {
 	_, err := os.Lstat(filepath.Join(j.Dir, fetchedReceipt))
 	return err == nil
 }
@@ -37,8 +34,8 @@ func resultsWereFetched(j *Job) bool {
 // client has fetched, unless it has none or they were fetched. A runner with
 // unfetched results is not idle: they end with its machine. d.mu must be
 // held.
-func (d *Daemon) noteResultsLocked(j *Job, res *proto.Result, fetched bool) {
-	if j.unfetched || fetched || !hasResults(res) {
+func (d *Daemon) noteResultsLocked(j *Job, res *proto.Result) {
+	if j.unfetched || j.fetched || !hasResults(res) {
 		return
 	}
 	j.unfetched = true
@@ -55,19 +52,21 @@ func (d *Daemon) forgetResultsLocked(j *Job) {
 }
 
 // resultsFetched records that a client downloaded j's retained changes
-// whole, and stops counting them. The record outlives a restart; if it
-// cannot be written, the results count again after one.
+// whole, and stops counting them. It records the download whether or not the
+// job is counted yet: a download can finish after the job publishes its
+// result but before it is counted, and the count then sees the record. The
+// record outlives a restart; if it cannot be written, the results count again
+// after one.
 func (d *Daemon) resultsFetched(j *Job) {
 	d.mu.Lock()
-	counted := j.unfetched
+	first := !j.fetched
+	j.fetched = true
+	d.forgetResultsLocked(j)
 	d.mu.Unlock()
-	if !counted {
+	if !first {
 		return
 	}
 	if err := j.writeJSON(fetchedReceipt, fetchedRecord{FetchedAt: time.Now().UTC()}); err != nil {
 		log.Printf("job %s: recording fetched results: %v", j.ID, err)
 	}
-	d.mu.Lock()
-	d.forgetResultsLocked(j)
-	d.mu.Unlock()
 }

@@ -479,7 +479,8 @@ func (d *Daemon) loadExisting() error {
 			}
 		}
 		d.jobs[j.ID] = j
-		d.noteResultsLocked(j, j.result, resultsWereFetched(j))
+		j.fetched = fetchRecorded(j)
+		d.noteResultsLocked(j, j.result)
 		if _, ok := d.collected[j.ID]; ok {
 			if err := os.Remove(filepath.Join(d.collectedDir(), j.ID+".json")); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("removing stale collection marker %s: %w", j.ID, err)

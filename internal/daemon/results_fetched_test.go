@@ -98,3 +98,24 @@ func TestInfoCountsUnfetchedResults(t *testing.T) {
 		t.Fatalf("%d unfetched after the jobs were removed, want 0", n)
 	}
 }
+
+// A download can finish after a job publishes its result but before the job
+// is counted as unfetched. The download is still recorded, and the count that
+// follows sees it.
+func TestFetchBeforeResultsAreCountedIsRecorded(t *testing.T) {
+	d, _ := testDaemon(t)
+	j := &Job{ID: proto.NewULID(), Dir: t.TempDir()}
+	res := &proto.Result{Changes: &proto.ChangeSummary{PathCount: 1}}
+
+	d.resultsFetched(j)
+	d.mu.Lock()
+	d.noteResultsLocked(j, res)
+	n := d.unfetched
+	d.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("%d unfetched after a download that finished before the count, want 0", n)
+	}
+	if !fetchRecorded(j) {
+		t.Fatal("the download left no record")
+	}
+}

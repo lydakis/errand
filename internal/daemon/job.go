@@ -85,9 +85,12 @@ type Job struct {
 	stagingOnce         sync.Once
 	changeCancel        context.CancelFunc
 	changeCancelRequest string
-	// unfetched is whether the job is counted in Daemon.unfetched.
-	// Protected by the daemon's mu.
+	// unfetched is whether the job is counted in Daemon.unfetched, and
+	// fetched whether a client has downloaded its retained changes whole,
+	// which fetched.json records across restarts. Protected by the daemon's
+	// mu.
 	unfetched bool
+	fetched   bool
 }
 
 func newJob(id, dir string) *Job {
@@ -1103,7 +1106,7 @@ func (j *Job) finalizeWithScopeOutcome(d *Daemon, res *proto.Result, neverRan, s
 	// Counted before the job leaves the running set, so the runner never
 	// looks idle between the job's end and its client's download.
 	d.mu.Lock()
-	d.noteResultsLocked(j, res, false)
+	d.noteResultsLocked(j, res)
 	d.mu.Unlock()
 	close(j.done)
 	d.release(j)
