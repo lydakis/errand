@@ -66,18 +66,18 @@ func (c *LambdaCatalog) Offers(ctx context.Context) ([]Offer, error) {
 		if limit := c.Account.MaxPricePerHour; limit > 0 && price > limit {
 			unavailable = fmt.Sprintf("costs $%.2f/h, above max_price_per_hour = %g in [cloud.lambda]", price, limit)
 		}
-		arch := lambdaArch(t.Architecture)
-		if arch == "" || binaryArch != "" && arch != binaryArch {
+		arch, ok := lambdaArch(t.Architecture)
+		if !ok || binaryArch != "" && arch != binaryArch {
 			continue // errand has no build for it, or errand_binary is for another
 		}
 		p := c.Account
 		p.InstanceType, p.Arch = t.Name, arch
 		offers = append(offers, Offer{
-			Name: lambdaOfferName(t.Name), Facts: t.facts(arch), Provider: &p, PricePerHour: price,
+			Name: lambdaOfferName(t.Name), Facts: t.facts(arch), Provider: &p, PricePerHour: &price,
 			IdleTimeout: c.IdleTimeout, MaxLifetime: c.MaxLifetime, Unavailable: unavailable,
 		})
 	}
-	sort.SliceStable(offers, func(i, j int) bool { return offers[i].PricePerHour < offers[j].PricePerHour })
+	sort.SliceStable(offers, func(i, j int) bool { return *offers[i].PricePerHour < *offers[j].PricePerHour })
 	return offers, nil
 }
 

@@ -12,7 +12,9 @@ Pick a runner that is always on, since it is what ends the machines when your
 laptop is asleep. On it:
 
 1. Save a [Lambda Cloud](https://lambda.ai) API key alone in a file owned by
-   the user errand runs as, with mode 600.
+   the user errand runs as, with mode 600. errand refuses files other users
+   can read; on Windows, that is any file whose ACL lets someone other than
+   you, SYSTEM or Administrators read it.
 2. Add to its `errandd.toml`:
 
    ```toml
@@ -87,8 +89,8 @@ cloud peer still ends them when they go idle or reach their lifetime.
   runner that is busy queues the job; errand does not rent a second machine.
 - Never for `--where '*'`.
 - Every reachable cloud peer with a matching offer can supply the machine.
-  The cheapest matching offer wins: an offer with `price_per_hour` before one
-  without, and equal offers in random order. Neither your default peer nor how
+  The cheapest matching offer wins: an offer with `price_per_hour`, even
+  `0`, before one without, and equal offers in random order. Neither your default peer nor how
   busy a cloud peer's own runner is plays a part. If a cloud peer turns the
   request down before starting anything (no permission, nothing matches any
   more, or it is at `max_leases`), the next one is asked. A cloud peer that
@@ -187,8 +189,9 @@ Until then the machine still admits it, at most until `idle_timeout` or
 
 `[cloud.lambda]` rents [Lambda Cloud](https://lambda.ai) instances. The cloud
 peer lists the account's instance types every two minutes (sooner after a
-listing fails) and before launching a new machine, and offers every type that has capacity in a wanted region, named
-after Lambda's own name with hyphens (`gpu-1x-h100-sxm5`). An offer's GPUs,
+listing fails) and before launching a new machine, and offers every type
+that has capacity in a wanted region, named after Lambda's own name with
+hyphens (`gpu-1x-h100-sxm5`). An offer's GPUs,
 CPUs, architecture and price come from the listing; no shape is configured.
 
 ```toml
@@ -222,16 +225,18 @@ own version for that architecture from GitHub once, checks it against the
 release's checksums, and keeps it in its state directory. A development build
 of errand has no release, so a cloud peer running one needs `errand_binary`
 set to a Linux build, and offers only instance types of that build's
-architecture. Everything is checked before anything is rented.
+architecture. Everything is checked before anything is rented, and the
+machine gets the copy that was checked, even if the file changes while it
+boots.
 
 **Reaching the machine.** Clients reach it one of two ways:
 
 - **Over SSH** (the default). The runner listens on no port, and jobs reach
-  it over SSH on port 22, as they reach any SSH peer. Each machine you run
-  errand from makes an SSH key of its own and sends the public half with the
-  lease request; the leased machine admits only the keys the cloud peer
-  added. The lease carries the machine's host key, so errand checks it
-  without a `known_hosts` entry.
+  it over SSH on port 22, as they reach any SSH peer, logged in as `ubuntu`,
+  the only login on Lambda's images. Each machine you run errand from makes
+  an SSH key of its own and sends the public half with the lease request; the
+  leased machine admits only the keys the cloud peer added. The lease carries
+  the machine's host key, so errand checks it without a `known_hosts` entry.
 - **Over your tailnet**, when `tailscale_auth_key_file` is set. The machine
   joins as `errand-<lease id>`, and the runner listens only on the tailnet.
 

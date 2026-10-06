@@ -41,7 +41,7 @@ func TestLambdaCatalogOffers(t *testing.T) {
 	}
 	var names []string
 	for _, o := range offers {
-		names = append(names, fmt.Sprintf("%s $%.2f %s/%s %d cpu %s", o.Name, o.PricePerHour, o.Facts.OS, o.Facts.Arch, o.Facts.NumCPU, describe(o.Facts.GPUs)))
+		names = append(names, fmt.Sprintf("%s $%.2f %s/%s %d cpu %s", o.Name, *o.PricePerHour, o.Facts.OS, o.Facts.Arch, o.Facts.NumCPU, describe(o.Facts.GPUs)))
 	}
 	// The A10 has capacity only where the account does not rent, and the
 	// riscv type has no errand build.

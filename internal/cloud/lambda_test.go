@@ -71,6 +71,8 @@ type fakeLambda struct {
 	types       map[string]fakeInstanceType // instance types besides gpu_1x_h100_pcie
 	attempts    []time.Time                 // when each launch request arrived
 	keepAlive   int                         // terminate calls to accept without terminating
+	arch        string                      // gpu_1x_h100_pcie's architecture, if not x86_64
+	forget      bool                        // stop listing terminated instances at once
 }
 
 func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +93,7 @@ func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/instance-types":
 		types := map[string]any{}
-		h100 := fakeInstanceType{price: 249, arch: "x86_64", gpu: "H100 (80 GB PCIe)", vcpus: 26, gpus: 1}
+		h100 := fakeInstanceType{price: 249, arch: cmp.Or(f.arch, "x86_64"), gpu: "H100 (80 GB PCIe)", vcpus: 26, gpus: 1}
 		for name, t := range f.types {
 			types[name] = t.listing(name, f.capacity)
 		}
@@ -151,9 +153,13 @@ func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			next = strconv.Itoa(end)
 		}
 		json.NewEncoder(w).Encode(map[string]any{"data": list, "page_token": next})
-		// Lambda lists a terminating instance as terminated a little later.
+		// Lambda lists a terminating instance as terminated a little later,
+		// or stops listing it.
 		for _, in := range list {
-			if in.Status == "terminating" {
+			switch {
+			case in.Status == "terminating" && f.forget:
+				delete(f.instances, in.ID)
+			case in.Status == "terminating":
 				in.Status = "terminated"
 			}
 		}
@@ -399,9 +405,10 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 	if ssh.knownHosts != "203.0.113.7 ssh-ed25519 AAAAhost errand-lease\n" || !slices.Contains(ssh.lastArgs, "StrictHostKeyChecking=yes") {
 		t.Fatalf("host key not pinned: %q %q", ssh.knownHosts, ssh.lastArgs)
 	}
-	// That a launch was sent is saved before sending it, and the instance ID
-	// before waiting, so release can always find the machine.
-	if len(saved) < 3 || !strings.HasPrefix(saved[0], `{"sent":"`) || !strings.HasSuffix(saved[0], `","key_id":"`+keyID("secret-key")+`","region":"us-east-1"}`) || !strings.Contains(saved[1], `"instance_id":"inst-a"`) || strings.Contains(saved[1], "url") {
+	// That a launch was sent is saved before sending it, the instance ID
+	// before waiting, and that Lambda has shown it as soon as it has, so
+	// release can always find the machine and tell when it is gone.
+	if len(saved) < 3 || !strings.HasPrefix(saved[0], `{"sent":"`) || !strings.HasSuffix(saved[0], `","key_id":"`+keyID("secret-key")+`","region":"us-east-1"}`) || !strings.Contains(saved[1], `"instance_id":"inst-a"`) || strings.Contains(saved[1], "url") || strings.Contains(saved[1], "seen") || !strings.Contains(saved[2], `"seen":true`) {
 		t.Fatalf("saved %q", saved)
 	}
 	for _, want := range []string{"launching gpu_1x_h100_pcie in us-east-1 ($2.49/h)", "instance booting", "instance active", "instance is up at 203.0.113.7; installing errand"} {
@@ -557,6 +564,81 @@ func TestLambdaReleaseFindsUnsavedInstance(t *testing.T) {
 	}
 }
 
+// An instance Lambda has shown is gone once Lambda stops listing it, even
+// within the launch's settle window, and that holds after a restart, since
+// the lease's state says so. One never seen may still be registering.
+func TestLambdaReleaseOfUnlistedSeenInstance(t *testing.T) {
+	p, api, _ := newLambda(t)
+	now := time.Now()
+	p.Now = func() time.Time { return now }
+	api.forget = true
+	id := proto.NewULID()
+	api.instances["inst-z"] = &lambdaInstance{ID: "inst-z", Name: LeaseHostname(id), Status: "active"}
+	var state lambdaState
+	json.Unmarshal(lambdaStateJSON(now.Add(-time.Minute), "secret-key", "inst-z"), &state)
+	state.Seen = true
+	seen, _ := json.Marshal(state)
+	req := ReleaseRequest{LeaseID: id, Offer: "h100", State: seen}
+	// Asked to terminate, then terminating, then no longer listed.
+	if calls := releaseUntilDone(t, p, req); calls != 3 {
+		t.Fatalf("released after %d calls", calls)
+	}
+	if len(api.terminated) != 1 || len(api.instances) != 0 {
+		t.Fatalf("terminated %v, still listed %v", api.terminated, api.instances)
+	}
+	// A restarted cloud peer has only the lease's state.
+	restarted := &LambdaProvider{APIKeyFile: p.APIKeyFile, BaseURL: p.BaseURL, Now: p.Now, RequestGap: time.Millisecond, Pacing: &lambdaPacing{}}
+	if err := restarted.Release(context.Background(), req); err != nil {
+		t.Fatalf("release after a restart: %v", err)
+	}
+	// To another key, perhaps another account's, absence proves nothing.
+	json.Unmarshal(lambdaStateJSON(now.Add(-time.Minute), "another-key", "inst-z"), &state)
+	state.Seen = true
+	req.State, _ = json.Marshal(state)
+	if err := restarted.Release(context.Background(), req); err == nil || !strings.Contains(err.Error(), "key changed") {
+		t.Fatalf("release of an instance seen under another key: %v", err)
+	}
+	// Without Seen, not finding the instance proves nothing yet.
+	req.State = lambdaStateJSON(now.Add(-time.Minute), "secret-key", "inst-z")
+	if err := restarted.Release(context.Background(), req); err == nil || !strings.Contains(err.Error(), "checking again") {
+		t.Fatalf("release of an instance never seen: %v", err)
+	}
+}
+
+// The install sends the very errand_binary acquire checked, even when the
+// file is rewritten after the check, and leaves no copy of it behind.
+func TestLambdaInstallsTheCheckedBinary(t *testing.T) {
+	tmp := t.TempDir()
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, tmp)
+	}
+	p, _, ssh := newLambda(t)
+	want, err := os.ReadFile(p.ErrandBinary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewritten := false
+	p.SSH = func(ctx context.Context, args []string, stdin io.Reader) ([]byte, error) {
+		if !rewritten {
+			rewritten = true
+			if err := os.WriteFile(p.ErrandBinary, []byte("#!/bin/sh\necho unchecked\n"), 0o700); err != nil {
+				t.Error(err)
+			}
+		}
+		return ssh.run(ctx, args, stdin)
+	}
+	req := AcquireRequest{LeaseID: proto.NewULID(), Login: "george@github", Progress: func(string) {}, Save: noSave}
+	if _, err := p.Acquire(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if !rewritten || ssh.files["errand"] != string(want) {
+		t.Fatalf("sent %d bytes of errand, want the %d checked", len(ssh.files["errand"]), len(want))
+	}
+	if left, _ := os.ReadDir(tmp); len(left) != 0 {
+		t.Fatalf("acquire left %v in the temporary directory", left)
+	}
+}
+
 func TestLambdaRefusals(t *testing.T) {
 	p, api, _ := newLambda(t)
 	api.capacity = []string{"us-west-1"}
@@ -588,6 +670,12 @@ func TestLambdaRefusals(t *testing.T) {
 	pc.MaxPricePerHour = 2
 	if _, err := pc.Acquire(context.Background(), req); err == nil || !strings.Contains(err.Error(), "Lambda now charges $2.49/h for gpu_1x_h100_pcie, above max_price_per_hour = 2") || len(apiC.launches) != 0 {
 		t.Fatalf("price above the cap: %v, %d launches", err, len(apiC.launches))
+	}
+	// So does an instance type whose architecture errand does not know.
+	pu, apiU, _ := newLambda(t)
+	apiU.arch = "riscv64"
+	if _, err := pu.Acquire(context.Background(), req); err == nil || !strings.Contains(err.Error(), `has architecture "riscv64"`) || len(apiU.launches) != 0 {
+		t.Fatalf("unknown arch: %v, %d launches", err, len(apiU.launches))
 	}
 	// A missing or wrong install input fails before anything is launched.
 	dir := t.TempDir()
@@ -956,7 +1044,7 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 	b, err := New(Config{
 		StateDir: t.TempDir(),
 		Offers: []Offer{{
-			Name: "h100", Provider: p, PricePerHour: 2.49,
+			Name: "h100", Provider: p, PricePerHour: new(2.49),
 			Facts:       proto.Facts{OS: "linux", Arch: "amd64", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 80 << 10}}},
 			IdleTimeout: time.Hour, MaxLifetime: time.Hour,
 		}},
@@ -971,7 +1059,7 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	if offers := b.Offers(context.Background()); offers[0].PricePerHour != 2.49 {
+	if offers := b.Offers(context.Background()); offers[0].PricePerHour == nil || *offers[0].PricePerHour != 2.49 {
 		t.Fatalf("offers %+v", offers)
 	}
 	l, err := b.Acquire("george", "george@github", "gpu=h100", "", "")
@@ -1037,9 +1125,14 @@ func TestLambdaInstallCommandUnpacksBundle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	binary, err := os.Open(p.ErrandBinary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer binary.Close()
 	r, w := io.Pipe()
 	go func() {
-		w.CloseWithError(p.writeInstallBundle(w, config, "errand-lease-host", p.ErrandBinary, "tskey-auth-FAKE", ""))
+		w.CloseWithError(writeInstallBundle(w, binary, config, "errand-lease-host", "tskey-auth-FAKE", ""))
 	}()
 	cmd := exec.Command("sh", "-c", lambdaInstallCommand)
 	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -1071,7 +1164,7 @@ func TestLambdaInstallCommandUnpacksBundle(t *testing.T) {
 	os.WriteFile(filepath.Join(bin, "sudo"), []byte("#!/bin/sh\necho 'sudo: a password is required' >&2\nexit 1\n"), 0o755)
 	r, w = io.Pipe()
 	go func() {
-		w.CloseWithError(p.writeInstallBundle(w, config, "errand-lease-host", p.ErrandBinary, "tskey-auth-FAKE", ""))
+		w.CloseWithError(writeInstallBundle(w, binary, config, "errand-lease-host", "tskey-auth-FAKE", ""))
 	}()
 	cmd = exec.Command("sh", "-c", lambdaInstallCommand)
 	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))

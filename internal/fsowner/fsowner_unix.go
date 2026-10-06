@@ -19,3 +19,11 @@ func ownedByCurrentUser(f *os.File) (bool, error) {
 	}
 	return int(stat.Uid) == os.Geteuid(), nil
 }
+
+func private(f *os.File) (bool, error) {
+	info, err := f.Stat()
+	if err != nil {
+		return false, err
+	}
+	return info.Mode().Perm()&0o077 == 0, nil
+}

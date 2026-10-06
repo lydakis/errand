@@ -1557,8 +1557,8 @@ func TestChangeGCDryRunDoesNotWidenRestrictiveDownloadedStaging(t *testing.T) {
 	}
 
 	result, err := ChangeGC(24*time.Hour, true)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil || !strings.HasPrefix(err.Error(), download+": ") {
+		t.Fatalf("dry-run did not name the unmeasurable download: %v", err)
 	}
 	if !result.DryRun || result.Failed != 1 || result.Removed != 0 {
 		t.Fatalf("dry-run result = %+v", result)

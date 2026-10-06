@@ -31,12 +31,13 @@ func TestLambdaLiveCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, it := range types {
-		f := it.facts(lambdaArch(it.Architecture))
+		arch, known := lambdaArch(it.Architecture)
+		f := it.facts(arch)
 		t.Logf("%-28s $%6.2f/h %-6s %3d cpu  %-24q -> %-20s capacity in %s", it.Name, float64(it.PriceCentsPerHour)/100, it.Architecture, it.VCPUs, it.GPUDescription, placement.DescribeGPUs(f.GPUs), strings.Join(it.Regions, ","))
 		if it.GPUs > 0 && (len(f.GPUs) != it.GPUs || f.GPUs[0].MemoryMiB == 0) {
 			t.Errorf("%s: %q parsed as %+v", it.Name, it.GPUDescription, f.GPUs)
 		}
-		if lambdaArch(it.Architecture) == "" {
+		if !known {
 			t.Errorf("%s: unknown architecture %q", it.Name, it.Architecture)
 		}
 	}
@@ -46,7 +47,7 @@ func TestLambdaLiveCatalog(t *testing.T) {
 	}
 	var lines []string
 	for _, o := range offers {
-		lines = append(lines, fmt.Sprintf("%-28s $%6.2f/h %s", o.Name, o.PricePerHour, placement.DescribeGPUs(o.Facts.GPUs)))
+		lines = append(lines, fmt.Sprintf("%-28s $%6.2f/h %s", o.Name, *o.PricePerHour, placement.DescribeGPUs(o.Facts.GPUs)))
 	}
 	t.Logf("%d offers with capacity now:\n%s", len(offers), strings.Join(lines, "\n"))
 }

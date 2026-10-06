@@ -36,21 +36,41 @@ func (p *LambdaProvider) releaseURL() string {
 	return errandReleases
 }
 
-// errandBinary is the errand build to install on the machine: errand_binary
+// errandBinary returns a private copy of the errand build to install on the
+// machine, checked to be a Linux errand build for its architecture, so a
+// wrong one fails here instead of on a paid machine. The copy is what was
+// checked and what the install sends: the file it came from may be replaced
+// in between. The caller closes and removes the copy.
+func (p *LambdaProvider) errandBinary(ctx context.Context, progress func(string)) (*os.File, error) {
+	path, err := p.errandBuild(ctx, progress)
+	if err != nil {
+		return nil, err
+	}
+	binary, err := privateCopy(path)
+	if err == nil {
+		if err = checkLinuxBinary(binary, path, p.Arch); err != nil {
+			removeCopy(binary)
+		}
+	}
+	if err != nil {
+		if p.ErrandBinary != "" {
+			return nil, fmt.Errorf("lambda errand_binary: %w", err)
+		}
+		return nil, err
+	}
+	return binary, nil
+}
+
+// errandBuild is where the errand build for the machine is: errand_binary
 // when set, this process when it is a Linux build for the machine's
 // architecture, or else this version's release for it, downloaded once into
-// the provider's directory and checked against the release's checksums. Any
-// of them must be a Linux errand build, so a wrong one fails here instead of
-// on a paid machine.
-func (p *LambdaProvider) errandBinary(ctx context.Context, progress func(string)) (string, error) {
+// the provider's directory and checked against the release's checksums.
+func (p *LambdaProvider) errandBuild(ctx context.Context, progress func(string)) (string, error) {
 	if p.ErrandBinary != "" {
-		if err := checkLinuxBinary(p.ErrandBinary, p.Arch); err != nil {
-			return "", fmt.Errorf("lambda errand_binary: %w", err)
-		}
 		return p.ErrandBinary, nil
 	}
 	if runtime.GOOS == "linux" && runtime.GOARCH == p.Arch {
-		if self, err := os.Executable(); err == nil && checkLinuxBinary(self, p.Arch) == nil {
+		if self, err := os.Executable(); err == nil && checkLinuxFile(self, p.Arch) == nil {
 			return self, nil
 		}
 	}
@@ -64,14 +84,14 @@ func (p *LambdaProvider) errandBinary(ctx context.Context, progress func(string)
 	path := filepath.Join(p.KeyDir, "bin", fmt.Sprintf("errand-%s-linux-%s", version, p.Arch))
 	lambdaBinaryMu.Lock()
 	defer lambdaBinaryMu.Unlock()
-	if checkLinuxBinary(path, p.Arch) == nil {
+	if checkLinuxFile(path, p.Arch) == nil {
 		return path, nil
 	}
 	progress(fmt.Sprintf("downloading errand %s for linux/%s", version, p.Arch))
 	if err := p.downloadErrand(ctx, version, path); err != nil {
 		return "", fmt.Errorf("downloading errand %s for linux/%s: %w", version, p.Arch, err)
 	}
-	if err := checkLinuxBinary(path, p.Arch); err != nil {
+	if err := checkLinuxFile(path, p.Arch); err != nil {
 		os.Remove(path)
 		return "", fmt.Errorf("the errand %s release for linux/%s: %w", version, p.Arch, err)
 	}

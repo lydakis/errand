@@ -979,7 +979,7 @@ func TestAcquireTakesCheapestMatchingOffer(t *testing.T) {
 	base := h.cfg.Offers[0]
 	pool, dear, cheap := base, base, base
 	pool.Name, dear.Name, cheap.Name = "pool", "dear", "cheap"
-	dear.PricePerHour, cheap.PricePerHour = 3.5, 1.25
+	dear.PricePerHour, cheap.PricePerHour = new(3.5), new(1.25)
 	h.cfg.Offers = []Offer{pool, dear, cheap}
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", "", proto.NewULID())
@@ -1199,12 +1199,12 @@ func TestCatalogOffersAreLeased(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	base := h.cfg.Offers[0]
 	listed := base
-	listed.Name, listed.PricePerHour = "gpu-1x-h100", 2.49
+	listed.Name, listed.PricePerHour = "gpu-1x-h100", new(2.49)
 	dear := base
-	dear.Name, dear.PricePerHour = "gpu-8x-h100", 27.99
+	dear.Name, dear.PricePerHour = "gpu-8x-h100", new(27.99)
 	dear.Facts.GPUs = slices.Repeat(base.Facts.GPUs, 8)
 	shadowed := base
-	shadowed.Name, shadowed.PricePerHour = "h100", 0.01 // a configured offer's name
+	shadowed.Name, shadowed.PricePerHour = "h100", new(0.01) // a configured offer's name
 	catalog := &fakeCatalog{offers: []Offer{dear, shadowed, listed}}
 	h.cfg.Catalog = catalog
 	h.cfg.CatalogRefresh = time.Hour
@@ -1212,11 +1212,15 @@ func TestCatalogOffersAreLeased(t *testing.T) {
 	// Right after the start, the offers wait for the first listing.
 	var names []string
 	for _, o := range b.Offers(context.Background()) {
-		names = append(names, fmt.Sprintf("%s $%.2f", o.Name, o.PricePerHour))
+		price := "unpriced"
+		if o.PricePerHour != nil {
+			price = fmt.Sprintf("$%.2f", *o.PricePerHour)
+		}
+		names = append(names, o.Name+" "+price)
 	}
 	// Configured offers come first and hide a listed one of the same name;
 	// listed ones follow, cheapest first.
-	if want := []string{"h100 $0.00", "gpu-1x-h100 $2.49", "gpu-8x-h100 $27.99"}; !slices.Equal(names, want) {
+	if want := []string{"h100 unpriced", "gpu-1x-h100 $2.49", "gpu-8x-h100 $27.99"}; !slices.Equal(names, want) {
 		t.Fatalf("offers %q, want %q", names, want)
 	}
 	// With the configured offer unpriced, the cheapest match is the listed one.

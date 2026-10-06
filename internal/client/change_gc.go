@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -76,7 +77,19 @@ type localChangeCandidate struct {
 	modified       time.Time
 	bytes          int64
 	transferActive bool
-	scanFailed     bool
+	scanErr        error
+}
+
+// path names the candidate in failure reports: its job record, else its
+// first download.
+func (c *localChangeCandidate) path() string {
+	if c.statePath != "" {
+		return c.statePath
+	}
+	if len(c.downloadPaths) > 0 {
+		return c.downloadPaths[0]
+	}
+	return c.key
 }
 
 const unresolvedChangeStateProtection = proto.ChangeReconciliationWindow
@@ -104,14 +117,26 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 		return result, err
 	}
 	cutoff := time.Now().Add(-olderThan)
-	for _, candidate := range candidates {
+	keys := make([]string, 0, len(candidates))
+	for key := range candidates {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	// Each failure names its record so a nonzero exit is never unexplained.
+	var failures []error
+	fail := func(candidate *localChangeCandidate, err error) {
+		result.Failed++
+		failures = append(failures, fmt.Errorf("%s: %w", candidate.path(), err))
+	}
+	for _, key := range keys {
+		candidate := candidates[key]
 		if !candidate.modified.Before(cutoff) {
 			continue
 		}
 		result.Selected++
 		if dryRun {
-			if candidate.scanFailed {
-				result.Failed++
+			if candidate.scanErr != nil {
+				fail(candidate, candidate.scanErr)
 				continue
 			}
 			if candidate.transferActive {
@@ -120,7 +145,7 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 			}
 			unlock, acquired, lockErr := tryAcquireExistingLocalChangeLock(localChangeTransferLockName(candidate.key))
 			if lockErr != nil {
-				result.Failed++
+				fail(candidate, lockErr)
 				continue
 			}
 			if !acquired {
@@ -130,7 +155,7 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 			removed, eligible, protected, removeErr := collectLocalChangeCandidate(candidate, cutoff, true)
 			unlock()
 			if removeErr != nil {
-				result.Failed++
+				fail(candidate, removeErr)
 				continue
 			}
 			if protected {
@@ -143,14 +168,16 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 			}
 			continue
 		}
-		collectLocalChangeLocked(downloads, candidate, cutoff, &result)
+		if err := collectLocalChangeLocked(downloads, candidate, cutoff, &result); err != nil {
+			fail(candidate, err)
+		}
 	}
 	if !dryRun {
 		if err := errors.Join(
 			syncExistingLocalDirectory(jobs),
 			syncExistingLocalDirectory(downloads),
 		); err != nil {
-			return result, err
+			return result, errors.Join(append(failures, err)...)
 		}
 	}
 	transfers, err := workspaceTransferGC(cutoff, dryRun)
@@ -160,39 +187,39 @@ func ChangeGC(olderThan time.Duration, dryRun bool) (ChangeGCResult, error) {
 	result.Failed += transfers.Failed
 	result.Stale += transfers.Stale
 	result.FreedBytes += transfers.FreedBytes
-	return result, err
+	return result, errors.Join(append(failures, err)...)
 }
 
-func collectLocalChangeLocked(downloads string, candidate *localChangeCandidate, cutoff time.Time, result *ChangeGCResult) {
+// collectLocalChangeLocked returns why a candidate could not be collected;
+// the caller counts the failure.
+func collectLocalChangeLocked(downloads string, candidate *localChangeCandidate, cutoff time.Time, result *ChangeGCResult) error {
 	unlock, acquired, lockErr := tryAcquireLocalChangeLock(localChangeTransferLockName(candidate.key))
 	if lockErr != nil {
-		result.Failed++
-		return
+		return lockErr
 	}
 	if !acquired {
 		result.Protected++
-		return
+		return nil
 	}
 	defer unlock()
 	// The scan ran without the transfer lock, so a fetch may have renamed its
 	// staging directory into place since. Rescan while no fetch can run.
 	if err := rescanLocalChangeCandidate(downloads, candidate); err != nil {
-		result.Failed++
-		return
+		return err
 	}
 	removed, eligible, protected, removeErr := collectLocalChangeCandidate(candidate, cutoff, false)
 	if removeErr != nil {
-		result.Failed++
-		return
+		return removeErr
 	}
 	if protected {
 		result.Protected++
-		return
+		return nil
 	}
 	if eligible && removed {
 		result.Removed++
 		result.FreedBytes += candidate.bytes
 	}
+	return nil
 }
 
 // rescanLocalChangeCandidate refreshes a candidate's downloads and bytes. The
@@ -243,30 +270,23 @@ func syncExistingLocalDirectory(path string) error {
 func collectLocalChangeCandidate(candidate *localChangeCandidate, cutoff time.Time, dryRun bool) (removed, eligible, protected bool, err error) {
 	eligible = true
 	var state localChangeState
+	readable := false
 	if candidate.statePath != "" {
-		state, err = loadLocalChangeStateFile(candidate.statePath, candidate.key)
+		state, readable, protected, err = loadCollectableChangeState(candidate)
 		if err != nil {
 			return false, false, false, err
 		}
-		pending, unavailable, pendingErr := localChangeTransactionExists(state)
-		if pendingErr != nil {
-			return false, false, false, pendingErr
-		}
-		if pending || localChangeStateNeedsProtection(state, unavailable, candidate.modified, time.Now()) {
+		if protected {
 			return false, true, true, nil
 		}
 	}
 	remove := func() error {
 		if candidate.statePath != "" {
-			current, err := loadLocalChangeStateFile(candidate.statePath, candidate.key)
+			_, _, current, err := loadCollectableChangeState(candidate)
 			if err != nil {
 				return err
 			}
-			pending, unavailable, pendingErr := localChangeTransactionExists(current)
-			if pendingErr != nil {
-				return pendingErr
-			}
-			if pending || localChangeStateNeedsProtection(current, unavailable, candidate.modified, time.Now()) {
+			if current {
 				protected = true
 				return nil
 			}
@@ -294,7 +314,8 @@ func collectLocalChangeCandidate(candidate *localChangeCandidate, cutoff time.Ti
 		}
 		return nil
 	}
-	if dryRun || candidate.statePath == "" {
+	// An unreadable record names no workspace to lock; no command can use it.
+	if dryRun || !readable {
 		err = remove()
 	} else if _, statErr := os.Stat(state.Root); statErr == nil {
 		err = withWorkspaceChangeLock(state.Root, remove)
@@ -304,6 +325,26 @@ func collectLocalChangeCandidate(candidate *localChangeCandidate, cutoff time.Ti
 		err = statErr
 	}
 	return err == nil && eligible && !protected, eligible, protected, err
+}
+
+// loadCollectableChangeState loads a candidate's job record and reports
+// whether it must be kept. A record this version cannot decode, such as one
+// written by an earlier errand, protects nothing: no command can fetch, apply
+// or recover through it.
+func loadCollectableChangeState(candidate *localChangeCandidate) (state localChangeState, readable, protected bool, err error) {
+	state, err = loadLocalChangeStateFile(candidate.statePath, candidate.key)
+	var unreadable *unreadableChangeStateError
+	if errors.As(err, &unreadable) {
+		return state, false, false, nil
+	}
+	if err != nil {
+		return state, false, false, err
+	}
+	pending, unavailable, err := localChangeTransactionExists(state)
+	if err != nil {
+		return state, true, false, err
+	}
+	return state, true, pending || localChangeStateNeedsProtection(state, unavailable, candidate.modified, time.Now()), nil
 }
 
 func localChangeStateNeedsProtection(
@@ -530,7 +571,7 @@ func collectChangeGCCandidatesContext(ctx context.Context, jobs, downloads strin
 			if readOnly {
 				unlock, acquired, err := tryAcquireExistingLocalChangeLock(localChangeTransferLockName(key))
 				if err != nil {
-					candidate.scanFailed = true
+					candidate.scanErr = err
 					continue
 				}
 				if !acquired {
@@ -543,7 +584,7 @@ func collectChangeGCCandidatesContext(ctx context.Context, jobs, downloads strin
 					continue
 				}
 				if err != nil {
-					candidate.scanFailed = true
+					candidate.scanErr = err
 					continue
 				}
 			} else {
