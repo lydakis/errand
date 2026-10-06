@@ -36,7 +36,7 @@ func TestTransferBlobsReconstructCheckpointAfterSourceDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeTransferFile(t, source, "file", "accepted source\n")
-	bundle, _, err := CollectWorkspaceChangesContext(ctx, source, first, base, proto.SelectionPolicy{}, 1<<20)
+	bundle, _, err := CollectWorkspaceChangesContext(ctx, source, first, TreeBase(workspaceBasePath(first)), base, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestTransferBlobsReconstructCheckpointAfterSourceDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertTransferFile(t, workspaceBasePath(second), "file", "accepted source\n")
-	deletion, _, err := CollectWorkspaceChangesContext(ctx, source, second, next.Manifest, proto.SelectionPolicy{}, 1<<20)
+	deletion, _, err := CollectWorkspaceChangesContext(ctx, source, second, TreeBase(workspaceBasePath(second)), next.Manifest, proto.SelectionPolicy{}, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}

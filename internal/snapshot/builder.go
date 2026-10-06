@@ -58,7 +58,10 @@ func (b *Builder) hash(ctx context.Context, path string, info fs.FileInfo) (stri
 		unchanged = os.SameFile(info, after) && info.Mode() == after.Mode() && info.Size() == after.Size() && info.ModTime().Equal(after.ModTime())
 	}
 	if !unchanged {
-		return "", sourceChangedf("snapshot: %s changed while hashing", path)
+		if !after.Mode().IsRegular() {
+			return "", sourceChangedf("snapshot: %s changed while hashing", path)
+		}
+		return "", fileChangedf(path, "snapshot: %s changed while hashing", path)
 	}
 	if supported {
 		b.next[path] = fileHash{stamp, hash}

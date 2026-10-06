@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,8 +60,8 @@ func TestWatchPrepareRehashesDirtyContentAndKeepsPriorEntries(t *testing.T) {
 }
 
 func TestWatchPrepareInvalidatesHashesEvenWhenStatEvidenceMatches(t *testing.T) {
-	for _, reconcile := range []bool{false, true} {
-		t.Run(map[bool]string{false: "dirty-file", true: "reconciliation"}[reconcile], func(t *testing.T) {
+	for _, mode := range []string{"dirty-file", "reconciliation", "changed-while-read"} {
+		t.Run(mode, func(t *testing.T) {
 			w, b := prepareWatchFixture(t)
 			assertPreparedMatchesFull(t, w, b)
 			name := filepath.Join(w.root, "value")
@@ -76,13 +77,55 @@ func TestWatchPrepareInvalidatesHashesEvenWhenStatEvidenceMatches(t *testing.T) 
 			}
 			old.stamp, _ = Fingerprint(info)
 			b.hashes[name] = old
-			if reconcile {
+			switch mode {
+			case "reconciliation":
 				w.InvalidatePreparation()
-			} else {
+			case "changed-while-read":
+				w.InvalidateFiles([]string{name})
+			default:
 				w.invalidatePath(name, dirtyContent)
 			}
 			assertPreparedMatchesFull(t, w, b)
 		})
+	}
+}
+
+// A file that changed while a push read it is reread alone: the preparation
+// stays incremental, as when its native event arrives first.
+func TestWatchInvalidateFilesKeepsPreparationIncremental(t *testing.T) {
+	w, b := prepareWatchFixture(t)
+	assertPreparedMatchesFull(t, w, b)
+	fullAt := w.prepared.fullAt
+	name := filepath.Join(w.root, "value")
+	if err := os.WriteFile(name, []byte("after!"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	w.InvalidateFiles([]string{name})
+	assertPreparedMatchesFull(t, w, b)
+	if !w.prepared.fullAt.Equal(fullAt) {
+		t.Fatal("a changed file forced full reconciliation")
+	}
+	// A path outside the watched root cannot be attributed and reconciles fully.
+	w.InvalidateFiles([]string{filepath.Join(t.TempDir(), "value")})
+	assertPreparedMatchesFull(t, w, b)
+	if w.prepared.fullAt.Equal(fullAt) {
+		t.Fatal("an unattributable change stayed incremental")
+	}
+}
+
+func TestWatchPreparationFailureKeepsConsumedHints(t *testing.T) {
+	w, _ := prepareWatchFixture(t)
+	hinted, changed := filepath.Join(w.root, "hinted"), filepath.Join(w.root, "value")
+	consumed := map[string]dirtyKind{hinted: dirtyContent}
+	w.preparationFailed(FileChanged(changed, errors.New("changed")), consumed, false, false, true)
+	if w.dirty[hinted] != dirtyContent || w.dirty[changed] != dirtyEntry || !w.owedFull || w.fullScan || w.resetHashes {
+		t.Fatalf("file change lost hints or forced reconciliation: dirty=%v owed=%v full=%v reset=%v",
+			w.dirty, w.owedFull, w.fullScan, w.resetHashes)
+	}
+	w.dirty, w.owedFull = nil, false
+	w.preparationFailed(sourceChangedf("snapshot: selected directory %q was replaced", "dir"), consumed, false, false, false)
+	if !w.fullScan || !w.resetHashes {
+		t.Fatal("structural change did not force full reconciliation")
 	}
 }
 

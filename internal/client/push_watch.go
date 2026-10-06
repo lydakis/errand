@@ -167,7 +167,11 @@ func runPushWatch(ctx context.Context, opts PushOptions, watch *snapshot.Watch, 
 			visible := normalizeWatchResult(&event)
 			var sourceError *pushSourceError
 			if errors.As(event.Err, &sourceError) {
-				watch.InvalidatePreparation()
+				if files, ok := snapshot.ChangedFiles(sourceError); ok {
+					watch.InvalidateFiles(files)
+				} else {
+					watch.InvalidatePreparation()
+				}
 				// Only proven mutation gets unlimited resampling. Unknown errors
 				// stay bounded, even when mutations occur between those failures.
 				mutation := snapshot.IsSourceChanged(sourceError)

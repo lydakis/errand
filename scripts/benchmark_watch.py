@@ -182,17 +182,22 @@ def measure(args, storage, socket_dir, report):
                 (root / ".errandignore").unlink()
                 (root / ".gitignore").write_text("ignored/\n")
                 git = ["git", "-C", str(root), "-c", "user.name=bench", "-c", "user.email=bench@example.invalid"]
-                subprocess.run([*git, "init", "-q"], check=True, capture_output=True)
+                # The user's Git configuration must not sign, ignore or hook the fixture.
+                fixture = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+                subprocess.run([*git, "init", "-q"], check=True, capture_output=True, env=fixture)
                 if args.git_tracking != "none":
                     tracked = ["."] if args.git_tracking == "all" else [
                         ".gitignore", "edit.txt", *sorted(p.name for p in root.glob("package-*") if int(p.name.split("-")[1]) % 2 == 0),
                         *sorted(p.name for p in root.glob("victim-*"))]
-                    subprocess.run([*git, "add", "--", *tracked], check=True, capture_output=True)
-                    subprocess.run([*git, "commit", "-q", "-m", "fixture"], check=True, capture_output=True)
+                    subprocess.run([*git, "add", "--", *tracked], check=True, capture_output=True, env=fixture)
+                    subprocess.run([*git, "commit", "-q", "-m", "fixture"], check=True, capture_output=True, env=fixture)
             (root / "ignored").mkdir()
-            ws, _ = run(binary, root, env, 60, "workspaces", "create", "--on", "local", "--json", "bench")
+            # Creation and the watch's first scan grow with the workspace (over two
+            # minutes and 25 s at 100K files on a Linux host); slower disks need more.
+            ws, report["create_seconds"] = run(binary, root, env, max(60, args.files // 100), "workspaces", "create",
+                                               "--on", "local", "--json", "bench")
             remote = storage / "daemon" / "workspaces" / ws["id"] / "data" / "edit.txt"
-            rsync = shutil.which("rsync")
+            rsync = None if args.skip_rsync else shutil.which("rsync")
             if rsync:
                 target = storage / "rsync-destination"
                 target.mkdir()
@@ -232,7 +237,7 @@ def measure(args, storage, socket_dir, report):
                 reader = threading.Thread(target=read_rows, daemon=True)
                 reader.start()
                 def next_row():
-                    stamp, row = rows.get(timeout=60)
+                    stamp, row = rows.get(timeout=max(60, args.files // 1000))
                     if row is None or row.get("status") not in ("applied", "unchanged"):
                         raise RuntimeError(f"watch failed: {row}")
                     return stamp, row
@@ -333,6 +338,7 @@ def main():
     parser.add_argument("--change", choices=("edit", "create", "delete"), default="edit",
                         help="measured change: edit edit.txt, create a new root file, or delete a root file")
     parser.add_argument("--skip-once", action="store_true", help="skip one-shot push samples")
+    parser.add_argument("--skip-rsync", action="store_true", help="skip the rsync comparison")
     parser.add_argument("--trace", action="store_true", help="record watch preparation modes and fallback reasons")
     parser.add_argument("--pause-seconds", type=float, default=0, help="idle interval before each measured watch save")
     args = parser.parse_args()

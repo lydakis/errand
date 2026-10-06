@@ -1362,6 +1362,7 @@ func (r *stagingUpload) Close() error { return r.body.Close() }
 
 func (d *Daemon) abortAdmission(j *Job, startErr error) error {
 	defer d.drainQueue() // a rollback can free a running slot
+	j.releaseBase()
 	cleanupErr := j.cleanupWorkspace()
 	if cleanupErr == nil {
 		cleanupErr = removeOwnedTree(j.Dir)

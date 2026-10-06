@@ -35,19 +35,20 @@ func (d *Daemon) handleWorkspaceCreateDiff(w http.ResponseWriter, r *http.Reques
 // This is the existing evictable snapshot cache, not the mutable workspace or
 // named dependency caches. Failure to retain an optimization is non-fatal.
 func (d *Daemon) cacheWorkspaceSource(ctx context.Context, source string, manifest proto.Manifest, restored map[string]bool) {
-	if err := d.cacheSnapshotSource(ctx, source, manifest, restored); err != nil && ctx.Err() == nil {
+	if err := d.cacheSnapshotSource(ctx, source, manifest, restored, nil); err != nil && ctx.Err() == nil {
 		log.Printf("workspace snapshot cache insertion: %v", err)
 	}
 }
 
 // Jobs and pushes reconstruct only verified content in private staging trees.
-// Keep their cache-hit tracking and subsequent ingestion policy together.
-func (d *Daemon) snapshotExtractOptions(ctx context.Context) (archive.ExtractOptions, map[string]bool) {
+// Keep their cache-hit tracking and subsequent ingestion policy together. A job
+// pins its hits as part of its change base.
+func (d *Daemon) snapshotExtractOptions(ctx context.Context, pins *cachePins) (archive.ExtractOptions, map[string]bool) {
 	var opts archive.ExtractOptions
 	restored := make(map[string]bool)
 	if d.cache != nil {
 		opts.ResolveMissing = func(dest string, entry proto.ManifestEntry) (bool, error) {
-			hit, err := d.cache.Materialize(ctx, dest, entry)
+			hit, err := d.cache.Materialize(ctx, dest, entry, pins)
 			if hit {
 				restored[entry.Path] = true
 			}
@@ -57,7 +58,7 @@ func (d *Daemon) snapshotExtractOptions(ctx context.Context) (archive.ExtractOpt
 	return opts, restored
 }
 
-func (d *Daemon) cacheSnapshotSource(ctx context.Context, source string, manifest proto.Manifest, restored map[string]bool) error {
+func (d *Daemon) cacheSnapshotSource(ctx context.Context, source string, manifest proto.Manifest, restored map[string]bool, pins *cachePins) error {
 	if d.cache == nil {
 		return nil
 	}
@@ -75,7 +76,7 @@ func (d *Daemon) cacheSnapshotSource(ctx context.Context, source string, manifes
 		if e.Type != proto.EntryFile || seen[e.SHA256] {
 			continue
 		}
-		if err := d.cache.Insert(ctx, filepath.Join(source, filepath.FromSlash(e.Path)), e.SHA256, e.Size); err != nil {
+		if err := d.cache.Insert(ctx, filepath.Join(source, filepath.FromSlash(e.Path)), e.SHA256, e.Size, pins); err != nil {
 			// One unreadable source must not prevent caching later files.
 			// Return one diagnostic rather than accumulating errors per file.
 			if firstErr == nil {

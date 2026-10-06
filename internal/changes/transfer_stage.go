@@ -105,32 +105,42 @@ func materializeSourceAtRoot(ctx context.Context, source, tree *os.Root, m proto
 		policy.linkDirectory = func(e proto.ManifestEntry) bool { return linkDirectories[e.Path] }
 	}
 	return materializeTransferTree(ctx, tree, m, policy, func(e proto.ManifestEntry) (io.ReadCloser, error) {
-		parent, name, lease, err := paths.parent(e.Path)
-		defer paths.release(lease)
-		var info os.FileInfo
-		var f *os.File
-		if err == nil {
-			info, err = parent.Lstat(name)
-			if err == nil && !info.Mode().IsRegular() {
-				return nil, fmt.Errorf("transfer source %q is not a regular file", e.Path)
-			}
-			if err == nil {
-				f, err = parent.Open(name)
-			}
-		}
-		if errors.Is(err, os.ErrPermission) && !errors.Is(err, errMaterializationParentVerification) {
-			f, err = openSearchSourceFile(source, e.Path)
-			info = nil // O_NOFOLLOW and the descriptor stat replace the lstat/open pair.
-		}
+		in, err := openMaterializationSource(&paths, e, mode(e))
 		if err != nil {
 			return nil, err
 		}
-		opened, err := f.Stat()
-		if err != nil || !opened.Mode().IsRegular() || (info != nil && !os.SameFile(info, opened)) || opened.Size() != e.Size || !fsmode.Matches(opened, mode(e)) {
-			return nil, errors.Join(fmt.Errorf("transfer source %q changed while opening", e.Path), f.Close())
-		}
-		return &transferSourceReader{File: f, entry: e, mode: mode(e)}, nil
+		return in, nil
 	})
+}
+
+// openMaterializationSource opens a regular source file whose descriptor still
+// matches the manifest entry; its reader rechecks the file when closed.
+func openMaterializationSource(paths *materializationPaths, e proto.ManifestEntry, mode uint32) (*transferSourceReader, error) {
+	parent, name, lease, err := paths.parent(e.Path)
+	defer paths.release(lease)
+	var info os.FileInfo
+	var f *os.File
+	if err == nil {
+		info, err = parent.Lstat(name)
+		if err == nil && !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("transfer source %q is not a regular file", e.Path)
+		}
+		if err == nil {
+			f, err = parent.Open(name)
+		}
+	}
+	if errors.Is(err, os.ErrPermission) && !errors.Is(err, errMaterializationParentVerification) {
+		f, err = openSearchSourceFile(paths.root, e.Path)
+		info = nil // O_NOFOLLOW and the descriptor stat replace the lstat/open pair.
+	}
+	if err != nil {
+		return nil, err
+	}
+	opened, err := f.Stat()
+	if err != nil || !opened.Mode().IsRegular() || (info != nil && !os.SameFile(info, opened)) || opened.Size() != e.Size || !fsmode.Matches(opened, mode) {
+		return nil, errors.Join(fmt.Errorf("transfer source %q changed while opening", e.Path), f.Close())
+	}
+	return &transferSourceReader{File: f, entry: e, mode: mode}, nil
 }
 
 type transferSourceReader struct {
