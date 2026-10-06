@@ -13,7 +13,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const testHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOFmZUN5Kd0kLHRZhkmAlu0HQK9h5BFXKCzIdeUCC5n3 errand-lease"
@@ -170,13 +172,22 @@ func TestSSHIdentityWithoutHostKey(t *testing.T) {
 	}
 }
 
-// Connections to one target are pooled by what this process trusts about
+// Connections to an endpoint are pooled by what this process trusts about
 // it: one opened before a lease's host key was pinned is not reused for the
 // lease, while requests that trust the same keep sharing one connection.
+// Each endpoint keeps one pool, so trust that rotates with every lease at a
+// reused address leaves nothing behind.
 func TestSSHPoolSeparatesTrust(t *testing.T) {
 	freshSSHTrust(t)
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	var closed atomic.Int32
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateClosed {
+			closed.Add(1)
+		}
+	}
+	server.Start()
 	defer server.Close()
 	var mu sync.Mutex
 	var dials []sshTrust
@@ -202,22 +213,32 @@ func TestSSHPoolSeparatesTrust(t *testing.T) {
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 	}
-	get()
-	get()
-	if err := TrustSSHHost(target, testHostKey, "/keys/errand"); err != nil {
-		t.Fatal(err)
+	const otherHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOFmZUN5Kd0kLHRZhkmAlu0HQK9h5BFXKCzIdeUCC5n4 other"
+	// Each lease at the address: its host key and key file, or none.
+	for _, lease := range [][2]string{{"", ""}, {testHostKey, "/keys/errand"}, {otherHostKey, "/keys/errand"}, {"", ""}} {
+		if err := TrustSSHHost(target, lease[0], lease[1]); err != nil {
+			t.Fatal(err)
+		}
+		get()
+		get()
+		pools := 0
+		rt.transports.Range(func(any, any) bool { pools++; return true })
+		if pools != 1 {
+			t.Fatalf("%d pools for one endpoint", pools)
+		}
 	}
-	get()
-	get()
-	// A later lease at the address without a host key is an ordinary peer
-	// again, and shares the ordinary pool.
-	if err := TrustSSHHost(target, "", ""); err != nil {
-		t.Fatal(err)
-	}
-	get()
 	mu.Lock()
 	defer mu.Unlock()
-	if len(dials) != 2 || dials[0].hostKey != "" || dials[1].hostKey == "" || !slices.Equal(dials[1].identities, []string{"/keys/errand"}) {
+	if len(dials) != 4 || dials[0].hostKey != "" || dials[1].hostKey == "" || dials[2].hostKey == dials[1].hostKey ||
+		dials[3].hostKey != "" || len(dials[3].identities) != 0 || !slices.Equal(dials[1].identities, []string{"/keys/errand"}) {
 		t.Fatalf("dials %+v", dials)
+	}
+	// Replaced pools close their idle connections.
+	deadline := time.Now().Add(5 * time.Second)
+	for closed.Load() < 3 {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d of 3 replaced connections closed", closed.Load())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

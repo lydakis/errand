@@ -362,7 +362,7 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 	if names, _ := launch["ssh_key_names"].([]any); len(names) != 1 || names[0] != keyName || api.sshKeys[keyName] != "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE errand-cloud-peer" || len(api.sshKeys) != 2 {
 		t.Fatalf("ssh keys: launch %v, account %v", launch["ssh_key_names"], api.sshKeys)
 	}
-	if !slices.Contains(ssh.lastArgs, filepath.Join(p.KeyDir, "lambda_ed25519")) {
+	if !slices.Contains(ssh.lastArgs, filepath.Join(p.KeyDir, "key", "lambda_ed25519")) {
 		t.Fatalf("install did not use the cloud peer's key: %q", ssh.lastArgs)
 	}
 	// The instance gets the host key SSH then pins; the Tailscale key never
@@ -463,7 +463,7 @@ func TestLambdaAcquireOverSSH(t *testing.T) {
 		t.Fatalf("authorized-keys %q", got)
 	}
 	// This cloud peer watches the machine with its own key.
-	if machine.Identity != filepath.Join(p.KeyDir, "lambda_ed25519") {
+	if machine.Identity != filepath.Join(p.KeyDir, "key", "lambda_ed25519") {
 		t.Fatalf("identity %q", machine.Identity)
 	}
 }
@@ -612,7 +612,7 @@ func TestLambdaRegistersOwnKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	public, err := os.ReadFile(filepath.Join(p.KeyDir, "lambda_ed25519.pub"))
+	public, err := os.ReadFile(filepath.Join(p.KeyDir, "key", "lambda_ed25519.pub"))
 	if err != nil || !strings.HasPrefix(name, "errand-") || api.sshKeys[name] != strings.TrimSpace(string(public)) {
 		t.Fatalf("registered %q: %v, account %v", name, err, api.sshKeys)
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"math/big"
 	"net/url"
 	"strings"
 )
@@ -65,8 +66,12 @@ func (t LeaseTarget) Check() error {
 
 // SSHKeyBody returns the key type and base64 data of one authorized_keys
 // line without options, dropping its comment. ok is false for anything
-// else: the data must be a well-formed public key of the declared type,
-// one of ed25519, RSA, NIST ECDSA, or their security-key forms.
+// else. The key must be one OpenSSH would load as a host key: ed25519,
+// NIST ECDSA or RSA, of the declared type and within OpenSSH's own limits
+// for loading it, with an RSA exponent that is odd and at least 3. That is
+// a check of form, matching OpenSSH's load rules, not a cryptographic
+// audit. It covers host keys, the only keys from outside errand, and the
+// ed25519 device keys errand makes itself.
 func SSHKeyBody(s string) (body string, ok bool) {
 	fields := strings.Fields(s)
 	if len(fields) < 2 || len(s) > 16<<10 || strings.ContainsAny(s, "\r\n") {
@@ -103,14 +108,10 @@ func sshPublicKeyBlob(keyType, blob string) bool {
 	switch keyType {
 	case "ssh-ed25519":
 		ok = sshEd25519(&blob)
-	case "sk-ssh-ed25519@openssh.com":
-		ok = sshEd25519(&blob) && sshRead(&blob, new(string))
 	case "ssh-rsa":
-		ok = sshMpint(&blob) && sshMpint(&blob)
+		ok = sshRSA(&blob)
 	case "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521":
 		ok = sshECDSA(&blob, strings.TrimPrefix(keyType, "ecdsa-sha2-"))
-	case "sk-ecdsa-sha2-nistp256@openssh.com":
-		ok = sshECDSA(&blob, "nistp256") && sshRead(&blob, new(string))
 	}
 	return ok && blob == ""
 }
@@ -120,10 +121,24 @@ func sshEd25519(data *string) bool {
 	return sshRead(data, &key) && len(key) == ed25519.PublicKeySize
 }
 
+// sshRSA reads an exponent and a modulus within the bounds OpenSSH loads:
+// an odd exponent of at least 3 and a modulus of 1024 to 16384 bits.
+func sshRSA(data *string) bool {
+	var e, n *big.Int
+	if !sshMpint(data, &e) || !sshMpint(data, &n) {
+		return false
+	}
+	return e.Bit(0) == 1 && e.Cmp(big.NewInt(3)) >= 0 && n.BitLen() >= 1024 && n.BitLen() <= 16384
+}
+
 // sshMpint reads a positive integer in its shortest encoding.
-func sshMpint(data *string) bool {
+func sshMpint(data *string, v **big.Int) bool {
 	var n string
-	return sshRead(data, &n) && n != "" && n[0]&0x80 == 0 && (n[0] != 0 || len(n) > 1 && n[1]&0x80 != 0)
+	if !sshRead(data, &n) || n == "" || n[0]&0x80 != 0 || n[0] == 0 && (len(n) == 1 || n[1]&0x80 == 0) {
+		return false
+	}
+	*v = new(big.Int).SetBytes([]byte(n))
+	return true
 }
 
 // sshECDSA reads a curve name and a point on that curve.

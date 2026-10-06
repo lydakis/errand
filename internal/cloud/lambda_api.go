@@ -404,7 +404,7 @@ func (p *LambdaProvider) registerKey(ctx context.Context, apiKey string) (string
 }
 
 func (p *LambdaProvider) keyFile() string {
-	return filepath.Join(p.KeyDir, "lambda_ed25519")
+	return filepath.Join(p.KeyDir, "key", "lambda_ed25519")
 }
 
 func (p *LambdaProvider) keygen() func(context.Context, string, string) (string, error) {

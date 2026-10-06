@@ -45,15 +45,16 @@ func TestEnsureSSHKey(t *testing.T) {
 	if again, err := EnsureSSHKey(context.Background(), path, "errand"); err != nil || again != publics[0] {
 		t.Fatalf("existing key not reused: %q %v", again, err)
 	}
-	// A process stopped between placing the two halves leaves only the
-	// private key; the public half is derived from it again.
-	os.Remove(path + ".pub")
-	if again, err := EnsureSSHKey(context.Background(), path, "errand"); err != nil || again != publics[0] {
-		t.Fatalf("public half not restored: %q %v", again, err)
+	// Only the pair is left, in its own directory, whichever process won.
+	for dir, want := range map[string]int{filepath.Dir(path): 2, filepath.Dir(filepath.Dir(path)): 1} {
+		if entries, _ := os.ReadDir(dir); len(entries) != want {
+			t.Fatalf("%s holds %v", dir, entries)
+		}
 	}
-	entries, _ := os.ReadDir(filepath.Dir(path))
-	if len(entries) != 2 {
-		t.Fatalf("left behind %v", entries)
+	// A pair someone broke is reported, not half replaced.
+	os.Remove(path + ".pub")
+	if _, err := EnsureSSHKey(context.Background(), path, "errand"); err == nil {
+		t.Fatal("a key without its public half was used")
 	}
 }
 
@@ -61,16 +62,9 @@ func TestEnsureSSHKey(t *testing.T) {
 // the key it sends with lease requests.
 func TestEnsureSSHKeyWithoutOpenSSH(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	path := filepath.Join(t.TempDir(), "errand_ed25519")
+	path := filepath.Join(t.TempDir(), "key", "errand_ed25519")
 	public, err := EnsureSSHKey(context.Background(), path, "errand")
 	if err != nil || !strings.HasPrefix(public, "ssh-ed25519 ") || !strings.HasSuffix(public, " errand") {
 		t.Fatalf("key %q: %v", public, err)
-	}
-	if err := os.WriteFile(path, []byte("not a key"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	os.Remove(path + ".pub")
-	if _, err := EnsureSSHKey(context.Background(), path, "errand"); err == nil {
-		t.Fatal("derived a public key from garbage")
 	}
 }

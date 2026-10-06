@@ -394,13 +394,14 @@ func withdrawLease(broker placementChoice, requestID, id string) string {
 	return fmt.Sprintf("released lease %s", id)
 }
 
-// leaseKeyFile is the SSH key this client sends with lease requests.
+// leaseKeyFile is the SSH key this client sends with lease requests. Its
+// directory holds only the key pair, which EnsureSSHKey makes whole.
 func leaseKeyFile() (string, error) {
 	dir, err := config.StateDirectory()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "ssh", "errand_ed25519"), nil
+	return filepath.Join(dir, "ssh", "lease", "errand_ed25519"), nil
 }
 
 // clientLeaseIdentity is this client's lease key file and its public key,

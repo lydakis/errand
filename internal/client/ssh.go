@@ -41,25 +41,23 @@ type sshRoundTripper struct {
 	transports            sync.Map
 }
 
-// sshTransportKey names a pool of connections. A connection is reused only
-// for requests that would open it the same way, trusting the same host key
-// and offering the same identities.
+// sshTransportKey names the pool of connections to one endpoint.
 type sshTransportKey struct {
 	target  string
 	command string
 	socket  string
-	trust   string
+}
+
+// sshPool is an endpoint's connections, all opened trusting the same host
+// key and offering the same identities.
+type sshPool struct {
+	trust     string
+	transport *http.Transport
 }
 
 func (rt *sshRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	endpoint := sshEndpointForRequest(req.URL)
-	trust, _ := sshTrustFor(endpoint.target)
-	key := sshTransportKey{target: endpoint.target, command: endpoint.command, socket: endpoint.socket, trust: trust.poolKey()}
-	value, ok := rt.transports.Load(key)
-	if !ok {
-		value, _ = rt.transports.LoadOrStore(key, rt.newTransport(endpoint, trust))
-	}
-	inner := value.(*http.Transport)
+	inner := rt.pool(endpoint).transport
 
 	clone := req.Clone(req.Context())
 	u := *req.URL
@@ -69,6 +67,32 @@ func (rt *sshRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	clone.URL = &u
 	clone.Host = "errand"
 	return inner.RoundTrip(clone)
+}
+
+// pool returns endpoint's pool for what this process now trusts about its
+// target. When that changed, as when a lease's address is reused, a new
+// pool replaces the old one, whose idle connections are closed; requests
+// already on them finish.
+func (rt *sshRoundTripper) pool(endpoint sshEndpoint) *sshPool {
+	trust, _ := sshTrustFor(endpoint.target)
+	key := sshTransportKey{target: endpoint.target, command: endpoint.command, socket: endpoint.socket}
+	for {
+		value, ok := rt.transports.Load(key)
+		if ok && value.(*sshPool).trust == trust.poolKey() {
+			return value.(*sshPool)
+		}
+		fresh := &sshPool{trust: trust.poolKey(), transport: rt.newTransport(endpoint, trust)}
+		if !ok {
+			if _, loaded := rt.transports.LoadOrStore(key, fresh); !loaded {
+				return fresh
+			}
+			continue
+		}
+		if rt.transports.CompareAndSwap(key, value, fresh) {
+			value.(*sshPool).transport.CloseIdleConnections()
+			return fresh
+		}
+	}
 }
 
 // newTransport dials endpoint with trust as it was when the pool was made.
