@@ -30,6 +30,10 @@ type Offer struct {
 	PricePerHour *float64 // USD, informational; nil when unpriced
 	IdleTimeout  time.Duration
 	MaxLifetime  time.Duration
+	// Unavailable says why the offer cannot be leased from right now, such
+	// as a price above the cap. It is advertised like any other, so a
+	// request only it would match comes here and is refused with this reason.
+	Unavailable string
 }
 
 // ProbeFunc asks a leased runner for its info, offering identity (a private
@@ -44,8 +48,14 @@ type AdmitFunc func(ctx context.Context, target proto.LeaseTarget, identity stri
 const admitTimeout = 30 * time.Second
 
 type Config struct {
-	StateDir       string // leases are persisted under StateDir/leases
-	Offers         []Offer
+	StateDir string // leases are persisted under StateDir/leases
+	Offers   []Offer
+	// Catalog lists further offers, such as a cloud account's instance
+	// types with capacity, refreshed every CatalogRefresh (default 2m).
+	Catalog        Catalog
+	CatalogRefresh time.Duration
+	// Version is this errand's version, for providers that install errand.
+	Version        string
 	MaxLeases      int
 	AcquireTimeout time.Duration
 	ReleaseTimeout time.Duration
@@ -101,8 +111,9 @@ type record struct {
 // wakes the worker.
 type lease struct {
 	record
-	stop context.CancelFunc // cancels the running acquire or probe
-	wake chan struct{}
+	offer Offer              // the offer it was made from, which a catalog may since have dropped
+	stop  context.CancelFunc // cancels the running acquire or probe
+	wake  chan struct{}
 }
 
 type Broker struct {
@@ -113,6 +124,18 @@ type Broker struct {
 	mu     sync.Mutex
 	leases map[string]*lease
 	closed bool
+	// catalog is the latest listing from cfg.Catalog, cheapest first.
+	// catalogMu lets one listing run at a time, so an older one cannot
+	// land after a newer one.
+	catalogMu sync.Mutex
+	catalog   []Offer
+	catalogAt time.Time
+	// catalogTried is when the last listing ended, failed or not; catalogMu
+	// guards it.
+	catalogTried time.Time
+	// listed is closed once the catalog's first listing has finished, or
+	// at once without a catalog.
+	listed chan struct{}
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -140,6 +163,9 @@ func New(cfg Config) (*Broker, error) {
 	if cfg.IdlePoll <= 0 {
 		cfg.IdlePoll = 30 * time.Second
 	}
+	if cfg.CatalogRefresh <= 0 {
+		cfg.CatalogRefresh = 2 * time.Minute
+	}
 	// Paths kept in lease records, such as the identity a machine is reached
 	// with, must not depend on the directory the runner was started from.
 	dir, err := filepath.Abs(cfg.StateDir)
@@ -147,7 +173,10 @@ func New(cfg Config) (*Broker, error) {
 		return nil, err
 	}
 	cfg.StateDir = dir
-	b := &Broker{cfg: cfg, offers: map[string]Offer{}, dir: filepath.Join(cfg.StateDir, "leases"), leases: map[string]*lease{}}
+	b := &Broker{cfg: cfg, offers: map[string]Offer{}, dir: filepath.Join(cfg.StateDir, "leases"), leases: map[string]*lease{}, listed: make(chan struct{})}
+	if cfg.Catalog == nil {
+		close(b.listed)
+	}
 	for _, o := range cfg.Offers {
 		if o.Name == "" || o.Provider == nil || o.IdleTimeout <= 0 || o.MaxLifetime <= 0 {
 			return nil, fmt.Errorf("cloud offer %q is incomplete", o.Name)
@@ -158,11 +187,11 @@ func New(cfg Config) (*Broker, error) {
 		if _, dup := b.offers[o.Name]; dup {
 			return nil, fmt.Errorf("cloud offer %q is defined twice", o.Name)
 		}
-		// Providers that keep files of their own keep them with the leases.
-		if k, ok := o.Provider.(interface{ useStateDir(string) }); ok {
-			k.useStateDir(cfg.StateDir)
-		}
+		b.setUp(o.Provider)
 		b.offers[o.Name] = o
+	}
+	if cfg.Catalog != nil {
+		b.setUp(cfg.Catalog)
 	}
 	if err := os.MkdirAll(b.dir, 0700); err != nil {
 		return nil, err
@@ -196,7 +225,22 @@ func New(cfg Config) (*Broker, error) {
 	for _, l := range b.leases {
 		b.start(l)
 	}
+	if cfg.Catalog != nil {
+		b.wg.Add(1)
+		go b.refreshCatalog()
+	}
 	return b, nil
+}
+
+// setUp hands a provider or catalog what it may need from the broker: a
+// directory for files of its own, kept with the leases, and errand's version.
+func (b *Broker) setUp(v any) {
+	if k, ok := v.(interface{ useStateDir(string) }); ok {
+		k.useStateDir(b.cfg.StateDir)
+	}
+	if k, ok := v.(interface{ useVersion(string) }); ok {
+		k.useVersion(b.cfg.Version)
+	}
 }
 
 // load reads the recorded leases, dropping ended ones past their history.
@@ -229,13 +273,40 @@ func (b *Broker) load() ([]record, error) {
 	return records, nil
 }
 
-// Offers describes what this broker can lease.
-func (b *Broker) Offers() []proto.Offer {
-	out := make([]proto.Offer, 0, len(b.cfg.Offers))
-	for _, o := range b.cfg.Offers {
+// Offers describes what this broker can lease: its configured offers, then
+// the catalog's as of its last refresh. Right after the broker starts it
+// waits for the catalog's first listing, or until ctx ends, so a client
+// asking then is not told there is nothing to lease.
+func (b *Broker) Offers(ctx context.Context) []proto.Offer {
+	select {
+	case <-b.listed:
+	case <-ctx.Done():
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []proto.Offer
+	for _, o := range b.offersLocked() {
 		out = append(out, o.Offer())
 	}
 	return out
+}
+
+// offersLocked is every offer that can be leased from right now.
+func (b *Broker) offersLocked() []Offer {
+	return append(slices.Clone(b.cfg.Offers), b.catalog...)
+}
+
+// offerLocked finds an offer by name among those that can be leased from.
+func (b *Broker) offerLocked(name string) (Offer, bool) {
+	if o, ok := b.offers[name]; ok {
+		return o, true
+	}
+	for _, o := range b.catalog {
+		if o.Name == name {
+			return o, true
+		}
+	}
+	return Offer{}, false
 }
 
 // Offer is how o is advertised.
@@ -262,23 +333,41 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	if _, ok := proto.SSHKeyBody(sshKey); sshKey != "" && !ok {
 		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
-	if len(b.offers) == 0 {
+	if len(b.offers) == 0 && b.cfg.Catalog == nil {
 		return proto.Lease{}, &Error{http.StatusNotFound, "this runner has no cloud offers"}
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.closed {
-		return proto.Lease{}, &Error{http.StatusServiceUnavailable, "cloud broker is shutting down"}
 	}
 	if requestID == "" {
 		requestID = proto.NewULID()
+	}
+	// Only a new lease needs the catalog. A catalog that may have changed
+	// since the client saw it is listed again first, so a lease is not made
+	// from an offer that is gone, but a lease the owner already has is
+	// handed out without waiting for that.
+	if b.cfg.Catalog != nil {
+		if l, done, err := b.acquire(owner, login, where, q, sshKey, requestID, false); done {
+			return l, err
+		}
+		b.freshenCatalog()
+	}
+	l, _, err := b.acquire(owner, login, where, q, sshKey, requestID, true)
+	return l, err
+}
+
+// acquire hands out the lease a request already has or the owner's matching
+// one, and otherwise, when launch is set, makes a new one. done is false when
+// it found no lease to hand out and did not launch.
+func (b *Broker) acquire(owner, login, where string, q placement.Requirements, sshKey, requestID string, launch bool) (_ proto.Lease, done bool, _ error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return proto.Lease{}, true, &Error{http.StatusServiceUnavailable, "cloud broker is shutting down"}
 	}
 	var launching *lease
 	active := 0
 	// A request asked again, after its answer was lost, gets the same lease.
 	for _, l := range b.sorted() {
 		if l.Owner == owner && slices.Contains(l.Requests, requestID) {
-			return l.view(), nil
+			return l.view(), true, nil
 		}
 	}
 	// A launching lease handed to another request is waited on by that
@@ -315,19 +404,28 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 		}
 		switch {
 		case l.State == proto.LeaseReady && l.Facts != nil && len(q.Missing(*l.Facts)) == 0:
-			return share(l)
-		case l.State == proto.LeaseLaunching && launching == nil && len(q.Missing(b.offers[l.Offer].Facts)) == 0:
+			lease, err := share(l)
+			return lease, true, err
+		case l.State == proto.LeaseLaunching && launching == nil && len(q.Missing(l.offer.Facts)) == 0:
 			launching = l
 		}
 	}
 	if launching != nil {
-		return share(launching)
+		lease, err := share(launching)
+		return lease, true, err
+	}
+	if !launch {
+		return proto.Lease{}, false, nil
 	}
 	var offer *Offer
 	var reasons []string
-	for i := range b.cfg.Offers {
-		o := &b.cfg.Offers[i]
+	candidates := b.offersLocked()
+	for i := range candidates {
+		o := &candidates[i]
 		missing := q.Missing(o.Facts)
+		if len(missing) == 0 && o.Unavailable != "" {
+			missing = []string{o.Unavailable}
+		}
 		if len(missing) == 0 {
 			if offer == nil || placement.CheaperOffer(o.Offer(), offer.Offer()) {
 				offer = o
@@ -337,25 +435,25 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 		reasons = append(reasons, o.Name+": "+strings.Join(missing, "; "))
 	}
 	if offer == nil {
-		return proto.Lease{}, &Error{http.StatusPreconditionFailed, fmt.Sprintf("no offer matches %q: %s", where, strings.Join(reasons, "; "))}
+		return proto.Lease{}, true, &Error{http.StatusPreconditionFailed, fmt.Sprintf("no offer matches %q: %s", where, strings.Join(reasons, "; "))}
 	}
 	if active >= b.cfg.MaxLeases {
-		return proto.Lease{}, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease limit reached (%d active, max_leases = %d)", active, b.cfg.MaxLeases)}
+		return proto.Lease{}, true, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease limit reached (%d active, max_leases = %d)", active, b.cfg.MaxLeases)}
 	}
 	now := time.Now()
-	l := &lease{wake: make(chan struct{}, 1), record: record{
+	l := &lease{wake: make(chan struct{}, 1), offer: *offer, record: record{
 		Owner: owner, Login: login, Requests: []string{requestID}, Release: offer.Provider.ReleaseSpec(), IdleTimeout: offer.IdleTimeout,
 		Lease: proto.Lease{ID: proto.NewULID(), Offer: offer.Name, Where: where, SSHKeys: keyList(sshKey), State: proto.LeaseLaunching, CreatedAt: now, ExpiresAt: now.Add(offer.MaxLifetime)},
 	}}
 	l.addProgress("launching " + offer.Name)
 	// Recorded before acquiring, so a crash cannot forget a machine being paid for.
 	if err := b.persist(&l.record); err != nil {
-		return proto.Lease{}, &Error{http.StatusInternalServerError, "recording lease: " + err.Error()}
+		return proto.Lease{}, true, &Error{http.StatusInternalServerError, "recording lease: " + err.Error()}
 	}
 	log.Printf("lease %s (%s): launching for where %q", l.ID, l.Offer, where)
 	b.leases[l.ID] = l
 	b.start(l)
-	return l.view(), nil
+	return l.view(), true, nil
 }
 
 // Release ends an owner's lease. A launching lease stops its acquire first.
@@ -573,7 +671,9 @@ func (b *Broker) launch(l *lease) {
 		b.mu.Unlock()
 		return // released before the acquire started
 	}
-	offer := b.offers[l.Offer] // only this process's leases are launching
+	// Only this process's leases are launching, and each keeps the offer it
+	// was made from, which a catalog may since have dropped.
+	provider, offerName := l.offer.Provider, l.Offer
 	// The hard stop holds while launching too.
 	created := l.CreatedAt
 	deadline := earlier(created.Add(b.cfg.AcquireTimeout), l.ExpiresAt)
@@ -586,8 +686,8 @@ func (b *Broker) launch(l *lease) {
 	b.mu.Unlock()
 	defer cancel()
 
-	machine, err := offer.Provider.Acquire(ctx, AcquireRequest{
-		LeaseID: id, Offer: offer.Name, Where: where, Login: login, SSHKey: sshKey,
+	machine, err := provider.Acquire(ctx, AcquireRequest{
+		LeaseID: id, Offer: offerName, Where: where, Login: login, SSHKey: sshKey,
 		Progress: func(line string) { b.note(l, line) },
 		Save: func(state json.RawMessage) error {
 			return b.update(l, func(r *record) bool {
@@ -853,7 +953,10 @@ func (b *Broker) release(l *lease) {
 // that offer still releases the way r was made, or else one built from the
 // release settings r recorded.
 func (b *Broker) releaser(r record) (Provider, error) {
-	if o, ok := b.offers[r.Offer]; ok && o.Provider.ReleaseSpec().equal(r.Release) {
+	b.mu.Lock()
+	o, ok := b.offerLocked(r.Offer)
+	b.mu.Unlock()
+	if ok && o.Provider.ReleaseSpec().equal(r.Release) {
 		return o.Provider, nil
 	}
 	return r.Release.provider()
