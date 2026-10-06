@@ -69,15 +69,13 @@ func (p *LambdaProvider) errandBuild(ctx context.Context, progress func(string))
 	if p.ErrandBinary != "" {
 		return p.ErrandBinary, nil
 	}
-	if runtime.GOOS == "linux" && runtime.GOARCH == p.Arch {
-		if self, err := os.Executable(); err == nil && checkLinuxFile(self, p.Arch) == nil {
-			return self, nil
-		}
+	if self := selfBuild(p.Arch); self != "" {
+		return self, nil
+	}
+	if problem := p.buildProblem(p.Arch); problem != "" {
+		return "", errors.New(problem)
 	}
 	version := strings.TrimPrefix(p.Version, "v")
-	if version == "" || strings.HasSuffix(version, "-dev") {
-		return "", fmt.Errorf("this cloud peer runs a development build of errand (%s) on %s/%s, which has no release to install on linux/%s machines; set errand_binary to a linux/%s errand build", p.Version, runtime.GOOS, runtime.GOARCH, p.Arch, p.Arch)
-	}
 	if p.KeyDir == "" {
 		return "", errors.New("lambda provider has no directory for downloaded builds")
 	}
@@ -96,6 +94,40 @@ func (p *LambdaProvider) errandBuild(ctx context.Context, progress func(string))
 		return "", fmt.Errorf("the errand %s release for linux/%s: %w", version, p.Arch, err)
 	}
 	return path, nil
+}
+
+// buildProblem says why this cloud peer has no errand build for linux/arch
+// machines, or "" when it has one: errand_binary for that architecture,
+// this process when it is a Linux build for it, or else the release of this
+// version. An errand_binary that cannot be read is left for the launch to
+// report. It downloads nothing, so offers can be listed with it.
+func (p *LambdaProvider) buildProblem(arch string) string {
+	if p.ErrandBinary != "" {
+		if have, err := linuxBinaryArch(p.ErrandBinary); err == nil && have != arch {
+			return fmt.Sprintf("errand_binary is a linux/%s build, which cannot run on linux/%s machines", have, arch)
+		}
+		return ""
+	}
+	if selfBuild(arch) != "" {
+		return ""
+	}
+	if version := strings.TrimPrefix(p.Version, "v"); version == "" || strings.HasSuffix(version, "-dev") {
+		return fmt.Sprintf("this cloud peer runs a development build of errand (%s) on %s/%s, which has no release to install on linux/%s machines; set errand_binary to a linux/%s errand build", p.Version, runtime.GOOS, runtime.GOARCH, arch, arch)
+	}
+	return ""
+}
+
+// selfBuild is this process's executable when it is a Linux errand build
+// for arch, or "".
+func selfBuild(arch string) string {
+	if runtime.GOOS != "linux" || runtime.GOARCH != arch {
+		return ""
+	}
+	self, err := os.Executable()
+	if err != nil || checkLinuxFile(self, arch) != nil {
+		return ""
+	}
+	return self
 }
 
 // downloadErrand fetches the release archive for version and this arch,

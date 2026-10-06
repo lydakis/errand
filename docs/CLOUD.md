@@ -224,8 +224,10 @@ or for an `arm64` GH200 from an `amd64` box, it downloads the release of its
 own version for that architecture from GitHub once, checks it against the
 release's checksums, and keeps it in its state directory. A development build
 of errand has no release, so a cloud peer running one needs `errand_binary`
-set to a Linux build, and offers only instance types of that build's
-architecture. Everything is checked before anything is rented, and the
+set to a Linux build. An instance type of another architecture than
+`errand_binary`'s, or one a development build has no release for, is listed
+as unavailable, so a request only it matches says what to set.
+Everything is checked before anything is rented, and the
 machine gets the copy that was checked, even if the file changes while it
 boots.
 
