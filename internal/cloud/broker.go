@@ -163,10 +163,11 @@ type lease struct {
 	offer Offer              // the offer it was made from, which a catalog may since have dropped
 	stop  context.CancelFunc // cancels the running acquire or probe
 	wake  chan struct{}
-	// unusable is why the worker's latest probe of a ready lease found its
-	// machine unreachable or no longer matching the lease's where, or empty.
-	// A lease just made ready was checked by its launch.
-	unusable string
+	// checkFailed is why the worker's latest check of a ready lease found
+	// its machine unreachable or no longer matching the lease's where, or
+	// that there has been none since the cloud peer restarted; empty when it
+	// passed. A lease just made ready was checked by its launch.
+	checkFailed string
 	// holdFailing is when an idle release of the lease first could not take
 	// the hold on its runner, since which the lease has stayed due for
 	// release; zero otherwise.
@@ -285,7 +286,7 @@ func New(cfg Config) (*Broker, error) {
 			l.LastBusy = now // a full idle window after a restart
 			// Nothing about the machine is known until the worker's first
 			// probe, which comes as the worker starts.
-			l.unusable = "not checked since the cloud peer restarted"
+			l.checkFailed = "not checked since the cloud peer restarted"
 		}
 		b.leases[r.ID] = l
 	}
@@ -447,11 +448,15 @@ func (b *Broker) acquire(owner, login, where string, q placement.Requirements, s
 		return proto.Lease{}, true, &Error{http.StatusNotFound, "this runner has no cloud offers"}
 	}
 	// Leases passed over are noted once, by the pass that answers.
-	var passed []*lease
+	type passedOver struct {
+		l   *lease
+		why string
+	}
+	var passed []passedOver
 	defer func() {
 		if done {
-			for _, l := range passed {
-				b.noteLocked(l, "not handed out: "+l.unusable)
+			for _, p := range passed {
+				b.noteLocked(p.l, "not handed out: "+p.why)
 			}
 		}
 	}()
@@ -469,8 +474,8 @@ func (b *Broker) acquire(owner, login, where string, q placement.Requirements, s
 		}
 		switch {
 		case l.State == proto.LeaseReady && l.Facts != nil && len(q.Missing(*l.Facts)) == 0:
-			if l.unusable != "" {
-				passed = append(passed, l)
+			if why := l.refusal(time.Now()); why != "" {
+				passed = append(passed, passedOver{l, why})
 				continue
 			}
 			lease, err := b.shareLocked(l, requestID, sshKey)
@@ -627,8 +632,8 @@ func (b *Broker) Admit(owner, login, id, sshKey string, use bool) (proto.Lease, 
 		return proto.Lease{}, &Error{http.StatusNotFound, "no active lease of yours has that ID"}
 	}
 	// A lease Acquire would pass over is not handed out by name either.
-	if use && l.State == proto.LeaseReady && l.unusable != "" {
-		return proto.Lease{}, &Error{http.StatusConflict, fmt.Sprintf("lease %s cannot be used now: %s; it ends once idle", l.ID, l.unusable)}
+	if why := l.refusal(time.Now()); use && why != "" {
+		return proto.Lease{}, &Error{http.StatusConflict, fmt.Sprintf("lease %s cannot be used now: %s", l.ID, why)}
 	}
 	var refused error
 	if err := b.applyLocked(l, func(r *record) bool {
@@ -929,23 +934,20 @@ func (b *Broker) watch(l *lease) {
 		if len(r.PendingKeys) > 0 {
 			b.admitPending(l, r)
 		}
-		busy, reached, unusable, probed := false, false, "", false
+		busy, reached, failed, probed := false, false, "", false
 		if time.Now().Before(r.ExpiresAt) {
-			busy, reached, unusable = b.busy(l, r)
+			busy, reached, failed = b.busy(l, r)
 			probed = true
 		}
-		// A hold that a hand-out overtook, or that a cloud peer that stopped
+		// A hold whose outcome is unknown, or that a cloud peer that stopped
 		// left behind, keeps the lease from being handed out until it is
 		// lifted or has lapsed.
-		held := ""
 		if r.HoldToken != "" {
-			held = b.liftHold(l)
+			b.liftHold(l)
 		}
 		b.mu.Lock()
-		if held != "" {
-			l.unusable = held
-		} else if probed {
-			l.unusable = unusable
+		if probed {
+			l.checkFailed = failed
 		}
 		if busy {
 			l.LastBusy = time.Now()
@@ -986,9 +988,12 @@ func (b *Broker) watch(l *lease) {
 // counts as idle. Past the lease's lifetime nothing the drain finds keeps
 // it.
 //
-// The hold's token is recorded before the hold is taken, so a cloud peer
-// that stops in between knows on restart that the runner may be held, and
-// lifts the hold before handing the lease out.
+// The hold's token is recorded before the hold is taken, and while it is
+// recorded the lease is not handed out (see refusal), whatever the drain
+// answered or failed to: a drain whose answer was lost may have taken it.
+// A cloud peer that stops in between knows on restart that the runner may
+// be held, and lifts the hold before handing the lease out. A taken hold
+// goes with the lease into releasing; were that not recorded, it is lifted.
 //
 // The probe and the drain took time, and requests may have changed the
 // record meanwhile, so the decision is made against the record as it is
@@ -1073,11 +1078,7 @@ func (b *Broker) retire(l *lease, reached bool) bool {
 		return true
 	}
 	if token != "" && !b.stopped(l) {
-		if held := b.liftHold(l); held != "" {
-			b.mu.Lock()
-			l.unusable = held
-			b.mu.Unlock()
-		}
+		b.liftHold(l)
 	}
 	return false
 }
@@ -1117,26 +1118,43 @@ func (b *Broker) dropHold(l *lease, token string) {
 }
 
 // liftHold lifts the hold a ready lease's record says the runner may be
-// under: one a hand-out overtook, or one a cloud peer that stopped left
-// behind. It returns why the lease cannot be handed out while the hold may
-// remain, or empty once it is lifted or has lapsed.
-func (b *Broker) liftHold(l *lease) string {
+// under: one whose drain's outcome is unknown, or one a cloud peer that
+// stopped left behind. The record keeps the hold, and so the lease is not
+// handed out, until it is lifted or has lapsed.
+func (b *Broker) liftHold(l *lease) {
 	b.mu.Lock()
 	r := l.record
 	b.mu.Unlock()
 	if r.HoldToken == "" || r.State != proto.LeaseReady {
-		return ""
+		return
 	}
-	lapses := r.HoldSince.Add(runnerHoldTTL)
 	ctx, cancel := context.WithTimeout(b.ctx, probeTimeout)
 	err := b.cfg.Resume(ctx, r.drainTarget(), r.Identity, r.HoldToken)
 	cancel()
-	if err == nil || !time.Now().Before(lapses) {
+	if err == nil || !time.Now().Before(r.HoldSince.Add(runnerHoldTTL)) {
 		b.dropHold(l, r.HoldToken)
-		return ""
+		return
 	}
-	b.note(l, "the machine may refuse new jobs until "+lapses.Format(time.RFC3339)+": "+err.Error())
-	return "this cloud peer may still be holding it idle, until " + lapses.Format(time.RFC3339)
+	b.note(l, "could not lift the hold on the machine, which may refuse new jobs until "+r.HoldSince.Add(runnerHoldTTL).Format(time.RFC3339)+": "+err.Error())
+}
+
+// refusal says why a lease cannot be handed out as a ready machine, to a
+// run asking for one or naming it, or is empty when it can. It is the one
+// rule every hand-out follows, and depends only on what the cloud peer has
+// recorded of the lease and its worker's latest check: a lease that is not
+// ready, whose runner this cloud peer may be holding idle (recorded before
+// the hold is asked for, until it is lifted or lapses), or whose latest
+// check failed or has not happened since a restart, is refused.
+func (l *lease) refusal(now time.Time) string {
+	switch {
+	case l.State != proto.LeaseReady:
+		return "it is " + l.State
+	case l.HoldToken != "" && now.Before(l.HoldSince.Add(runnerHoldTTL)):
+		return "this cloud peer may be holding it idle, until " + l.HoldSince.Add(runnerHoldTTL).Format(time.RFC3339)
+	case l.checkFailed != "":
+		return l.checkFailed
+	}
+	return ""
 }
 
 // drainTarget is how the cloud peer reaches the runner's local socket to
@@ -1227,7 +1245,7 @@ func (b *Broker) stopped(l *lease) bool {
 // asking no later than the lease's hard stop, and why it cannot be handed
 // out, if it cannot: it did not answer, or its facts no longer match the
 // lease's where.
-func (b *Broker) busy(l *lease, r record) (busy, reached bool, unusable string) {
+func (b *Broker) busy(l *lease, r record) (busy, reached bool, failed string) {
 	ctx, cancel, ok := b.readyCall(l, r, probeTimeout)
 	defer cancel()
 	if !ok {
@@ -1236,11 +1254,11 @@ func (b *Broker) busy(l *lease, r record) (busy, reached bool, unusable string) 
 	info, err := b.cfg.Probe(ctx, *r.Target, r.Identity, r.Where)
 	q, _ := placement.Parse(r.Where)
 	if err != nil {
-		unusable = "this cloud peer cannot reach it: " + err.Error()
+		failed = "this cloud peer cannot reach it: " + err.Error()
 	} else if missing := q.Missing(info.Facts); len(missing) > 0 {
-		unusable = "it no longer matches " + r.Where + ": " + strings.Join(missing, "; ")
+		failed = "it no longer matches " + r.Where + ": " + strings.Join(missing, "; ")
 	}
-	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0, err == nil, unusable
+	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0, err == nil, failed
 }
 
 // release tries once to destroy the machine and records the outcome.

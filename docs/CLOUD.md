@@ -139,9 +139,12 @@ cannot reach counts as idle. Before releasing an idle lease, the cloud peer
 has its runner refuse new jobs, so a job submitted just before the release is
 refused rather than lost, and one that took a job just before keeps the
 lease for another full idle window. It does this over SSH, as the runner's own user, for
-Lambda machines on the tailnet too. If it cannot, while the machine still
-answers, the lease is kept and the release tried again at the next idle check,
-for up to one more `idle_timeout`. After that, a runner that stayed idle is
+Lambda machines on the tailnet too. From the moment it asks, the lease is
+neither handed out nor run on by name, until the release or until the hold is
+lifted. If it cannot get the hold, or the answer is lost, while the machine
+still answers, the lease is kept, still not handed out, and at the next idle
+check the cloud peer lifts the hold and tries the release again, for up to one
+more `idle_timeout`. After that, a runner that stayed idle is
 released without the hold. The hold lasts until the machine is gone: the
 cloud peer renews it while the provider terminates the machine, however long
 that takes. A provider command's machine that the cloud peer

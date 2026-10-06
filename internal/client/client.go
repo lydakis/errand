@@ -75,11 +75,14 @@ type RunOptions struct {
 	// Resolve, when set, supplies Candidates once local preparation has
 	// succeeded, so a machine is rented only for a run that can start.
 	Resolve func() ([]RunTarget, error)
-	// BeforeSubmit, when set, runs once every local step of an attempt has
-	// succeeded, right before the request that places work on target; an
-	// error ends the attempt without that request.
+	// BeforeSubmit, when set, runs once every local step and check of an
+	// attempt has succeeded, right before the request that places work on
+	// target goes out; an error ends the attempt without that request. It
+	// runs once per attempt: retrying the request, after a transport
+	// failure or to re-ship a full snapshot, does not run it again.
 	BeforeSubmit   func(target RunTarget) error
-	Workspace      string // explicitly selected existing persistent workspace
+	claim          func() error // BeforeSubmit for this attempt; see claimOnce
+	Workspace      string       // explicitly selected existing persistent workspace
 	workspaceID    string
 	Caches         []proto.CacheBinding
 	Artifacts      []string
@@ -373,12 +376,7 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		<-controller.done // release the shared signal channel before a fallback attempt
 	}()
 
-	if opts.BeforeSubmit != nil {
-		if err := opts.BeforeSubmit(RunTarget{PeerURL: opts.PeerURL, PeerName: opts.PeerName}); err != nil {
-			errf("%v", err)
-			return ExitTransaction, false
-		}
-	}
+	opts.claim = claimOnce(opts)
 	submissionStarted = true
 	status, admissionUncertain, err := submit(opts, jobID, spec, manifest, plan)
 	if err != nil {
@@ -979,6 +977,12 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 	if err := opts.selectionGuard.Verify(); err != nil {
 		return status, false, &submitNotStartedError{err: err}
 	}
+	// The last step before the request goes out.
+	if opts.claim != nil {
+		if err := opts.claim(); err != nil {
+			return status, false, &submitNotStartedError{err: err}
+		}
+	}
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	go func() {
@@ -1084,6 +1088,22 @@ type submitHTTPError struct {
 	code       string
 	message    string
 	capacity   bool
+}
+
+// claimOnce is opts' BeforeSubmit for one attempt at its target, run at
+// most once, right before the first request that places work there.
+func claimOnce(opts RunOptions) func() error {
+	claimed := false
+	return func() error {
+		if opts.BeforeSubmit == nil || claimed {
+			return nil
+		}
+		if err := opts.BeforeSubmit(RunTarget{PeerURL: opts.PeerURL, PeerName: opts.PeerName}); err != nil {
+			return err
+		}
+		claimed = true
+		return nil
+	}
 }
 
 type submitNotStartedError struct {

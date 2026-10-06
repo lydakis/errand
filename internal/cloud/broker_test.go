@@ -1419,12 +1419,12 @@ func TestUnusableReadyLeaseNotHandedOut(t *testing.T) {
 }
 
 // waitUnusable wakes a lease's worker until its latest probe found the
-// machine unusable, or usable.
+// lease refused for hand-outs, or not.
 func waitUnusable(t *testing.T, b *Broker, id string, unusable bool) {
 	t.Helper()
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
 		b.mu.Lock()
-		got := b.leases[id].unusable != ""
+		got := b.leases[id].refusal(time.Now()) != ""
 		b.mu.Unlock()
 		if got == unusable {
 			return
@@ -1519,18 +1519,73 @@ func TestDrainFindingWorkRestartsIdleWindow(t *testing.T) {
 	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 }
 
-// A lease handed out while its runner is being drained keeps the runner,
-// which takes jobs again.
-func TestHandOutDuringDrainResumesRunner(t *testing.T) {
+// A lease whose runner is being held for its idle release is not handed
+// out: a run asking meanwhile gets another machine, naming it to run on is
+// refused, and the held lease is released with its runner refusing jobs.
+func TestLeaseBeingHeldIsNotHandedOut(t *testing.T) {
 	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	h.cfg.IdlePoll = time.Hour
+	h.cfg.MaxLeases = 3
 	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
 	draining, proceed := make(chan struct{}), make(chan struct{})
+	var once sync.Once
 	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, token string) error {
 		err := h.machine.drain(ctx, target, identity, token)
-		close(draining)
-		<-proceed
+		once.Do(func() {
+			close(draining)
+			<-proceed
+		})
 		return err
+	}
+	b := h.start(t)
+	var proceeded sync.Once
+	let := func() { proceeded.Do(func() { close(proceed) }) }
+	t.Cleanup(let) // before the broker closes
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	time.Sleep(150 * time.Millisecond)
+	wake(b, l.ID)
+	<-draining
+	if other, err := b.Acquire("george", "", "gpu", "", ""); err != nil || other.ID == l.ID {
+		t.Fatalf("hand-out during the hold: %+v %v", other, err)
+	}
+	var refused *Error
+	if _, err := b.Admit("george", "", l.ID, "", true); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, "may be holding it idle") {
+		t.Fatalf("naming a held lease to run on: %v", err)
+	}
+	let()
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+	if !h.machine.held() {
+		t.Fatal("released a runner that could still take jobs")
+	}
+}
+
+// A drain whose answer is lost may have left the runner held: the lease is
+// not handed out, to a run asking or one naming it, until the hold is
+// lifted.
+func TestDrainWithLostAnswerWithholdsLease(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.MaxLeases = 3
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	var lost, stuck atomic.Bool
+	lost.Store(true)
+	stuck.Store(true)
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, token string) error {
+		err := h.machine.drain(ctx, target, identity, token)
+		if err == nil && lost.Swap(false) {
+			return errors.New("ssh: connection timed out")
+		}
+		return err
+	}
+	h.cfg.Resume = func(ctx context.Context, target proto.LeaseTarget, identity, token string) error {
+		if stuck.Load() {
+			return errors.New("ssh: connection timed out")
+		}
+		return h.machine.resume(ctx, target, identity, token)
 	}
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", "", "")
@@ -1540,22 +1595,49 @@ func TestHandOutDuringDrainResumesRunner(t *testing.T) {
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	time.Sleep(150 * time.Millisecond)
 	wake(b, l.ID)
-	<-draining
-	if again, err := b.Acquire("george", "", "gpu", "", ""); err != nil || again.ID != l.ID {
-		t.Fatalf("hand-out: %+v %v", again, err)
+	waitProgress(t, b, l.ID, "could not hold the machine idle before releasing it; retrying: ssh: connection timed out")
+	if !h.machine.held() {
+		t.Fatal("the drain did not take the hold")
 	}
-	close(proceed)
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
-		held := h.machine.held()
-		if !held {
+	withheld := func() {
+		t.Helper()
+		if other, err := b.Acquire("george", "", "gpu", "", ""); err != nil || other.ID == l.ID {
+			t.Fatalf("hand-out of a lease that may be held: %+v %v", other, err)
+		}
+		var refused *Error
+		if _, err := b.Admit("george", "", l.ID, "", true); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, "may be holding it idle") {
+			t.Fatalf("naming a lease that may be held: %v", err)
+		}
+	}
+	withheld()
+
+	// A job taken elsewhere keeps the lease; lifting the hold still fails.
+	h.machine.running.Store(1)
+	wake(b, l.ID)
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		got, _ := b.Get("george", l.ID)
+		if strings.Contains(strings.Join(got.Progress, "\n"), "could not lift the hold on the machine") {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("runner still refuses jobs")
+			t.Fatalf("progress %q", got.Progress)
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
-		t.Fatalf("lease handed out during the drain was released: %+v", got)
+	withheld()
+
+	stuck.Store(false)
+	wake(b, l.ID)
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		if _, err := b.Admit("george", "", l.ID, "", true); err == nil {
+			break
+		} else if time.Now().After(deadline) {
+			t.Fatalf("the lease stayed withheld once its hold was lifted: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if h.machine.held() {
+		t.Fatal("the hold was not lifted")
 	}
 }
 
@@ -2306,9 +2388,9 @@ func TestUnliftedHoldWithholdsTheLeaseUntilItLapses(t *testing.T) {
 	b2 := h.start(t)
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
 		b2.mu.Lock()
-		reason := b2.leases[l.ID].unusable
+		reason := b2.leases[l.ID].refusal(time.Now())
 		b2.mu.Unlock()
-		if strings.Contains(reason, "this cloud peer may still be holding it idle") {
+		if strings.Contains(reason, "this cloud peer may be holding it idle") {
 			break
 		}
 		if time.Now().After(deadline) {
