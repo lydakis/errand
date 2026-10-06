@@ -7,13 +7,11 @@ const ErrorCodePushStageMissing = "push_stage_missing"
 // PushRequest identifies an immutable source snapshot. Replaying its ID retries
 // the same transfer; applying a staged transfer uses that ID and no new upload.
 type PushRequest struct {
-	ID       string   `json:"id"`
-	ClientID string   `json:"client_id"`
-	Manifest Manifest `json:"manifest"`
+	ID       string `json:"id"`
+	ClientID string `json:"client_id"`
 	// Delta carries changed source entries against a retained checkpoint.
-	// When present, Manifest is omitted on the wire and reconstructed remotely.
-	Delta      *ChangeBundle `json:"delta,omitempty"`
-	SourceRoot string        `json:"source_root,omitempty"`
+	Delta      *ChangeBundle `json:"delta"`
+	SourceRoot string        `json:"source_root"`
 }
 type PushApplyRequest struct {
 	Path      string `json:"path,omitempty"`

@@ -19,7 +19,7 @@ func (d *Daemon) pushBase(row workspaceRecord, client string) (*changeops.Source
 }
 
 // The retained source checkpoint is independent of the running application's
-// mutable files. Advertising it also negotiates delta-source upload support.
+// mutable files. Every push uses this checkpoint to prepare its source delta.
 func (d *Daemon) handleWorkspacePushBase(w http.ResponseWriter, r *http.Request, id Identity) {
 	client := r.URL.Query().Get("client")
 	if !proto.ValidChangeClientID(client) {

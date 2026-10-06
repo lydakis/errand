@@ -2,37 +2,28 @@ package client
 
 import (
 	"context"
-	"errors"
-	"net/http"
 	"strings"
 
 	"github.com/lydakis/errand/internal/archive"
 	"github.com/lydakis/errand/internal/proto"
 )
 
-func pushBase(peer, workspace, client string) (*proto.Manifest, error) {
+func pushBase(peer, workspace, client string) (proto.Manifest, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
 	var base proto.Manifest
 	err := getJSONContext(ctx, strings.TrimSuffix(peer, "/")+"/v0/workspaces/"+workspace+"/push/base?client="+client, maxWorkspaceResponseBytes, "push checkpoint", &base)
-	var response *controlHTTPError
-	if errors.As(err, &response) && response.statusCode == http.StatusNotFound {
-		return nil, nil
-	} // old daemon
 	if err != nil {
-		return nil, err
+		return base, err
 	}
 	if err := archive.Validate(base); err != nil {
-		return nil, err
+		return base, err
 	}
-	return &base, nil
+	return base, nil
 }
 
 func pushSourceManifest(request proto.PushRequest) proto.Manifest {
-	if request.Delta != nil {
-		return request.Delta.RemoteManifest
-	}
-	return request.Manifest
+	return request.Delta.RemoteManifest
 }
 
 func smallPushDelta(manifest proto.Manifest) bool {
@@ -46,12 +37,4 @@ func smallPushDelta(manifest proto.Manifest) bool {
 		}
 	}
 	return true
-}
-
-// SourceRoot is bound to the complete manifest when a delta is prepared.
-func pushManifestRoot(request proto.PushRequest) string {
-	if request.Delta != nil {
-		return request.SourceRoot
-	}
-	return request.Manifest.RootHash()
 }

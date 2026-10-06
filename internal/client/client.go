@@ -338,8 +338,8 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 	}
 	plan, negErr := negotiation.plan, negotiation.err
 	if negErr != nil {
-		errf("snapshot negotiation failed (%v); shipping everything", negErr)
-		plan = shipPlan{}
+		errf("snapshot negotiation: %v", negErr)
+		return ExitTransaction, false
 	}
 	if plan.partial {
 		shipFiles, shipBytes := 0, int64(0)
