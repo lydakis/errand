@@ -979,7 +979,7 @@ func TestAcquireTakesCheapestMatchingOffer(t *testing.T) {
 	base := h.cfg.Offers[0]
 	pool, dear, cheap := base, base, base
 	pool.Name, dear.Name, cheap.Name = "pool", "dear", "cheap"
-	dear.PricePerHour, cheap.PricePerHour = 3.5, 1.25
+	dear.PricePerHour, cheap.PricePerHour = new(3.5), new(1.25)
 	h.cfg.Offers = []Offer{pool, dear, cheap}
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", "", proto.NewULID())

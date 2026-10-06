@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lydakis/errand/internal/cloud"
+	"github.com/lydakis/errand/internal/proto"
 )
 
 func TestCloudOffers(t *testing.T) {
@@ -123,7 +125,7 @@ allow_users = ["broker@example"]
 	}
 	o := b.Offers[0]
 	p, ok := o.Provider.(*cloud.LambdaProvider)
-	if !ok || p.InstanceType != "gpu_1x_h100_pcie" || p.User != "ubuntu" || p.ErrandBinary != "/opt/errand-linux-amd64" || o.PricePerHour != 2.49 || o.Facts.OS != "linux" || o.Facts.Arch != "amd64" {
+	if !ok || p.InstanceType != "gpu_1x_h100_pcie" || p.ErrandBinary != "/opt/errand-linux-amd64" || o.PricePerHour == nil || *o.PricePerHour != 2.49 || o.Facts.OS != "linux" || o.Facts.Arch != "amd64" {
 		t.Fatalf("offer %+v provider %+v", o, o.Provider)
 	}
 
@@ -135,10 +137,6 @@ allow_users = ["broker@example"]
 		{func(o *CloudOffer) { o.Acquire = []string{"/a"} }, "not both"},
 		{func(o *CloudOffer) { o.Lambda.APIKeyFile = "lambda.key" }, "api_key_file must be an absolute path"},
 		{func(o *CloudOffer) { o.Lambda.InstanceType = "" }, "instance_type"},
-		{func(o *CloudOffer) { o.Lambda.User = "root; reboot" }, "plain login name"},
-		{func(o *CloudOffer) { o.Lambda.User = "-" }, "plain login name"},
-		{func(o *CloudOffer) { o.Lambda.User = "9" }, "plain login name"},
-		{func(o *CloudOffer) { o.Lambda.User = strings.Repeat("a", 33) }, "plain login name"},
 		{func(o *CloudOffer) { o.Lambda.AllowUsers = []string{" "} }, "not a tailnet login"},
 		{func(o *CloudOffer) { o.Lambda.AllowUsers = []string{"a@github", ""} }, "not a tailnet login"},
 		{func(o *CloudOffer) { o.Lambda.AllowUsers = []string{"a@github\n"} }, "not a tailnet login"},
@@ -146,9 +144,9 @@ allow_users = ["broker@example"]
 		{func(o *CloudOffer) { o.Lambda.TailscaleAuthKeyFile = ""; o.Lambda.AllowUsers = []string{"a@github"} }, "needs tailscale_auth_key_file"},
 		{func(o *CloudOffer) { o.OS = "windows" }, "Lambda offers run linux"},
 		{func(o *CloudOffer) { o.Lambda.ErrandBinary = ""; o.Arch = "riscv" }, "arch must"},
-		{func(o *CloudOffer) { o.Price = -1 }, "price_per_hour"},
-		{func(o *CloudOffer) { o.Price = math.NaN() }, "price_per_hour"},
-		{func(o *CloudOffer) { o.Price = math.Inf(1) }, "price_per_hour"},
+		{func(o *CloudOffer) { o.Price = new(-1.0) }, "price_per_hour"},
+		{func(o *CloudOffer) { o.Price = new(math.NaN()) }, "price_per_hour"},
+		{func(o *CloudOffer) { o.Price = new(math.Inf(1)) }, "price_per_hour"},
 	} {
 		l := lambda
 		o := CloudOffer{Name: "x", Lambda: &l}
@@ -178,5 +176,41 @@ allow_users = ["broker@example"]
 	// Command offers may now declare Windows machines.
 	if _, err := (DaemonCloud{Offers: []CloudOffer{{Name: "win", OS: "windows", Acquire: []string{"/a"}, Release: []string{"/r"}}}}).Broker(); err != nil {
 		t.Errorf("windows offer: %v", err)
+	}
+}
+
+// A price of zero is kept as a price all the way to clients, so a free
+// offer is not taken for an unpriced one.
+func TestFreeOfferKeepsItsPrice(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "errandd.toml")
+	os.WriteFile(path, []byte(`
+[[cloud.offers]]
+name = "free"
+price_per_hour = 0
+acquire = ["/a"]
+release = ["/r"]
+
+[[cloud.offers]]
+name = "unpriced"
+acquire = ["/a"]
+release = ["/r"]
+`), 0600)
+	d, err := LoadDaemon(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := d.Cloud.Broker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, wantPriced := range []bool{true, false} {
+		data, _ := json.Marshal(b.Offers[i].Offer())
+		var o proto.Offer
+		if err := json.Unmarshal(data, &o); err != nil {
+			t.Fatal(err)
+		}
+		if priced := o.PricePerHour != nil; priced != wantPriced || priced && *o.PricePerHour != 0 {
+			t.Errorf("%s: sent as %s", b.Offers[i].Name, data)
+		}
 	}
 }

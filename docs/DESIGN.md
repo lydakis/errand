@@ -796,7 +796,8 @@ binary aborts safely before the installation transaction.
 Client-side workspace identity and staging records are keyed by runner endpoint plus job
 ID. Pending apply journals are never collected. Pre-admission records follow an
 explicit local GC cutoff; unresolved submitted records receive a 30-day safety
-window before an explicit `gc changes` may retire them.
+window before an explicit `gc changes` may retire them. Records this version
+cannot decode are never migrated; they follow the explicit cutoff.
 
 `fetch --output DIR` exports the selected remote values into a new directory,
 preserving workspace-relative paths, file modes, and safe symlinks. It requires

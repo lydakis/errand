@@ -91,3 +91,21 @@ func TestGPURequirements(t *testing.T) {
 		t.Fatalf("describe: %q", got)
 	}
 }
+
+// A price of zero is a price: a free offer comes before an unpriced one.
+func TestCheaperOfferCountsFreeAsPriced(t *testing.T) {
+	unpriced, free, cheap := proto.Offer{Name: "unpriced"}, proto.Offer{Name: "free", PricePerHour: new(0.0)}, proto.Offer{Name: "cheap", PricePerHour: new(0.5)}
+	for _, tc := range []struct {
+		a, b proto.Offer
+		want bool
+	}{
+		{free, unpriced, true}, {unpriced, free, false},
+		{free, cheap, true}, {cheap, free, false},
+		{cheap, unpriced, true}, {unpriced, cheap, false},
+		{unpriced, unpriced, false}, {free, free, false},
+	} {
+		if got := CheaperOffer(tc.a, tc.b); got != tc.want {
+			t.Errorf("CheaperOffer(%s, %s) = %v", tc.a.Name, tc.b.Name, got)
+		}
+	}
+}
