@@ -43,8 +43,8 @@ errand: selected cabal-7f3a for gpu=h100 (0/1 slots, 0 staging, 0 queued)
 `--where gpu` rents the cheapest GPU with capacity, `--where gpu=h100` the
 cheapest H100, `--where gpus>=8` an eight-GPU box. Prices are shown before
 anything is rented. Machines above `max_price_per_hour`, $10/h unless you
-say otherwise, are never rented, at the price Lambda lists right before the
-launch: that covers every single-GPU type, and
+say otherwise, are never rented, at the price Lambda lists as each launch
+request goes out: that covers every single-GPU type, and
 stops a sold-out $3/h type from quietly becoming a $30/h box. A request only
 a dearer type could serve is refused with the price and the setting to
 raise. Set the cap to `0` for no cap.
@@ -324,8 +324,10 @@ file systems must all be in that region.
 
 **One instance type as a configured offer.** A `[[cloud.offers]]` entry with
 a `[cloud.offers.lambda]` table rents one instance type with a shape, price
-and timeouts of your own, and takes the same settings as `[cloud.lambda]`
-plus `instance_type`. A configured offer hides a listed one of the same name.
+and timeouts of your own. Its `[cloud.offers.lambda]` table takes the
+account settings of `[cloud.lambda]`, including `max_price_per_hour` with the
+same $10/h default, plus `instance_type`; `price_per_hour` is only the price
+errand shows. A configured offer hides a listed one of the same name.
 
 ```toml
 [[cloud.offers]]

@@ -159,8 +159,15 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 		} `json:"data"`
 	}
 	state := lambdaState{KeyID: keyID(key), Region: region}
-	// Nothing is sent unless its state is saved first.
+	// Nothing is sent unless its state is saved first, nor at a price above
+	// the cap: waiting for Lambda's launch limit can take a while, and the
+	// price is listed again as each attempt goes out.
 	sending := func() error {
+		if p.MaxPricePerHour > 0 {
+			if err := p.checkPrice(ctx, key); err != nil {
+				return err
+			}
+		}
 		state.Sent = p.now()
 		return saveState(req, state)
 	}
