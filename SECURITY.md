@@ -141,7 +141,13 @@ The following properties must hold:
   conflict-safe application path. They cannot silently widen their destination.
 - No initiator environment value or credential is forwarded implicitly. Jobs
   receive a small runner-side allowlist (`PATH`, `HOME`, `USER`, `LOGNAME`,
-  `LANG`, and `TMPDIR`) plus values explicitly declared by the caller. Receipt
+  `LANG`, and `TMPDIR`) plus values explicitly declared by the caller. On
+  Windows the allowlist is instead `PATH`, `PATHEXT`, `LANG`, the profile,
+  temporary and system folder variables (`USERPROFILE`, `HOMEDRIVE`,
+  `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `SystemRoot`,
+  `SystemDrive`, `windir`, `ComSpec`, `ProgramData` and the `ProgramFiles`
+  and `CommonProgramFiles` variants), and `USERNAME`, `USERDOMAIN`, `OS`,
+  `COMPUTERNAME`, `NUMBER_OF_PROCESSORS` and `PROCESSOR_ARCHITECTURE`. Receipt
   metadata does not retain the declared values. Ambient variable forwarding
   requires personal configuration, an explicitly selected profile, or CLI
   `--passenv`; nonempty top-level workspace `env.pass` is rejected.
@@ -189,10 +195,11 @@ Cloud peers and leases:
   all of that principal's leases, whatever the request asked for. If the
   cloud peer cannot record that, the leases stay as they were, and the
   principal's next request tries again.
-- A Lambda machine admits only the lease's owner, the cloud peer, and any
-  logins the operator lists in the offer's `allow_users`. On the tailnet, its
-  runner allows the tailnet login that asked for the lease plus
-  `allow_users`; a Lambda lease requested without a tailnet
+- A Lambda machine admits only the lease's owner, the cloud peer, any
+  logins the operator lists in the offer's `allow_users`, and, on the
+  tailnet, callers that the tailnet policy grants the errand capability on
+  the machine's tag. On the tailnet, its runner allows the tailnet login
+  that asked for the lease plus `allow_users`; a Lambda lease requested without a tailnet
   login and without `allow_users` is refused before anything is rented. For
   a machine reached over SSH, the cloud peer adds the public key of each of
   the owner's devices that asks for the lease, and a Lambda machine admits
@@ -220,8 +227,10 @@ Cloud peers and leases:
   `600` on Unix; on Windows, readable only by that user, SYSTEM and
   Administrators). Errors name these files by what they hold, not by path.
   The tailnet auth key goes to the machine only over its pinned SSH
-  connection, never in Lambda launch metadata or a command line, and the
-  install removes it afterwards.
+  connection, never in Lambda launch metadata or a command line. The install
+  script deletes it when it exits, which is after the runner has started, so
+  jobs admitted during that window, or after an install that crashed, can
+  read it.
 - The errand build installed on a Lambda machine is checked to be a Linux
   errand build for the machine's architecture before anything is rented. A
   downloaded release must match the release's published checksums, and the
@@ -239,8 +248,11 @@ Cloud peers and leases:
   an instance it listed before.
 - A cloud peer starts a new lease only while fewer than `max_leases` leases
   are active across all callers; lowering the setting does not end leases
-  already active. Unless `max_price_per_hour` is `0`, the Lambda provider
-  refuses a type whose listed price is above that cap. The price is checked
+  already active. For offers from `[cloud.lambda]`, unless
+  `max_price_per_hour` is `0`, the Lambda provider refuses a type whose
+  listed price is above that cap. A configured `[[cloud.offers]]` entry with
+  a `[cloud.offers.lambda]` table has no price cap; its `price_per_hour` is
+  only shown and used for ranking. The price is checked
   once per lease, before the launch waits its turn behind Lambda's launch
   rate limit, and is not checked again while it waits or retries.
 
@@ -253,7 +265,8 @@ outside protected roots, unsafe local change application, or bypasses of
 documented resource and forwarding boundaries. For cloud peers, that includes
 starting a lease without the `lease` and `submit` actions or from a browser
 page, seeing or using another principal's lease, a Lambda machine admitting
-anyone but its owner, the cloud peer and the offer's `allow_users`, a provider or Lambda secret leaving
+anyone but its owner, the cloud peer, the offer's `allow_users` and callers
+the tailnet policy grants on its tag, a provider or Lambda secret leaving
 the cloud peer other than as documented, and a lease outliving its idle and
 lifetime rules while the cloud peer runs.
 
@@ -293,8 +306,10 @@ outside a protected client or runner boundary are high-impact findings.
   values. The cloud peer has root on the Lambda machines it leases, and it
   logs into them with its own key to install and watch them.
 - A device key admitted to a leased machine reached over SSH gets a shell
-  as the machine's login, the same authority as `submit` there. On Lambda
-  images that login can use `sudo`.
+  as the machine's login, the same authority as `submit` there. A Lambda
+  machine's runner and jobs run as that login, which can use `sudo`, so
+  anyone admitted to a Lambda machine, over SSH or the tailnet, has root on
+  it.
 - Taking `submit` away on the cloud peer does not reach into machines
   already leased. The owner's leases end at its next request to the cloud
   peer, and until then a leased machine still admits it, until the cloud
