@@ -284,19 +284,15 @@ func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, in
 	if arch := lambdaArch(t.Architecture); arch != "" && p.Arch != "" && arch != p.Arch {
 		return "", 0, fmt.Errorf("Lambda instance type %s is %s but the offer says arch = %q", p.InstanceType, t.Architecture, p.Arch)
 	}
-	available := t.Regions
-	regions := p.Regions
-	if len(p.FileSystems) > 0 {
-		// Lambda attaches a filesystem only to instances in its own region.
-		fsRegion, err := p.fileSystemRegion(ctx, key)
-		if err != nil {
-			return "", 0, err
-		}
-		if len(regions) > 0 && !slices.Contains(regions, fsRegion) {
-			return "", 0, fmt.Errorf("the offer's file systems are in %s, which regions does not list", fsRegion)
-		}
-		regions = []string{fsRegion}
+	// The price may have changed since the offer was listed.
+	if price := float64(t.PriceCentsPerHour) / 100; p.MaxPricePerHour > 0 && price > p.MaxPricePerHour {
+		return "", 0, fmt.Errorf("Lambda now charges $%.2f/h for %s, above max_price_per_hour = %g in [cloud.lambda]", price, p.InstanceType, p.MaxPricePerHour)
 	}
+	regions, err := p.launchRegions(ctx, key)
+	if err != nil {
+		return "", 0, err
+	}
+	available := t.Regions
 	if len(regions) == 0 && len(available) > 0 {
 		return available[0], t.PriceCentsPerHour, nil
 	}
@@ -310,6 +306,24 @@ func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, in
 		where = strings.Join(regions, ", ")
 	}
 	return "", 0, fmt.Errorf("Lambda has no %s capacity in %s right now", p.InstanceType, where)
+}
+
+// launchRegions are the regions a launch may use, in preference order, or
+// none for any: the region of the offer's file systems when it attaches any,
+// since Lambda attaches a file system only to instances in its own region,
+// and otherwise Regions.
+func (p *LambdaProvider) launchRegions(ctx context.Context, key string) ([]string, error) {
+	if len(p.FileSystems) == 0 {
+		return p.Regions, nil
+	}
+	fsRegion, err := p.fileSystemRegion(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if len(p.Regions) > 0 && !slices.Contains(p.Regions, fsRegion) {
+		return nil, fmt.Errorf("the offer's file systems are in %s, which regions does not list", fsRegion)
+	}
+	return []string{fsRegion}, nil
 }
 
 type lambdaFileSystem struct {

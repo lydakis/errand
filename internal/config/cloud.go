@@ -234,7 +234,8 @@ func (a LambdaAccount) catalog() (*cloud.LambdaCatalog, error) {
 			return nil, fmt.Errorf("cloud lambda: instance_types entry %q is not a Lambda instance type name such as gpu_1x_a10", t)
 		}
 	}
-	c := &cloud.LambdaCatalog{Account: *p, InstanceTypes: a.InstanceTypes, MaxPricePerHour: maxPrice}
+	p.MaxPricePerHour = maxPrice
+	c := &cloud.LambdaCatalog{Account: *p, InstanceTypes: a.InstanceTypes}
 	if c.IdleTimeout, err = positiveDuration("cloud lambda idle_timeout", a.IdleTimeout, defaultLeaseIdle); err != nil {
 		return nil, err
 	}

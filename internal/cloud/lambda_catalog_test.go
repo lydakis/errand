@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -33,7 +34,7 @@ func TestLambdaCatalogOffers(t *testing.T) {
 		"gpu_1x_future":    {price: 1, arch: "riscv", gpu: "X (1 GB)", vcpus: 1, gpus: 1},
 	}
 	c := &LambdaCatalog{Account: *p, IdleTimeout: time.Minute, MaxLifetime: time.Hour}
-	c.Account.InstanceType, c.Account.Arch = "", ""
+	c.Account.InstanceType, c.Account.Arch, c.Account.ErrandBinary = "", "", ""
 	offers, err := c.Offers(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -47,8 +48,8 @@ func TestLambdaCatalogOffers(t *testing.T) {
 	want := []string{
 		"cpu-4x-general $0.10 linux/amd64 4 cpu none",
 		"gpu-1x-gh200 $1.49 linux/arm64 64 cpu 1x GH200 (96 GiB)",
-		"gpu-1x-h100-pcie $2.49 linux/amd64 26 cpu 1x H100 PCIe (80 GiB)",
-		"gpu-8x-h100-sxm5 $27.99 linux/amd64 208 cpu 8x H100 SXM5 (80 GiB)",
+		"gpu-1x-h100-pcie $2.49 linux/amd64 26 cpu 1x H100 (80 GiB)",
+		"gpu-8x-h100-sxm5 $27.99 linux/amd64 208 cpu 8x H100 (80 GiB)",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("offers:\n%s\nwant:\n%s", strings.Join(names, "\n"), strings.Join(want, "\n"))
@@ -61,7 +62,7 @@ func TestLambdaCatalogOffers(t *testing.T) {
 	}
 	// A price cap keeps dearer types only as unavailable, with the reason
 	// a refused request shows; a list of types narrows the catalog.
-	c.MaxPricePerHour = 2.49
+	c.Account.MaxPricePerHour = 2.49
 	offers, _ = c.Offers(context.Background())
 	if len(offers) != 4 || offers[2].Unavailable != "" || offers[3].Name != "gpu-8x-h100-sxm5" || offers[3].Unavailable != "costs $27.99/h, above max_price_per_hour = 2.49 in [cloud.lambda]" {
 		t.Fatalf("capped: %+v", offers)
@@ -71,13 +72,40 @@ func TestLambdaCatalogOffers(t *testing.T) {
 		t.Fatalf("listed and capped: %+v", offers)
 	}
 	// Any region: the A10 is in.
-	c.InstanceTypes, c.MaxPricePerHour, c.Account.Regions = nil, 0, nil
+	c.InstanceTypes, c.Account.MaxPricePerHour, c.Account.Regions = nil, 0, nil
 	if offers, _ = c.Offers(context.Background()); len(offers) != 5 || offers[1].Name != "gpu-1x-a10" {
 		t.Fatalf("any region: %+v", offers)
+	}
+	// An errand_binary for amd64 cannot run on the arm64 GH200.
+	c.Account.ErrandBinary = p.ErrandBinary
+	if offers, _ = c.Offers(context.Background()); len(offers) != 4 || slices.ContainsFunc(offers, func(o Offer) bool { return o.Facts.Arch != "amd64" }) {
+		t.Fatalf("errand_binary for amd64: %+v", offers)
 	}
 	os.WriteFile(p.APIKeyFile, []byte("wrong"), 0600)
 	if _, err := c.Offers(context.Background()); err == nil || !strings.Contains(err.Error(), "API key was invalid") {
 		t.Fatalf("bad key: %v", err)
+	}
+}
+
+// With file systems, a type is offered only with capacity in their region,
+// the only one a launch may use.
+func TestLambdaCatalogFileSystemRegion(t *testing.T) {
+	p, api, _ := newLambda(t)
+	api.types = map[string]fakeInstanceType{
+		"gpu_1x_a10":       {price: 75, arch: "x86_64", gpu: "A10 (24 GB PCIe)", vcpus: 30, gpus: 1, regions: []string{"us-west-1"}},
+		"gpu_1x_h100_pcie": {price: 249, arch: "x86_64", gpu: "H100 (80 GB PCIe)", vcpus: 26, gpus: 1, regions: []string{"us-east-1"}},
+	}
+	api.fileSystems = map[string]string{"datasets": "us-east-1"}
+	c := &LambdaCatalog{Account: *p, IdleTimeout: time.Minute, MaxLifetime: time.Hour}
+	c.Account.Regions, c.Account.FileSystems = nil, []string{"datasets"}
+	offers, err := c.Offers(context.Background())
+	if err != nil || len(offers) != 1 || offers[0].Name != "gpu-1x-h100-pcie" {
+		t.Fatalf("offers %+v: %v", offers, err)
+	}
+	// File systems outside the account's regions offer nothing, and say why.
+	c.Account.Regions = []string{"us-west-1"}
+	if _, err := c.Offers(context.Background()); err == nil || !strings.Contains(err.Error(), "file systems are in us-east-1, which regions does not list") {
+		t.Fatalf("file systems outside regions: %v", err)
 	}
 }
 
@@ -92,13 +120,13 @@ func describe(gpus []proto.GPU) string {
 // memory vram>=N checks.
 func TestLambdaGPUDescriptions(t *testing.T) {
 	for desc, want := range map[string]string{
-		"H100 (80 GB SXM5)":  "H100 SXM5/80",
-		"H100 (80 GB PCIe)":  "H100 PCIe/80",
-		"A100 (40 GB SXM4)":  "A100 SXM4/40",
+		"H100 (80 GB SXM5)":  "H100/80",
+		"H100 (80 GB PCIe)":  "H100/80",
+		"A100 (40 GB SXM4)":  "A100/40",
 		"GH200 (96 GB)":      "GH200/96",
 		"RTX 6000 (24 GB)":   "RTX 6000/24",
 		"Tesla V100 (16 GB)": "Tesla V100/16",
-		"B200 (180 GB SXM6)": "B200 SXM6/180",
+		"B200 (180 GB SXM6)": "B200/180",
 		"Mystery GPU":        "Mystery GPU/0",
 	} {
 		f := lambdaInstanceType{GPUDescription: desc, GPUs: 2}.facts("amd64")

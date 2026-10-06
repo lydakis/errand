@@ -878,7 +878,7 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 	// Clients reach their leased machines through this list, so it is the
 	// only record of them a client needs.
 	if d.broker != nil && id.Allowed(proto.ActionLease) {
-		offers = d.broker.Offers()
+		offers = d.broker.Offers(r.Context())
 		leases = leaseView(id, d.broker.Active(leaseOwner(id)))
 	}
 	d.mu.Lock()

@@ -41,7 +41,8 @@ errand: selected cabal-7f3a for gpu=h100 (0/1 slots, 0 staging, 0 queued)
 `--where gpu` rents the cheapest GPU with capacity, `--where gpu=h100` the
 cheapest H100, `--where gpus>=8` an eight-GPU box. Prices are shown before
 anything is rented. Machines above `max_price_per_hour`, $10/h unless you
-say otherwise, are never rented: that covers every single-GPU type, and
+say otherwise, are never rented, at the price Lambda lists right before the
+launch: that covers every single-GPU type, and
 stops a sold-out $3/h type from quietly becoming a $30/h box. A request only
 a dearer type could serve is refused with the price and the setting to
 raise. Set the cap to `0` for no cap.
@@ -220,7 +221,8 @@ or for an `arm64` GH200 from an `amd64` box, it downloads the release of its
 own version for that architecture from GitHub once, checks it against the
 release's checksums, and keeps it in its state directory. A development build
 of errand has no release, so a cloud peer running one needs `errand_binary`
-set to a Linux build. Everything is checked before anything is rented.
+set to a Linux build, and offers only instance types of that build's
+architecture. Everything is checked before anything is rented.
 
 **Reaching the machine.** Clients reach it one of two ways:
 
@@ -281,7 +283,8 @@ release of any lease whose machine the key cannot see.
 When no listed region has capacity, the lease fails at once with a message
 saying so. errand does not wait for capacity. With `file_systems`, the machine
 can only launch in the region that holds them, so that is the one region
-errand tries; the file systems must all be in that region.
+errand tries, and only instance types with capacity there are offered; the
+file systems must all be in that region.
 
 **One instance type as a configured offer.** A `[[cloud.offers]]` entry with
 a `[cloud.offers.lambda]` table rents one instance type with a shape, price

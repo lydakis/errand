@@ -199,7 +199,7 @@ idle_timeout = "10m"
 		t.Fatal(err)
 	}
 	c, ok := b.Catalog.(*cloud.LambdaCatalog)
-	if !ok || len(b.Offers) != 0 || c.Account.APIKeyFile != "/etc/errand/lambda.key" || !slices.Equal(c.InstanceTypes, []string{"gpu_1x_a10", "gpu_1x_h100_sxm5"}) || c.MaxPricePerHour != 3 ||
+	if !ok || len(b.Offers) != 0 || c.Account.APIKeyFile != "/etc/errand/lambda.key" || !slices.Equal(c.InstanceTypes, []string{"gpu_1x_a10", "gpu_1x_h100_sxm5"}) || c.Account.MaxPricePerHour != 3 ||
 		!slices.Equal(c.Account.Regions, []string{"us-east-1"}) || c.Account.User != "ubuntu" || c.IdleTimeout != 10*time.Minute || c.MaxLifetime != 12*time.Hour || c.Account.InstanceType != "" {
 		t.Fatalf("catalog %+v", b.Catalog)
 	}
@@ -210,12 +210,12 @@ idle_timeout = "10m"
 		t.Fatalf("catalog with offers: %+v %v", b, err)
 	}
 	// The price cap has a default; 0 lifts it.
-	if b, _ := withOffer.Broker(); b.Catalog.(*cloud.LambdaCatalog).MaxPricePerHour != DefaultLambdaMaxPrice {
+	if b, _ := withOffer.Broker(); b.Catalog.(*cloud.LambdaCatalog).Account.MaxPricePerHour != DefaultLambdaMaxPrice {
 		t.Fatalf("default cap %v", b.Catalog)
 	}
 	zero := 0.0
 	uncapped := DaemonCloud{Lambda: &LambdaAccount{LambdaSettings: LambdaSettings{APIKeyFile: "/k"}, MaxPricePerHour: &zero}}
-	if b, err := uncapped.Broker(); err != nil || b.Catalog.(*cloud.LambdaCatalog).MaxPricePerHour != 0 {
+	if b, err := uncapped.Broker(); err != nil || b.Catalog.(*cloud.LambdaCatalog).Account.MaxPricePerHour != 0 {
 		t.Fatalf("uncapped: %+v %v", b, err)
 	}
 	for _, tc := range []struct {

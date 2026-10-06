@@ -267,6 +267,24 @@ func checkLinuxBinary(path, arch string) error {
 	return nil
 }
 
+// linuxBinaryArch is the architecture of the Linux errand build at path.
+func linuxBinaryArch(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	bin, err := elf.NewFile(f)
+	f.Close()
+	if err != nil {
+		return "", fmt.Errorf("%s is not a Linux executable", path)
+	}
+	arch := map[elf.Machine]string{elf.EM_X86_64: "amd64", elf.EM_AARCH64: "arm64"}[bin.Machine]
+	if arch == "" {
+		return "", fmt.Errorf("%s is a %s file, which errand does not run on", path, bin.Machine)
+	}
+	return arch, checkLinuxBinary(path, arch)
+}
+
 const errandMainPackage = "github.com/lydakis/errand/cmd/errand"
 
 // sshPermanent recognizes SSH failures that retrying cannot fix: a key the

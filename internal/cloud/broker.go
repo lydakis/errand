@@ -31,8 +31,8 @@ type Offer struct {
 	IdleTimeout  time.Duration
 	MaxLifetime  time.Duration
 	// Unavailable says why the offer cannot be leased from right now, such
-	// as a price above the cap. It is not advertised, and a request only
-	// it would match is refused with this reason.
+	// as a price above the cap. It is advertised like any other, so a
+	// request only it would match comes here and is refused with this reason.
 	Unavailable string
 }
 
@@ -130,6 +130,12 @@ type Broker struct {
 	catalogMu sync.Mutex
 	catalog   []Offer
 	catalogAt time.Time
+	// catalogTried is when the last listing ended, failed or not; catalogMu
+	// guards it.
+	catalogTried time.Time
+	// listed is closed once the catalog's first listing has finished, or
+	// at once without a catalog.
+	listed chan struct{}
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -167,7 +173,10 @@ func New(cfg Config) (*Broker, error) {
 		return nil, err
 	}
 	cfg.StateDir = dir
-	b := &Broker{cfg: cfg, offers: map[string]Offer{}, dir: filepath.Join(cfg.StateDir, "leases"), leases: map[string]*lease{}}
+	b := &Broker{cfg: cfg, offers: map[string]Offer{}, dir: filepath.Join(cfg.StateDir, "leases"), leases: map[string]*lease{}, listed: make(chan struct{})}
+	if cfg.Catalog == nil {
+		close(b.listed)
+	}
 	for _, o := range cfg.Offers {
 		if o.Name == "" || o.Provider == nil || o.IdleTimeout <= 0 || o.MaxLifetime <= 0 {
 			return nil, fmt.Errorf("cloud offer %q is incomplete", o.Name)
@@ -265,15 +274,19 @@ func (b *Broker) load() ([]record, error) {
 }
 
 // Offers describes what this broker can lease: its configured offers, then
-// the catalog's as of its last refresh.
-func (b *Broker) Offers() []proto.Offer {
+// the catalog's as of its last refresh. Right after the broker starts it
+// waits for the catalog's first listing, or until ctx ends, so a client
+// asking then is not told there is nothing to lease.
+func (b *Broker) Offers(ctx context.Context) []proto.Offer {
+	select {
+	case <-b.listed:
+	case <-ctx.Done():
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	var out []proto.Offer
 	for _, o := range b.offersLocked() {
-		if o.Unavailable == "" {
-			out = append(out, o.Offer())
-		}
+		out = append(out, o.Offer())
 	}
 	return out
 }

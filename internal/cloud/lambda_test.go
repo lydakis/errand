@@ -582,6 +582,13 @@ func TestLambdaRefusals(t *testing.T) {
 	if _, err := pa.Acquire(context.Background(), req); err == nil || !strings.Contains(err.Error(), `is x86_64 but the offer says arch = "arm64"`) || len(apiA.launches) != 0 {
 		t.Fatalf("arch mismatch: %v, %d launches", err, len(apiA.launches))
 	}
+	// A price above the cap, as Lambda lists it right before launching,
+	// launches nothing, even when the offer was listed cheaper.
+	pc, apiC, _ := newLambda(t)
+	pc.MaxPricePerHour = 2
+	if _, err := pc.Acquire(context.Background(), req); err == nil || !strings.Contains(err.Error(), "Lambda now charges $2.49/h for gpu_1x_h100_pcie, above max_price_per_hour = 2") || len(apiC.launches) != 0 {
+		t.Fatalf("price above the cap: %v, %d launches", err, len(apiC.launches))
+	}
 	// A missing or wrong install input fails before anything is launched.
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "arm"), fakeELF(elf.EM_AARCH64), 0700)
@@ -964,7 +971,7 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	if offers := b.Offers(); offers[0].PricePerHour != 2.49 {
+	if offers := b.Offers(context.Background()); offers[0].PricePerHour != 2.49 {
 		t.Fatalf("offers %+v", offers)
 	}
 	l, err := b.Acquire("george", "george@github", "gpu=h100", "", "")

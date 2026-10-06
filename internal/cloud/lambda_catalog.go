@@ -22,19 +22,18 @@ type LambdaCatalog struct {
 	// offer.
 	Account LambdaProvider
 	// InstanceTypes limits the offers to these Lambda names; empty means
-	// every type. Dearer types than MaxPricePerHour are listed only as
-	// unavailable, so a request for one says what to raise; 0 means no cap.
-	InstanceTypes   []string
-	MaxPricePerHour float64
-	IdleTimeout     time.Duration
-	MaxLifetime     time.Duration
+	// every type. Dearer types than Account.MaxPricePerHour are listed only
+	// as unavailable, so a request for one says what to raise.
+	InstanceTypes []string
+	IdleTimeout   time.Duration
+	MaxLifetime   time.Duration
 }
 
 func (c *LambdaCatalog) useStateDir(dir string) { c.Account.useStateDir(dir) }
 func (c *LambdaCatalog) useVersion(v string)    { c.Account.useVersion(v) }
 
-// Offers lists the account's instance types with capacity in a wanted
-// region, cheapest first.
+// Offers lists the account's instance types with capacity in a region a
+// launch may use, cheapest first.
 func (c *LambdaCatalog) Offers(ctx context.Context) ([]Offer, error) {
 	key, err := readSecret(c.Account.APIKeyFile, "Lambda API key")
 	if err != nil {
@@ -44,22 +43,32 @@ func (c *LambdaCatalog) Offers(ctx context.Context) ([]Offer, error) {
 	if err != nil {
 		return nil, err
 	}
+	regions, err := c.Account.launchRegions(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	// errand_binary runs on one architecture. One that cannot be read
+	// leaves every type listed, so a lease says what is wrong with it.
+	binaryArch := ""
+	if c.Account.ErrandBinary != "" {
+		binaryArch, _ = linuxBinaryArch(c.Account.ErrandBinary)
+	}
 	var offers []Offer
 	for _, t := range types {
 		if len(c.InstanceTypes) > 0 && !slices.Contains(c.InstanceTypes, t.Name) {
 			continue
 		}
-		if !slices.ContainsFunc(t.Regions, func(r string) bool { return len(c.Account.Regions) == 0 || slices.Contains(c.Account.Regions, r) }) {
+		if !slices.ContainsFunc(t.Regions, func(r string) bool { return len(regions) == 0 || slices.Contains(regions, r) }) {
 			continue
 		}
 		price := float64(t.PriceCentsPerHour) / 100
 		unavailable := ""
-		if c.MaxPricePerHour > 0 && price > c.MaxPricePerHour {
-			unavailable = fmt.Sprintf("costs $%.2f/h, above max_price_per_hour = %g in [cloud.lambda]", price, c.MaxPricePerHour)
+		if limit := c.Account.MaxPricePerHour; limit > 0 && price > limit {
+			unavailable = fmt.Sprintf("costs $%.2f/h, above max_price_per_hour = %g in [cloud.lambda]", price, limit)
 		}
 		arch := lambdaArch(t.Architecture)
-		if arch == "" {
-			continue // errand has no build for it
+		if arch == "" || binaryArch != "" && arch != binaryArch {
+			continue // errand has no build for it, or errand_binary is for another
 		}
 		p := c.Account
 		p.InstanceType, p.Arch = t.Name, arch
@@ -120,8 +129,9 @@ func (p *LambdaProvider) instanceTypes(ctx context.Context, key string) ([]lambd
 }
 
 // lambdaGPU reads Lambda's GPU descriptions, such as "H100 (80 GB SXM5)",
-// "GH200 (96 GB)" or "RTX 6000 (24 GB)": the model, its memory, and a
-// variant that stays in the name so gpu=sxm5 can tell it from PCIe.
+// "GH200 (96 GB)" or "RTX 6000 (24 GB)": the model and its memory. A variant
+// such as SXM5 is left out of the name: the driver's name for the GPU, which
+// the leased machine is checked against, may not carry it.
 var lambdaGPU = regexp.MustCompile(`^(.*?)\s*\((\d+)\s*GB\s*([^)]*)\)\s*$`)
 
 // facts are the offer's claim about the machine, which the leased machine
@@ -133,7 +143,7 @@ func (t lambdaInstanceType) facts(arch string) proto.Facts {
 	}
 	gpu := proto.GPU{Name: strings.TrimSpace(t.GPUDescription)}
 	if m := lambdaGPU.FindStringSubmatch(t.GPUDescription); m != nil {
-		gpu.Name = strings.TrimSpace(m[1] + " " + m[3])
+		gpu.Name = strings.TrimSpace(m[1])
 		gib, _ := strconv.Atoi(m[2])
 		gpu.MemoryMiB = gib << 10
 	}

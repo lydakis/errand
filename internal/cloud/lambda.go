@@ -43,6 +43,9 @@ type LambdaProvider struct {
 	Arch                 string   // the instance's architecture, amd64 or arm64
 	Version              string   // errand's version, for fetching its release
 	AllowUsers           []string // tailnet logins admitted besides the caller
+	// MaxPricePerHour refuses a launch at a higher price than this, in USD,
+	// as Lambda lists it right before launching; 0 means no cap.
+	MaxPricePerHour float64
 	// KeyDir holds the cloud peer's own SSH key, made and registered with
 	// Lambda on first use. The broker sets it to its state directory.
 	KeyDir string

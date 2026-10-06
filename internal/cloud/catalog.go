@@ -24,31 +24,36 @@ const catalogTimeout = 15 * time.Second
 // broker closes. A listing that fails leaves the last one in place.
 func (b *Broker) refreshCatalog() {
 	defer b.wg.Done()
+	b.freshenCatalog()
+	close(b.listed)
 	for {
-		b.freshenCatalog()
 		select {
 		case <-b.ctx.Done():
 			return
 		case <-time.After(b.cfg.CatalogRefresh):
 		}
+		b.freshenCatalog()
 	}
 }
 
 // freshenCatalog lists the catalog again unless it was listed within
 // CatalogRefresh. Callers hold no lock; one listing runs at a time, and a
-// caller that waited for another's sees that one as fresh.
+// caller that waited for another's takes its outcome, failed or not, instead
+// of listing again.
 func (b *Broker) freshenCatalog() {
 	if b.cfg.Catalog == nil {
 		return
 	}
+	asked := time.Now()
 	b.catalogMu.Lock()
 	defer b.catalogMu.Unlock()
 	b.mu.Lock()
 	fresh := !b.catalogAt.IsZero() && time.Since(b.catalogAt) < b.cfg.CatalogRefresh
 	b.mu.Unlock()
-	if fresh {
+	if fresh || b.catalogTried.After(asked) {
 		return
 	}
+	defer func() { b.catalogTried = time.Now() }()
 	ctx, cancel := context.WithTimeout(b.ctx, catalogTimeout)
 	defer cancel()
 	offers, err := b.cfg.Catalog.Offers(ctx)
