@@ -789,6 +789,20 @@ echo '{"url":"http://box:7443"}'
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 }
 
+// Files a lease record names stay valid whatever directory the runner is
+// later started from.
+func TestStateDirIsAbsolute(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	t.Chdir(h.dir)
+	lambda := &LambdaProvider{InstanceType: "t", APIKeyFile: "/a"}
+	h.cfg.StateDir = "state"
+	h.cfg.Offers = append(h.cfg.Offers, Offer{Name: "lambda", Provider: lambda, IdleTimeout: time.Hour, MaxLifetime: time.Hour})
+	h.start(t)
+	if want := filepath.Join(h.dir, "state", "lambda"); lambda.KeyDir != want {
+		t.Fatalf("key dir %q, want %q", lambda.KeyDir, want)
+	}
+}
+
 // Acquire's stdout is bounded: one that prints more is a failed launch,
 // however the output reaches errand.
 func TestAcquireRefusesOversizedOutput(t *testing.T) {
