@@ -110,9 +110,10 @@ type Broker struct {
 	offers map[string]Offer
 	dir    string
 
-	mu     sync.Mutex
-	leases map[string]*lease
-	closed bool
+	mu        sync.Mutex
+	leases    map[string]*lease
+	withdrawn withdrawnRequests
+	closed    bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -281,6 +282,9 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 			return l.view(), nil
 		}
 	}
+	if b.withdrawn.has(owner, requestID, time.Now()) {
+		return proto.Lease{}, &Error{http.StatusGone, "this request was withdrawn"}
+	}
 	// A launching lease handed to another request is waited on by that
 	// request too. A ready lease handed out starts a full idle window, so
 	// the request has time to submit its work.
@@ -446,10 +450,15 @@ func (b *Broker) Withdraw(owner, requestID string) (proto.Lease, error) {
 			l = c
 		}
 	}
-	b.mu.Unlock()
 	if l == nil {
+		// The request may still be on its way.
+		if requestID != "" {
+			b.withdrawn = b.withdrawn.add(owner, requestID, time.Now())
+		}
+		b.mu.Unlock()
 		return proto.Lease{}, &Error{http.StatusNotFound, "no lease was handed to that request"}
 	}
+	b.mu.Unlock()
 	err := b.update(l, func(r *record) bool {
 		i := slices.Index(r.Requests, requestID)
 		if i < 0 || r.State != proto.LeaseLaunching {

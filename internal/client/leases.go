@@ -127,7 +127,8 @@ func leaseRequest(ctx context.Context, method, endpoint string, body []byte, dst
 
 // LeaseRefused reports whether a cloud peer turned a lease request down
 // before starting anything: the caller may not lease there, it has no
-// offers any more, nothing there matches, or it is at its lease limit. A
+// offers any more, nothing there matches, it is at its lease limit, or the
+// request was already withdrawn. A
 // refusal of a retry is not one: the first attempt may have started a
 // lease.
 func LeaseRefused(err error) bool {
@@ -136,7 +137,7 @@ func LeaseRefused(err error) bool {
 		return false
 	}
 	switch refused.statusCode {
-	case http.StatusForbidden, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusTooManyRequests:
+	case http.StatusForbidden, http.StatusNotFound, http.StatusGone, http.StatusPreconditionFailed, http.StatusTooManyRequests:
 		return true
 	}
 	return false

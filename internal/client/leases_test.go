@@ -54,7 +54,7 @@ func TestAcquireLeaseRepeatsLostRequest(t *testing.T) {
 // attempt of the request may have reached this one: a retry is refused
 // without regard to what a lost first attempt started.
 func TestLeaseRefusalIsSafeOnlyBeforeALostAnswer(t *testing.T) {
-	for _, status := range []int{http.StatusForbidden, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusTooManyRequests} {
+	for _, status := range []int{http.StatusForbidden, http.StatusNotFound, http.StatusGone, http.StatusPreconditionFailed, http.StatusTooManyRequests} {
 		for _, lost := range []bool{false, true} {
 			attempts := 0
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1012,3 +1012,40 @@ func TestProgressTailIsNumbered(t *testing.T) {
 		t.Fatalf("%d lines up to %d, starting %q", len(r.Progress), r.ProgressSeq, r.Progress[0])
 	}
 }
+
+// A request that arrives after its own withdrawal starts nothing: a run
+// that withdrew a request the cloud peer had not seen yet has gone.
+func TestRequestArrivingAfterItsWithdrawalStartsNothing(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	b := h.start(t)
+	request := proto.NewULID()
+	var e *Error
+	if _, err := b.Withdraw("george", request); !errors.As(err, &e) || e.Status != http.StatusNotFound {
+		t.Fatalf("withdrawing a request not seen yet: %v", err)
+	}
+	if l, err := b.Acquire("george", "", "gpu", "", request); !errors.As(err, &e) || e.Status != http.StatusGone {
+		t.Fatalf("acquired after the withdrawal: %+v %v", l, err)
+	}
+	if leases := b.List("george"); len(leases) != 0 {
+		t.Fatalf("leases %+v", leases)
+	}
+	// Only that owner's request is refused.
+	if _, err := b.Acquire("someone", "", "gpu", "", request); err != nil {
+		t.Fatal(err)
+	}
+
+	// The record is bounded by age and count.
+	var w withdrawnRequests
+	now := time.Now()
+	w = w.add("george", "old", now.Add(-2*withdrawnRequestAge))
+	for i := range maxWithdrawnRequests {
+		w = w.add("george", fmt.Sprint(i), now.Add(time.Duration(i)))
+	}
+	if len(w) != maxWithdrawnRequests || w.has("george", "old", now) || !w.has("george", "0", now) {
+		t.Fatalf("%d withdrawals kept", len(w))
+	}
+	w = w.add("george", "next", now.Add(time.Hour/2))
+	if len(w) != maxWithdrawnRequests || w.has("george", "0", now) || !w.has("george", "next", now) {
+		t.Fatalf("the oldest withdrawal was not dropped at the cap")
+	}
+}
