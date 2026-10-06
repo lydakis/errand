@@ -169,41 +169,28 @@ func writeInstallBundle(w io.Writer, binary *os.File, config []byte, hostname, a
 		return err
 	}
 	if err := add("errand", 0o755, info.Size(), io.NewSectionReader(binary, 0, info.Size())); err != nil {
-		return fmt.Errorf("errand_binary: %w", err)
+		return fmt.Errorf("errand build: %w", err)
 	}
 	return tw.Close()
 }
 
-// checkInstall checks what the install needs before anything is rented. It
-// returns a private copy of errand_binary, which is what it checked and what
-// the install sends: the file at errand_binary may be replaced in between.
-// The caller closes and removes the copy.
-func (p *LambdaProvider) checkInstall() (*os.File, error) {
+// checkInstall checks the tools the install needs before anything is rented.
+func (p *LambdaProvider) checkInstall() error {
 	if p.HostKey == nil || p.Keygen == nil {
 		if _, err := exec.LookPath("ssh-keygen"); err != nil {
-			return nil, fmt.Errorf("renting Lambda machines needs ssh-keygen: %w", err)
+			return fmt.Errorf("renting Lambda machines needs ssh-keygen: %w", err)
 		}
 	}
 	if p.SSH == nil {
 		if _, err := exec.LookPath("ssh"); err != nil {
-			return nil, fmt.Errorf("installing errand on Lambda machines needs ssh: %w", err)
+			return fmt.Errorf("installing errand on Lambda machines needs ssh: %w", err)
 		}
 	}
-	binary, err := privateCopy(p.ErrandBinary)
-	if err == nil {
-		if err = checkLinuxBinary(binary, p.ErrandBinary, p.Arch); err != nil {
-			removeCopy(binary)
-		}
-	}
-	if err != nil {
-		return nil, fmt.Errorf("lambda errand_binary: %w", err)
-	}
-	return binary, nil
+	return nil
 }
 
-// privateCopy copies the regular file at path to a temporary file only this
-// user can read, and returns it open.
-func privateCopy(path string) (*os.File, error) {
+// openRegular opens the regular file at path.
+func openRegular(path string) (*os.File, error) {
 	// Opening a FIFO would block, so the type is checked before opening
 	// and again on what was opened.
 	if info, err := os.Stat(path); err != nil {
@@ -211,14 +198,25 @@ func privateCopy(path string) (*os.File, error) {
 	} else if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
-	src, err := os.Open(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() {
+		f.Close()
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	return f, nil
+}
+
+// privateCopy copies the regular file at path to a temporary file only this
+// user can read, and returns it open.
+func privateCopy(path string) (*os.File, error) {
+	src, err := openRegular(path)
 	if err != nil {
 		return nil, err
 	}
 	defer src.Close()
-	if info, err := src.Stat(); err != nil || !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("%s is not a regular file", path)
-	}
 	dst, err := os.CreateTemp("", "errand-lease-binary-")
 	if err != nil {
 		return nil, err
@@ -298,6 +296,34 @@ func checkLinuxBinary(f io.ReaderAt, path, arch string) error {
 		}
 	}
 	return nil
+}
+
+// checkLinuxFile is checkLinuxBinary for the file at path.
+func checkLinuxFile(path, arch string) error {
+	f, err := openRegular(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return checkLinuxBinary(f, path, arch)
+}
+
+// linuxBinaryArch is the architecture of the Linux errand build at path.
+func linuxBinaryArch(path string) (string, error) {
+	f, err := openRegular(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	bin, err := elf.NewFile(f)
+	if err != nil {
+		return "", fmt.Errorf("%s is not a Linux executable", path)
+	}
+	arch := map[elf.Machine]string{elf.EM_X86_64: "amd64", elf.EM_AARCH64: "arm64"}[bin.Machine]
+	if arch == "" {
+		return "", fmt.Errorf("%s is a %s file, which errand does not run on", path, bin.Machine)
+	}
+	return arch, checkLinuxBinary(f, path, arch)
 }
 
 const errandMainPackage = "github.com/lydakis/errand/cmd/errand"
