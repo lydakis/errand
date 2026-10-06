@@ -27,7 +27,7 @@ type Offer struct {
 	Name         string
 	Facts        proto.Facts
 	Provider     Provider
-	PricePerHour float64 // USD, informational
+	PricePerHour *float64 // USD, informational; nil when unpriced
 	IdleTimeout  time.Duration
 	MaxLifetime  time.Duration
 }

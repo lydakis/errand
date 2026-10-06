@@ -515,11 +515,11 @@ type Info struct {
 // Offer is a machine shape a cloud peer can acquire. Its facts are declared
 // in configuration; a leased machine's measured facts must still match.
 type Offer struct {
-	Name           string  `json:"name"`
-	Facts          Facts   `json:"facts"`
-	PricePerHour   float64 `json:"price_per_hour,omitempty"` // USD, as configured
-	IdleTimeoutSec int64   `json:"idle_timeout_sec"`
-	MaxLifetimeSec int64   `json:"max_lifetime_sec"`
+	Name           string   `json:"name"`
+	Facts          Facts    `json:"facts"`
+	PricePerHour   *float64 `json:"price_per_hour,omitempty"` // USD, as configured; nil when unpriced
+	IdleTimeoutSec int64    `json:"idle_timeout_sec"`
+	MaxLifetimeSec int64    `json:"max_lifetime_sec"`
 }
 
 const (

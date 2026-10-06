@@ -210,8 +210,8 @@ func TestLeaseSuppliersRankedByOffer(t *testing.T) {
 		}
 		return names
 	}
-	offers["cabal"] = []proto.Offer{{Name: "lambda", Facts: gpu, PricePerHour: 2.49}}
-	offers["mini"] = []proto.Offer{{Name: "pool", Facts: gpu}, {Name: "cheap", Facts: gpu, PricePerHour: 1.99}, {Name: "a10", Facts: proto.Facts{OS: "linux"}, PricePerHour: 0.5}}
+	offers["cabal"] = []proto.Offer{{Name: "lambda", Facts: gpu, PricePerHour: new(2.49)}}
+	offers["mini"] = []proto.Offer{{Name: "pool", Facts: gpu}, {Name: "cheap", Facts: gpu, PricePerHour: new(1.99)}, {Name: "a10", Facts: proto.Facts{OS: "linux"}, PricePerHour: new(0.5)}}
 	if got := strings.Join(order("cabal", "mini", "gone"), " "); got != "mini:cheap cabal:lambda" {
 		t.Fatalf("ranked %s", got)
 	}
@@ -219,7 +219,7 @@ func TestLeaseSuppliersRankedByOffer(t *testing.T) {
 	if got := strings.Join(order("cabal", "mini"), " "); got != "cabal:lambda mini:pool" {
 		t.Fatalf("an unpriced offer ranked first: %s", got)
 	}
-	offers["mini"] = []proto.Offer{{Name: "same", Facts: gpu, PricePerHour: 2.49}}
+	offers["mini"] = []proto.Offer{{Name: "same", Facts: gpu, PricePerHour: new(2.49)}}
 	first := map[string]bool{}
 	for range 50 {
 		first[order("cabal", "mini")[0]] = true
