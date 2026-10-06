@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -104,6 +105,15 @@ func TestLogReplayWithoutFollowEndsWhileTheJobRuns(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest || !bytes.Contains(body, []byte("tail")) {
 		t.Fatalf("negative tail = %s %s, want 400", resp.Status, body)
+	}
+	resp, err = http.Get(ts.URL + "/v0/jobs/" + id + "/logs?follow=0&from=" + strconv.FormatInt(math.MaxInt64, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest || !bytes.Contains(body, []byte("from")) {
+		t.Fatalf("from past every sequence number = %s %s, want 400", resp.Status, body)
 	}
 }
 

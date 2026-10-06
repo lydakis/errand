@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -1591,6 +1592,10 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 	from, _ := strconv.ParseInt(query.Get("from"), 10, 64)
 	if lei, err := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64); err == nil && lei > from {
 		from = lei
+	}
+	if from < 0 || from == math.MaxInt64 {
+		httpError(w, http.StatusBadRequest, "from must be a log sequence number")
+		return
 	}
 	// follow=0 replays what is written so far and ends with an "end" event
 	// carrying the job's current status. tail=N and since=UNIX_MS narrow where
