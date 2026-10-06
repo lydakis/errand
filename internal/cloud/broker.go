@@ -397,7 +397,7 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	if owner == "" {
 		return proto.Lease{}, &Error{http.StatusForbidden, "caller has no ownership identity"}
 	}
-	if sshKey != "" && !ValidSSHPublicKey(sshKey) {
+	if _, ok := proto.SSHKeyBody(sshKey); sshKey != "" && !ok {
 		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
 	if requestID == "" {
@@ -610,7 +610,7 @@ func (b *Broker) end(owner, id, note string) (proto.Lease, error) {
 // released while the machine admits the device, and a lease Acquire would
 // pass over is refused. Letting a device in to look does neither.
 func (b *Broker) Admit(owner, login, id, sshKey string, use bool) (proto.Lease, error) {
-	if sshKey != "" && !ValidSSHPublicKey(sshKey) {
+	if _, ok := proto.SSHKeyBody(sshKey); sshKey != "" && !ok {
 		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
 	b.mu.Lock()
@@ -1088,8 +1088,9 @@ func (b *Broker) admitPending(l *lease, r record) {
 			return false
 		}
 		for _, k := range keys {
-			r.PendingKeys = slices.DeleteFunc(slices.Clone(r.PendingKeys), func(p string) bool { return p == k })
-			if r.Target.SSH != "" && !slices.Contains(r.SSHKeys, k) {
+			same := func(p string) bool { return proto.SameSSHKey(p, k) }
+			r.PendingKeys = slices.DeleteFunc(slices.Clone(r.PendingKeys), same)
+			if r.Target.SSH != "" && !slices.ContainsFunc(r.SSHKeys, same) {
 				r.SSHKeys = append(slices.Clone(r.SSHKeys), k)
 			}
 		}
@@ -1472,7 +1473,8 @@ func (b *Broker) persist(r *record) error {
 // it, otherwise once the worker has added it. A lease admits at most
 // maxLeaseKeys keys, which keeps its record within what clients read.
 func (r *record) admit(sshKey string) error {
-	if sshKey == "" || slices.Contains(r.SSHKeys, sshKey) || slices.Contains(r.PendingKeys, sshKey) {
+	same := func(k string) bool { return proto.SameSSHKey(k, sshKey) }
+	if sshKey == "" || slices.ContainsFunc(r.SSHKeys, same) || slices.ContainsFunc(r.PendingKeys, same) {
 		return nil
 	}
 	if r.Target != nil && r.Target.SSH == "" {

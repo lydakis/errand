@@ -1077,7 +1077,7 @@ func TestDialSSHDrainsStdoutAfterProcessExit(t *testing.T) {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
-	conn, err := dialSSH(context.Background(), "fake", "ignored")
+	conn, err := dialSSH(context.Background(), "fake", "ignored", sshTrust{})
 	if err != nil {
 		t.Fatal(err)
 	}

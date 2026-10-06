@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/tailnet"
 	"github.com/lydakis/errand/internal/tomlconfig"
 	"github.com/lydakis/errand/internal/workspace"
@@ -146,29 +146,11 @@ func (c Client) PeerURL(name string) (string, error) {
 	if !ok || (p.URL == "" && p.SSH == "") {
 		return "", fmt.Errorf("peer %q is not configured", name)
 	}
-	if p.URL != "" && p.SSH != "" {
-		return "", fmt.Errorf("peer %q sets both url and ssh; choose one transport", name)
-	}
-	if p.URL != "" && (p.RemoteCommand != "" || p.RemoteSocket != "") {
-		return "", fmt.Errorf("peer %q: remote_command and remote_socket require ssh", name)
+	if err := proto.CheckPeerTransport(p.URL, p.SSH, p.RemoteCommand, p.RemoteSocket); err != nil {
+		return "", fmt.Errorf("peer %q: %w", name, err)
 	}
 	if p.SSH != "" {
-		if strings.ContainsAny(p.SSH, " \t\r\n:/?#") || strings.HasPrefix(p.SSH, "@") ||
-			strings.HasSuffix(p.SSH, "@") || strings.Count(p.SSH, "@") > 1 {
-			return "", fmt.Errorf("peer %q: ssh must be an ssh_config host or user@host", name)
-		}
-		if p.RemoteSocket != "" && !strings.HasPrefix(p.RemoteSocket, "/") {
-			return "", fmt.Errorf("peer %q: remote_socket must be an absolute Unix path", name)
-		}
-		if p.RemoteCommand != "" && !strings.HasPrefix(p.RemoteCommand, "/") {
-			return "", fmt.Errorf("peer %q: remote_command must be an absolute executable path", name)
-		}
 		return SSHScheme + "://" + p.SSH, nil
-	}
-	u, err := url.Parse(p.URL)
-	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" ||
-		(u.Scheme != "http" && u.Scheme != "https") {
-		return "", fmt.Errorf("peer %q: url must be an http:// or https:// runner base URL", name)
 	}
 	return strings.TrimSuffix(p.URL, "/"), nil
 }

@@ -38,7 +38,7 @@ func TestSSHConnectFailureIsUnreachableOnWrite(t *testing.T) {
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
-	conn, err := dialSSH(context.Background(), "gone", "true")
+	conn, err := dialSSH(context.Background(), "gone", "true", sshTrust{})
 	if err != nil {
 		t.Fatal(err)
 	}

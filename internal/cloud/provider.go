@@ -3,7 +3,6 @@ package cloud
 import (
 	"bufio"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -177,25 +176,13 @@ func (p CommandProvider) Release(ctx context.Context, req ReleaseRequest) error 
 	return nil
 }
 
-// checkTarget keeps leases to remote runners: a broker must not be able to
-// point a client at a socket on the client's own machine.
+// checkTarget keeps leases to remote runners a client can use: a broker
+// must not be able to point a client at a socket on the client's own
+// machine, and a target no client can use is refused while its machine can
+// still be released at once.
 func checkTarget(t proto.LeaseTarget) error {
-	if t.URL == "" && t.SSH == "" {
-		return errors.New("provider named no url or ssh target")
-	}
-	if t.HostKey != "" && t.SSH == "" {
-		return errors.New("provider named a host_key without an ssh target")
+	if err := t.Check(); err != nil {
+		return fmt.Errorf("provider target: %w", err)
 	}
 	return nil
-}
-
-// ValidSSHPublicKey accepts one authorized_keys line: a key type, its base64
-// blob and an optional comment, without options.
-func ValidSSHPublicKey(s string) bool {
-	fields := strings.Fields(s)
-	if len(fields) < 2 || len(s) > 16<<10 || strings.ContainsAny(s, "\r\n") || !strings.HasPrefix(fields[0], "ssh-") && !strings.HasPrefix(fields[0], "ecdsa-") && !strings.HasPrefix(fields[0], "sk-") {
-		return false
-	}
-	_, err := base64.StdEncoding.DecodeString(fields[1])
-	return err == nil
 }

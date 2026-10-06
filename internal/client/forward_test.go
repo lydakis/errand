@@ -199,7 +199,7 @@ func TestForwardSessionUsesSSHTransport(t *testing.T) {
 	defer server.Close()
 
 	oldDial := dialSSHConnection
-	dialSSHConnection = func(ctx context.Context, _, _ string) (net.Conn, error) {
+	dialSSHConnection = func(ctx context.Context, _, _ string, _ sshTrust) (net.Conn, error) {
 		var dialer net.Dialer
 		return dialer.DialContext(ctx, "tcp", server.Listener.Addr().String())
 	}

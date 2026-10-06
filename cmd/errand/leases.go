@@ -100,12 +100,14 @@ func leasePeersOf(cfg config.Client, broker string, info proto.Info) []leasePeer
 
 // admits reports whether a ready lease lets in the device with publicKey.
 func admits(l proto.Lease, publicKey string) bool {
-	return l.Target == nil || l.Target.SSH == "" || len(l.SSHKeys) == 0 || slices.Contains(l.SSHKeys, publicKey)
+	return l.Target == nil || l.Target.SSH == "" || len(l.SSHKeys) == 0 ||
+		slices.ContainsFunc(l.SSHKeys, func(k string) bool { return proto.SameSSHKey(k, publicKey) })
 }
 
 // admitLeaseKeys lets more of a lease owner's devices into a machine reached
 // over SSH, for a cloud peer. Each key goes on its own line of the login's
-// authorized_keys, once.
+// authorized_keys, once. The script is POSIX shell, like the command the
+// SSH transport runs to reach errand on the machine.
 func admitLeaseKeys(ctx context.Context, t proto.LeaseTarget, identity string, keys []string) error {
 	if _, err := leaseTargetPeer(t, identity); err != nil {
 		return err
@@ -275,26 +277,34 @@ func admitThisDevice(cfg config.Client, broker, target, id string, info proto.In
 	if lease.State != proto.LeaseReady {
 		return leasePeer{}, false, fmt.Errorf("lease %s is %s", id, lease.State)
 	}
-	info.Leases = []proto.Lease{lease}
+	// The peer is named against all the leases, as leasePeerNamed found it.
+	info.Leases = slices.Clone(info.Leases)
+	for i := range info.Leases {
+		if info.Leases[i].ID == id {
+			info.Leases[i] = lease
+		}
+	}
 	for _, lp := range leasePeersOf(cfg, broker, info) {
-		return lp, true, nil
+		if lp.Lease.ID == id {
+			return lp, true, nil
+		}
 	}
 	return leasePeer{}, false, fmt.Errorf("lease %s has an unusable target", id)
 }
 
-// leaseTargetPeer is the peer entry for a lease target. The host key of an
-// ssh target is trusted for this process, with identity offered when set.
+// leaseTargetPeer is the peer entry for a lease target. An ssh target's
+// host key, when the cloud peer reported one, is trusted for this process,
+// and identity is offered when set.
 func leaseTargetPeer(t proto.LeaseTarget, identity string) (config.Peer, error) {
-	peer := config.LeasePeer(t)
-	if err := config.ValidatePeer("lease", peer); err != nil {
+	if err := t.Check(); err != nil {
 		return config.Peer{}, err
 	}
-	if t.HostKey != "" {
+	if t.SSH != "" {
 		if err := client.TrustSSHHost(t.SSH, t.HostKey, identity); err != nil {
 			return config.Peer{}, err
 		}
 	}
-	return peer, nil
+	return config.LeasePeer(t), nil
 }
 
 // leaseCandidate is a lease peer as a run candidate.
@@ -446,13 +456,14 @@ func withdrawLease(broker placementChoice, requestID, id string) string {
 	return fmt.Sprintf("released lease %s", lease.ID)
 }
 
-// leaseKeyFile is the SSH key this client sends with lease requests.
+// leaseKeyFile is the SSH key this client sends with lease requests. Its
+// directory holds only the key pair, which EnsureSSHKey makes whole.
 func leaseKeyFile() (string, error) {
 	dir, err := config.StateDirectory()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "ssh", "errand_ed25519"), nil
+	return filepath.Join(dir, "ssh", "lease", "errand_ed25519"), nil
 }
 
 // clientLeaseIdentity is this client's lease key file and its public key,

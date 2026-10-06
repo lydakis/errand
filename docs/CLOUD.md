@@ -59,7 +59,7 @@ max_price_per_hour = 20                                   # default 10; 0 for no
 
 Callers over the tailnet need the `lease` action in the errand capability
 besides `submit`; `allow_users` grants both. The cloud peer and the machines
-you run errand from need `ssh` and `ssh-keygen`. [Lambda](#lambda) below has
+you run errand from need `ssh`. [Lambda](#lambda) below has
 the rest of the settings.
 
 The lease is then a peer named after the cloud peer and the end of the lease
@@ -364,7 +364,10 @@ release. Stdout is limited to 16 KiB. Name the machine after `ERRAND_LEASE_ID` s
 when acquire was interrupted before printing anything. With `ssh`, a
 `host_key` field (`"ssh-ed25519 AAAA..."`) makes errand accept only that host
 key for the machine, which saves a `known_hosts` entry for a machine that just
-booted.
+booted. With or without it, clients offer the key they sent as
+`ERRAND_LEASE_SSH_KEY`, so the machine can admit them by it. A target that
+breaks these rules fails the launch as soon as acquire exits, and its machine
+is released then.
 
 **release** destroys the machine. It must succeed when run twice, and when
 `ERRAND_LEASE_STATE` is empty.

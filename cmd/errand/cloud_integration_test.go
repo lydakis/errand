@@ -143,7 +143,7 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	}
 	// The client sent the public half of its own errand key.
 	sent, _ := os.ReadFile(sentKey)
-	public, err := os.ReadFile(filepath.Join(state, "errand", "ssh", "errand_ed25519.pub"))
+	public, err := os.ReadFile(filepath.Join(state, "errand", "ssh", "lease", "errand_ed25519.pub"))
 	if err != nil || !strings.HasPrefix(string(sent), "ssh-ed25519 ") || strings.TrimSpace(string(sent)) != strings.TrimSpace(string(public)) {
 		t.Fatalf("lease key %q, client key %q %v", sent, public, err)
 	}
