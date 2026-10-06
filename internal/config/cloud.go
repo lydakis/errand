@@ -3,9 +3,7 @@ package config
 import (
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 	"unicode"
@@ -20,6 +18,9 @@ type DaemonCloud struct {
 	MaxLeases      int          `toml:"max_leases"`
 	AcquireTimeout string       `toml:"acquire_timeout"`
 	Offers         []CloudOffer `toml:"offers"`
+	// Lambda offers a Lambda Cloud account's instance types without an
+	// offer for each: their shapes and prices come from Lambda.
+	Lambda *LambdaAccount `toml:"lambda"`
 }
 
 type CloudOffer struct {
@@ -39,16 +40,31 @@ type CloudOffer struct {
 	MaxLifetime string       `toml:"max_lifetime"` // default 12h
 }
 
-// LambdaOffer rents Lambda Cloud instances instead of running commands.
-type LambdaOffer struct {
-	InstanceType         string   `toml:"instance_type"`
+// LambdaSettings is what every Lambda machine of one account shares.
+type LambdaSettings struct {
+	APIKeyFile           string   `toml:"api_key_file"`
 	Regions              []string `toml:"regions"`
 	FileSystems          []string `toml:"file_systems"`
-	APIKeyFile           string   `toml:"api_key_file"`
 	User                 string   `toml:"user"`
 	TailscaleAuthKeyFile string   `toml:"tailscale_auth_key_file"`
 	ErrandBinary         string   `toml:"errand_binary"`
 	AllowUsers           []string `toml:"allow_users"`
+}
+
+// LambdaOffer rents one Lambda instance type as a configured offer.
+type LambdaOffer struct {
+	LambdaSettings
+	InstanceType string `toml:"instance_type"`
+}
+
+// LambdaAccount offers every instance type of a Lambda account that has
+// capacity, or those in InstanceTypes, at up to MaxPricePerHour.
+type LambdaAccount struct {
+	LambdaSettings
+	InstanceTypes   []string `toml:"instance_types"`
+	MaxPricePerHour float64  `toml:"max_price_per_hour"`
+	IdleTimeout     string   `toml:"idle_timeout"` // default 20m
+	MaxLifetime     string   `toml:"max_lifetime"` // default 12h
 }
 
 const (
@@ -68,8 +84,16 @@ func (c DaemonCloud) Broker() (*cloud.Config, error) {
 	if out.AcquireTimeout, err = positiveDuration("cloud acquire_timeout", c.AcquireTimeout, 15*time.Minute); err != nil {
 		return nil, err
 	}
+	if c.Lambda != nil {
+		if out.Catalog, err = c.Lambda.catalog(); err != nil {
+			return nil, err
+		}
+	}
 	if len(c.Offers) == 0 {
-		return &cloud.Config{}, nil
+		if out.Catalog == nil {
+			return &cloud.Config{}, nil
+		}
+		return out, nil
 	}
 	seen := map[string]bool{}
 	for i, o := range c.Offers {
@@ -179,6 +203,42 @@ func (l LambdaOffer) provider(arch string) (*cloud.LambdaProvider, error) {
 	if l.InstanceType == "" {
 		return nil, fmt.Errorf("lambda needs instance_type")
 	}
+	p, err := l.LambdaSettings.provider()
+	if err != nil {
+		return nil, err
+	}
+	p.InstanceType, p.Arch = l.InstanceType, arch
+	return p, nil
+}
+
+// catalog offers the account's instance types as they are listed.
+func (a LambdaAccount) catalog() (*cloud.LambdaCatalog, error) {
+	p, err := a.LambdaSettings.provider()
+	if err != nil {
+		return nil, fmt.Errorf("cloud lambda: %w", err)
+	}
+	if a.MaxPricePerHour < 0 || math.IsNaN(a.MaxPricePerHour) || math.IsInf(a.MaxPricePerHour, 0) {
+		return nil, fmt.Errorf("cloud lambda: max_price_per_hour must not be negative")
+	}
+	for _, t := range a.InstanceTypes {
+		if t == "" || strings.ContainsFunc(t, func(r rune) bool { return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_') }) {
+			return nil, fmt.Errorf("cloud lambda: instance_types entry %q is not a Lambda instance type name such as gpu_1x_a10", t)
+		}
+	}
+	c := &cloud.LambdaCatalog{Account: *p, InstanceTypes: a.InstanceTypes, MaxPricePerHour: a.MaxPricePerHour}
+	if c.IdleTimeout, err = positiveDuration("cloud lambda idle_timeout", a.IdleTimeout, defaultLeaseIdle); err != nil {
+		return nil, err
+	}
+	if c.MaxLifetime, err = positiveDuration("cloud lambda max_lifetime", a.MaxLifetime, defaultLeaseLifetime); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// provider checks the account settings. The Linux errand build for a
+// machine is found when one is rented: errand_binary when set, otherwise
+// this build or its release for the machine's architecture.
+func (l LambdaSettings) provider() (*cloud.LambdaProvider, error) {
 	for name, path := range map[string]string{"api_key_file": l.APIKeyFile, "tailscale_auth_key_file": l.TailscaleAuthKeyFile} {
 		if !filepath.IsAbs(path) && (path != "" || name != "tailscale_auth_key_file") {
 			return nil, fmt.Errorf("lambda %s must be an absolute path", name)
@@ -208,22 +268,11 @@ func (l LambdaOffer) provider(arch string) (*cloud.LambdaProvider, error) {
 			return nil, fmt.Errorf("lambda allow_users entry %q is not a tailnet login", u)
 		}
 	}
-	binary := l.ErrandBinary
-	if binary == "" {
-		// The broker's own build serves when the machine matches it.
-		if runtime.GOOS != "linux" || runtime.GOARCH != arch {
-			return nil, fmt.Errorf("lambda errand_binary must name a linux/%s errand build (this runner is %s/%s)", arch, runtime.GOOS, runtime.GOARCH)
-		}
-		self, err := os.Executable()
-		if err != nil {
-			return nil, fmt.Errorf("lambda errand_binary: %w", err)
-		}
-		binary = self
-	} else if !filepath.IsAbs(binary) {
+	if l.ErrandBinary != "" && !filepath.IsAbs(l.ErrandBinary) {
 		return nil, fmt.Errorf("lambda errand_binary must be an absolute path")
 	}
 	return &cloud.LambdaProvider{
-		APIKeyFile: l.APIKeyFile, InstanceType: l.InstanceType, Regions: l.Regions, FileSystems: l.FileSystems,
-		User: user, TailscaleAuthKeyFile: l.TailscaleAuthKeyFile, ErrandBinary: binary, Arch: arch, AllowUsers: l.AllowUsers,
+		APIKeyFile: l.APIKeyFile, Regions: l.Regions, FileSystems: l.FileSystems,
+		User: user, TailscaleAuthKeyFile: l.TailscaleAuthKeyFile, ErrandBinary: l.ErrandBinary, AllowUsers: l.AllowUsers,
 	}, nil
 }

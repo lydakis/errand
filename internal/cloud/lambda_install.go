@@ -40,7 +40,7 @@ const lambdaInstallCommand = `d="$HOME/.errand-lease"; rm -rf "$d" && mkdir -m 7
 // runs a fixed script from it. Values travel only as file contents, so none
 // needs quoting for a shell or systemd, and the auth key never appears in
 // launch metadata or a command.
-func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, authKey, login, clientKey string) error {
+func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, binary, authKey, login, clientKey string) error {
 	known, err := os.CreateTemp("", "errand-lease-known-hosts-")
 	if err != nil {
 		return err
@@ -95,7 +95,7 @@ func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, 
 	bundle, w := io.Pipe()
 	wrote := make(chan error, 1)
 	go func() {
-		err := p.writeInstallBundle(w, config, hostname, authKey, clientKey)
+		err := p.writeInstallBundle(w, config, hostname, binary, authKey, clientKey)
 		w.CloseWithError(err)
 		wrote <- err
 	}()
@@ -132,7 +132,7 @@ func lambdaRunnerConfig(tailnet bool, allowUsers []string) ([]byte, error) {
 
 // writeInstallBundle writes the archive lambdaInstallCommand unpacks.
 // Over SSH the machine admits clientKey; on the tailnet it needs no key.
-func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname, authKey, clientKey string) error {
+func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname, binaryPath, authKey, clientKey string) error {
 	tw := tar.NewWriter(w)
 	add := func(name string, mode int64, size int64, body io.Reader) error {
 		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: mode, Size: size, ModTime: time.Unix(0, 0), Typeflag: tar.TypeReg}); err != nil {
@@ -163,7 +163,7 @@ func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname
 	if err := add("errandd.toml", 0o644, int64(len(config)), bytes.NewReader(config)); err != nil {
 		return err
 	}
-	binary, err := os.Open(p.ErrandBinary)
+	binary, err := os.Open(binaryPath)
 	if err != nil {
 		return err
 	}
@@ -174,16 +174,13 @@ func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname
 	}
 	// tar fails the archive if the file changes size while it is copied.
 	if err := add("errand", 0o755, info.Size(), binary); err != nil {
-		return fmt.Errorf("errand_binary %s: %w", p.ErrandBinary, err)
+		return fmt.Errorf("errand build %s: %w", binaryPath, err)
 	}
 	return tw.Close()
 }
 
-// checkInstall checks what the install needs before anything is rented.
+// checkInstall checks the tools the install needs before anything is rented.
 func (p *LambdaProvider) checkInstall() error {
-	if err := checkLinuxBinary(p.ErrandBinary, p.Arch); err != nil {
-		return fmt.Errorf("lambda errand_binary: %w", err)
-	}
 	if p.HostKey == nil || p.Keygen == nil {
 		if _, err := exec.LookPath("ssh-keygen"); err != nil {
 			return fmt.Errorf("renting Lambda machines needs ssh-keygen: %w", err)

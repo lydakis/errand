@@ -44,8 +44,14 @@ type AdmitFunc func(ctx context.Context, target proto.LeaseTarget, identity stri
 const admitTimeout = 30 * time.Second
 
 type Config struct {
-	StateDir       string // leases are persisted under StateDir/leases
-	Offers         []Offer
+	StateDir string // leases are persisted under StateDir/leases
+	Offers   []Offer
+	// Catalog lists further offers, such as a cloud account's instance
+	// types with capacity, refreshed every CatalogRefresh (default 2m).
+	Catalog        Catalog
+	CatalogRefresh time.Duration
+	// Version is this errand's version, for providers that install errand.
+	Version        string
 	MaxLeases      int
 	AcquireTimeout time.Duration
 	ReleaseTimeout time.Duration
@@ -101,8 +107,9 @@ type record struct {
 // wakes the worker.
 type lease struct {
 	record
-	stop context.CancelFunc // cancels the running acquire or probe
-	wake chan struct{}
+	provider Provider           // the offer's provider when the lease was made
+	stop     context.CancelFunc // cancels the running acquire or probe
+	wake     chan struct{}
 }
 
 type Broker struct {
@@ -113,6 +120,9 @@ type Broker struct {
 	mu     sync.Mutex
 	leases map[string]*lease
 	closed bool
+	// catalog is the latest listing from cfg.Catalog, cheapest first.
+	catalog   []Offer
+	catalogAt time.Time
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -140,6 +150,9 @@ func New(cfg Config) (*Broker, error) {
 	if cfg.IdlePoll <= 0 {
 		cfg.IdlePoll = 30 * time.Second
 	}
+	if cfg.CatalogRefresh <= 0 {
+		cfg.CatalogRefresh = 2 * time.Minute
+	}
 	// Paths kept in lease records, such as the identity a machine is reached
 	// with, must not depend on the directory the runner was started from.
 	dir, err := filepath.Abs(cfg.StateDir)
@@ -158,11 +171,11 @@ func New(cfg Config) (*Broker, error) {
 		if _, dup := b.offers[o.Name]; dup {
 			return nil, fmt.Errorf("cloud offer %q is defined twice", o.Name)
 		}
-		// Providers that keep files of their own keep them with the leases.
-		if k, ok := o.Provider.(interface{ useStateDir(string) }); ok {
-			k.useStateDir(cfg.StateDir)
-		}
+		b.setUp(o.Provider)
 		b.offers[o.Name] = o
+	}
+	if cfg.Catalog != nil {
+		b.setUp(cfg.Catalog)
 	}
 	if err := os.MkdirAll(b.dir, 0700); err != nil {
 		return nil, err
@@ -196,7 +209,22 @@ func New(cfg Config) (*Broker, error) {
 	for _, l := range b.leases {
 		b.start(l)
 	}
+	if cfg.Catalog != nil {
+		b.wg.Add(1)
+		go b.refreshCatalog()
+	}
 	return b, nil
+}
+
+// setUp hands a provider or catalog what it may need from the broker: a
+// directory for files of its own, kept with the leases, and errand's version.
+func (b *Broker) setUp(v any) {
+	if k, ok := v.(interface{ useStateDir(string) }); ok {
+		k.useStateDir(b.cfg.StateDir)
+	}
+	if k, ok := v.(interface{ useVersion(string) }); ok {
+		k.useVersion(b.cfg.Version)
+	}
 }
 
 // load reads the recorded leases, dropping ended ones past their history.
@@ -229,13 +257,34 @@ func (b *Broker) load() ([]record, error) {
 	return records, nil
 }
 
-// Offers describes what this broker can lease.
+// Offers describes what this broker can lease: its configured offers, then
+// the catalog's as of its last refresh.
 func (b *Broker) Offers() []proto.Offer {
-	out := make([]proto.Offer, 0, len(b.cfg.Offers))
-	for _, o := range b.cfg.Offers {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []proto.Offer
+	for _, o := range b.offersLocked() {
 		out = append(out, o.Offer())
 	}
 	return out
+}
+
+// offersLocked is every offer that can be leased from right now.
+func (b *Broker) offersLocked() []Offer {
+	return append(slices.Clone(b.cfg.Offers), b.catalog...)
+}
+
+// offerLocked finds an offer by name among those that can be leased from.
+func (b *Broker) offerLocked(name string) (Offer, bool) {
+	if o, ok := b.offers[name]; ok {
+		return o, true
+	}
+	for _, o := range b.catalog {
+		if o.Name == name {
+			return o, true
+		}
+	}
+	return Offer{}, false
 }
 
 // Offer is how o is advertised.
@@ -262,9 +311,12 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	if sshKey != "" && !ValidSSHPublicKey(sshKey) {
 		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
-	if len(b.offers) == 0 {
+	if len(b.offers) == 0 && b.cfg.Catalog == nil {
 		return proto.Lease{}, &Error{http.StatusNotFound, "this runner has no cloud offers"}
 	}
+	// A catalog that may have changed since the client saw it is listed
+	// again, so a lease is not made from an offer that is gone.
+	b.freshenCatalog()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
@@ -316,7 +368,7 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 		switch {
 		case l.State == proto.LeaseReady && l.Facts != nil && len(q.Missing(*l.Facts)) == 0:
 			return share(l)
-		case l.State == proto.LeaseLaunching && launching == nil && len(q.Missing(b.offers[l.Offer].Facts)) == 0:
+		case l.State == proto.LeaseLaunching && launching == nil && len(q.Missing(l.offerFacts(b))) == 0:
 			launching = l
 		}
 	}
@@ -325,8 +377,9 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	}
 	var offer *Offer
 	var reasons []string
-	for i := range b.cfg.Offers {
-		o := &b.cfg.Offers[i]
+	candidates := b.offersLocked()
+	for i := range candidates {
+		o := &candidates[i]
 		missing := q.Missing(o.Facts)
 		if len(missing) == 0 {
 			if offer == nil || placement.CheaperOffer(o.Offer(), offer.Offer()) {
@@ -343,7 +396,7 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 		return proto.Lease{}, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease limit reached (%d active, max_leases = %d)", active, b.cfg.MaxLeases)}
 	}
 	now := time.Now()
-	l := &lease{wake: make(chan struct{}, 1), record: record{
+	l := &lease{wake: make(chan struct{}, 1), provider: offer.Provider, record: record{
 		Owner: owner, Login: login, Requests: []string{requestID}, Release: offer.Provider.ReleaseSpec(), IdleTimeout: offer.IdleTimeout,
 		Lease: proto.Lease{ID: proto.NewULID(), Offer: offer.Name, Where: where, SSHKeys: keyList(sshKey), State: proto.LeaseLaunching, CreatedAt: now, ExpiresAt: now.Add(offer.MaxLifetime)},
 	}}
@@ -573,7 +626,9 @@ func (b *Broker) launch(l *lease) {
 		b.mu.Unlock()
 		return // released before the acquire started
 	}
-	offer := b.offers[l.Offer] // only this process's leases are launching
+	// Only this process's leases are launching, and each keeps the provider
+	// of the offer it was made from, which a catalog may since have dropped.
+	provider, offerName := l.provider, l.Offer
 	// The hard stop holds while launching too.
 	created := l.CreatedAt
 	deadline := earlier(created.Add(b.cfg.AcquireTimeout), l.ExpiresAt)
@@ -586,8 +641,8 @@ func (b *Broker) launch(l *lease) {
 	b.mu.Unlock()
 	defer cancel()
 
-	machine, err := offer.Provider.Acquire(ctx, AcquireRequest{
-		LeaseID: id, Offer: offer.Name, Where: where, Login: login, SSHKey: sshKey,
+	machine, err := provider.Acquire(ctx, AcquireRequest{
+		LeaseID: id, Offer: offerName, Where: where, Login: login, SSHKey: sshKey,
 		Progress: func(line string) { b.note(l, line) },
 		Save: func(state json.RawMessage) error {
 			return b.update(l, func(r *record) bool {
@@ -852,7 +907,10 @@ func (b *Broker) release(l *lease) {
 // that offer still releases the way r was made, or else one built from the
 // release settings r recorded.
 func (b *Broker) releaser(r record) (Provider, error) {
-	if o, ok := b.offers[r.Offer]; ok && o.Provider.ReleaseSpec().equal(r.Release) {
+	b.mu.Lock()
+	o, ok := b.offerLocked(r.Offer)
+	b.mu.Unlock()
+	if ok && o.Provider.ReleaseSpec().equal(r.Release) {
 		return o.Provider, nil
 	}
 	return r.Release.provider()

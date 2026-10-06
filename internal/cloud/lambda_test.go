@@ -27,6 +27,31 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+// fakeInstanceType is one entry of the fake's instance type listing.
+type fakeInstanceType struct {
+	price       int
+	arch, gpu   string
+	vcpus, gpus int
+	regions     []string // with capacity; nil means the fake's capacity
+}
+
+func (t fakeInstanceType) listing(name string, capacity []string) map[string]any {
+	var regions []map[string]string
+	if t.regions == nil {
+		t.regions = capacity
+	}
+	for _, r := range t.regions {
+		regions = append(regions, map[string]string{"name": r, "description": r})
+	}
+	return map[string]any{
+		"instance_type": map[string]any{
+			"name": name, "description": "1x " + t.gpu, "gpu_description": t.gpu, "price_cents_per_hour": t.price, "architecture": t.arch,
+			"specs": map[string]any{"vcpus": t.vcpus, "memory_gib": 4 * t.vcpus, "storage_gib": 512, "gpus": t.gpus},
+		},
+		"regions_with_capacity_available": regions,
+	}
+}
+
 // fakeLambda serves the slice of the Lambda Cloud API the provider uses.
 type fakeLambda struct {
 	mu          sync.Mutex
@@ -35,16 +60,17 @@ type fakeLambda struct {
 	launches    []map[string]any
 	terminated  []string
 	polls       int
-	rateLimited int               // requests to refuse with 429 first
-	fileSystems map[string]string // name → region
-	sshKeys     map[string]string // name → public key
-	keysAdded   int               // POST /ssh-keys calls
-	launchError int               // status to refuse launches with
-	pollErrors  int               // status polls to fail with 502 first
-	pageSize    int               // instances per page, when set
-	apiKey      string            // the account's key, if not secret-key
-	attempts    []time.Time       // when each launch request arrived
-	keepAlive   int               // terminate calls to accept without terminating
+	rateLimited int                         // requests to refuse with 429 first
+	fileSystems map[string]string           // name → region
+	sshKeys     map[string]string           // name → public key
+	keysAdded   int                         // POST /ssh-keys calls
+	launchError int                         // status to refuse launches with
+	pollErrors  int                         // status polls to fail with 502 first
+	pageSize    int                         // instances per page, when set
+	apiKey      string                      // the account's key, if not secret-key
+	types       map[string]fakeInstanceType // instance types besides gpu_1x_h100_pcie
+	attempts    []time.Time                 // when each launch request arrived
+	keepAlive   int                         // terminate calls to accept without terminating
 }
 
 func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -64,14 +90,13 @@ func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/instance-types":
-		var regions []map[string]string
-		for _, name := range f.capacity {
-			regions = append(regions, map[string]string{"name": name, "description": name})
+		types := map[string]any{}
+		h100 := fakeInstanceType{price: 249, arch: "x86_64", gpu: "H100 (80 GB PCIe)", vcpus: 26, gpus: 1}
+		for name, t := range f.types {
+			types[name] = t.listing(name, f.capacity)
 		}
-		reply(map[string]any{"gpu_1x_h100_pcie": map[string]any{
-			"instance_type":                   map[string]any{"name": "gpu_1x_h100_pcie", "price_cents_per_hour": 249, "architecture": "x86_64"},
-			"regions_with_capacity_available": regions,
-		}})
+		types["gpu_1x_h100_pcie"] = h100.listing("gpu_1x_h100_pcie", f.capacity)
+		reply(types)
 	case r.Method == http.MethodGet && r.URL.Path == "/ssh-keys":
 		var list []map[string]string
 		for name, public := range f.sshKeys {
@@ -1006,7 +1031,9 @@ func TestLambdaInstallCommandUnpacksBundle(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, w := io.Pipe()
-	go func() { w.CloseWithError(p.writeInstallBundle(w, config, "errand-lease-host", "tskey-auth-FAKE", "")) }()
+	go func() {
+		w.CloseWithError(p.writeInstallBundle(w, config, "errand-lease-host", p.ErrandBinary, "tskey-auth-FAKE", ""))
+	}()
 	cmd := exec.Command("sh", "-c", lambdaInstallCommand)
 	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	cmd.Stdin = r
@@ -1036,7 +1063,9 @@ func TestLambdaInstallCommandUnpacksBundle(t *testing.T) {
 	// still goes.
 	os.WriteFile(filepath.Join(bin, "sudo"), []byte("#!/bin/sh\necho 'sudo: a password is required' >&2\nexit 1\n"), 0o755)
 	r, w = io.Pipe()
-	go func() { w.CloseWithError(p.writeInstallBundle(w, config, "errand-lease-host", "tskey-auth-FAKE", "")) }()
+	go func() {
+		w.CloseWithError(p.writeInstallBundle(w, config, "errand-lease-host", p.ErrandBinary, "tskey-auth-FAKE", ""))
+	}()
 	cmd = exec.Command("sh", "-c", lambdaInstallCommand)
 	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	cmd.Stdin = r

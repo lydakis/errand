@@ -231,6 +231,7 @@ func New(cfg Config) (*Daemon, error) {
 	if cfg.Cloud != nil {
 		brokerCfg := *cfg.Cloud
 		brokerCfg.StateDir = cfg.StateDir
+		brokerCfg.Version = cfg.Version
 		if d.broker, err = cloud.New(brokerCfg); err != nil {
 			_ = d.Close()
 			return nil, fmt.Errorf("starting cloud broker: %w", err)

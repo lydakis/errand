@@ -270,33 +270,21 @@ func lambdaArch(name string) string {
 }
 
 func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, int, error) {
-	var types struct {
-		Data map[string]struct {
-			InstanceType struct {
-				PriceCentsPerHour int    `json:"price_cents_per_hour"`
-				Architecture      string `json:"architecture"`
-			} `json:"instance_type"`
-			Regions []struct {
-				Name string `json:"name"`
-			} `json:"regions_with_capacity_available"`
-		} `json:"data"`
+	types, err := p.instanceTypes(ctx, key)
+	if err != nil {
+		return "", 0, err
 	}
-	if err := p.call(ctx, key, http.MethodGet, "/instance-types", nil, &types); err != nil {
-		return "", 0, fmt.Errorf("listing Lambda instance types: %w", err)
-	}
-	t, ok := types.Data[p.InstanceType]
-	if !ok {
+	i := slices.IndexFunc(types, func(t lambdaInstanceType) bool { return t.Name == p.InstanceType })
+	if i < 0 {
 		return "", 0, fmt.Errorf("Lambda has no instance type %q", p.InstanceType)
 	}
+	t := types[i]
 	// errand_binary was checked against the offer's arch; the machine must
 	// match it, or the paid instance could never run errand.
-	if arch := lambdaArch(t.InstanceType.Architecture); arch != "" && p.Arch != "" && arch != p.Arch {
-		return "", 0, fmt.Errorf("Lambda instance type %s is %s but the offer says arch = %q", p.InstanceType, t.InstanceType.Architecture, p.Arch)
+	if arch := lambdaArch(t.Architecture); arch != "" && p.Arch != "" && arch != p.Arch {
+		return "", 0, fmt.Errorf("Lambda instance type %s is %s but the offer says arch = %q", p.InstanceType, t.Architecture, p.Arch)
 	}
-	var available []string
-	for _, r := range t.Regions {
-		available = append(available, r.Name)
-	}
+	available := t.Regions
 	regions := p.Regions
 	if len(p.FileSystems) > 0 {
 		// Lambda attaches a filesystem only to instances in its own region.
@@ -310,11 +298,11 @@ func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, in
 		regions = []string{fsRegion}
 	}
 	if len(regions) == 0 && len(available) > 0 {
-		return available[0], t.InstanceType.PriceCentsPerHour, nil
+		return available[0], t.PriceCentsPerHour, nil
 	}
 	for _, want := range regions {
 		if slices.Contains(available, want) {
-			return want, t.InstanceType.PriceCentsPerHour, nil
+			return want, t.PriceCentsPerHour, nil
 		}
 	}
 	where := "any region"
