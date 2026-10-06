@@ -972,7 +972,7 @@ echo '{"url":"http://box:7443"}'
 func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	h.cfg.IdlePoll = time.Hour // probe only when woken
-	h.cfg.Offers[0].IdleTimeout = 200 * time.Millisecond
+	h.cfg.Offers[0].IdleTimeout = time.Second
 	// Once the lease is ready, each idle probe waits for the test.
 	var gate atomic.Bool
 	probing, answer := make(chan struct{}), make(chan struct{})
@@ -984,18 +984,20 @@ func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 		return h.machine.probe(ctx, target, identity, where)
 	}
 	b := h.start(t)
+	t.Cleanup(func() { gate.Store(false); close(answer) }) // before the broker closes
 	l, err := b.Acquire("george", "", "gpu", "", proto.NewULID())
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	ready := waitState(t, b, "george", l.ID, proto.LeaseReady)
+	time.Sleep(time.Until(ready.IdleUntil) - 400*time.Millisecond)
 	gate.Store(true)
 	wake(b, l.ID)
-	<-probing                          // an idle probe, which will find the machine idle
-	time.Sleep(300 * time.Millisecond) // past the idle deadline
+	<-probing // an idle probe, which will find the machine idle
 	if again, err := b.Acquire("george", "", "gpu", "", proto.NewULID()); err != nil || again.ID != l.ID {
 		t.Fatalf("reuse: %+v %v", again, err)
 	}
+	time.Sleep(time.Until(ready.IdleUntil) + 200*time.Millisecond) // past the deadline the probe began under
 	gate.Store(false)
 	answer <- struct{}{}
 	time.Sleep(100 * time.Millisecond)
@@ -1120,22 +1122,24 @@ func TestBusyObservedWithoutAWrite(t *testing.T) {
 }
 
 // Lease guarantee 5: naming a ready lease to run on counts as a hand-out,
-// so a lease at its idle deadline is not released while the machine admits
-// the device.
+// so a lease near its idle deadline is not released while the machine
+// admits the device.
 func TestAdmissionRestartsIdleWindow(t *testing.T) {
 	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	h.cfg.IdlePoll = time.Hour // check only when woken
-	h.cfg.Offers[0].IdleTimeout = 300 * time.Millisecond
+	h.cfg.Offers[0].IdleTimeout = time.Second
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", testKey(0), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	time.Sleep(350 * time.Millisecond) // past the idle deadline
+	ready := waitState(t, b, "george", l.ID, proto.LeaseReady)
+	time.Sleep(time.Until(ready.IdleUntil) - 300*time.Millisecond) // near the idle deadline
 	if _, err := b.Admit("george", "", l.ID, testKey(1), true); err != nil {
 		t.Fatal(err)
 	}
+	time.Sleep(time.Until(ready.IdleUntil) + 100*time.Millisecond)
+	wake(b, l.ID) // a check past the deadline the lease had
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
 		got, _ := b.Get("george", l.ID)
 		if got.State != proto.LeaseReady {
@@ -1862,13 +1866,14 @@ func (p pendingRelease) Release(ctx context.Context, req ReleaseRequest) error {
 
 // Lease guarantee 4: a run's claim of a lease and its idle release are
 // decided under one lock, so whichever is recorded first wins. A claim made
-// while the idle check runs past the deadline keeps the lease; one made
-// once the release is recorded is refused with 409. A release the provider
-// is still confirming is shown once, not at every poll.
+// while the idle check runs keeps the lease even when the check's answer
+// comes past the deadline it began under; one made once the release is
+// recorded is refused with 409. A release the provider is still confirming
+// is shown once, not at every poll.
 func TestClaimAndIdleReleaseOneWins(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	h.cfg.IdlePoll = time.Hour // check only when woken
-	h.cfg.Offers[0].IdleTimeout = 200 * time.Millisecond
+	h.cfg.Offers[0].IdleTimeout = time.Second
 	pending := new(atomic.Bool)
 	pending.Store(true)
 	h.cfg.Offers[0].Provider = pendingRelease{h.cfg.Offers[0].Provider.(CommandProvider), pending}
@@ -1882,25 +1887,28 @@ func TestClaimAndIdleReleaseOneWins(t *testing.T) {
 		return h.machine.probe(ctx, target, identity, where)
 	}
 	b := h.start(t)
+	t.Cleanup(func() { gate.Store(false); close(answer) }) // before the broker closes
 	l, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	ready := waitState(t, b, "george", l.ID, proto.LeaseReady)
+	time.Sleep(time.Until(ready.IdleUntil) - 400*time.Millisecond)
 	gate.Store(true)
 	wake(b, l.ID)
-	<-probing                          // an idle check, which will find the machine idle
-	time.Sleep(300 * time.Millisecond) // past the idle deadline
-	if _, err := b.Admit("george", "", l.ID, "", true); err != nil {
+	<-probing // an idle check, which will find the machine idle
+	claimed, err := b.Admit("george", "", l.ID, "", true)
+	if err != nil {
 		t.Fatalf("claim during the idle check: %v", err)
 	}
+	time.Sleep(time.Until(ready.IdleUntil) + 200*time.Millisecond) // past the deadline the check began under
 	gate.Store(false)
 	answer <- struct{}{}
 	time.Sleep(100 * time.Millisecond)
 	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
 		t.Fatalf("a lease claimed during the idle check was released: %+v", got)
 	}
-	time.Sleep(250 * time.Millisecond)
+	time.Sleep(time.Until(claimed.IdleUntil) + 50*time.Millisecond)
 	wake(b, l.ID)
 	waitState(t, b, "george", l.ID, proto.LeaseReleasing)
 	var refused *Error
@@ -1915,4 +1923,49 @@ func TestClaimAndIdleReleaseOneWins(t *testing.T) {
 	}
 	pending.Store(false)
 	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+}
+
+// A lease the idle or lifetime rule would release now is not handed out,
+// even before its worker has released it: the hand-out rule and the
+// release rule agree at every moment.
+func TestDueLeaseNotHandedOut(t *testing.T) {
+	now := time.Now()
+	l := &lease{record: record{Lease: proto.Lease{State: proto.LeaseReady, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}, IdleTimeout: time.Minute, LastBusy: now}}
+	for _, tc := range []struct {
+		at   time.Time
+		want string
+	}{
+		{now.Add(time.Minute - time.Second), ""},
+		{now.Add(time.Minute), "it is due for release: idle for 1m0s"},
+		{now.Add(time.Hour), "it is due for release: max lifetime of 1h0m0s reached"},
+	} {
+		if got := l.refusal(tc.at); got != tc.want {
+			t.Fatalf("refusal at %s: %q, want %q", tc.at.Sub(now), got, tc.want)
+		}
+	}
+
+	h := newHarness(t, okAcquire)
+	h.cfg.IdlePoll = time.Hour // the worker releases nothing on its own
+	h.cfg.MaxLeases = 3
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	b := h.start(t)
+	request := proto.NewULID()
+	idle, err := b.Acquire("george", "", "gpu", "", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready := waitState(t, b, "george", idle.ID, proto.LeaseReady)
+	time.Sleep(time.Until(ready.IdleUntil) + 50*time.Millisecond)
+	if got, _ := b.Get("george", idle.ID); got.State != proto.LeaseReady {
+		t.Fatalf("released without a check: %+v", got)
+	}
+	var refused *Error
+	if _, err := b.Admit("george", "", idle.ID, "", true); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, "due for release: idle for") {
+		t.Fatalf("claim of a lease due for release: %v", err)
+	}
+	for _, req := range []string{proto.NewULID(), request} {
+		if other, err := b.Acquire("george", "", "gpu", "", req); err != nil || other.ID == idle.ID {
+			t.Fatalf("hand-out of a lease due for release: %+v %v", other, err)
+		}
+	}
 }

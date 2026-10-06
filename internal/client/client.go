@@ -977,12 +977,6 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 	if err := opts.selectionGuard.Verify(); err != nil {
 		return status, false, &submitNotStartedError{err: err}
 	}
-	// The last step before the request goes out.
-	if opts.claim != nil {
-		if err := opts.claim(); err != nil {
-			return status, false, &submitNotStartedError{err: err}
-		}
-	}
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	go func() {
@@ -1037,6 +1031,13 @@ func submitOnce(opts RunOptions, jobID string, spec proto.Spec, manifest proto.M
 		req.Header.Set("X-Errand-Project-B64", encoded)
 		if truncated {
 			req.Header.Set("X-Errand-Project-Truncated", "1")
+		}
+	}
+	// The last step before the request goes out.
+	if opts.claim != nil {
+		if err := opts.claim(); err != nil {
+			pr.CloseWithError(err)
+			return status, false, &submitNotStartedError{err: err}
 		}
 	}
 	// Durable reconstruction and admission may outlast the control-request

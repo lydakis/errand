@@ -157,10 +157,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if pending.Applying {
 		// Complete the exact interrupted request before accepting another one. The
 		// remote receipt makes a lost response safe to retry despite later job edits.
-		if err := opts.claim(); err != nil {
-			return err
-		}
-		err := finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter)
+		err := finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter, opts.claim)
 		result.Recovered = true
 		if opts.watchState != nil {
 			opts.watchState.manifest = ""
@@ -268,10 +265,7 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	if opts.Apply && pending.Staged != nil {
 		response = *pending.Staged
 	} else {
-		if err := opts.claim(); err != nil {
-			return err
-		}
-		response, err = uploadPush(opts.PeerURL, ws.ID, filepath.Join(dir, "push-sources", pending.Request.ID), pending.Request, opts.meter)
+		response, err = uploadPush(opts.PeerURL, ws.ID, filepath.Join(dir, "push-sources", pending.Request.ID), pending.Request, opts.meter, opts.claim)
 		if err != nil {
 			// This typed rejection is emitted before the receiver stages anything.
 			// Never replace an uncertain apply or retry an arbitrary HTTP 409.
@@ -306,13 +300,10 @@ func pushChangesLocked(opts PushOptions, ws proto.Workspace, origin workspaceOri
 	}
 	pending.Applying = true
 	pending.Apply = proto.PushApplyRequest{Path: opts.Path, Conflicts: opts.MaterializeConflicts}
-	if err := opts.claim(); err != nil {
-		return err
-	}
 	if err := replaceTransferJSON(pendingPath, pending); err != nil {
 		return err
 	}
-	err = finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter)
+	err = finishPush(opts.PeerURL, ws.ID, dir, pending, result, opts.meter, opts.claim)
 	if err == nil && opts.watchState != nil {
 		opts.watchState.generation = pending.Request.ID
 		if opts.watchState.base != nil {
@@ -347,14 +338,17 @@ func prunePushSources(parent, keep string) error {
 	}
 	return nil
 }
-func uploadPush(peer, workspace, source string, request proto.PushRequest, meter *transferMeter) (proto.PushResult, error) {
+
+// uploadPush stages a push's source on the runner. claim, when set, runs
+// right before the upload request goes out, after any negotiation.
+func uploadPush(peer, workspace, source string, request proto.PushRequest, meter *transferMeter, claim func() error) (proto.PushResult, error) {
 	if request.Delta == nil {
 		return proto.PushResult{}, fmt.Errorf("push is missing its source delta")
 	}
 	// A small delta costs less to send directly than another network round trip
 	// to discover whether its bodies are cached. Larger deltas still negotiate.
 	if smallPushDelta(request.Delta.RemoteManifest) {
-		return uploadPushOnce(peer, workspace, source, request, meter, shipPlan{})
+		return uploadPushOnce(peer, workspace, source, request, meter, shipPlan{}, claim)
 	}
 	endpoint := strings.TrimSuffix(peer, "/") + "/v0/workspaces/" + workspace + "/push/diff"
 	plan, err := negotiateSnapshotAt(context.Background(), endpoint, pushSourceManifest(request))
@@ -364,13 +358,13 @@ func uploadPush(peer, workspace, source string, request proto.PushRequest, meter
 	var result proto.PushResult
 	err = uploadWithSnapshotFallback(plan, func(attempt shipPlan) error {
 		var err error
-		result, err = uploadPushOnce(peer, workspace, source, request, meter, attempt)
+		result, err = uploadPushOnce(peer, workspace, source, request, meter, attempt, claim)
 		return err
 	}, nil)
 	return result, err
 }
 
-func uploadPushOnce(peer, workspace, source string, request proto.PushRequest, meter *transferMeter, plan shipPlan) (proto.PushResult, error) {
+func uploadPushOnce(peer, workspace, source string, request proto.PushRequest, meter *transferMeter, plan shipPlan, claim func() error) (proto.PushResult, error) {
 	var result proto.PushResult
 	if request.Delta == nil {
 		return result, fmt.Errorf("push is missing its source delta")
@@ -406,6 +400,13 @@ func uploadPushOnce(peer, workspace, source string, request proto.PushRequest, m
 		return result, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	// The last step before the request goes out.
+	if claim != nil {
+		if err := claim(); err != nil {
+			pr.CloseWithError(err)
+			return result, err
+		}
+	}
 	// Reconstruction and durable staging happen after the upload is read.
 	// Their budget must not shrink to the short control-request timeout.
 	resp, err := maintenanceHTTP.Do(req)
@@ -440,20 +441,22 @@ var errPushCheckpointChanged = errors.New("push checkpoint changed before stagin
 
 var errPushStageMissing = errors.New("push stage is missing")
 
-func finishPush(peer, workspace, dir string, pending pendingPush, result *proto.PushResult, meter *transferMeter) error {
+// finishPush applies a staged push. claim, when set, runs right before the
+// first request that changes the workspace goes out.
+func finishPush(peer, workspace, dir string, pending pendingPush, result *proto.PushResult, meter *transferMeter, claim func() error) error {
 	if err := writePushGeneration(dir, pending.Request.ID); err != nil {
 		return err
 	}
 	defer func() { meter.paths(result.Paths, nil) }()
-	err := finishPushOnce(peer, workspace, dir, pending, result)
+	err := finishPushOnce(peer, workspace, dir, pending, result, claim)
 	if !errors.Is(err, errPushStageMissing) {
 		return err
 	}
 	// Only the daemon's explicit missing-stage response permits re-staging.
 	// Generic 404s and damaged attempts do not establish that apply never ran.
-	_, err = uploadPush(peer, workspace, filepath.Join(dir, "push-sources", pending.Request.ID), pending.Request, meter)
+	_, err = uploadPush(peer, workspace, filepath.Join(dir, "push-sources", pending.Request.ID), pending.Request, meter, claim)
 	if err == nil {
-		err = finishPushOnce(peer, workspace, dir, pending, result)
+		err = finishPushOnce(peer, workspace, dir, pending, result, claim)
 	}
 	var conflict *changeops.MergeConflictError
 	if errors.As(err, &conflict) {
@@ -465,7 +468,7 @@ func finishPush(peer, workspace, dir string, pending pendingPush, result *proto.
 	return nil
 }
 
-func finishPushOnce(peer, workspace, dir string, pending pendingPush, result *proto.PushResult) error {
+func finishPushOnce(peer, workspace, dir string, pending pendingPush, result *proto.PushResult, claim func() error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), maintenanceTimeout)
 	defer cancel()
 	raw, err := json.Marshal(pending.Apply)
@@ -478,6 +481,12 @@ func finishPushOnce(peer, workspace, dir string, pending pendingPush, result *pr
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// The last step before the request goes out.
+	if claim != nil {
+		if err := claim(); err != nil {
+			return err
+		}
+	}
 	resp, err := maintenanceHTTP.Do(req)
 	if err != nil {
 		return fmt.Errorf("push outcome unknown; repeat push to recover: %w", err)

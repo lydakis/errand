@@ -167,12 +167,6 @@ func createPreparedWorkspaceOnce(opts RunOptions, prep snapshotPreparation, requ
 	if err := prep.guard.Verify(); err != nil {
 		return result, err
 	}
-	// The last step before the request goes out.
-	if opts.claim != nil {
-		if err := opts.claim(); err != nil {
-			return result, err
-		}
-	}
 	pr, pw := io.Pipe()
 	defer pr.Close()
 	mw := multipart.NewWriter(pw)
@@ -214,6 +208,13 @@ func createPreparedWorkspaceOnce(opts RunOptions, prep snapshotPreparation, requ
 		return result, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	// The last step before the request goes out.
+	if opts.claim != nil {
+		if err := opts.claim(); err != nil {
+			pr.CloseWithError(err)
+			return result, err
+		}
+	}
 	// Durable reconstruction and admission may outlast the control-request
 	// header budget. Keep the existing upload context and uncertainty handling.
 	resp, err := maintenanceHTTP.Do(req)

@@ -22,11 +22,14 @@ func TestPushClaimsRightBeforeChangingWorkspace(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
 		baseFails, retry bool
+		large, diffFails bool
 		refuse           bool
 		claims, changes  int32
 		ok               bool
 	}{
 		{name: "negotiation fails", baseFails: true},
+		{name: "upload negotiation fails", large: true, diffFails: true},
+		{name: "large upload", large: true, claims: 1, changes: 2, ok: true},
 		{name: "claim refused", refuse: true, claims: 1},
 		{name: "upload retried", retry: true, claims: 1, changes: 3, ok: true},
 	} {
@@ -35,11 +38,12 @@ func TestPushClaimsRightBeforeChangingWorkspace(t *testing.T) {
 			var rejected atomic.Bool
 			root, _, peer, ws := watchFixtureHandler(t, func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if strings.HasSuffix(r.URL.Path, "/push/base") && tc.baseFails {
+					if strings.HasSuffix(r.URL.Path, "/push/base") && tc.baseFails || strings.HasSuffix(r.URL.Path, "/push/diff") && tc.diffFails {
 						http.Error(w, "unavailable", http.StatusServiceUnavailable)
 						return
 					}
-					if r.Method != http.MethodGet && !strings.HasSuffix(r.URL.Path, "/push/base") {
+					// Negotiations only read.
+					if r.Method != http.MethodGet && !strings.HasSuffix(r.URL.Path, "/push/base") && !strings.HasSuffix(r.URL.Path, "/push/diff") {
 						changes.Add(1)
 					}
 					if strings.HasSuffix(r.URL.Path, "/push") && tc.retry && !rejected.Swap(true) {
@@ -51,7 +55,11 @@ func TestPushClaimsRightBeforeChangingWorkspace(t *testing.T) {
 				})
 			})
 			changes.Store(0) // setting up the workspace
-			if err := os.WriteFile(filepath.Join(root, "value"), []byte("edited\n"), 0600); err != nil {
+			body := "edited\n"
+			if tc.large { // negotiated before it is uploaded
+				body = strings.Repeat("e", 128<<10)
+			}
+			if err := os.WriteFile(filepath.Join(root, "value"), []byte(body), 0600); err != nil {
 				t.Fatal(err)
 			}
 			_, err := client.PushChanges(client.PushOptions{PeerURL: peer, Workspace: ws.Name, Root: root, Apply: true, BeforeSubmit: func() error {
