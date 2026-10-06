@@ -107,17 +107,19 @@ def run(command, root, env, log, timeout=1200, read_output=True):
     # Go's test timeout does not bound benchmarks. Bound the entire process
     # group, including commands launched by a benchmark, and retain partial logs.
     # A timer bounds the wait. Popen.wait(timeout) polls under a lock that
-    # Ctrl-C can leave held, and the reap below would then hang on it. Build it
-    # before spawning, so only the spawn itself comes before the try.
-    expired = threading.Event()
-    watchdog = threading.Timer(timeout, lambda: (expired.set(), kill_group(process)))
+    # Ctrl-C can leave held, and the reap below would then hang on it. Set up
+    # before spawning, so only the spawn itself comes before the try. The timer
+    # starts after the clock, so a run it stops always reads as over time.
+    watchdog = threading.Timer(timeout, lambda: kill_group(process))
     watchdog.daemon = True
+    started = time.monotonic()
     with log.open("w") as output:
         process = subprocess.Popen(command, cwd=root, env=env, stdout=output,
                                    stderr=subprocess.STDOUT, text=True, start_new_session=True)
         try:
             watchdog.start()
             process.wait()
+            elapsed = time.monotonic() - started
         except BaseException:
             # Ctrl-C interrupts this driver, not the child's separate session.
             # Stop and reap that group before propagating any interrupted wait.
@@ -126,7 +128,7 @@ def run(command, root, env, log, timeout=1200, read_output=True):
             raise
         finally:
             watchdog.cancel()
-    if expired.is_set():
+    if elapsed >= timeout:
         raise RuntimeError(f"{command} exceeded {timeout}s; see {log}")
     if process.returncode:
         raise RuntimeError(f"{command} exited {process.returncode}; see {log}")
