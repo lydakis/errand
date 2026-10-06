@@ -138,12 +138,31 @@ func TestSSHIdentityWithoutHostKey(t *testing.T) {
 	if args := pinArgs(t, target); !slices.Equal(args, []string{"-i", "/keys/errand"}) {
 		t.Fatalf("args %q", args)
 	}
-	// A host key learned later pins it, and keeps the identity.
+	// The address can be reused for another lease, which may pin a host
+	// key or not: each registration replaces what an earlier one said.
+	if err := TrustSSHHost(target, testHostKey, "/keys/lambda"); err != nil {
+		t.Fatal(err)
+	}
+	if args := pinArgs(t, target); !slices.Contains(args, "StrictHostKeyChecking=yes") || slices.Contains(args, "/keys/errand") || !slices.Contains(args, "/keys/lambda") {
+		t.Fatalf("pinned args %q", args)
+	}
+	if err := TrustSSHHost(target, "", "/keys/errand"); err != nil {
+		t.Fatal(err)
+	}
+	if args := pinArgs(t, target); !slices.Equal(args, []string{"-i", "/keys/errand"}) {
+		t.Fatalf("args after an unpinned lease %q", args)
+	}
 	if err := TrustSSHHost(target, testHostKey, ""); err != nil {
 		t.Fatal(err)
 	}
-	if args := pinArgs(t, target); !slices.Contains(args, "StrictHostKeyChecking=yes") || !slices.Contains(args, "/keys/errand") {
-		t.Fatalf("args %q", args)
+	if err := TrustSSHHost(target, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if args := pinArgs(t, target); args != nil {
+		t.Fatalf("a stale pin outlived an unpinned registration: %q", args)
+	}
+	if _, ok := sshTrustFor(target); ok {
+		t.Fatal("an unpinned target without keys is not an ordinary peer")
 	}
 	restoreSSHPeer("ssh://peer-unpinned.errand", "ubuntu@203.0.113.22", "", "", "", []string{"/keys/errand"})
 	if args := pinArgs(t, "ubuntu@203.0.113.22"); !slices.Equal(args, []string{"-i", "/keys/errand"}) {
@@ -189,6 +208,12 @@ func TestSSHPoolSeparatesTrust(t *testing.T) {
 		t.Fatal(err)
 	}
 	get()
+	get()
+	// A later lease at the address without a host key is an ordinary peer
+	// again, and shares the ordinary pool.
+	if err := TrustSSHHost(target, "", ""); err != nil {
+		t.Fatal(err)
+	}
 	get()
 	mu.Lock()
 	defer mu.Unlock()

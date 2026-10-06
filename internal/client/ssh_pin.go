@@ -39,12 +39,14 @@ var (
 	sshTrusted = map[string]sshTrust{}
 )
 
-// TrustSSHHost has this process's SSH connections to target (user@host)
-// accept only hostKey, a public key such as "ssh-ed25519 AAAA...", when it
-// is not empty, and offer identityFile when that is not empty. Leased
-// machines are reached this way: their cloud peer may report the host key
-// they booted with, and their address may have belonged to another machine
-// before; they admit the client's errand key either way. Nothing is kept
+// TrustSSHHost registers what this process's SSH connections to target
+// (user@host) trust: only hostKey, a public key such as "ssh-ed25519
+// AAAA...", or with hostKey empty, the user's own known_hosts; and they
+// offer identityFile when it is not empty. Leased machines are reached this
+// way: their cloud peer may report the host key they booted with, and their
+// address may have belonged to another machine before, so a registration
+// with another host key, or none, replaces what an earlier one said about
+// target. They admit the client's errand key either way. Nothing is kept
 // between processes; each one learns the key from the cloud peer again.
 func TrustSSHHost(target, hostKey, identityFile string) error {
 	var key string
@@ -57,21 +59,22 @@ func TrustSSHHost(target, hostKey, identityFile string) error {
 	if identityFile != "" && (!filepath.IsAbs(identityFile) || strings.ContainsAny(identityFile, "\"\r\n")) {
 		return fmt.Errorf("SSH identity file %q must be an absolute path", identityFile)
 	}
-	if key == "" && identityFile == "" {
-		return nil
-	}
 	sshTrustMu.Lock()
 	defer sshTrustMu.Unlock()
 	trust := sshTrusted[target]
-	if key != "" {
-		trust.hostKey = key
+	if trust.hostKey != key {
+		trust = sshTrust{hostKey: key}
 	}
 	// A cloud peer and its own client may share a process and each offer
-	// their key; ssh tries them in turn.
+	// their key for the same machine; ssh tries them in turn.
 	if identityFile != "" && !slices.Contains(trust.identities, identityFile) {
 		trust.identities = append(slices.Clone(trust.identities), identityFile)
 	}
-	sshTrusted[target] = trust
+	if trust.poolKey() == "" {
+		delete(sshTrusted, target) // an ordinary peer again
+	} else {
+		sshTrusted[target] = trust
+	}
 	return nil
 }
 
