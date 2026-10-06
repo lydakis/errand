@@ -31,7 +31,7 @@ type CloudOffer struct {
 	GPU         string       `toml:"gpu"`            // model name as the driver reports it, e.g. "H100 80GB"
 	GPUs        int          `toml:"gpus"`           // defaults to 1 when gpu or vram is set
 	VRAM        int          `toml:"vram"`           // GiB per GPU
-	Price       float64      `toml:"price_per_hour"` // USD, shown to callers
+	Price       *float64     `toml:"price_per_hour"` // USD, shown to callers
 	Acquire     []string     `toml:"acquire"`
 	Release     []string     `toml:"release"`
 	Lambda      *LambdaOffer `toml:"lambda"`
@@ -45,7 +45,6 @@ type LambdaOffer struct {
 	Regions              []string `toml:"regions"`
 	FileSystems          []string `toml:"file_systems"`
 	APIKeyFile           string   `toml:"api_key_file"`
-	User                 string   `toml:"user"`
 	TailscaleAuthKeyFile string   `toml:"tailscale_auth_key_file"`
 	ErrandBinary         string   `toml:"errand_binary"`
 	AllowUsers           []string `toml:"allow_users"`
@@ -94,7 +93,7 @@ func (c DaemonCloud) Broker() (*cloud.Config, error) {
 		if o.Arch != "" && o.Arch != "amd64" && o.Arch != "arm64" {
 			return nil, fmt.Errorf("%s: arch must be amd64 or arm64", where)
 		}
-		if o.Price < 0 || math.IsNaN(o.Price) || math.IsInf(o.Price, 0) {
+		if o.Price != nil && (*o.Price < 0 || math.IsNaN(*o.Price) || math.IsInf(*o.Price, 0)) {
 			return nil, fmt.Errorf("%s: price_per_hour must not be negative", where)
 		}
 		var provider cloud.Provider
@@ -189,20 +188,6 @@ func (l LambdaOffer) provider(arch string) (*cloud.LambdaProvider, error) {
 	if l.TailscaleAuthKeyFile == "" && len(l.AllowUsers) > 0 {
 		return nil, fmt.Errorf("lambda allow_users names tailnet logins and needs tailscale_auth_key_file")
 	}
-	user := l.User
-	if user == "" {
-		user = "ubuntu"
-	}
-	// A portable Linux login name: a lowercase letter or underscore, then
-	// lowercase letters, digits, - and _, at most 32 in all.
-	if len(user) > 32 || !(user[0] >= 'a' && user[0] <= 'z' || user[0] == '_') {
-		return nil, fmt.Errorf("lambda user %q is not a plain login name", user)
-	}
-	for _, r := range user {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
-			return nil, fmt.Errorf("lambda user %q is not a plain login name", user)
-		}
-	}
 	for _, u := range l.AllowUsers {
 		if u == "" || strings.ContainsFunc(u, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
 			return nil, fmt.Errorf("lambda allow_users entry %q is not a tailnet login", u)
@@ -224,6 +209,6 @@ func (l LambdaOffer) provider(arch string) (*cloud.LambdaProvider, error) {
 	}
 	return &cloud.LambdaProvider{
 		APIKeyFile: l.APIKeyFile, InstanceType: l.InstanceType, Regions: l.Regions, FileSystems: l.FileSystems,
-		User: user, TailscaleAuthKeyFile: l.TailscaleAuthKeyFile, ErrandBinary: binary, Arch: arch, AllowUsers: l.AllowUsers,
+		TailscaleAuthKeyFile: l.TailscaleAuthKeyFile, ErrandBinary: binary, Arch: arch, AllowUsers: l.AllowUsers,
 	}, nil
 }

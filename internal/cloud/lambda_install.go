@@ -39,8 +39,9 @@ const lambdaInstallCommand = `d="$HOME/.errand-lease"; rm -rf "$d" && mkdir -m 7
 // or the client's SSH key to the machine as one archive over SSH stdin and
 // runs a fixed script from it. Values travel only as file contents, so none
 // needs quoting for a shell or systemd, and the auth key never appears in
-// launch metadata or a command.
-func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, authKey, login, clientKey string) error {
+// launch metadata or a command. binary is the errand build checkInstall
+// checked.
+func (p *LambdaProvider) install(ctx context.Context, binary *os.File, ip, hostPublic, hostname, authKey, login, clientKey string) error {
 	known, err := os.CreateTemp("", "errand-lease-known-hosts-")
 	if err != nil {
 		return err
@@ -53,7 +54,7 @@ func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, 
 	if err != nil {
 		return err
 	}
-	user := p.user()
+	user := lambdaUser
 	base := []string{
 		"-i", p.keyFile(),
 		"-o", "BatchMode=yes",
@@ -95,7 +96,7 @@ func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, 
 	bundle, w := io.Pipe()
 	wrote := make(chan error, 1)
 	go func() {
-		err := p.writeInstallBundle(w, config, hostname, authKey, clientKey)
+		err := writeInstallBundle(w, binary, config, hostname, authKey, clientKey)
 		w.CloseWithError(err)
 		wrote <- err
 	}()
@@ -132,7 +133,7 @@ func lambdaRunnerConfig(tailnet bool, allowUsers []string) ([]byte, error) {
 
 // writeInstallBundle writes the archive lambdaInstallCommand unpacks.
 // Over SSH the machine admits clientKey; on the tailnet it needs no key.
-func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname, authKey, clientKey string) error {
+func writeInstallBundle(w io.Writer, binary *os.File, config []byte, hostname, authKey, clientKey string) error {
 	tw := tar.NewWriter(w)
 	add := func(name string, mode int64, size int64, body io.Reader) error {
 		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: mode, Size: size, ModTime: time.Unix(0, 0), Typeflag: tar.TypeReg}); err != nil {
@@ -163,38 +164,75 @@ func (p *LambdaProvider) writeInstallBundle(w io.Writer, config []byte, hostname
 	if err := add("errandd.toml", 0o644, int64(len(config)), bytes.NewReader(config)); err != nil {
 		return err
 	}
-	binary, err := os.Open(p.ErrandBinary)
-	if err != nil {
-		return err
-	}
-	defer binary.Close()
 	info, err := binary.Stat()
 	if err != nil {
 		return err
 	}
-	// tar fails the archive if the file changes size while it is copied.
-	if err := add("errand", 0o755, info.Size(), binary); err != nil {
-		return fmt.Errorf("errand_binary %s: %w", p.ErrandBinary, err)
+	if err := add("errand", 0o755, info.Size(), io.NewSectionReader(binary, 0, info.Size())); err != nil {
+		return fmt.Errorf("errand_binary: %w", err)
 	}
 	return tw.Close()
 }
 
-// checkInstall checks what the install needs before anything is rented.
-func (p *LambdaProvider) checkInstall() error {
-	if err := checkLinuxBinary(p.ErrandBinary, p.Arch); err != nil {
-		return fmt.Errorf("lambda errand_binary: %w", err)
-	}
+// checkInstall checks what the install needs before anything is rented. It
+// returns a private copy of errand_binary, which is what it checked and what
+// the install sends: the file at errand_binary may be replaced in between.
+// The caller closes and removes the copy.
+func (p *LambdaProvider) checkInstall() (*os.File, error) {
 	if p.HostKey == nil || p.Keygen == nil {
 		if _, err := exec.LookPath("ssh-keygen"); err != nil {
-			return fmt.Errorf("renting Lambda machines needs ssh-keygen: %w", err)
+			return nil, fmt.Errorf("renting Lambda machines needs ssh-keygen: %w", err)
 		}
 	}
 	if p.SSH == nil {
 		if _, err := exec.LookPath("ssh"); err != nil {
-			return fmt.Errorf("installing errand on Lambda machines needs ssh: %w", err)
+			return nil, fmt.Errorf("installing errand on Lambda machines needs ssh: %w", err)
 		}
 	}
-	return nil
+	binary, err := privateCopy(p.ErrandBinary)
+	if err == nil {
+		if err = checkLinuxBinary(binary, p.ErrandBinary, p.Arch); err != nil {
+			removeCopy(binary)
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lambda errand_binary: %w", err)
+	}
+	return binary, nil
+}
+
+// privateCopy copies the regular file at path to a temporary file only this
+// user can read, and returns it open.
+func privateCopy(path string) (*os.File, error) {
+	// Opening a FIFO would block, so the type is checked before opening
+	// and again on what was opened.
+	if info, err := os.Stat(path); err != nil {
+		return nil, err
+	} else if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	src, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer src.Close()
+	if info, err := src.Stat(); err != nil || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	dst, err := os.CreateTemp("", "errand-lease-binary-")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		removeCopy(dst)
+		return nil, fmt.Errorf("copying %s: %w", path, err)
+	}
+	return dst, nil
+}
+
+func removeCopy(f *os.File) {
+	f.Close()
+	os.Remove(f.Name())
 }
 
 func (p *LambdaProvider) hostKey() func(context.Context) (string, string, error) {
@@ -237,17 +275,9 @@ func hostKeyCloudConfig(private, public string) string {
 	return b.String()
 }
 
-// checkLinuxBinary makes sure path is a Linux executable for arch, so a
-// wrong build fails here instead of on a paid machine.
-func checkLinuxBinary(path, arch string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", path)
-	}
+// checkLinuxBinary makes sure f, read from path, is a Linux executable for
+// arch, so a wrong build fails here instead of on a paid machine.
+func checkLinuxBinary(f io.ReaderAt, path, arch string) error {
 	bin, err := elf.NewFile(f)
 	if err != nil {
 		return fmt.Errorf("%s is not a Linux executable", path)

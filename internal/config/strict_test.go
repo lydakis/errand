@@ -17,6 +17,7 @@ func TestLoadConfigRejectsUnknownSettings(t *testing.T) {
 		{"peer", "[peers.build]\nurl = 'http://build:7443'\nremote_comand = '/bin/errand'", "peers.build.remote_comand", false},
 		{"runner", "max_job = 2", "max_job", true},
 		{"runner cache", "[named_cache]\nmax_byte = 10", "named_cache.max_byte", true},
+		{"lambda user", "[[cloud.offers]]\nname = 'h100'\n[cloud.offers.lambda]\nuser = 'ubuntu'", "cloud.offers.lambda.user", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
