@@ -331,7 +331,7 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	if owner == "" {
 		return proto.Lease{}, &Error{http.StatusForbidden, "caller has no ownership identity"}
 	}
-	if sshKey != "" && !ValidSSHPublicKey(sshKey) {
+	if _, ok := proto.SSHKeyBody(sshKey); sshKey != "" && !ok {
 		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
 	if len(b.offers) == 0 && b.cfg.Catalog == nil {
@@ -517,7 +517,7 @@ func (b *Broker) end(owner, id, note string) (proto.Lease, error) {
 // asking for a machine. The worker adds the key; the answer lists it in
 // SSHKeys once it has.
 func (b *Broker) Admit(owner, login, id, sshKey string) (proto.Lease, error) {
-	if !ValidSSHPublicKey(sshKey) {
+	if _, ok := proto.SSHKeyBody(sshKey); !ok {
 		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
 	b.mu.Lock()
@@ -866,8 +866,9 @@ func (b *Broker) admitPending(l *lease, r record) {
 			return false
 		}
 		for _, k := range keys {
-			r.PendingKeys = slices.DeleteFunc(slices.Clone(r.PendingKeys), func(p string) bool { return p == k })
-			if r.Target.SSH != "" && !slices.Contains(r.SSHKeys, k) {
+			same := func(p string) bool { return proto.SameSSHKey(p, k) }
+			r.PendingKeys = slices.DeleteFunc(slices.Clone(r.PendingKeys), same)
+			if r.Target.SSH != "" && !slices.ContainsFunc(r.SSHKeys, same) {
 				r.SSHKeys = append(slices.Clone(r.SSHKeys), k)
 			}
 		}
@@ -1144,7 +1145,8 @@ func (b *Broker) persist(r *record) error {
 // key: at once if the machine is not reached over SSH or already admits
 // it, otherwise once the worker has added it.
 func (r *record) admit(sshKey string) {
-	if sshKey == "" || slices.Contains(r.SSHKeys, sshKey) || slices.Contains(r.PendingKeys, sshKey) {
+	same := func(k string) bool { return proto.SameSSHKey(k, sshKey) }
+	if sshKey == "" || slices.ContainsFunc(r.SSHKeys, same) || slices.ContainsFunc(r.PendingKeys, same) {
 		return
 	}
 	if r.Target != nil && r.Target.SSH == "" {

@@ -220,12 +220,12 @@ func TestReleaseCancelsHangingProbe(t *testing.T) {
 func TestTailnetLeaseReusedAcrossClientKeys(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	b := h.start(t)
-	l, err := b.Acquire("george", "george@github", "gpu", "ssh-ed25519 bWFj errand", "")
+	l, err := b.Acquire("george", "george@github", "gpu", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	if same, err := b.Acquire("george", "george@github", "gpu", "ssh-ed25519 bWluaQ== errand", ""); err != nil || same.ID != l.ID {
+	if same, err := b.Acquire("george", "george@github", "gpu", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand", ""); err != nil || same.ID != l.ID {
 		t.Fatalf("an HTTP lease must be reused across keys: %+v %v", same, err)
 	}
 }
@@ -236,7 +236,7 @@ echo '{"ssh":"ubuntu@box"}'
 `)
 	h.cfg.MaxLeases = 3
 	b := h.start(t)
-	const mac, mini = "ssh-ed25519 bWFj errand", "ssh-ed25519 bWluaQ== errand"
+	const mac, mini = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand"
 	l, err := b.Acquire("george", "", "gpu", mac, "")
 	if err != nil {
 		t.Fatal(err)
@@ -263,7 +263,7 @@ func TestLeaseAdmitsOwnersOtherDevices(t *testing.T) {
 	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	h.cfg.IdlePoll = 20 * time.Millisecond
 	b := h.start(t)
-	const mac, mini, air = "ssh-ed25519 bWFj errand", "ssh-ed25519 bWluaQ== errand", "ssh-ed25519 YWly errand"
+	const mac, mini, air = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD errand"
 	l, err := b.Acquire("george", "", "gpu", mac, "")
 	if err != nil {
 		t.Fatal(err)
@@ -320,12 +320,12 @@ func TestReleaseCancelsAdmission(t *testing.T) {
 		return ctx.Err()
 	}
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "ssh-ed25519 bWFj errand", "")
+	l, err := b.Acquire("george", "", "gpu", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 bWluaQ== errand"); err != nil {
+	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand"); err != nil {
 		t.Fatal(err)
 	}
 	<-admitting
@@ -549,6 +549,69 @@ func TestFailedLaunchesAreReleased(t *testing.T) {
 	failed = waitState(t, b2, "george", l2.ID, proto.LeaseFailed)
 	if !strings.Contains(failed.Error, "requires 1 GPU (has none)") {
 		t.Fatalf("lease %+v", failed)
+	}
+}
+
+// A target no client could use fails the launch as soon as acquire returns,
+// and its machine is released then, not at acquire_timeout.
+func TestUnusableTargetsFailAtOnce(t *testing.T) {
+	for _, target := range []string{
+		`{"url":"http://box:7443","ssh":"ubuntu@box"}`,
+		`{"url":"ftp://box"}`,
+		`{"ssh":"ubuntu@box:22"}`,
+		`{"ssh":"ubuntu@box","host_key":"ssh-ed25519 not*base64"}`,
+		`{"url":"http://box:7443","host_key":"ssh-ed25519 AAAA"}`,
+		`{"instance":"i-123"}`,
+	} {
+		h := newHarness(t, "echo '"+target+"'\n")
+		h.cfg.AcquireTimeout = time.Hour
+		b := h.start(t)
+		l, err := b.Acquire("george", "", "gpu", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		failed := waitState(t, b, "george", l.ID, proto.LeaseFailed)
+		if !strings.Contains(failed.Error, "provider target") || !strings.Contains(h.releases(), l.ID) {
+			t.Fatalf("%s: lease %+v releases %q", target, failed, h.releases())
+		}
+	}
+}
+
+// A device's key is the same key whatever its comment says, so a public
+// half rebuilt without one neither asks the machine again nor is listed
+// twice.
+func TestLeaseKeysComparedWithoutComments(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	b := h.start(t)
+	const mac, mini = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand"
+	l, err := b.Acquire("george", "", "gpu", mac, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	if again, err := b.Acquire("george", "", "gpu", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB", ""); err != nil || again.ID != l.ID || !slices.Equal(again.SSHKeys, []string{mac}) {
+		t.Fatalf("same key without its comment: %+v %v", again, err)
+	}
+	if _, err := b.Admit("george", "", l.ID, mini); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC rebuilt"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for got, _ := b.Get("george", l.ID); len(got.SSHKeys) < 2; got, _ = b.Get("george", l.ID) {
+		if time.Now().After(deadline) {
+			t.Fatalf("key never added: %+v", got)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	b.mu.Lock()
+	r := b.leases[l.ID].record
+	b.mu.Unlock()
+	h.machine.mu.Lock()
+	defer h.machine.mu.Unlock()
+	if !slices.Equal(h.machine.admitted, []string{mini}) || len(r.SSHKeys) != 2 || len(r.PendingKeys) != 0 {
+		t.Fatalf("machine asked to add %q; keys %q pending %q", h.machine.admitted, r.SSHKeys, r.PendingKeys)
 	}
 }
 

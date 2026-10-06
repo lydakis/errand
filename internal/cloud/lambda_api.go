@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/lydakis/errand/internal/client"
+	"github.com/lydakis/errand/internal/proto"
 )
 
 const lambdaAPI = "https://cloud.lambda.ai/api/v1"
@@ -387,12 +388,16 @@ func (p *LambdaProvider) registerKey(ctx context.Context, apiKey string) (string
 	if err := p.call(ctx, apiKey, http.MethodGet, "/ssh-keys", nil, &list); err != nil {
 		return "", fmt.Errorf("listing Lambda SSH keys: %w", err)
 	}
+	body, ok := proto.SSHKeyBody(public)
+	if !ok {
+		return "", fmt.Errorf("SSH key %s is not a public key", p.keyFile())
+	}
 	for _, k := range list.Data {
-		if sshKeyBody(k.PublicKey) == sshKeyBody(public) {
+		if proto.SameSSHKey(k.PublicKey, body) {
 			return k.Name, nil
 		}
 	}
-	name := "errand-" + keyID(sshKeyBody(public))
+	name := "errand-" + keyID(body)
 	var added struct {
 		Data struct {
 			Name string `json:"name"`
@@ -405,7 +410,7 @@ func (p *LambdaProvider) registerKey(ctx context.Context, apiKey string) (string
 }
 
 func (p *LambdaProvider) keyFile() string {
-	return filepath.Join(p.KeyDir, "lambda_ed25519")
+	return filepath.Join(p.KeyDir, "key", "lambda_ed25519")
 }
 
 func (p *LambdaProvider) keygen() func(context.Context, string, string) (string, error) {
@@ -413,15 +418,6 @@ func (p *LambdaProvider) keygen() func(context.Context, string, string) (string,
 		return p.Keygen
 	}
 	return client.EnsureSSHKey
-}
-
-// sshKeyBody is a public key's type and data, without its comment.
-func sshKeyBody(public string) string {
-	fields := strings.Fields(public)
-	if len(fields) < 2 {
-		return public
-	}
-	return fields[0] + " " + fields[1]
 }
 
 type lambdaInstance struct {
