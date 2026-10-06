@@ -21,6 +21,9 @@ type placementChoice struct {
 	config.RunCandidate
 	Info   proto.Info
 	Target string // transport identity; RunCandidate.URL remains the configured display URL
+	// claim, for a lease named to run on, asks its cloud peer for it right
+	// before work is placed there.
+	claim func() error
 }
 
 type placementExclusion struct {
@@ -186,15 +189,11 @@ func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placeme
 	if !rawURL {
 		c.Target = client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
 	}
-	// A lease named to run on is asked for once the run is ready to submit,
-	// as a rented one is, so a run that fails locally does not renew it.
-	if claim := claimNamedLease(e.Peer); claim != nil && !rawURL {
-		return nil, func() (placementChoice, error) {
-			if err := claim(); err != nil {
-				return placementChoice{}, err
-			}
-			return c, nil
-		}, nil
+	// A lease named to run on is asked for only once everything local has
+	// succeeded, right before the work is placed, so a run that fails
+	// before then does not renew it.
+	if !rawURL {
+		c.claim = claimNamedLease(e.Peer)
 	}
 	return []placementChoice{c}, nil, nil
 }
@@ -219,6 +218,12 @@ func configurePlacement(opts *client.RunOptions, choices []placementChoice, leas
 			}
 			return []client.RunTarget{add(c)}, nil
 		}
+	}
+	opts.BeforeSubmit = func(target client.RunTarget) error {
+		if c := byTarget[target]; c.claim != nil {
+			return c.claim()
+		}
+		return nil
 	}
 	where := opts.Where
 	opts.OnSelected = func(target client.RunTarget) {

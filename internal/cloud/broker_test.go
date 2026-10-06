@@ -1069,11 +1069,12 @@ func waitProgress(t *testing.T, b *Broker, id, line string) {
 	}
 }
 
-// drain holds an idle machine, as a runner refuses new jobs once quiesced,
-// for holdTTL (default an hour); renew extends a hold that has not lapsed.
-func (m *fakeMachine) drain(_ context.Context, _ proto.LeaseTarget, _, renew string) (string, error) {
+// drain holds an idle machine under token, as a runner refuses new jobs
+// once quiesced, for holdTTL (default an hour); a live hold with that token
+// is renewed.
+func (m *fakeMachine) drain(_ context.Context, _ proto.LeaseTarget, _, token string) error {
 	if m.down.Load() {
-		return "", errors.New("connection refused")
+		return errors.New("connection refused")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1082,24 +1083,23 @@ func (m *fakeMachine) drain(_ context.Context, _ proto.LeaseTarget, _, renew str
 		ttl = time.Hour
 	}
 	held := time.Now().Before(m.heldUntil)
-	switch {
-	case renew != "" && renew == m.hold && held:
-	case m.running.Load() > 0 || held:
-		return "", fmt.Errorf("%w: 1 running", ErrRunnerBusy)
-	default:
-		m.hold = proto.NewULID()
+	if !(held && token == m.hold) && (m.running.Load() > 0 || held) {
+		return fmt.Errorf("%w: 1 running", ErrRunnerBusy)
 	}
-	m.heldUntil = time.Now().Add(ttl)
-	return m.hold, nil
+	m.hold, m.heldUntil = token, time.Now().Add(ttl)
+	return nil
 }
 
+// resume lifts the hold token names, if the machine has it.
 func (m *fakeMachine) resume(_ context.Context, _ proto.LeaseTarget, _, token string) error {
+	if m.down.Load() {
+		return errors.New("connection refused")
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if token != m.hold {
-		return errors.New("setup quiesce token does not match")
+	if token == m.hold {
+		m.hold, m.heldUntil = "", time.Time{}
 	}
-	m.hold, m.heldUntil = "", time.Time{}
 	return nil
 }
 
@@ -1485,12 +1485,12 @@ func TestDrainFindingWorkRestartsIdleWindow(t *testing.T) {
 	h.cfg.Offers[0].IdleTimeout = idle
 	var drains atomic.Int32
 	var foundWork atomic.Int64
-	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (string, error) {
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, token string) error {
 		if drains.Add(1) == 1 {
 			foundWork.Store(time.Now().UnixNano())
-			return "", fmt.Errorf("%w: 1 running", ErrRunnerBusy) // done before the next check
+			return fmt.Errorf("%w: 1 running", ErrRunnerBusy) // done before the next check
 		}
-		return h.machine.drain(ctx, target, identity, renew)
+		return h.machine.drain(ctx, target, identity, token)
 	}
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", "", "")
@@ -1526,11 +1526,11 @@ func TestHandOutDuringDrainResumesRunner(t *testing.T) {
 	h.cfg.IdlePoll = time.Hour
 	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
 	draining, proceed := make(chan struct{}), make(chan struct{})
-	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (string, error) {
-		token, err := h.machine.drain(ctx, target, identity, renew)
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, token string) error {
+		err := h.machine.drain(ctx, target, identity, token)
 		close(draining)
 		<-proceed
-		return token, err
+		return err
 	}
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", "", "")
@@ -1583,12 +1583,12 @@ func TestIdleReleaseWhenDrainFails(t *testing.T) {
 			var drains atomic.Int32
 			var failing atomic.Bool
 			failing.Store(true)
-			h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (string, error) {
+			h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, token string) error {
 				drains.Add(1)
 				if failing.Load() {
-					return "", tc.drain
+					return tc.drain
 				}
-				return h.machine.drain(ctx, target, identity, renew)
+				return h.machine.drain(ctx, target, identity, token)
 			}
 			b := h.start(t)
 			l, err := b.Acquire("george", "", "gpu", testKey(0), "")
@@ -1634,12 +1634,12 @@ func TestDrainUsesProvidersDrainTarget(t *testing.T) {
 	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
 	h.cfg.Offers[0].Provider = drainProvider{h.cfg.Offers[0].Provider.(CommandProvider)}
 	drained := make(chan proto.LeaseTarget, 1)
-	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (string, error) {
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, token string) error {
 		select {
 		case drained <- target:
 		default:
 		}
-		return h.machine.drain(ctx, target, identity, renew)
+		return h.machine.drain(ctx, target, identity, token)
 	}
 	h.cfg.IdlePoll = time.Hour
 	b := h.start(t)
@@ -1702,8 +1702,8 @@ func TestHoldThatKeepsFailing(t *testing.T) {
 	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	h.cfg.IdlePoll = time.Hour // check only when woken
 	h.cfg.Offers[0].IdleTimeout = 300 * time.Millisecond
-	h.cfg.Drain = func(context.Context, proto.LeaseTarget, string, string) (string, error) {
-		return "", errors.New("ssh: connection timed out")
+	h.cfg.Drain = func(context.Context, proto.LeaseTarget, string, string) error {
+		return errors.New("ssh: connection timed out")
 	}
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", testKey(0), "")
@@ -2201,9 +2201,9 @@ func TestLifetimeEndsALeaseWhoseDrainFoundWork(t *testing.T) {
 	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
 	h.cfg.Offers[0].MaxLifetime = 500 * time.Millisecond
 	var expires atomic.Int64
-	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (string, error) {
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, token string) error {
 		time.Sleep(time.Until(time.Unix(0, expires.Load())) + 20*time.Millisecond)
-		return "", fmt.Errorf("%w: 1 running", ErrRunnerBusy)
+		return fmt.Errorf("%w: 1 running", ErrRunnerBusy)
 	}
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", "", "")
@@ -2218,4 +2218,153 @@ func TestLifetimeEndsALeaseWhoseDrainFoundWork(t *testing.T) {
 	if got, _ := b.Get("george", l.ID); !strings.Contains(strings.Join(got.Progress, "\n"), "max lifetime") {
 		t.Fatalf("progress %q", got.Progress)
 	}
+}
+
+// crashWithHold leaves a ready lease as a cloud peer that stopped right
+// after holding its runner would: the hold's token recorded, since since,
+// and the runner held under it.
+func crashWithHold(t *testing.T, h *harness, b *Broker, id string, since time.Time) string {
+	t.Helper()
+	b.Close()
+	path := filepath.Join(h.cfg.StateDir, "leases", id+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r record
+	if err := json.Unmarshal(data, &r); err != nil {
+		t.Fatal(err)
+	}
+	r.HoldToken, r.HoldSince = proto.NewULID(), since
+	if data, err = json.Marshal(r); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.machine.drain(context.Background(), proto.LeaseTarget{}, "", r.HoldToken); err != nil {
+		t.Fatal(err)
+	}
+	return r.HoldToken
+}
+
+// Lease guarantee 4: a cloud peer that stopped between holding a runner and
+// recording the release lifts the hold on restart before handing the lease
+// out.
+func TestRestartLiftsAHoldItLeftBehind(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.MaxLeases = 3
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	crashWithHold(t, h, b, l.ID, time.Now())
+	lifting := make(chan struct{})
+	h.cfg.Resume = func(ctx context.Context, target proto.LeaseTarget, identity, token string) error {
+		<-lifting
+		return h.machine.resume(ctx, target, identity, token)
+	}
+	b2 := h.start(t)
+	if other, err := b2.Acquire("george", "", "gpu", "", ""); err != nil || other.ID == l.ID {
+		t.Fatalf("handed out a lease whose runner may be held: %+v %v", other, err)
+	}
+	if !h.machine.held() {
+		t.Fatal("the hold was lifted early")
+	}
+	close(lifting)
+	waitUnusable(t, b2, l.ID, false)
+	if h.machine.held() {
+		t.Fatal("the runner is still held")
+	}
+	b2.mu.Lock()
+	token := b2.leases[l.ID].HoldToken
+	b2.mu.Unlock()
+	if token != "" {
+		t.Fatalf("hold %s still recorded", token)
+	}
+}
+
+// A hold that cannot be lifted keeps the lease from being handed out until
+// it has lapsed.
+func TestUnliftedHoldWithholdsTheLeaseUntilItLapses(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.MaxLeases = 3
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	lapses := time.Now().Add(500 * time.Millisecond)
+	crashWithHold(t, h, b, l.ID, lapses.Add(-runnerHoldTTL))
+	h.cfg.Resume = func(context.Context, proto.LeaseTarget, string, string) error {
+		return errors.New("ssh: connection timed out")
+	}
+	b2 := h.start(t)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		b2.mu.Lock()
+		reason := b2.leases[l.ID].unusable
+		b2.mu.Unlock()
+		if strings.Contains(reason, "this cloud peer may still be holding it idle") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("unusable because %q", reason)
+		}
+	}
+	other, err := b2.Acquire("george", "", "gpu", "", "")
+	if err != nil || other.ID == l.ID {
+		t.Fatalf("handed out a lease whose runner may be held: %+v %v", other, err)
+	}
+	if _, err := b2.Release("george", other.ID); err != nil { // newer, so it would be handed out first
+		t.Fatal(err)
+	}
+	if !time.Now().Before(lapses) {
+		t.Fatal("too slow to check the lease before the hold lapsed")
+	}
+	time.Sleep(time.Until(lapses))
+	waitUnusable(t, b2, l.ID, false)
+	if again, err := b2.Acquire("george", "", "gpu", "", ""); err != nil || again.ID != l.ID {
+		t.Fatalf("lease not handed out once its hold lapsed: %+v %v", again, err)
+	}
+}
+
+// The hold's token is on disk before the runner is asked to hold, so no
+// stop of the cloud peer can leave a hold it does not know about.
+func TestHoldIsRecordedBeforeItIsTaken(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	var leaseID atomic.Value
+	recorded := make(chan bool, 1)
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, token string) error {
+		data, err := os.ReadFile(filepath.Join(h.cfg.StateDir, "leases", leaseID.Load().(string)+".json"))
+		var r record
+		select {
+		case recorded <- err == nil && json.Unmarshal(data, &r) == nil && r.HoldToken == token && !r.HoldSince.IsZero():
+		default:
+		}
+		return h.machine.drain(ctx, target, identity, token)
+	}
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaseID.Store(l.ID)
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	time.Sleep(150 * time.Millisecond)
+	wake(b, l.ID)
+	select {
+	case ok := <-recorded:
+		if !ok {
+			t.Fatal("the hold was taken before its token was recorded")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no drain")
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 }

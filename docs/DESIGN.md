@@ -307,15 +307,16 @@ cloud peer keeps the only lease record. See [cloud peers](CLOUD.md).
    | | its owner releases it, or `max_lifetime` passes | releasing, without a hold |
    | idle-due | the idle check finds work, or the drain does before `max_lifetime` | ready, with a full `idle_timeout` |
    | | the runner cannot be reached, has no SSH route (a provider command's machine reached only over the tailnet), or refuses the hold | releasing, without a hold |
-   | | the runner agrees to refuse new jobs, which it does only while it has none | holding |
+   | | the runner agrees to refuse new jobs, which it does only while it has none; the hold's token and time are recorded before it is asked | holding |
    | | the hold fails while the runner answers | idle-due, tried again at each idle check; after one more `idle_timeout`, releasing without the hold |
    | holding | still due when the release is recorded | releasing, with the hold |
    | | handed out, or named to run on, meanwhile | ready, with the hold lifted |
+   | | the cloud peer stops before recording the release, or the hold cannot be lifted | ready with the hold recorded: not handed out until the hold is lifted, or until five minutes after it was taken, when the runner lets it lapse |
    | releasing | the provider confirms the machine is gone | released, or failed if its launch failed |
-   | | the provider is still terminating it, or fails | releasing, tried again with no deadline; the hold, which lapses on the runner after five minutes, is renewed every minute, across restarts of the cloud peer; a runner that took work after its hold lapsed is released anyway, and its progress says the hold was lost |
+   | | the provider is still terminating it, or fails | releasing, tried again with no deadline; the hold, which lapses on the runner after five minutes, is renewed every minute under its recorded token, across restarts of the cloud peer; a runner that took work after its hold lapsed is released anyway, and its progress says the hold was lost |
    | released, failed | | kept as history: the last 32, for up to a week |
 
-   The runner takes the hold only from its own user on its local socket, which the cloud peer reaches over SSH, for Lambda machines on the tailnet too.
+   Each step is recorded before it acts on the machine, or is safe to repeat when a restart finds it unrecorded: a lease is recorded before its machine is acquired, and one still launching at a restart is released; a key added to the machine stays pending until recorded, and adding it again changes nothing; a hold's token, which the cloud peer chooses, is recorded before the hold is taken, and taking, renewing and lifting it by that token can be repeated; a release is recorded before the machine is destroyed, and destroying it again changes nothing. The runner takes the hold only from its own user on its local socket, which the cloud peer reaches over SSH, for Lambda machines on the tailnet too.
 5. A run handed a ready lease, or naming it with `--on` once it is ready to submit, may use it for at least `idle_timeout` unless its owner releases it or `max_lifetime` passes; a command that only reads, or a run that fails before it can submit, does not renew it. A ready lease is handed out only while the cloud peer's latest check of its runner, at launch or at the last idle check since the cloud peer started, reached it and found it still matching; one whose check failed is passed over and gets no new idle window. Nothing on the machine survives the lease.
 6. A lease counts as released only once the provider confirms the machine is gone; until then the release is retried.
 7. So, while the cloud peer runs, no machine bills past `max_lifetime` plus the time to confirm its release. If the cloud peer is gone for good, nothing ends its machines: there is no spending cap.

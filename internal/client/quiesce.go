@@ -17,27 +17,31 @@ import (
 // is already held idle.
 var ErrRunnerNotIdle = errors.New("runner is not idle")
 
+// ErrNotHeld is ResumeRunner's answer when the runner has no hold with that
+// token: it lapsed, was lifted, or was never taken.
+var ErrNotHeld = errors.New("runner has no such hold")
+
 // ErrQuiesceRefused is QuiesceRunner's answer when the runner does not let
 // the caller hold it, such as a caller that is not its own user.
 var ErrQuiesceRefused = errors.New("runner refused to be held idle")
 
 // QuiesceRunner has an idle runner refuse new jobs for a few minutes, as
 // errand setup does before a restart, and returns the token that ends it
-// early. With renew, the token of a hold taken earlier, it extends that
-// hold while it lasts, and takes it afresh once it has lapsed. A runner
-// admits this only from its own user over its local socket, so only a peer
-// reached over SSH can be held this way.
-func QuiesceRunner(ctx context.Context, peerURL, renew string) (string, error) {
+// early. A nonempty token, a ULID, names the hold, so the caller can record
+// it first: a live hold with that token is renewed, and otherwise the hold
+// is taken under it. A runner admits this only from its own user over its
+// local socket, so only a peer reached over SSH can be held this way.
+func QuiesceRunner(ctx context.Context, peerURL, token string) (string, error) {
 	var payload io.Reader = http.NoBody
-	if renew != "" {
-		raw, _ := json.Marshal(proto.SetupQuiesceRenew{Token: renew})
+	if token != "" {
+		raw, _ := json.Marshal(proto.SetupQuiesceRequest{Token: token})
 		payload = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(peerURL, "/")+"/v0/setup/quiesce", payload)
 	if err != nil {
 		return "", err
 	}
-	if renew != "" {
+	if token != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	res, err := directHTTP.Do(req)
@@ -82,8 +86,11 @@ func ResumeRunner(ctx context.Context, peerURL, token string) error {
 	if err != nil {
 		return err
 	}
-	if res.StatusCode != http.StatusNoContent {
-		return &controlHTTPError{statusCode: res.StatusCode, err: errors.New(apiError(raw))}
+	switch res.StatusCode {
+	case http.StatusNoContent:
+		return nil
+	case http.StatusConflict:
+		return fmt.Errorf("%w: %s", ErrNotHeld, apiError(raw))
 	}
-	return nil
+	return &controlHTTPError{statusCode: res.StatusCode, err: errors.New(apiError(raw))}
 }

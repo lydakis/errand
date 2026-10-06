@@ -215,15 +215,16 @@ func TestSetupQuiesceIsLocalOnly(t *testing.T) {
 	}
 }
 
-// A hold is renewed by its token while it lasts. Another token does not
-// renew it, and once it has lapsed the token takes it afresh, as an idle
-// runner grants any hold.
-func TestSetupQuiesceRenewal(t *testing.T) {
+// A caller names its hold, so it can record the token before the hold
+// exists. The hold is renewed by that name while it lasts, another name
+// does not take it over, and once it has lapsed the same name takes it
+// again, as an idle runner grants any hold.
+func TestSetupQuiesceNamedHold(t *testing.T) {
 	d := &Daemon{jobs: map[string]*Job{}, running: map[string]*Job{}}
 	quiesce := func(token string) (int, proto.SetupQuiesce) {
 		var body io.Reader
 		if token != "" {
-			raw, _ := json.Marshal(proto.SetupQuiesceRenew{Token: token})
+			raw, _ := json.Marshal(proto.SetupQuiesceRequest{Token: token})
 			body = bytes.NewReader(raw)
 		}
 		w := httptest.NewRecorder()
@@ -232,23 +233,26 @@ func TestSetupQuiesceRenewal(t *testing.T) {
 		json.NewDecoder(w.Body).Decode(&hold)
 		return w.Code, hold
 	}
-	code, hold := quiesce("")
-	if code != http.StatusCreated || hold.Token == "" {
-		t.Fatalf("taking the hold = %d %+v", code, hold)
+	if code, _ := quiesce("not a ulid"); code != http.StatusBadRequest {
+		t.Fatalf("a hold named by a non-ULID = %d, want 400", code)
+	}
+	name := proto.NewULID()
+	if code, hold := quiesce(name); code != http.StatusCreated || hold.Token != name {
+		t.Fatalf("taking the named hold = %d %+v", code, hold)
 	}
 	d.mu.Lock()
 	d.setupQuiesceUntil = time.Now().Add(time.Second) // nearly over
 	d.mu.Unlock()
-	if code, renewed := quiesce(hold.Token); code != http.StatusCreated || renewed.Token != hold.Token || time.Until(renewed.ExpiresAt) < setupQuiesceDuration-time.Minute {
+	if code, renewed := quiesce(name); code != http.StatusCreated || renewed.Token != name || time.Until(renewed.ExpiresAt) < setupQuiesceDuration-time.Minute {
 		t.Fatalf("renewing the hold = %d %+v", code, renewed)
 	}
-	if code, _ := quiesce("another"); code != http.StatusConflict {
-		t.Fatalf("renewing with another token = %d, want 409", code)
+	if code, _ := quiesce(proto.NewULID()); code != http.StatusConflict {
+		t.Fatalf("another name while held = %d, want 409", code)
 	}
 	d.mu.Lock()
 	d.setupQuiesceUntil = time.Now().Add(-time.Second)
 	d.mu.Unlock()
-	if code, again := quiesce(hold.Token); code != http.StatusCreated || again.Token == "" || again.Token == hold.Token {
-		t.Fatalf("renewing a lapsed hold = %d %+v", code, again)
+	if code, again := quiesce(name); code != http.StatusCreated || again.Token != name {
+		t.Fatalf("taking a lapsed hold again = %d %+v", code, again)
 	}
 }

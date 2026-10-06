@@ -74,7 +74,11 @@ type RunOptions struct {
 	OnSelected func(RunTarget) // advisory before contacting each selected runner
 	// Resolve, when set, supplies Candidates once local preparation has
 	// succeeded, so a machine is rented only for a run that can start.
-	Resolve        func() ([]RunTarget, error)
+	Resolve func() ([]RunTarget, error)
+	// BeforeSubmit, when set, runs once every local step of an attempt has
+	// succeeded, right before the request that places work on target; an
+	// error ends the attempt without that request.
+	BeforeSubmit   func(target RunTarget) error
 	Workspace      string // explicitly selected existing persistent workspace
 	workspaceID    string
 	Caches         []proto.CacheBinding
@@ -369,6 +373,12 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		<-controller.done // release the shared signal channel before a fallback attempt
 	}()
 
+	if opts.BeforeSubmit != nil {
+		if err := opts.BeforeSubmit(RunTarget{PeerURL: opts.PeerURL, PeerName: opts.PeerName}); err != nil {
+			errf("%v", err)
+			return ExitTransaction, false
+		}
+	}
 	submissionStarted = true
 	status, admissionUncertain, err := submit(opts, jobID, spec, manifest, plan)
 	if err != nil {

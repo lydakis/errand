@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -2227,5 +2228,63 @@ func TestChangeGCRescansDownloadRenamedIntoPlaceAfterScan(t *testing.T) {
 	}
 	if _, err := os.Stat(dest); !os.IsNotExist(err) {
 		t.Fatalf("expired download kept: %v", err)
+	}
+}
+
+// BeforeSubmit runs only once every local step has succeeded, right before
+// the submission: a run whose snapshot negotiation fails never reaches it,
+// and one it refuses sends no submission and keeps no change state.
+func TestBeforeSubmitRunsOnlyRightBeforeSubmission(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		negotiate bool
+		refuse    bool
+		claims    int32
+	}{
+		{"negotiation fails", false, false, 0},
+		{"claim refused", true, true, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stateHome := t.TempDir()
+			t.Setenv("XDG_STATE_HOME", stateHome)
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "input"), []byte("data"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var submitted atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff" && tc.negotiate:
+					replyMissingSnapshotBlobs(t, w, r)
+				case r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff":
+					http.Error(w, "disk full", http.StatusInternalServerError)
+				default:
+					submitted.Add(1)
+					http.Error(w, "unexpected", http.StatusInternalServerError)
+				}
+			}))
+			defer server.Close()
+			var claims atomic.Int32
+			code := runWithDetachNotifications(RunOptions{
+				PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+				Stdout: io.Discard, Stderr: io.Discard,
+				BeforeSubmit: func(RunTarget) error {
+					claims.Add(1)
+					if tc.refuse {
+						return errors.New("lease is released")
+					}
+					return nil
+				},
+			}, make(chan os.Signal, 1), testInterruptNotifications(), nil)
+			if code != ExitTransaction || claims.Load() != tc.claims || submitted.Load() != 0 {
+				t.Fatalf("exit %d after %d claims and %d other requests", code, claims.Load(), submitted.Load())
+			}
+			if entries, _ := os.ReadDir(filepath.Join(stateHome, "errand", "jobs")); len(entries) != 0 {
+				t.Fatalf("unsubmitted change state survived: %v", entries)
+			}
+		})
 	}
 }

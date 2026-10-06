@@ -54,10 +54,11 @@ type SetupQuiesceRelease struct {
 	Token string `json:"token"`
 }
 
-// SetupQuiesceRenew, sent to take the hold, renews the hold Token names
-// while that hold lasts. Once it has lapsed, the hold is taken afresh, which
-// an idle runner grants as it would any other.
-type SetupQuiesceRenew struct {
+// SetupQuiesceRequest, sent to take the hold, names it with the caller's
+// own Token, a ULID, so the caller can record the token before the hold
+// exists. A live hold with that token is renewed; otherwise the hold is
+// taken under it, which an idle runner grants as it would any other.
+type SetupQuiesceRequest struct {
 	Token string `json:"token"`
 }
 

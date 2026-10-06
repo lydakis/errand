@@ -45,16 +45,20 @@ type ProbeFunc func(ctx context.Context, target proto.LeaseTarget, identity, whe
 // SSH lets in, connecting with identity (a private key file) when set.
 type AdmitFunc func(ctx context.Context, target proto.LeaseTarget, identity string, keys []string) error
 
-// DrainFunc has an idle leased runner refuse new jobs for a few minutes, so
-// a release for idleness cannot lose a job the runner admits meanwhile, and
-// returns the hold's token. With renew, the token of an earlier hold, it
-// extends that hold while it lasts, and takes it afresh once it has lapsed.
-// It returns an error wrapping ErrRunnerBusy when the runner has jobs or is
+// DrainFunc has an idle leased runner refuse new jobs for runnerHoldTTL,
+// so a release for idleness cannot lose a job the runner admits meanwhile.
+// The hold is named by token, a ULID the broker records first: a live hold
+// with that token is renewed, and otherwise the hold is taken under it. It
+// returns an error wrapping ErrRunnerBusy when the runner has jobs or is
 // held by someone else.
-type DrainFunc func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (token string, err error)
+type DrainFunc func(ctx context.Context, target proto.LeaseTarget, identity, token string) error
 
-// ResumeFunc lifts the hold token names, so the runner takes jobs again.
+// ResumeFunc lifts the hold token names, so the runner takes jobs again. It
+// succeeds when the runner has no such hold.
 type ResumeFunc func(ctx context.Context, target proto.LeaseTarget, identity, token string) error
+
+// runnerHoldTTL is how long a runner keeps a hold that is not renewed.
+const runnerHoldTTL = 5 * time.Minute
 
 // ErrRunnerBusy is a DrainFunc's answer for a runner that has work.
 var ErrRunnerBusy = errors.New("runner has work")
@@ -138,10 +142,13 @@ type record struct {
 	Identity string `json:"identity,omitempty"`
 	// DrainTarget is Machine.Drain.
 	DrainTarget *proto.LeaseTarget `json:"drain_target,omitempty"`
-	// HoldToken names the hold that keeps a releasing lease's runner from
-	// taking jobs until its machine is gone. It is recorded so that a
-	// restarted cloud peer renews the hold rather than losing it.
-	HoldToken string `json:"hold_token,omitempty"`
+	// HoldToken names the hold that keeps the runner from taking jobs
+	// before its machine is gone, and HoldSince is when it was last taken
+	// on a ready lease. The token is recorded before the hold is taken, so a
+	// restarted cloud peer renews a releasing lease's hold, and lifts a ready
+	// lease's before handing it out, rather than losing track of either.
+	HoldToken string    `json:"hold_token,omitempty"`
+	HoldSince time.Time `json:"hold_since,omitzero"`
 	// LastBusy is when a ready lease was last seen with work or handed out.
 	// It is kept only in memory, since a restart starts a full idle window
 	// anyway, so no failed write can lose it.
@@ -922,11 +929,24 @@ func (b *Broker) watch(l *lease) {
 		if len(r.PendingKeys) > 0 {
 			b.admitPending(l, r)
 		}
-		busy, reached := false, false
+		busy, reached, unusable, probed := false, false, "", false
 		if time.Now().Before(r.ExpiresAt) {
-			busy, reached = b.busy(l, r)
+			busy, reached, unusable = b.busy(l, r)
+			probed = true
+		}
+		// A hold that a hand-out overtook, or that a cloud peer that stopped
+		// left behind, keeps the lease from being handed out until it is
+		// lifted or has lapsed.
+		held := ""
+		if r.HoldToken != "" {
+			held = b.liftHold(l)
 		}
 		b.mu.Lock()
+		if held != "" {
+			l.unusable = held
+		} else if probed {
+			l.unusable = unusable
+		}
 		if busy {
 			l.LastBusy = time.Now()
 		}
@@ -966,6 +986,10 @@ func (b *Broker) watch(l *lease) {
 // counts as idle. Past the lease's lifetime nothing the drain finds keeps
 // it.
 //
+// The hold's token is recorded before the hold is taken, so a cloud peer
+// that stops in between knows on restart that the runner may be held, and
+// lifts the hold before handing the lease out.
+//
 // The probe and the drain took time, and requests may have changed the
 // record meanwhile, so the decision is made against the record as it is
 // now. The machine is destroyed only once the release is recorded;
@@ -977,14 +1001,17 @@ func (b *Broker) retire(l *lease, reached bool) bool {
 	target := r.drainTarget()
 	token := ""
 	if reached && target.SSH != "" && time.Now().Before(r.ExpiresAt) {
-		ctx, cancel, ok := b.readyCall(l, r, probeTimeout)
-		if !ok {
-			cancel()
-			return false
-		}
 		var err error
-		token, err = b.cfg.Drain(ctx, target, r.Identity, "")
-		cancel()
+		token, err = b.recordHold(l)
+		if err == nil {
+			ctx, cancel, ok := b.readyCall(l, r, probeTimeout)
+			if !ok {
+				cancel()
+				return false // released meanwhile; the release keeps the hold
+			}
+			err = b.cfg.Drain(ctx, target, r.Identity, token)
+			cancel()
+		}
 		switch {
 		case err == nil:
 			b.mu.Lock()
@@ -994,15 +1021,23 @@ func (b *Broker) retire(l *lease, reached bool) bool {
 		case !time.Now().Before(r.ExpiresAt):
 			// The lifetime ran out during the drain; the hard stop does not
 			// wait on the runner, busy or not.
+			b.dropHold(l, token)
+			token = ""
 		case errors.Is(err, ErrRunnerBusy):
 			// Work taken since the probe, which a short job may finish
 			// before the next check: it is seen here or not at all.
+			b.dropHold(l, token)
 			b.mu.Lock()
 			l.LastBusy = time.Now()
 			l.holdFailing = time.Time{}
 			b.mu.Unlock()
 			return false
-		case !errors.Is(err, ErrUndrainable):
+		case errors.Is(err, ErrUndrainable):
+			b.dropHold(l, token)
+			token = ""
+		default:
+			// The hold may have been taken; its token stays recorded until
+			// the hold is lifted, lapses, or goes with the release.
 			b.mu.Lock()
 			if l.holdFailing.IsZero() {
 				l.holdFailing = time.Now()
@@ -1022,10 +1057,6 @@ func (b *Broker) retire(l *lease, reached bool) bool {
 	}
 	released := false
 	err := b.update(l, func(r *record) bool {
-		if r.State == proto.LeaseReleasing && token != "" && r.HoldToken == "" {
-			r.HoldToken = token // released meanwhile; the hold goes with it
-			return true
-		}
 		reason := ""
 		if r.State == proto.LeaseReady {
 			reason = r.releaseReason(time.Now())
@@ -1034,7 +1065,6 @@ func (b *Broker) retire(l *lease, reached bool) bool {
 			return false
 		}
 		r.State = proto.LeaseReleasing
-		r.HoldToken = token
 		r.addProgress("releasing: " + reason)
 		released = true
 		return true
@@ -1043,14 +1073,70 @@ func (b *Broker) retire(l *lease, reached bool) bool {
 		return true
 	}
 	if token != "" && !b.stopped(l) {
-		ctx, cancel := context.WithTimeout(b.ctx, probeTimeout)
-		err := b.cfg.Resume(ctx, target, r.Identity, token)
-		cancel()
-		if err != nil {
-			b.note(l, "the machine may refuse new jobs for a few minutes: "+err.Error())
+		if held := b.liftHold(l); held != "" {
+			b.mu.Lock()
+			l.unusable = held
+			b.mu.Unlock()
 		}
 	}
 	return false
+}
+
+// recordHold records the token of the hold an idle release is about to
+// take on a ready lease's runner, reusing one recorded by an attempt whose
+// outcome is unknown, and when, so that the hold is known to lapse
+// runnerHoldTTL later.
+func (b *Broker) recordHold(l *lease) (string, error) {
+	token := ""
+	err := b.update(l, func(r *record) bool {
+		if r.State != proto.LeaseReady {
+			return false
+		}
+		if r.HoldToken == "" {
+			r.HoldToken = proto.NewULID()
+		}
+		r.HoldSince = time.Now()
+		token = r.HoldToken
+		return true
+	})
+	if err == nil && token == "" {
+		err = errors.New("the lease is no longer ready")
+	}
+	return token, err
+}
+
+// dropHold forgets a hold the runner is known not to hold.
+func (b *Broker) dropHold(l *lease, token string) {
+	b.advance(l, func(r *record) bool {
+		if token == "" || r.HoldToken != token {
+			return false
+		}
+		r.HoldToken, r.HoldSince = "", time.Time{}
+		return true
+	})
+}
+
+// liftHold lifts the hold a ready lease's record says the runner may be
+// under: one a hand-out overtook, or one a cloud peer that stopped left
+// behind. It returns why the lease cannot be handed out while the hold may
+// remain, or empty once it is lifted or has lapsed.
+func (b *Broker) liftHold(l *lease) string {
+	b.mu.Lock()
+	r := l.record
+	b.mu.Unlock()
+	if r.HoldToken == "" || r.State != proto.LeaseReady {
+		return ""
+	}
+	lapses := r.HoldSince.Add(runnerHoldTTL)
+	ctx, cancel := context.WithTimeout(b.ctx, probeTimeout)
+	err := b.cfg.Resume(ctx, r.drainTarget(), r.Identity, r.HoldToken)
+	cancel()
+	if err == nil || !time.Now().Before(lapses) {
+		b.dropHold(l, r.HoldToken)
+		return ""
+	}
+	b.note(l, "the machine may refuse new jobs until "+lapses.Format(time.RFC3339)+": "+err.Error())
+	return "this cloud peer may still be holding it idle, until " + lapses.Format(time.RFC3339)
 }
 
 // drainTarget is how the cloud peer reaches the runner's local socket to
@@ -1138,27 +1224,23 @@ func (b *Broker) stopped(l *lease) bool {
 }
 
 // busy reports whether the machine has work, and whether it answered,
-// asking no later than the lease's hard stop. It also records whether the
-// machine can be handed out: whether it answered, with facts that still
-// match the lease's where.
-func (b *Broker) busy(l *lease, r record) (busy, reached bool) {
+// asking no later than the lease's hard stop, and why it cannot be handed
+// out, if it cannot: it did not answer, or its facts no longer match the
+// lease's where.
+func (b *Broker) busy(l *lease, r record) (busy, reached bool, unusable string) {
 	ctx, cancel, ok := b.readyCall(l, r, probeTimeout)
 	defer cancel()
 	if !ok {
-		return false, false
+		return false, false, ""
 	}
 	info, err := b.cfg.Probe(ctx, *r.Target, r.Identity, r.Where)
-	unusable := ""
 	q, _ := placement.Parse(r.Where)
 	if err != nil {
 		unusable = "this cloud peer cannot reach it: " + err.Error()
 	} else if missing := q.Missing(info.Facts); len(missing) > 0 {
 		unusable = "it no longer matches " + r.Where + ": " + strings.Join(missing, "; ")
 	}
-	b.mu.Lock()
-	l.unusable = unusable
-	b.mu.Unlock()
-	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0, err == nil
+	return err == nil && info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0, err == nil, unusable
 }
 
 // release tries once to destroy the machine and records the outcome.
@@ -1193,8 +1275,8 @@ func (b *Broker) release(l *lease) {
 			r.State = proto.LeaseFailed
 		}
 		r.ReleasedAt = time.Now()
-		r.PendingKeys = nil // never to be added
-		r.HoldToken = ""    // the machine is gone
+		r.PendingKeys = nil                        // never to be added
+		r.HoldToken, r.HoldSince = "", time.Time{} // the machine is gone
 		r.addProgress("released")
 		return true
 	})
@@ -1235,10 +1317,11 @@ func (b *Broker) keepHold(l *lease) (stop func()) {
 	}
 }
 
-// renewHold renews a releasing lease's hold on its runner. The release was
-// decided when the hold was taken, so a runner that took work after its
-// hold lapsed, or will no longer be held, is still released, and the
-// progress says the hold was lost. A runner that cannot be reached is
+// renewHold renews a releasing lease's hold on its runner, taking it again
+// under the same token if it has lapsed while the runner stayed idle. The
+// release was decided when the hold was taken, so a runner that took work
+// after its hold lapsed, or will no longer be held, is still released, and
+// the progress says the hold was lost. A runner that cannot be reached is
 // tried again sooner than the next renewal.
 func (b *Broker) renewHold(ctx context.Context, l *lease) {
 	b.mu.Lock()
@@ -1248,28 +1331,19 @@ func (b *Broker) renewHold(ctx context.Context, l *lease) {
 		return
 	}
 	callCtx, cancel := context.WithTimeout(ctx, probeTimeout)
-	token, err := b.cfg.Drain(callCtx, r.drainTarget(), r.Identity, r.HoldToken)
+	err := b.cfg.Drain(callCtx, r.drainTarget(), r.Identity, r.HoldToken)
 	cancel()
 	if ctx.Err() != nil {
-		return // the attempt ended; the next one renews
+		return // the release ended; nothing is left to hold
 	}
 	switch {
 	case err == nil:
 		b.mu.Lock()
 		l.heldAt = time.Now()
 		b.mu.Unlock()
-		if token != r.HoldToken { // the hold had lapsed with the runner idle
-			b.advance(l, func(r *record) bool {
-				r.HoldToken = token
-				return true
-			})
-		}
 	case errors.Is(err, ErrRunnerBusy), errors.Is(err, ErrUndrainable):
 		b.note(l, "lost the hold on the machine, which may take jobs until it is gone; releasing it anyway: "+err.Error())
-		b.advance(l, func(r *record) bool {
-			r.HoldToken = ""
-			return true
-		})
+		b.dropHold(l, r.HoldToken)
 	default:
 		b.note(l, "could not renew the hold on the machine; retrying: "+err.Error())
 		b.mu.Lock()

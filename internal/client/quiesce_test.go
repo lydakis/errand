@@ -23,19 +23,22 @@ func TestQuiesceRunner(t *testing.T) {
 			json.NewEncoder(w).Encode(proto.APIError{Error: "runner setup is available only through the local Unix socket"})
 			return
 		}
-		var renew proto.SetupQuiesceRenew
+		var named proto.SetupQuiesceRequest
 		if r.Method == http.MethodPost {
-			json.NewDecoder(r.Body).Decode(&renew)
+			json.NewDecoder(r.Body).Decode(&named)
 		}
 		switch {
-		case r.Method == http.MethodPost && renew.Token != "" && renew.Token == token:
+		case r.Method == http.MethodPost && named.Token != "" && named.Token == token:
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(proto.SetupQuiesce{Token: token})
 		case r.Method == http.MethodPost && (jobs > 0 || token != ""):
 			w.WriteHeader(http.StatusConflict)
 			json.NewEncoder(w).Encode(proto.APIError{Error: "runner has active jobs (1 running)"})
 		case r.Method == http.MethodPost:
-			token = "hold"
+			token = named.Token
+			if token == "" {
+				token = "hold"
+			}
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(proto.SetupQuiesce{Token: token})
 		case r.Method == http.MethodDelete:
@@ -74,10 +77,15 @@ func TestQuiesceRunner(t *testing.T) {
 	if _, err := QuiesceRunner(ctx, server.URL, "other"); !errors.Is(err, ErrRunnerNotIdle) {
 		t.Fatalf("renewing another's hold: %v", err)
 	}
-	if err := ResumeRunner(ctx, server.URL, "other"); err == nil {
-		t.Fatal("resumed with another token")
+	if err := ResumeRunner(ctx, server.URL, "other"); !errors.Is(err, ErrNotHeld) {
+		t.Fatalf("resumed with another token: %v", err)
 	}
 	if err := ResumeRunner(ctx, server.URL, got); err != nil || token != "" {
 		t.Fatalf("resume: %v", err)
+	}
+	// A hold named by the caller is taken under that name.
+	named := proto.NewULID()
+	if got, err := QuiesceRunner(ctx, server.URL, named); err != nil || got != named || token != named {
+		t.Fatalf("named hold: %q %v", got, err)
 	}
 }

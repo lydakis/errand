@@ -152,6 +152,11 @@ func createPreparedWorkspace(opts RunOptions, prep snapshotPreparation, request 
 	if err := recordWorkspaceOrigin(opts, request.ID, prep.manifest); err != nil {
 		return proto.Workspace{}, fmt.Errorf("recording workspace origin: %w", err)
 	}
+	if opts.BeforeSubmit != nil {
+		if err := opts.BeforeSubmit(RunTarget{PeerURL: opts.PeerURL, PeerName: opts.PeerName}); err != nil {
+			return proto.Workspace{}, err
+		}
+	}
 	var result proto.Workspace
 	err = uploadWithSnapshotFallback(plan, func(attempt shipPlan) error {
 		var err error
