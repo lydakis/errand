@@ -25,7 +25,10 @@ func TestMain(m *testing.M) {
 	// Auto-apply re-executes the embedding binary. Dispatch it before replacing
 	// XDG_STATE_HOME or the helper would rerun the entire daemon test suite.
 	if len(os.Args) == 4 && os.Args[1] == "_automatic-apply" {
-		if err := client.RunAutomaticApplyWorker(os.Args[2], os.Args[3]); err != nil {
+		err := client.RunAutomaticApplyWorker(os.Args[2], os.Args[3])
+		// The worker is detached, so tests learn it is done from this marker.
+		_ = os.WriteFile(automaticApplyWorkerExited(os.Args[3]), nil, 0o600)
+		if err != nil {
 			os.Exit(1)
 		}
 		os.Exit(0)
@@ -142,6 +145,27 @@ func testDaemon(t *testing.T) (*Daemon, *httptest.Server) {
 	t.Cleanup(ts.Close)
 	t.Cleanup(func() { _ = d.Close() })
 	return d, ts
+}
+
+func automaticApplyWorkerExited(jobID string) string {
+	return filepath.Join(os.Getenv("XDG_STATE_HOME"), "automatic-apply-worker-exited-"+jobID)
+}
+
+// waitForAutomaticApplyWorker waits for the detached worker that a run with
+// ApplyOnSuccess starts. Run can return first, and a worker still writing
+// to XDG_STATE_HOME breaks the test's temporary directory cleanup.
+func waitForAutomaticApplyWorker(t *testing.T, jobID string) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if _, err := os.Stat(automaticApplyWorkerExited(jobID)); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("automatic apply worker for job %s did not exit", jobID)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func workspaceWith(t *testing.T, files map[string]string) string {
