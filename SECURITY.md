@@ -43,7 +43,9 @@ are not interchangeable identities for access to an existing job.
 A runner with a `[cloud]` section is a cloud peer. When `--where` matches no
 reachable runner, the client asks configured cloud peers for a lease. The
 cloud peer rents a machine through a Lambda account or operator-written
-provider commands, installs errand on it, and reports how to reach it. Jobs
+provider commands and reports how to reach it. The Lambda provider installs
+errand on the machine; a provider command must return a machine that already
+runs errand. Jobs
 then go from the client to the leased machine directly, as to any runner; the
 cloud peer never relays jobs. Leases belong to the ownership principal that
 asked for them, not to one device. The cloud peer watches each leased machine
@@ -159,8 +161,8 @@ The following properties must hold:
 - On Windows, the runner refuses to start a `.bat` or `.cmd` program with an
   argument that `cmd.exe` would reinterpret (`"`, `%`, `^`, `&`, `|`, `<`,
   `>` or a line break), so argv cannot become a different command.
-- Output that Errand captures from helper processes it runs itself, such as
-  provider commands and `ssh`, is size-limited.
+- Output that a cloud peer captures from provider commands and from the SSH
+  commands that install and admit keys on leased machines is size-limited.
 - Attached TCP forwarding requires the appropriate action and ownership of a
   running job, and creates only client-local loopback listeners.
 - Peer discovery probes only online nodes returned by the caller's own tailnet
@@ -184,21 +186,24 @@ Cloud peers and leases:
   without `submit` is shown no lease targets, progress or errors.
 - Any request from a principal that has lost `submit` on the cloud peer ends
   all of that principal's leases, whatever the request asked for.
-- A leased machine admits only its owner and the cloud peer. A Lambda
-  machine on the tailnet allows the tailnet login that asked for the lease
-  plus the offer's `allow_users`; a Lambda lease requested without a tailnet
+- A Lambda machine admits only the lease's owner, the cloud peer, and any
+  logins the operator lists in the offer's `allow_users`. On the tailnet, its
+  runner allows the tailnet login that asked for the lease plus
+  `allow_users`; a Lambda lease requested without a tailnet
   login and without `allow_users` is refused before anything is rented. For
   a machine reached over SSH, the cloud peer adds the public key of each of
   the owner's devices that asks for the lease, and a Lambda machine admits
   only those keys and the cloud peer's own. A provider command receives the
-  first device's public key and decides how its machine admits it. No
-  private key leaves its device.
+  first device's public key, and its machine's admission policy is the
+  operator's. No private key leaves its device.
 - A lease that carries an SSH host key is reached only with that key pinned,
   by the client and by the cloud peer. The Lambda provider generates a fresh
   host key for every lease. Without a host key, the user's own SSH
   configuration and `known_hosts` apply.
 - Provider-command and Lambda targets reach a runner by `url` or `ssh`
-  only; a lease cannot name a local socket.
+  only; a lease cannot name a local socket. The cloud peer checks a target
+  as soon as acquire returns, with the same rules as configured peers, and a
+  target that fails fails the launch and releases the machine.
 - An offer's facts are a claim. A lease becomes ready only once its machine
   answers as an errand runner whose measured facts match the request, and
   the client checks them again before using it.
@@ -223,13 +228,16 @@ Cloud peers and leases:
   ready lease is released once its runner has been idle for the offer's
   `idle_timeout` (an unreachable runner counts as idle), or at its
   `max_lifetime` even with a job running, and a failed release is retried
-  until it succeeds. A restart releases launches it interrupted. Removing an
-  offer only stops new leases. A Lambda lease counts as released only once
+  until it succeeds. A restart releases launches it interrupted and starts a
+  full idle window for each ready lease, so restarts can extend a lease up
+  to its `max_lifetime`. Removing an offer only stops new leases. A Lambda lease counts as released only once
   Lambda lists its instance as terminated.
-- A cloud peer holds at most `max_leases` active leases across all callers.
-  Unless `max_price_per_hour` is `0`, the Lambda provider never launches a
-  type whose price, as Lambda lists it right before the launch, is above
-  that cap.
+- A cloud peer starts a new lease only while fewer than `max_leases` leases
+  are active across all callers; lowering the setting does not end leases
+  already active. Unless `max_price_per_hour` is `0`, the Lambda provider
+  refuses a type whose listed price is above that cap. The price is checked
+  once per lease, before the launch waits its turn behind Lambda's launch
+  rate limit, and is not checked again while it waits or retries.
 
 ## Reportable Findings and Severity
 
@@ -239,8 +247,8 @@ disclosure, replay of an admitted job, unsafe archive or path handling, writes
 outside protected roots, unsafe local change application, or bypasses of
 documented resource and forwarding boundaries. For cloud peers, that includes
 starting a lease without the `lease` and `submit` actions or from a browser
-page, seeing or using another principal's lease, a leased machine admitting
-anyone but its owner and the cloud peer, a provider or Lambda secret leaving
+page, seeing or using another principal's lease, a Lambda machine admitting
+anyone but its owner, the cloud peer and the offer's `allow_users`, a provider or Lambda secret leaving
 the cloud peer other than as documented, and a lease outliving its idle and
 lifetime rules while the cloud peer runs.
 
