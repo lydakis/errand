@@ -17,10 +17,13 @@ type fetchedRecord struct {
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
-// hasResults reports whether res retained workspace changes for a client to
-// fetch.
-func hasResults(res *proto.Result) bool {
-	return res != nil && res.Changes != nil && res.Changes.PathCount > 0
+// retainsResults reports whether res, j's result, retained workspace changes
+// for a client to fetch that end with the machine. A job on a persistent
+// workspace changed the workspace, which outlives the job, so its changes
+// are not counted: persistent workspaces end with a lease without holding
+// it.
+func retainsResults(j *Job, res *proto.Result) bool {
+	return j.Spec.WorkspaceID == "" && res != nil && res.Changes != nil && res.Changes.PathCount > 0
 }
 
 // fetchRecorded reports whether j's receipt directory holds the record a
@@ -31,20 +34,21 @@ func fetchRecorded(j *Job) bool {
 }
 
 // noteResultsLocked counts j as a finished job whose retained changes no
-// client has fetched, unless it has none or they were fetched. A runner with
-// unfetched results is not idle: they end with its machine. d.mu must be
-// held.
+// client has fetched, unless it has none, they were fetched, or j is no
+// longer the runner's. A runner with unfetched results is not idle: they end
+// with its machine. It is called in the critical section that publishes res,
+// so nothing sees the result before it is counted. d.mu must be held.
 func (d *Daemon) noteResultsLocked(j *Job, res *proto.Result) {
-	if j.fetched || !hasResults(res) {
+	if j.fetched || d.jobs[j.ID] != j || !retainsResults(j, res) {
 		return
 	}
-	d.unfetched[j.ID] = j.Admission.Time
+	d.unfetched[j] = j.Admission.Time
 }
 
-// forgetResultsLocked stops counting j's results, which are fetched or gone.
-// d.mu must be held.
+// forgetResultsLocked stops counting j's results, which are fetched or gone;
+// it does nothing if they are not counted. d.mu must be held.
 func (d *Daemon) forgetResultsLocked(j *Job) {
-	delete(d.unfetched, j.ID)
+	delete(d.unfetched, j)
 }
 
 // latestUnfetchedLocked is when the runner admitted the most recent job whose

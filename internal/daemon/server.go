@@ -126,12 +126,16 @@ type Daemon struct {
 	closeOnce         sync.Once
 	closeErr          error
 
-	// unfetched holds, by job ID, when the runner admitted each finished job
-	// whose retained workspace changes no client has downloaded yet (see
+	// unfetched holds when the runner admitted each finished job whose
+	// retained workspace changes no client has downloaded yet (see
 	// noteResultsLocked), and lastAdmitted when it admitted its most recent
 	// job. Protected by mu.
-	unfetched    map[string]time.Time
+	unfetched    map[*Job]time.Time
 	lastAdmitted time.Time
+
+	// testHookResultPublished, when set, runs as soon as a job's terminal
+	// result can be seen by other requests.
+	testHookResultPublished func(*Job)
 }
 
 func New(cfg Config) (*Daemon, error) {
@@ -192,7 +196,7 @@ func New(cfg Config) (*Daemon, error) {
 	}
 	d := &Daemon{
 		placementSlots: make(chan struct{}, 4),
-		cfg:            cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{}, unfetched: map[string]time.Time{},
+		cfg:            cfg, jobs: map[string]*Job{}, running: map[string]*Job{}, collected: map[string]collectedRecord{}, unfetched: map[*Job]time.Time{},
 		identity: identity, selfUID: currentUID(),
 		writeAdmissionReceipt: (*Job).writeJSON,
 		writeProcessScope:     replaceJSONDurable,

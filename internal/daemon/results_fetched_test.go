@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -126,6 +127,9 @@ func TestFetchBeforeResultsAreCountedIsRecorded(t *testing.T) {
 	d, _ := testDaemon(t)
 	j := &Job{ID: proto.NewULID(), Dir: t.TempDir()}
 	res := &proto.Result{Changes: &proto.ChangeSummary{PathCount: 1}}
+	d.mu.Lock()
+	d.jobs[j.ID] = j
+	d.mu.Unlock()
 
 	d.resultsFetched(j)
 	d.mu.Lock()
@@ -137,5 +141,61 @@ func TestFetchBeforeResultsAreCountedIsRecorded(t *testing.T) {
 	}
 	if !fetchRecorded(j) {
 		t.Fatal("the download left no record")
+	}
+}
+
+// A job on a persistent workspace changes the workspace, which ends with a
+// lease without holding it, so its changes are never counted as unfetched.
+func TestWorkspaceJobResultsAreNotCounted(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	d, ts := testDaemon(t)
+	root := workspaceWith(t, map[string]string{"value.txt": "initial\n"})
+	ws, err := client.CreateWorkspace(client.RunOptions{PeerURL: ts.URL, Root: root}, "kept")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := submitWorkspaceCommand(t, ts.URL, root, ws, "echo changed > value.txt")
+	status := waitTerminal(t, ts.URL, id)
+	if status.Result == nil || status.Result.Changes == nil || status.Result.Changes.PathCount == 0 {
+		t.Fatalf("workspace job retained no changes: %+v", status.Result)
+	}
+	d.mu.Lock()
+	n := len(d.unfetched)
+	d.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("%d unfetched after a workspace job, want 0", n)
+	}
+}
+
+// Job GC can remove a job as soon as its result is published. The result is
+// counted in the same critical section that publishes it, so a removal right
+// then leaves no count behind for a job the runner no longer has.
+func TestJobGCRightAfterPublishLeavesNoCount(t *testing.T) {
+	d, ts := testDaemon(t)
+	published := make(chan *Job, 1)
+	d.testHookResultPublished = func(j *Job) {
+		outcome, cleanupErr, err := d.removeJobReceipt(j)
+		if outcome != jobRemovalRemoved || cleanupErr != nil || err != nil {
+			t.Errorf("removing the job as its result was published: %v %v %v", outcome, cleanupErr, err)
+		}
+		published <- j
+	}
+	root := workspaceWith(t, map[string]string{"value.txt": "initial\n"})
+	resp := rawSubmit(t, ts.URL, proto.NewULID(), root, []string{"/bin/sh", "-c", "echo changed > value.txt"})
+	resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		t.Fatalf("submit = %s", resp.Status)
+	}
+	j := <-published
+	<-j.done
+	d.mu.Lock()
+	_, kept := d.jobs[j.ID]
+	n := len(d.unfetched)
+	d.mu.Unlock()
+	if kept || n != 0 {
+		t.Fatalf("job kept %v, %d unfetched after its removal, want none", kept, n)
+	}
+	if !retainsResults(j, j.result) {
+		t.Fatalf("job retained no changes: %+v", j.result)
 	}
 }
