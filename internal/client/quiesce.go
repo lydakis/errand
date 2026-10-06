@@ -1,0 +1,72 @@
+package client
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/lydakis/errand/internal/proto"
+)
+
+// ErrRunnerNotIdle is QuiesceRunner's answer when the runner has jobs, or
+// is already held idle.
+var ErrRunnerNotIdle = errors.New("runner is not idle")
+
+// QuiesceRunner has an idle runner refuse new jobs for a few minutes, as
+// errand setup does before a restart, and returns the token that ends it
+// early. A runner admits this only from its own user over its local socket,
+// so only a peer reached over SSH can be held this way.
+func QuiesceRunner(ctx context.Context, peerURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(peerURL, "/")+"/v0/setup/quiesce", http.NoBody)
+	if err != nil {
+		return "", err
+	}
+	res, err := directHTTP.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+	body, err := readBoundedBody(res.Body, 4096, "quiesce")
+	if err != nil {
+		return "", err
+	}
+	switch res.StatusCode {
+	case http.StatusCreated:
+	case http.StatusConflict:
+		return "", fmt.Errorf("%w: %s", ErrRunnerNotIdle, apiError(body))
+	default:
+		return "", &controlHTTPError{statusCode: res.StatusCode, err: errors.New(apiError(body))}
+	}
+	var hold proto.SetupQuiesce
+	if err := json.Unmarshal(body, &hold); err != nil || hold.Token == "" {
+		return "", errors.New("runner returned no quiesce token")
+	}
+	return hold.Token, nil
+}
+
+// ResumeRunner ends a hold QuiesceRunner made.
+func ResumeRunner(ctx context.Context, peerURL, token string) error {
+	body, _ := json.Marshal(proto.SetupQuiesceRelease{Token: token})
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, strings.TrimSuffix(peerURL, "/")+"/v0/setup/quiesce", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	res, err := directHTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	raw, err := readBoundedBody(res.Body, 4096, "quiesce")
+	if err != nil {
+		return err
+	}
+	if res.StatusCode != http.StatusNoContent {
+		return &controlHTTPError{statusCode: res.StatusCode, err: errors.New(apiError(raw))}
+	}
+	return nil
+}

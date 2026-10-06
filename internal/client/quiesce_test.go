@@ -1,0 +1,60 @@
+package client
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/lydakis/errand/internal/proto"
+)
+
+func TestQuiesceRunner(t *testing.T) {
+	jobs, token := 0, ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v0/setup/quiesce" {
+			http.NotFound(w, r)
+			return
+		}
+		switch {
+		case r.Method == http.MethodPost && (jobs > 0 || token != ""):
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(proto.APIError{Error: "runner has active jobs (1 running)"})
+		case r.Method == http.MethodPost:
+			token = "hold"
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(proto.SetupQuiesce{Token: token})
+		case r.Method == http.MethodDelete:
+			var req proto.SetupQuiesceRelease
+			if json.NewDecoder(r.Body).Decode(&req) != nil || req.Token != token {
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(proto.APIError{Error: "setup quiesce token does not match"})
+				return
+			}
+			token = ""
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}))
+	defer server.Close()
+	ctx := context.Background()
+	jobs = 1
+	if _, err := QuiesceRunner(ctx, server.URL); !errors.Is(err, ErrRunnerNotIdle) {
+		t.Fatalf("busy runner: %v", err)
+	}
+	jobs = 0
+	got, err := QuiesceRunner(ctx, server.URL)
+	if err != nil || got != "hold" {
+		t.Fatalf("idle runner: %q %v", got, err)
+	}
+	if _, err := QuiesceRunner(ctx, server.URL); !errors.Is(err, ErrRunnerNotIdle) {
+		t.Fatalf("held runner: %v", err)
+	}
+	if err := ResumeRunner(ctx, server.URL, "other"); err == nil {
+		t.Fatal("resumed with another token")
+	}
+	if err := ResumeRunner(ctx, server.URL, got); err != nil || token != "" {
+		t.Fatalf("resume: %v", err)
+	}
+}
