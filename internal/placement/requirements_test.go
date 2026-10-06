@@ -81,6 +81,12 @@ func TestGPURequirements(t *testing.T) {
 			t.Errorf("accepted %q", s)
 		}
 	}
+	if q, _ := Parse("*"); !q.Any() {
+		t.Fatal("* must be the wildcard")
+	}
+	if q, _ := Parse("gpu"); q.Any() {
+		t.Fatal("gpu is a requirement")
+	}
 	if got := DescribeGPUs(f.GPUs); got != "2x NVIDIA H100 80GB HBM3 (80 GiB), 1x NVIDIA GeForce RTX 4090 (24 GiB)" {
 		t.Fatalf("describe: %q", got)
 	}

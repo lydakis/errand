@@ -34,7 +34,8 @@ func (c Client) SSHRemoteCommand(name string) string {
 	if name == "" {
 		name = c.DefaultPeer
 	}
-	return c.Peers[name].RemoteCommand
+	p, _, _ := c.peer(name)
+	return p.RemoteCommand
 }
 
 // SSHRemoteSocket returns the daemon Unix socket for an SSH peer. An empty
@@ -43,7 +44,8 @@ func (c Client) SSHRemoteSocket(name string) string {
 	if name == "" {
 		name = c.DefaultPeer
 	}
-	return c.Peers[name].RemoteSocket
+	p, _, _ := c.peer(name)
+	return p.RemoteSocket
 }
 
 type Client struct {
@@ -120,7 +122,10 @@ func (c Client) PeerURL(name string) (string, error) {
 	if name == "" {
 		return "", fmt.Errorf("no peer named and no default_peer configured")
 	}
-	p, ok := c.Peers[name]
+	p, ok, err := c.peer(name)
+	if err != nil {
+		return "", fmt.Errorf("peer %q: %w", name, err)
+	}
 	if name == "local" || p.Socket != "" {
 		if p.URL != "" || p.SSH != "" || p.RemoteCommand != "" || p.RemoteSocket != "" {
 			if name == "local" {
@@ -189,6 +194,7 @@ type Daemon struct {
 	Socket           string      `toml:"socket"`
 	Cache            DaemonCache `toml:"cache"`
 	NamedCache       DaemonCache `toml:"named_cache"`
+	Cloud            DaemonCloud `toml:"cloud"`
 
 	// MaxJobs defaults to 1. MaxQueued defaults to 8; zero disables queueing.
 	MaxJobs   int `toml:"max_jobs"`
@@ -277,6 +283,9 @@ func LoadDaemon(path string) (Daemon, error) {
 	}
 	if d.MaxQueued < 0 {
 		return d, fmt.Errorf("max_queued must not be negative")
+	}
+	if _, err := d.Cloud.Broker(); err != nil {
+		return d, err
 	}
 	return d, nil
 }

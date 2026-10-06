@@ -27,6 +27,9 @@ const (
 	ActionForwardOwn = "forward-own"
 	ActionCaches     = "manage-caches"
 	ActionGCJobs     = "gc-own"
+	// ActionLease acquires and releases cloud capacity. It is separate from
+	// submit because a lease can cost money.
+	ActionLease = "lease"
 
 	ErrorCodeSnapshotCacheMiss = "snapshot_cache_miss"
 
@@ -502,6 +505,81 @@ type Info struct {
 	MaxJobs      int   `json:"max_jobs"`
 	MaxQueued    int   `json:"max_queued"`
 	Facts        Facts `json:"facts"`
+	// Offers are machine shapes this runner can lease on demand. Leases are
+	// the caller's leases that may still hold a machine, without progress;
+	// clients find their leased machines here and keep no list of their own.
+	Offers []Offer `json:"offers,omitempty"`
+	Leases []Lease `json:"leases,omitempty"`
+}
+
+// Offer is a machine shape a cloud peer can acquire. Its facts are declared
+// in configuration; a leased machine's measured facts must still match.
+type Offer struct {
+	Name           string  `json:"name"`
+	Facts          Facts   `json:"facts"`
+	PricePerHour   float64 `json:"price_per_hour,omitempty"` // USD, as configured
+	IdleTimeoutSec int64   `json:"idle_timeout_sec"`
+	MaxLifetimeSec int64   `json:"max_lifetime_sec"`
+}
+
+const (
+	LeaseLaunching = "launching"
+	LeaseReady     = "ready"
+	LeaseReleasing = "releasing"
+	LeaseReleased  = "released"
+	LeaseFailed    = "failed"
+)
+
+type LeaseRequest struct {
+	// RequestID is a ULID the client makes. Sending the same request again,
+	// as a client that lost the answer does, returns the same lease.
+	RequestID string `json:"request_id"`
+	Where     string `json:"where"`
+	// SSHKey is the caller's SSH public key. A leased machine reached over
+	// SSH admits only the key of the client that asked for it.
+	SSHKey string `json:"ssh_key,omitempty"`
+}
+
+// LeaseTarget says how to reach a leased runner, with the same fields and
+// rules as a remote personal peer entry. Local sockets are not accepted: a
+// cloud peer must not be able to point a client at its own machine.
+type LeaseTarget struct {
+	URL           string `json:"url,omitempty"`
+	SSH           string `json:"ssh,omitempty"`
+	RemoteCommand string `json:"remote_command,omitempty"`
+	RemoteSocket  string `json:"remote_socket,omitempty"`
+	// HostKey pins an ssh target's host key ("ssh-ed25519 AAAA..."), so
+	// clients need no known_hosts entry for a machine that just booted.
+	HostKey string `json:"host_key,omitempty"`
+}
+
+type Lease struct {
+	ID     string       `json:"id"`
+	Offer  string       `json:"offer"`
+	Where  string       `json:"where"`
+	State  string       `json:"state"`
+	Target *LeaseTarget `json:"target,omitempty"`
+	// SSHKey is the client key a machine reached over SSH admits, so a
+	// client can tell which of its leases it can use itself.
+	SSHKey string `json:"ssh_key,omitempty"`
+	// Shared, in the answer to a lease request or a withdrawal, marks a
+	// lease other runs still hold.
+	Shared     bool      `json:"shared,omitempty"`
+	Facts      *Facts    `json:"facts,omitempty"` // measured once ready
+	Progress   []string  `json:"progress,omitempty"`
+	Error      string    `json:"error,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	ReadyAt    time.Time `json:"ready_at,omitzero"`
+	ReleasedAt time.Time `json:"released_at,omitzero"`
+	// ExpiresAt is the hard stop from the offer's max lifetime. IdleUntil
+	// is when an idle ready lease will be released unless work arrives.
+	ExpiresAt time.Time `json:"expires_at"`
+	IdleUntil time.Time `json:"idle_until,omitzero"`
+}
+
+// Active reports whether the lease may still hold a machine.
+func (l Lease) Active() bool {
+	return l.State == LeaseLaunching || l.State == LeaseReady || l.State == LeaseReleasing
 }
 
 type Event struct {

@@ -11,10 +11,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/lydakis/errand/internal/cloud"
 	"github.com/lydakis/errand/internal/proto"
 )
 
@@ -737,6 +740,194 @@ func TestTailscaleOnlyKeepsLocalControlButDisablesSSHJobs(t *testing.T) {
 			if err := json.Unmarshal(out.Body.Bytes(), &info); err != nil || !info.SSHDisabled {
 				t.Fatalf("missing transport state: %v / %+v", err, info)
 			}
+		}
+	}
+}
+
+// A leased runner admits its requester for every action, so lease alone does
+// not let a caller rent one.
+func TestLeaseAcquireNeedsSubmit(t *testing.T) {
+	d := &Daemon{}
+	for _, tc := range []struct {
+		actions map[string]bool
+		want    int
+	}{
+		{map[string]bool{proto.ActionLease: true}, http.StatusForbidden},
+		{map[string]bool{proto.ActionLease: true, proto.ActionSubmit: true}, http.StatusNotFound}, // past the check; no offers here
+	} {
+		w := httptest.NewRecorder()
+		d.handleLeaseAcquire(w, httptest.NewRequest(http.MethodPost, "/v0/leases", strings.NewReader(`{}`)), Identity{Login: "someone@github", Actions: tc.actions})
+		if w.Code != tc.want {
+			t.Errorf("actions %v: %d %q, want %d", tc.actions, w.Code, w.Body.String(), tc.want)
+		}
+	}
+}
+
+// Clients forget lease peers a cloud peer with offers does not list, so a
+// caller that cannot see its lease IDs must not see offers either.
+func TestInfoShowsOffersOnlyWithLeaseIDs(t *testing.T) {
+	d, err := New(Config{StateDir: t.TempDir(), InsecureNoAuth: true, Version: "test", GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: &cloud.Config{
+		Offers: []cloud.Offer{{Name: "x", Provider: cloud.CommandProvider{AcquireCommand: []string{"/bin/false"}, ReleaseCommand: []string{"/bin/true"}}, IdleTimeout: time.Minute, MaxLifetime: time.Minute}},
+		Probe:  func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) { return proto.Info{}, nil },
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	for _, tc := range []struct {
+		actions map[string]bool
+		offers  int
+	}{
+		{map[string]bool{proto.ActionSubmit: true}, 0},
+		{map[string]bool{proto.ActionSubmit: true, proto.ActionLease: true}, 1},
+	} {
+		w := httptest.NewRecorder()
+		d.handleInfo(w, httptest.NewRequest(http.MethodGet, "/v0/info", nil), Identity{Login: "someone@github", Actions: tc.actions})
+		var info proto.Info
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || len(info.Offers) != tc.offers {
+			t.Errorf("actions %v: %v, %d offers, want %d", tc.actions, err, len(info.Offers), tc.offers)
+		}
+	}
+}
+
+// A leased machine admits its owner for every action, so an owner whose
+// submit action was taken away is not shown where its leases are, and they
+// end at its next request of any kind, even one it is no longer allowed.
+func TestLeasesEndWithoutSubmit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("provider scripts are POSIX shell")
+	}
+	dir := t.TempDir()
+	acquire := filepath.Join(dir, "acquire.sh")
+	os.WriteFile(acquire, []byte("#!/bin/sh\necho 'claimed http://box:7443' >&2\necho '{\"url\":\"http://box:7443\"}'\n"), 0o700)
+	release := filepath.Join(dir, "release.sh")
+	os.WriteFile(release, []byte("#!/bin/sh\n"), 0o700)
+	gpu := []proto.GPU{{Name: "NVIDIA H100 80GB HBM3", MemoryMiB: 81559}}
+	var actions atomic.Pointer[[]string]
+	socket := fakeWhoisSocketHandler(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Tailscale-Version", "1.100.0")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"Node":        map[string]any{"Name": "laptop.tailnet.ts.net.", "StableID": "node-1"},
+			"UserProfile": map[string]any{"ID": 7, "LoginName": "someone@github"},
+			"CapMap": map[string]any{
+				proto.DefaultCapability: []any{map[string]any{"actions": *actions.Load()}},
+			},
+		})
+	}, nil)
+	d, err := New(Config{StateDir: t.TempDir(), TailscaledSocket: socket, Version: "test", GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: &cloud.Config{
+		Offers: []cloud.Offer{{Name: "x", Facts: proto.Facts{GPUs: gpu}, Provider: cloud.CommandProvider{AcquireCommand: []string{acquire}, ReleaseCommand: []string{release}}, IdleTimeout: time.Hour, MaxLifetime: time.Hour}},
+		Probe: func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) {
+			return proto.Info{Facts: proto.Facts{GPUs: gpu}}, nil
+		},
+		ReadyPoll: 10 * time.Millisecond, IdlePoll: 10 * time.Millisecond,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ts := httptest.NewServer(d.Handler())
+	defer ts.Close()
+	owner := Identity{Login: "someone@github", UserID: 7}
+	info := func(granted ...string) (int, proto.Info) {
+		actions.Store(&granted)
+		res, err := ts.Client().Get(ts.URL + "/v0/info")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var info proto.Info
+		json.NewDecoder(res.Body).Decode(&info)
+		return res.StatusCode, info
+	}
+	ready := func() proto.Lease {
+		lease, err := d.broker.Acquire(leaseOwner(owner), owner.Login, "gpu", "", proto.NewULID())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for deadline := time.Now().Add(5 * time.Second); ; {
+			_, got := info(proto.ActionSubmit, proto.ActionLease)
+			for _, l := range got.Leases {
+				if l.ID == lease.ID && l.State == proto.LeaseReady && l.Target != nil {
+					return lease
+				}
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("lease never ready: %+v", got.Leases)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	ended := func(lease proto.Lease, after string) {
+		t.Helper()
+		if l, _ := d.broker.Get(leaseOwner(owner), lease.ID); l.State == proto.LeaseReady {
+			t.Fatalf("lease kept after %s: %+v", after, l)
+		}
+	}
+
+	lease := ready()
+	// The release may already have finished, so the lease need not be listed.
+	code, got := info(proto.ActionLease)
+	if code != http.StatusOK || len(got.Leases) > 1 {
+		t.Fatalf("info with lease only: %d %+v", code, got.Leases)
+	}
+	for _, l := range got.Leases {
+		if l.Target != nil {
+			t.Fatalf("a caller without submit was shown its lease's target: %+v", l)
+		}
+	}
+	ended(lease, "its owner lost submit")
+
+	// Releasing the lease it no longer holds does not show the target either.
+	lease = ready()
+	actions.Store(&[]string{proto.ActionLease})
+	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/v0/leases/"+lease.ID, nil)
+	res, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var released proto.Lease
+	json.NewDecoder(res.Body).Decode(&released)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || released.ID != lease.ID || released.Target != nil || strings.Contains(strings.Join(released.Progress, "\n")+released.Error, "box") {
+		t.Fatalf("release without submit: %d %+v", res.StatusCode, released)
+	}
+	ended(lease, "its owner released it without submit")
+
+	lease = ready()
+	if code, got := info(proto.ActionReadOwn); code != http.StatusOK || len(got.Leases) != 0 {
+		t.Fatalf("info without lease: %d %+v", code, got.Leases)
+	}
+	ended(lease, "its owner lost submit and lease")
+
+	lease = ready()
+	if code, _ := info(); code != http.StatusForbidden {
+		t.Fatalf("info with no grant: %d", code)
+	}
+	ended(lease, "its owner lost every action")
+}
+
+// A web page cannot make a caller's browser lease a machine.
+func TestLeaseAcquireRefusesBrowserRequests(t *testing.T) {
+	d := &Daemon{broker: &cloud.Broker{}}
+	id := Identity{Login: "someone@github", Actions: map[string]bool{proto.ActionLease: true, proto.ActionSubmit: true}}
+	for _, tc := range []struct{ contentType, origin string }{
+		{"text/plain", ""},
+		{"", ""},
+		{"application/x-www-form-urlencoded", ""},
+		{"application/json", "https://attacker.example"},
+	} {
+		r := httptest.NewRequest(http.MethodPost, "/v0/leases", strings.NewReader(`{"where":"gpu"}`))
+		if tc.contentType != "" {
+			r.Header.Set("Content-Type", tc.contentType)
+		}
+		if tc.origin != "" {
+			r.Header.Set("Origin", tc.origin)
+		}
+		w := httptest.NewRecorder()
+		d.handleLeaseAcquire(w, r, id)
+		if w.Code != http.StatusUnsupportedMediaType {
+			t.Errorf("%+v: %d %s", tc, w.Code, w.Body.String())
 		}
 	}
 }

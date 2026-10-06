@@ -69,10 +69,14 @@ var maintenanceHTTP = &http.Client{
 }
 
 type RunOptions struct {
-	Where          string
-	Candidates     []RunTarget     // ordered eligible runners; used only with Where
-	OnSelected     func(RunTarget) // advisory before contacting each selected runner
-	Workspace      string          // explicitly selected existing persistent workspace
+	Where      string
+	Candidates []RunTarget     // ordered eligible runners; used only with Where
+	OnSelected func(RunTarget) // advisory before contacting each selected runner
+	// Resolve, when set, supplies Candidates once local preparation has
+	// succeeded, so a machine is rented only for a run that can start.
+	Resolve        func() ([]RunTarget, error)
+	claim          *Claim // the current target's, settled by the attempt
+	Workspace      string // explicitly selected existing persistent workspace
 	workspaceID    string
 	Caches         []proto.CacheBinding
 	Artifacts      []string
@@ -171,38 +175,57 @@ func runWithDetachNotifications(
 	}
 	defer forwarding.Close()
 	var prep *snapshotPreparation
+	prepare := func(opts RunOptions) (int, bool) {
+		prepared := make(chan snapshotPreparation, 1)
+		go func() {
+			if opts.Workspace != "" {
+				prepared <- prepareWorkspaceRun(opts)
+				return
+			}
+			prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot, opts.Caches...)
+		}()
+		var preparedSnapshot snapshotPreparation
+		select {
+		case <-sigCh:
+			errf("interrupted before submission")
+			return signalExit("interrupt", 2), false
+		case preparedSnapshot = <-prepared:
+		}
+		if preparedSnapshot.err != nil {
+			errf("%s: %v", preparedSnapshot.stage, preparedSnapshot.err)
+			return ExitTransaction, false
+		}
+		prep = &preparedSnapshot
+		files, snapshotBytes := snapshotSize(prep.manifest)
+		if opts.Workspace != "" {
+			fmt.Fprintf(opts.Stderr, "errand: using persistent workspace %s; local files are not uploaded\n", opts.Workspace)
+		} else if opts.NoSnapshot {
+			fmt.Fprintln(opts.Stderr, "errand: no snapshot; using an empty remote workspace")
+		} else {
+			fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
+		}
+		return 0, true
+	}
+	if opts.Resolve != nil {
+		// A persistent workspace is read from its runner, so only a
+		// snapshot can be prepared before there is one.
+		if opts.Workspace == "" {
+			if code, ok := prepare(opts); !ok {
+				return code
+			}
+		}
+		candidates, err := opts.Resolve()
+		if err != nil {
+			errf("%v", err)
+			return ExitTransaction
+		}
+		opts.Candidates = candidates
+	}
 	return tryCandidates(opts, func(attempt RunOptions) (int, bool) {
 		if prep == nil {
-			opts := attempt
-			prepared := make(chan snapshotPreparation, 1)
-			go func() {
-				if opts.Workspace != "" {
-					prepared <- prepareWorkspaceRun(opts)
-					return
-				}
-				prepared <- prepareSnapshot(opts.Root, opts.IncludeAll, opts.NoSnapshot, opts.Caches...)
-			}()
-			var preparedSnapshot snapshotPreparation
-			select {
-			case <-sigCh:
-				errf("interrupted before submission")
-				return signalExit("interrupt", 2), false
-			case preparedSnapshot = <-prepared:
+			if code, ok := prepare(attempt); !ok {
+				return code, false
 			}
-			if preparedSnapshot.err != nil {
-				errf("%s: %v", preparedSnapshot.stage, preparedSnapshot.err)
-				return ExitTransaction, false
-			}
-			prep = &preparedSnapshot
-			files, snapshotBytes := snapshotSize(prep.manifest)
-			if opts.Workspace != "" {
-				fmt.Fprintf(opts.Stderr, "errand: using persistent workspace %s; local files are not uploaded\n", opts.Workspace)
-			} else if opts.NoSnapshot {
-				fmt.Fprintln(opts.Stderr, "errand: no snapshot; using an empty remote workspace")
-			} else {
-				fmt.Fprintf(opts.Stderr, "errand: snapshot contains %d files, %d bytes\n", files, snapshotBytes)
-			}
-
 		}
 		return runPrepared(attempt, *prep, env, envSources, forwarding, sigCh, interruptsControl, detach)
 	})
@@ -226,9 +249,12 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		}
 	}
 	changeStateInitialized := true
-	submissionStarted := false
+	// What became of the job on this runner decides both whether its change
+	// state is discarded and whether a machine held for this run is kept.
+	outcome := notAdmitted
 	defer func() {
-		if changeStateInitialized && !submissionStarted {
+		opts.claim.settle(outcome)
+		if changeStateInitialized && outcome == notAdmitted {
 			if err := discardUnsubmittedChangeState(opts.PeerURL, jobID); err != nil {
 				errf("removing unsubmitted change state: %v", err)
 			}
@@ -335,12 +361,12 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		<-controller.done // release the shared signal channel before a fallback attempt
 	}()
 
-	submissionStarted = true
+	outcome = maybeAdmitted
 	status, admissionUncertain, err := submit(opts, jobID, spec, manifest, plan)
 	if err != nil {
 		errf("%v", err)
 		if !admissionUncertain && submitDefinitelyRejected(err) {
-			submissionStarted = false
+			outcome = notAdmitted
 			stopInterrupts()
 			<-controller.done
 			select {
@@ -358,6 +384,8 @@ func runPrepared(opts RunOptions, prep snapshotPreparation, env, envSources map[
 		errf("the job may have been admitted; handle %s", handle)
 		return ExitTransaction, false
 	}
+	outcome = admitted
+	opts.claim.settle(outcome)
 	if opts.ApplyOnSuccess {
 		if err := confirmAutomaticApplyAdmission(opts.PeerURL, jobID); err != nil {
 			errf("recording automatic apply admission: %v", err)

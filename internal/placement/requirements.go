@@ -23,6 +23,12 @@ type Requirements struct {
 	VRAMGiB  int
 }
 
+// Any reports whether the selector is the bare wildcard, which accepts every
+// eligible runner and must never cause capacity to be rented.
+func (q Requirements) Any() bool {
+	return q.OS == "" && q.Arch == "" && q.CPUs == 0 && !q.KVM && len(q.Tools) == 0 && !q.GPU
+}
+
 func Parse(s string) (Requirements, error) {
 	var q Requirements
 	if s == "*" {
@@ -199,4 +205,13 @@ func LessLoaded(a, b proto.Info) bool {
 		return af
 	}
 	return float64(ac)/float64(a.MaxJobs) < float64(bc)/float64(b.MaxJobs)
+}
+
+// CheaperOffer orders offers for renting: an offer with a price before one
+// without, then the lower price.
+func CheaperOffer(a, b proto.Offer) bool {
+	if (a.PricePerHour > 0) != (b.PricePerHour > 0) {
+		return a.PricePerHour > 0
+	}
+	return a.PricePerHour < b.PricePerHour
 }

@@ -214,7 +214,7 @@ func runAutomaticApplyWorkerContext(ctx context.Context, peerURL, jobID string, 
 }
 
 func restoreSSHEndpoint(state localChangeState) {
-	restoreSSHPeer(state.PeerURL, state.SSHTarget, state.SSHRemoteCommand, state.SSHRemoteSocket)
+	restoreSSHPeer(state.PeerURL, state.SSHTarget, state.SSHRemoteCommand, state.SSHRemoteSocket, state.SSHHostKey, state.SSHIdentities)
 }
 
 func automaticApplyPollDelay(base time.Duration, consecutiveErrors int) time.Duration {

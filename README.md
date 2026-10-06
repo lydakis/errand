@@ -182,6 +182,9 @@ for details.
   ignored output too. [Artifacts and exporting results](docs/USAGE.md#artifacts-and-caches).
 - **Speed up repeat builds:** `errand --cache compiler=target -- cargo test`
   reuses the runner's build cache. [Named caches](docs/NAMED_CACHES.md).
+- **Use a GPU you don't own:** `errand --where gpu=h100 -- python train.py`
+  leases a machine from a cloud peer when none of yours has one (experimental).
+  [Cloud peers](docs/CLOUD.md).
 - **Save recurring choices:** use `.errand.toml` and named profiles, then
   inspect them with `errand config`. [Configuration](docs/CONFIGURATION.md).
 - **Troubleshoot a connection:** run `errand doctor`.
