@@ -748,7 +748,7 @@ func cmdServe(args []string) int {
 	if err != nil {
 		log.Fatalf("errand serve: %v", err)
 	}
-	broker.Probe = probeLeaseTarget
+	broker.Probe, broker.AdmitKeys = probeLeaseTarget, admitLeaseKeys
 	d, err := daemon.New(daemon.Config{
 		Cloud:              broker,
 		ChangeStorage:      client.ChangeStorageStats,

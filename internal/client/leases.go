@@ -115,3 +115,13 @@ func LeaseRefused(err error) bool {
 	}
 	return false
 }
+
+// AdmitLeaseKey asks a cloud peer to let this device into one of its
+// caller's leased machines by sshKey. The answer lists the key in SSHKeys
+// once the machine admits it.
+func AdmitLeaseKey(ctx context.Context, peerURL, id, sshKey string) (proto.Lease, error) {
+	body, _ := json.Marshal(proto.LeaseRequest{SSHKey: sshKey})
+	var lease proto.Lease
+	err := leaseRequest(ctx, http.MethodPost, strings.TrimSuffix(peerURL, "/")+"/v0/leases/"+url.PathEscape(id)+"/ssh-keys", body, &lease)
+	return lease, err
+}

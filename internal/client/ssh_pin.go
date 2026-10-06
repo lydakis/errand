@@ -1,15 +1,22 @@
 package client
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
+	"context"
 	"fmt"
+	"io"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"slices"
 	"strings"
 	"sync"
+	"time"
+
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"github.com/lydakis/errand/internal/limitbuf"
+	"github.com/lydakis/errand/internal/nowindow"
+	"path/filepath"
 )
 
 // sshTrust is what this process was told about one SSH target.
@@ -136,4 +143,33 @@ func writeKnownHosts(path, content string) error {
 		return err
 	}
 	return os.Rename(f.Name(), path)
+}
+
+// RunSSH runs command on target (user@host) with stdin, as one ssh session
+// that trusts only what this process was told about target, if anything.
+// It never prompts.
+func RunSSH(ctx context.Context, target, command string, stdin io.Reader) error {
+	pin, err := sshPinArgs(target)
+	if err != nil {
+		return err
+	}
+	args := append(pin, "-T", "-o", "BatchMode=yes",
+		"-o", fmt.Sprintf("ConnectTimeout=%d", int((peerConnectTimeout+time.Second-1)/time.Second)),
+		"--", target, command)
+	cmd := exec.CommandContext(ctx, "ssh", args...)
+	cmd.Stdin = stdin
+	cmd.WaitDelay = time.Second
+	nowindow.Hide(cmd)
+	// The remote side decides how much it prints, so keep only enough to
+	// explain a failure.
+	stderr := &limitbuf.Buffer{Limit: 4096}
+	cmd.Stdout, cmd.Stderr = io.Discard, stderr
+	err = cmd.Run()
+	if err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("ssh %s: %w: %s", target, err, msg)
+		}
+		return fmt.Errorf("ssh %s: %w", target, err)
+	}
+	return nil
 }

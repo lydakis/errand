@@ -37,6 +37,12 @@ type Offer struct {
 // requirements, as --where selection does.
 type ProbeFunc func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error)
 
+// AdmitFunc adds SSH public keys to the keys a leased machine reached over
+// SSH lets in, connecting with identity (a private key file) when set.
+type AdmitFunc func(ctx context.Context, target proto.LeaseTarget, identity string, keys []string) error
+
+const admitTimeout = 30 * time.Second
+
 type Config struct {
 	StateDir       string // leases are persisted under StateDir/leases
 	Offers         []Offer
@@ -44,6 +50,7 @@ type Config struct {
 	AcquireTimeout time.Duration
 	ReleaseTimeout time.Duration
 	Probe          ProbeFunc
+	AdmitKeys      AdmitFunc
 	// ReadyPoll paces readiness checks while launching; IdlePoll paces idle
 	// checks and release retries.
 	ReadyPoll, IdlePoll time.Duration
@@ -74,6 +81,10 @@ type record struct {
 	// the lease (see "Lease guarantees" in docs/DESIGN.md).
 	Holders []string `json:"holders,omitempty"`
 	Used    bool     `json:"used,omitempty"`
+	// PendingKeys are SSH keys of the owner's devices that asked for the
+	// lease after it was launched, for the worker to add to the machine
+	// once it is ready. Added keys move to SSHKeys.
+	PendingKeys []string `json:"pending_keys,omitempty"`
 	// Release and IdleTimeout are fixed when the lease is made, so the lease
 	// ends the way it was made whatever later happens to its offer.
 	Release       ReleaseSpec     `json:"release"`
@@ -111,8 +122,8 @@ type Broker struct {
 // New starts a broker and a worker for every lease it recorded before. With
 // no offers it leases nothing new but still ends the leases it has.
 func New(cfg Config) (*Broker, error) {
-	if cfg.Probe == nil {
-		return nil, fmt.Errorf("cloud broker needs a runner probe")
+	if cfg.Probe == nil || cfg.AdmitKeys == nil {
+		return nil, fmt.Errorf("cloud broker needs a runner probe and a way to admit SSH keys")
 	}
 	if cfg.MaxLeases <= 0 {
 		cfg.MaxLeases = 2
@@ -234,9 +245,9 @@ func (o *Offer) Offer() proto.Offer {
 
 // Acquire returns the lease an earlier request with the same requestID
 // made, the owner's matching ready or launching lease, or a new one from the
-// first matching offer. login is the caller's tailnet login, when it has
+// cheapest matching offer. login is the caller's tailnet login, when it has
 // one. sshKey is the caller's SSH public key, or empty; a machine reached
-// over SSH admits only that key.
+// over SSH admits the key of each of the owner's devices that asks for it.
 func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.Lease, error) {
 	q, err := placement.Parse(where)
 	if err != nil {
@@ -287,23 +298,23 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 			case !r.Used:
 				r.Holders = append(slices.Clone(r.Holders), requestID)
 			}
+			r.admit(sshKey)
 			return true
 		}, true)
 		if err != nil {
 			return proto.Lease{}, &Error{http.StatusInternalServerError, "recording the lease: " + err.Error()}
 		}
+		b.wakeLocked(l)
 		return l.handed(), nil
 	}
 	for _, l := range b.sorted() {
 		if l.Active() {
 			active++
 		}
-		// The machine admits the login it was launched for, and over SSH the
-		// key. The login can change while the owner (a tailnet user ID)
-		// stays the same, and each machine the owner runs errand from has
-		// its own key. Until a lease is ready its transport is unknown.
-		reachedBySSH := l.Target == nil || l.Target.SSH != ""
-		if l.Owner != owner || l.Login != login || reachedBySSH && l.SSHKey != sshKey {
+		// The machine admits the login it was launched for. The login can
+		// change while the owner (a tailnet user ID) stays the same. Over
+		// SSH, another device of the owner's has its key added.
+		if l.Owner != owner || l.Login != login {
 			continue
 		}
 		switch {
@@ -338,7 +349,7 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	now := time.Now()
 	l := &lease{wake: make(chan struct{}, 1), record: record{
 		Owner: owner, Login: login, Holders: []string{requestID}, Release: offer.Provider.ReleaseSpec(), IdleTimeout: offer.IdleTimeout,
-		Lease: proto.Lease{ID: proto.NewULID(), Offer: offer.Name, Where: where, SSHKey: sshKey, State: proto.LeaseLaunching, CreatedAt: now, ExpiresAt: now.Add(offer.MaxLifetime)},
+		Lease: proto.Lease{ID: proto.NewULID(), Offer: offer.Name, Where: where, SSHKeys: keyList(sshKey), State: proto.LeaseLaunching, CreatedAt: now, ExpiresAt: now.Add(offer.MaxLifetime)},
 	}}
 	l.addProgress("launching " + offer.Name)
 	// Recorded before acquiring, so a crash cannot forget a machine being paid for.
@@ -400,6 +411,31 @@ func (b *Broker) end(owner, id, note string) (proto.Lease, error) {
 	case l.wake <- struct{}{}:
 	default:
 	}
+	return l.view(), nil
+}
+
+// Admit has an active lease of the owner's let in another of the owner's
+// devices by its SSH key, for a device that names the lease rather than
+// asking for a machine. The worker adds the key; the answer lists it in
+// SSHKeys once it has.
+func (b *Broker) Admit(owner, login, id, sshKey string) (proto.Lease, error) {
+	if !ValidSSHPublicKey(sshKey) {
+		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	l := b.leases[id]
+	if l == nil || l.Owner != owner || l.Login != login || !l.Active() {
+		return proto.Lease{}, &Error{http.StatusNotFound, "no active lease of yours has that ID"}
+	}
+	if err := b.applyLocked(l, func(r *record) bool {
+		before := len(r.PendingKeys)
+		r.admit(sshKey)
+		return len(r.PendingKeys) != before
+	}, true); err != nil {
+		return proto.Lease{}, &Error{http.StatusInternalServerError, "recording the key: " + err.Error()}
+	}
+	b.wakeLocked(l)
 	return l.view(), nil
 }
 
@@ -551,7 +587,10 @@ func (b *Broker) launch(l *lease) {
 	deadline := earlier(created.Add(b.cfg.AcquireTimeout), l.ExpiresAt)
 	ctx, cancel := context.WithDeadline(b.ctx, deadline)
 	l.stop = cancel
-	id, where, login, sshKey := l.ID, l.Where, l.Login, l.SSHKey
+	id, where, login, sshKey := l.ID, l.Where, l.Login, ""
+	if len(l.SSHKeys) > 0 {
+		sshKey = l.SSHKeys[0] // the device that asked first
+	}
 	b.mu.Unlock()
 	defer cancel()
 
@@ -658,6 +697,9 @@ func (b *Broker) watch(l *lease) {
 		if r.State != proto.LeaseReady {
 			return
 		}
+		if len(r.PendingKeys) > 0 {
+			b.admitPending(l, r)
+		}
 		busy := time.Now().Before(r.ExpiresAt) && b.busy(l, r)
 		// The probe took time, and requests may have changed the record
 		// meanwhile, so the decision is made against the record as it is
@@ -696,6 +738,44 @@ func (b *Broker) watch(l *lease) {
 	}
 }
 
+// admitPending adds the keys of the owner's devices that asked for a ready
+// lease after its launch to the machine, so they can reach it too. A key
+// that could not be added stays pending for the next check.
+func (b *Broker) admitPending(l *lease, r record) {
+	keys := slices.Clone(r.PendingKeys)
+	if r.Target.SSH != "" {
+		ctx, cancel, ok := b.readyCall(l, r, admitTimeout)
+		if !ok {
+			cancel()
+			return
+		}
+		err := b.cfg.AdmitKeys(ctx, *r.Target, r.Identity, keys)
+		cancel()
+		if err != nil {
+			if b.stopped(l) {
+				return // released meanwhile; nothing to retry
+			}
+			b.note(l, "adding another device's SSH key failed, retrying: "+err.Error())
+			return
+		}
+	}
+	_ = b.update(l, func(r *record) bool {
+		if r.State != proto.LeaseReady {
+			return false
+		}
+		for _, k := range keys {
+			r.PendingKeys = slices.DeleteFunc(slices.Clone(r.PendingKeys), func(p string) bool { return p == k })
+			if r.Target.SSH != "" && !slices.Contains(r.SSHKeys, k) {
+				r.SSHKeys = append(slices.Clone(r.SSHKeys), k)
+			}
+		}
+		if r.Target.SSH != "" {
+			r.addProgress(fmt.Sprintf("admitted %d more of your devices", len(keys)))
+		}
+		return true
+	})
+}
+
 // releaseReason says why a ready lease should be released now, or nothing.
 // busy is whether its machine was just seen with work.
 func (r *record) releaseReason(now time.Time, busy bool) string {
@@ -712,17 +792,30 @@ func (r *record) releaseReason(now time.Time, busy bool) string {
 	return ""
 }
 
+// readyCall bounds a worker's call to a ready lease's machine by timeout and
+// the lease's hard stop, and lets a release cancel it rather than wait for
+// it. ok is false when the lease is no longer ready.
+func (b *Broker) readyCall(l *lease, r record, timeout time.Duration) (ctx context.Context, cancel context.CancelFunc, ok bool) {
+	ctx, cancel = context.WithDeadline(b.ctx, earlier(time.Now().Add(timeout), r.ExpiresAt))
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	l.stop = cancel
+	return ctx, cancel, l.State == proto.LeaseReady
+}
+
+// stopped reports whether a lease is no longer ready.
+func (b *Broker) stopped(l *lease) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return l.State != proto.LeaseReady
+}
+
 // busy reports whether the machine has work, asking no later than the
 // lease's hard stop.
 func (b *Broker) busy(l *lease, r record) bool {
-	ctx, cancel := context.WithDeadline(b.ctx, earlier(time.Now().Add(5*time.Second), r.ExpiresAt))
+	ctx, cancel, ok := b.readyCall(l, r, 5*time.Second)
 	defer cancel()
-	// A release request cancels the probe rather than wait for it.
-	b.mu.Lock()
-	l.stop = cancel
-	stopped := l.State != proto.LeaseReady
-	b.mu.Unlock()
-	if stopped {
+	if !ok {
 		return false
 	}
 	info, err := b.cfg.Probe(ctx, *r.Target, r.Identity, "")
@@ -952,4 +1045,32 @@ func (b *Broker) persist(r *record) error {
 	}
 	defer dir.Close()
 	return durable.Sync(dir)
+}
+
+// admit has the machine let in another of the owner's devices by its SSH
+// key: at once if the machine is not reached over SSH or already admits
+// it, otherwise once the worker has added it.
+func (r *record) admit(sshKey string) {
+	if sshKey == "" || slices.Contains(r.SSHKeys, sshKey) || slices.Contains(r.PendingKeys, sshKey) {
+		return
+	}
+	if r.Target != nil && r.Target.SSH == "" {
+		return
+	}
+	r.PendingKeys = append(slices.Clone(r.PendingKeys), sshKey)
+}
+
+func keyList(sshKey string) []string {
+	if sshKey == "" {
+		return nil
+	}
+	return []string{sshKey}
+}
+
+// wakeLocked has a lease's worker look at it again.
+func (b *Broker) wakeLocked(l *lease) {
+	select {
+	case l.wake <- struct{}{}:
+	default:
+	}
 }

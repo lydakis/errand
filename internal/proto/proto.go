@@ -536,7 +536,7 @@ type LeaseRequest struct {
 	RequestID string `json:"request_id"`
 	Where     string `json:"where"`
 	// SSHKey is the caller's SSH public key. A leased machine reached over
-	// SSH admits only the key of the client that asked for it.
+	// SSH admits the key of each of the owner's devices that asks for it.
 	SSHKey string `json:"ssh_key,omitempty"`
 }
 
@@ -559,9 +559,10 @@ type Lease struct {
 	Where  string       `json:"where"`
 	State  string       `json:"state"`
 	Target *LeaseTarget `json:"target,omitempty"`
-	// SSHKey is the client key a machine reached over SSH admits, so a
-	// client can tell which of its leases it can use itself.
-	SSHKey string `json:"ssh_key,omitempty"`
+	// SSHKeys are the client keys a machine reached over SSH admits: one
+	// for each of the owner's devices that asked for the lease, once the
+	// cloud peer has added it. A client uses a lease once its key is here.
+	SSHKeys []string `json:"ssh_keys,omitempty"`
 	// Shared, in the answer to a lease request or a withdrawal, marks a
 	// lease other runs still hold.
 	Shared     bool      `json:"shared,omitempty"`

@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -76,13 +78,36 @@ func TestLeasePeerNames(t *testing.T) {
 	ready := func(id, ssh string) proto.Lease {
 		return proto.Lease{ID: id, Offer: "h100", State: proto.LeaseReady, Target: &proto.LeaseTarget{SSH: ssh, HostKey: hostKey}}
 	}
+	other := proto.Lease{ID: d, Offer: "h100", State: proto.LeaseReady, SSHKeys: []string{"ssh-ed25519 bWluaQ== errand"}, Target: &proto.LeaseTarget{SSH: "ubuntu@203.0.113.9", HostKey: hostKey}}
+	// Two leases share an ending, and this device is let into only one.
+	e, f := "01JZ0000000000000000AEE11A", "01JZ0000000000000000BEE11A"
+	otherF := other
+	otherF.ID = f
+	var admitted atomic.Value
+	admitted.Store("")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/v0/leases/"+d+"/ssh-keys" {
+			var req proto.LeaseRequest
+			json.NewDecoder(r.Body).Decode(&req)
+			admitted.Store(req.SSHKey)
+			json.NewEncoder(w).Encode(other)
+			return
+		}
+		if r.URL.Path == "/v0/leases/"+d {
+			admittedOther := other
+			admittedOther.SSHKeys = append(slices.Clone(other.SSHKeys), admitted.Load().(string))
+			json.NewEncoder(w).Encode(admittedOther)
+			return
+		}
 		json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, Leases: []proto.Lease{
 			ready(a, "ubuntu@203.0.113.7"), ready(b, "ubuntu@203.0.113.8"),
 			{ID: c, Offer: "h100", State: proto.LeaseLaunching},
-			// Leased from another of the owner's machines, whose key this
+			// Leased from another of the owner's devices, whose key this
 			// one does not have.
-			{ID: d, Offer: "h100", State: proto.LeaseReady, SSHKey: "ssh-ed25519 bWluaQ== errand", Target: &proto.LeaseTarget{SSH: "ubuntu@203.0.113.9", HostKey: hostKey}},
+			other,
+			ready(e, "ubuntu@203.0.113.10"), otherF,
+			// Not a lease ID; a peer must not get it printed.
+			ready("\x1b]0;owned\a000000000000000BAD", "ubuntu@203.0.113.11"),
 		}})
 	}))
 	defer srv.Close()
@@ -95,16 +120,20 @@ func TestLeasePeerNames(t *testing.T) {
 	// The shortest ending that is not taken by another lease or a
 	// configured peer; a launching lease, or one for another client's key,
 	// is not a peer here.
-	if want := []string{"cloud-0a7f3a", "cloud-b7f3a"}; !slices.Equal(names, want) {
+	if want := []string{"cloud-0a7f3a", "cloud-b7f3a", "cloud-aee11a"}; !slices.Equal(names, want) {
 		t.Fatalf("names %q, want %q", names, want)
 	}
 	if peer, ok, err := findLeasePeer(cfg, "cloud-b7f3a"); err != nil || !ok || peer.SSH != "ubuntu@203.0.113.8" {
 		t.Fatalf("found %+v %v %v", peer, ok, err)
 	}
-	for name, want := range map[string]string{"cloud-7f3a": "more than one lease", "cloud-00cc": "no ready lease of yours", "cloud-00dd": "no ready lease of yours"} {
+	for name, want := range map[string]string{"cloud-7f3a": "more than one lease", "cloud-00cc": "no ready lease of yours", "cloud-ee11a": "more than one lease", "cloud-0bad": "no ready lease of yours"} {
 		if _, _, err := findLeasePeer(cfg, name); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+	// Naming a lease another device asked for lets this one in.
+	if peer, ok, err := findLeasePeer(cfg, "cloud-00dd"); err != nil || !ok || peer.SSH != "ubuntu@203.0.113.9" || !strings.HasPrefix(admitted.Load().(string), "ssh-ed25519 ") {
+		t.Fatalf("other device's lease: %+v %v %v (sent %q)", peer, ok, err, admitted.Load())
 	}
 	// A cloud peer whose offers were removed still lists the leases it
 	// has left.
@@ -232,5 +261,41 @@ func TestLeaseFallsBackOnlyAfterARefusal(t *testing.T) {
 		if err == nil || (asked.Load() == 1) != tc.fallBack {
 			t.Fatalf("%d: asked the next supplier %d times: %v", tc.status, asked.Load(), err)
 		}
+	}
+}
+
+// A cloud peer lets another device in by adding its key to the leased
+// login's authorized_keys over SSH, once.
+func TestAdmitLeaseKeysAppendsEachKeyOnce(t *testing.T) {
+	home, bin := t.TempDir(), t.TempDir()
+	// Stands in for ssh: runs the remote command locally as the login.
+	script := "#!/bin/sh\nfor last; do :; done\nHOME=" + home + " exec sh -c \"$last\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	const mac, mini = "ssh-ed25519 bWFj errand", "ssh-ed25519 bWluaQ== errand"
+	target := proto.LeaseTarget{SSH: "ubuntu@box"}
+	for range 2 {
+		if err := admitLeaseKeys(context.Background(), target, "", []string{mac, mini}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := os.ReadFile(filepath.Join(home, ".ssh", "authorized_keys"))
+	if err != nil || string(got) != mac+"\n"+mini+"\n" {
+		t.Fatalf("authorized_keys %q %v", got, err)
+	}
+	// A hand-edited file whose last line has no newline keeps that line.
+	const air = "ssh-ed25519 YWly errand"
+	os.WriteFile(filepath.Join(home, ".ssh", "authorized_keys"), []byte(mac), 0o600)
+	if err := admitLeaseKeys(context.Background(), target, "", []string{air}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(home, ".ssh", "authorized_keys")); string(got) != mac+"\n"+air+"\n" {
+		t.Fatalf("authorized_keys %q", got)
+	}
+	if info, err := os.Stat(filepath.Join(home, ".ssh", "authorized_keys")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v %v", info.Mode(), err)
 	}
 }

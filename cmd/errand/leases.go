@@ -32,6 +32,10 @@ type leaseOption struct {
 
 var leasePollInterval = time.Second
 
+// leaseAdmitWait bounds how long a device waits for a cloud peer to add its
+// key to a ready machine: a few tries of one SSH command.
+var leaseAdmitWait = 2 * time.Minute
+
 func init() { config.FindLeasePeer = findLeasePeer }
 
 const leaseRequestTimeout = 30 * time.Second
@@ -78,9 +82,9 @@ func leasePeersOf(cfg config.Client, broker string, info proto.Info) []leasePeer
 		if l.State != proto.LeaseReady || l.Target == nil || !proto.ValidULID(l.ID) {
 			continue
 		}
-		// A machine reached over SSH admits only the key of the client
-		// that leased it, which may be another of the owner's machines.
-		if l.Target.SSH != "" && l.SSHKey != "" && l.SSHKey != publicKey {
+		// A machine reached over SSH lets in a device of the owner's only
+		// once the cloud peer added its key.
+		if !admits(l, publicKey) {
 			continue
 		}
 		peer, err := leaseTargetPeer(*l.Target, identity)
@@ -90,6 +94,23 @@ func leasePeersOf(cfg config.Client, broker string, info proto.Info) []leasePeer
 		out = append(out, leasePeer{Name: leasePeerName(cfg, broker, l.ID, ids), Broker: broker, Lease: l, Peer: peer})
 	}
 	return out
+}
+
+// admits reports whether a ready lease lets in the device with publicKey.
+func admits(l proto.Lease, publicKey string) bool {
+	return l.Target == nil || l.Target.SSH == "" || len(l.SSHKeys) == 0 || slices.Contains(l.SSHKeys, publicKey)
+}
+
+// admitLeaseKeys lets more of a lease owner's devices into a machine reached
+// over SSH, for a cloud peer. Each key goes on its own line of the login's
+// authorized_keys, once.
+func admitLeaseKeys(ctx context.Context, t proto.LeaseTarget, identity string, keys []string) error {
+	if _, err := leaseTargetPeer(t, identity); err != nil {
+		return err
+	}
+	// A last line without its newline would swallow the first added key.
+	const script = `umask 077 && mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && { [ ! -s ~/.ssh/authorized_keys ] || [ -z "$(tail -c 1 ~/.ssh/authorized_keys)" ] || echo >> ~/.ssh/authorized_keys; } && while IFS= read -r key; do grep -qxF "$key" ~/.ssh/authorized_keys || printf '%s\n' "$key" >> ~/.ssh/authorized_keys || exit 1; done`
+	return client.RunSSH(ctx, t.SSH, script, strings.NewReader(strings.Join(keys, "\n")+"\n"))
 }
 
 // leasePeerName names a lease after its cloud peer and the end of its ID,
@@ -154,19 +175,68 @@ func leasePeerNamed(cfg config.Client, name string) (leasePeer, bool, error) {
 	if err != nil {
 		return leasePeer{}, false, fmt.Errorf("asking %s for your leases: %w", broker, err)
 	}
-	var found []leasePeer
+	// The name is matched against every ready lease, including ones this
+	// device is not let into yet, so it never stands for one of two.
+	var match *proto.Lease
+	for i, l := range info.Leases {
+		if l.State != proto.LeaseReady || !proto.ValidULID(l.ID) || !strings.HasSuffix(strings.ToLower(l.ID), suffix) {
+			continue
+		}
+		if match != nil {
+			return leasePeer{}, false, fmt.Errorf("more than one lease on %s ends in %s; use a longer name", broker, suffix)
+		}
+		match = &info.Leases[i]
+	}
+	if match == nil {
+		return leasePeer{}, false, fmt.Errorf("%s has no ready lease of yours whose ID ends in %s; see errand leases", broker, suffix)
+	}
 	for _, lp := range leasePeersOf(cfg, broker, info) {
-		if strings.HasSuffix(strings.ToLower(lp.Lease.ID), suffix) {
-			found = append(found, lp)
+		if lp.Lease.ID == match.ID {
+			return lp, true, nil
 		}
 	}
-	switch len(found) {
-	case 0:
-		return leasePeer{}, false, fmt.Errorf("%s has no ready lease of yours whose ID ends in %s; see errand leases", broker, suffix)
-	case 1:
-		return found[0], true, nil
+	if _, publicKey := clientLeaseIdentity(); admits(*match, publicKey) {
+		return leasePeer{}, false, fmt.Errorf("lease %s has an unusable target", match.ID)
 	}
-	return leasePeer{}, false, fmt.Errorf("more than one lease on %s ends in %s; use a longer name", broker, suffix)
+	// One of the owner's other devices asked for it: this one is let in by
+	// naming it.
+	return admitThisDevice(cfg, broker, target, match.ID, info)
+}
+
+// admitThisDevice asks a cloud peer to let this device into the owner's
+// ready lease id, and waits until it has.
+func admitThisDevice(cfg config.Client, broker, target, id string, info proto.Info) (leasePeer, bool, error) {
+	keyFile, err := leaseKeyFile()
+	if err != nil {
+		return leasePeer{}, false, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), leaseAdmitWait)
+	defer cancel()
+	sshKey, err := client.EnsureSSHKey(ctx, keyFile, "errand")
+	if err != nil {
+		return leasePeer{}, false, err
+	}
+	fmt.Fprintf(os.Stderr, "errand: asking %s to let this device into lease %s\n", terminalSafeField(broker), id)
+	lease, err := client.AdmitLeaseKey(ctx, target, id, sshKey)
+	for err == nil && lease.State == proto.LeaseReady && !admits(lease, sshKey) {
+		select {
+		case <-ctx.Done():
+			return leasePeer{}, false, fmt.Errorf("%s has not let this device into lease %s after %s (errand leases shows why)", broker, id, leaseAdmitWait)
+		case <-time.After(leasePollInterval):
+		}
+		lease, err = client.GetLease(ctx, target, id)
+	}
+	if err != nil {
+		return leasePeer{}, false, fmt.Errorf("letting this device into lease %s: %w", id, err)
+	}
+	if lease.State != proto.LeaseReady {
+		return leasePeer{}, false, fmt.Errorf("lease %s is %s", id, lease.State)
+	}
+	info.Leases = []proto.Lease{lease}
+	for _, lp := range leasePeersOf(cfg, broker, info) {
+		return lp, true, nil
+	}
+	return leasePeer{}, false, fmt.Errorf("lease %s has an unusable target", id)
 }
 
 // leaseTargetPeer is the peer entry for a lease target. The host key of an
@@ -229,7 +299,7 @@ func leaseRunner(options []leaseOption, where string, stderr io.Writer) (placeme
 		}
 		fmt.Fprintf(stderr, "errand: %v\n", err)
 	}
-	choice, err := followLease(ctx, broker, lease, where, keyFile, stderr)
+	choice, err := followLease(ctx, broker, lease, where, keyFile, sshKey, stderr)
 	if err != nil {
 		outcome := withdrawLease(broker, requestID, lease.ID)
 		if ctx.Err() != nil {
@@ -243,10 +313,12 @@ func leaseRunner(options []leaseOption, where string, stderr io.Writer) (placeme
 	return choice, claim, nil
 }
 
-// followLease waits until a lease is ready and this machine reaches it.
-func followLease(ctx context.Context, broker placementChoice, lease proto.Lease, where, keyFile string, stderr io.Writer) (placementChoice, error) {
+// followLease waits until a lease is ready, lets this device in, and this
+// device reaches it.
+func followLease(ctx context.Context, broker placementChoice, lease proto.Lease, where, keyFile, sshKey string, stderr io.Writer) (placementChoice, error) {
 	brokerName := terminalSafeField(broker.Name)
 	shown := 0
+	var admitBy time.Time
 	if lease.State == proto.LeaseReady {
 		// An existing lease of yours already matches; its history is old news.
 		shown = len(lease.Progress)
@@ -256,8 +328,16 @@ func followLease(ctx context.Context, broker placementChoice, lease proto.Lease,
 		for ; shown < len(lease.Progress); shown++ {
 			fmt.Fprintf(stderr, "errand: %s: %s\n", brokerName, terminalSafeField(lease.Progress[shown]))
 		}
-		if lease.State != proto.LeaseLaunching {
+		if lease.State != proto.LeaseLaunching && (lease.State != proto.LeaseReady || admits(lease, sshKey)) {
 			break
+		}
+		if lease.State == proto.LeaseReady {
+			if admitBy.IsZero() {
+				admitBy = time.Now().Add(leaseAdmitWait)
+				fmt.Fprintf(stderr, "errand: %s: waiting for lease %s to let this device in\n", brokerName, lease.ID)
+			} else if time.Now().After(admitBy) {
+				return placementChoice{}, fmt.Errorf("lease %s from %s has not let this device in after %s (errand leases shows why)", lease.ID, broker.Name, leaseAdmitWait)
+			}
 		}
 		select {
 		case <-ctx.Done():
