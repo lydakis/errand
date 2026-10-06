@@ -931,6 +931,7 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 		Probe: func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
 			return machine.probe(ctx, proto.LeaseTarget{URL: "http://box:7443"}, identity, where)
 		},
+		AdmitKeys: machine.admit,
 		ReadyPoll: time.Millisecond,
 		IdlePoll:  time.Hour,
 	})
