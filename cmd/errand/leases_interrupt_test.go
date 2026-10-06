@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -80,6 +81,8 @@ func TestLeasePeerNames(t *testing.T) {
 	other := proto.Lease{ID: d, Offer: "h100", State: proto.LeaseReady, SSHKeys: []string{"ssh-ed25519 bWluaQ== errand"}, Target: &proto.LeaseTarget{SSH: "ubuntu@203.0.113.9", HostKey: hostKey}}
 	// Two leases share an ending, and this device is let into only one.
 	e, f := "01JZ0000000000000000AEE11A", "01JZ0000000000000000BEE11A"
+	// Another lease shares the end of d's ID, so d's peer needs a longer name.
+	g := "01JZ00000000000000000100DD"
 	otherF := other
 	otherF.ID = f
 	var admitted atomic.Value
@@ -101,6 +104,7 @@ func TestLeasePeerNames(t *testing.T) {
 		json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, Leases: []proto.Lease{
 			ready(a, "ubuntu@203.0.113.7"), ready(b, "ubuntu@203.0.113.8"),
 			{ID: c, Offer: "h100", State: proto.LeaseLaunching},
+			{ID: g, Offer: "h100", State: proto.LeaseLaunching},
 			// Leased from another of the owner's devices, whose key this
 			// one does not have.
 			other,
@@ -130,9 +134,10 @@ func TestLeasePeerNames(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	// Naming a lease another device asked for lets this one in.
-	if peer, ok, err := findLeasePeer(cfg, "cloud-00dd"); err != nil || !ok || peer.SSH != "ubuntu@203.0.113.9" || !strings.HasPrefix(admitted.Load().(string), "ssh-ed25519 ") {
-		t.Fatalf("other device's lease: %+v %v %v (sent %q)", peer, ok, err, admitted.Load())
+	// Naming a lease another device asked for lets this one in, under a
+	// name that tells it apart from all the cloud peer's leases.
+	if lp, ok, err := leasePeerNamed(cfg, "cloud-00dd"); err != nil || !ok || lp.Peer.SSH != "ubuntu@203.0.113.9" || lp.Name != "cloud-000dd" || !strings.HasPrefix(admitted.Load().(string), "ssh-ed25519 ") {
+		t.Fatalf("other device's lease: %+v %v %v (sent %q)", lp, ok, err, admitted.Load())
 	}
 	// A cloud peer whose offers were removed still lists the leases it
 	// has left.
@@ -258,6 +263,42 @@ func TestLeaseFallsBackOnlyAfterARefusal(t *testing.T) {
 		if err == nil || (asked.Load() == 1) != tc.fallBack {
 			t.Fatalf("%d: asked the next supplier %d times: %v", tc.status, asked.Load(), err)
 		}
+	}
+}
+
+// A lease target over SSH without a host key is reached with the user's
+// known_hosts, and still offers this device's errand key, which is the key
+// the machine was told to admit.
+func TestLeaseIdentityWithoutHostKey(t *testing.T) {
+	bin, out := t.TempDir(), filepath.Join(t.TempDir(), "args")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + out + "\n"
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	identity := filepath.Join(t.TempDir(), "errand_ed25519")
+	// Trust lasts for the process, so each run uses a host of its own.
+	target := proto.LeaseTarget{SSH: fmt.Sprintf("ubuntu@lease-%d", time.Now().UnixNano())}
+	if _, err := leaseTargetPeer(target, identity); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.RunSSH(context.Background(), target.SSH, "true", nil); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(out)
+	args := strings.Split(strings.TrimSpace(string(got)), "\n")
+	if i := slices.Index(args, "-i"); i < 0 || i+1 >= len(args) || args[i+1] != identity || slices.Contains(args, "StrictHostKeyChecking=yes") {
+		t.Fatalf("ssh args %q", args)
+	}
+}
+
+// A device whose public key lost its comment, as one rebuilt from the
+// private key does, is still the device a lease admits.
+func TestLeaseAdmitsKeyWithoutComment(t *testing.T) {
+	l := proto.Lease{State: proto.LeaseReady, Target: &proto.LeaseTarget{SSH: "ubuntu@box"}, SSHKeys: []string{"ssh-ed25519 bWFj errand"}}
+	if !admits(l, "ssh-ed25519 bWFj") || admits(l, "ssh-ed25519 bWluaQ==") {
+		t.Fatal("keys compared with their comments")
 	}
 }
 

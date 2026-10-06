@@ -605,9 +605,6 @@ func TestLambdaRefusals(t *testing.T) {
 // The cloud peer makes its own key on first use and adds it to the Lambda
 // account once; a key the account already has is used under its name.
 func TestLambdaRegistersOwnKey(t *testing.T) {
-	if _, err := exec.LookPath("ssh-keygen"); err != nil {
-		t.Skip("no ssh-keygen")
-	}
 	p, api, _ := newLambda(t)
 	p.Keygen = nil
 	ctx := context.Background()
@@ -960,9 +957,6 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 }
 
 func TestLambdaHostKeyGenerator(t *testing.T) {
-	if _, err := exec.LookPath("ssh-keygen"); err != nil {
-		t.Skip("no ssh-keygen")
-	}
 	private, public, err := (&LambdaProvider{}).hostKey()(context.Background())
 	if err != nil {
 		t.Fatal(err)

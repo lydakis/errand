@@ -41,25 +41,24 @@ type sshRoundTripper struct {
 	transports            sync.Map
 }
 
+// sshTransportKey names a pool of connections. A connection is reused only
+// for requests that would open it the same way, trusting the same host key
+// and offering the same identities.
 type sshTransportKey struct {
 	target  string
 	command string
 	socket  string
+	trust   string
 }
 
 func (rt *sshRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	endpoint := sshEndpointForRequest(req.URL)
-	key := sshTransportKey{target: endpoint.target, command: endpoint.command, socket: endpoint.socket}
-	value, _ := rt.transports.LoadOrStore(key, &http.Transport{
-		Proxy: nil,
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return dialSSHConnection(ctx, endpoint.target, sshRemoteInvocation(endpoint))
-		},
-		ResponseHeaderTimeout: rt.responseHeaderTimeout,
-		DisableCompression:    true,
-		MaxIdleConnsPerHost:   4,
-		IdleConnTimeout:       90 * time.Second,
-	})
+	trust, _ := sshTrustFor(endpoint.target)
+	key := sshTransportKey{target: endpoint.target, command: endpoint.command, socket: endpoint.socket, trust: trust.poolKey()}
+	value, ok := rt.transports.Load(key)
+	if !ok {
+		value, _ = rt.transports.LoadOrStore(key, rt.newTransport(endpoint, trust))
+	}
 	inner := value.(*http.Transport)
 
 	clone := req.Clone(req.Context())
@@ -70,6 +69,20 @@ func (rt *sshRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	clone.URL = &u
 	clone.Host = "errand"
 	return inner.RoundTrip(clone)
+}
+
+// newTransport dials endpoint with trust as it was when the pool was made.
+func (rt *sshRoundTripper) newTransport(endpoint sshEndpoint, trust sshTrust) *http.Transport {
+	return &http.Transport{
+		Proxy: nil,
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return dialSSHConnection(ctx, endpoint.target, sshRemoteInvocation(endpoint), trust)
+		},
+		ResponseHeaderTimeout: rt.responseHeaderTimeout,
+		DisableCompression:    true,
+		MaxIdleConnsPerHost:   4,
+		IdleConnTimeout:       90 * time.Second,
+	}
 }
 
 var dialSSHConnection = dialSSH
@@ -101,11 +114,9 @@ func restoreSSHPeer(peerURL, target, command, socket, hostKey string, identities
 	if !IsSSHPeer(peerURL) || target == "" {
 		return
 	}
-	if hostKey != "" {
-		_ = TrustSSHHost(target, hostKey, "")
-		for _, identity := range identities {
-			_ = TrustSSHHost(target, hostKey, identity)
-		}
+	_ = TrustSSHHost(target, hostKey, "")
+	for _, identity := range identities {
+		_ = TrustSSHHost(target, hostKey, identity)
 	}
 	sshEndpoints.Store(strings.TrimSuffix(peerURL, "/"), sshEndpoint{
 		target: target, command: effectiveSSHCommand(command), socket: socket,
@@ -166,12 +177,12 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
-func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, error) {
+func dialSSH(ctx context.Context, target, remoteInvocation string, trust sshTrust) (net.Conn, error) {
 	controlDir, err := sshControlDir()
 	if err != nil {
 		return nil, err
 	}
-	pin, err := sshPinArgs(target)
+	pin, err := trust.args(target)
 	if err != nil {
 		return nil, err
 	}

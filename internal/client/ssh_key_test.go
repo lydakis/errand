@@ -12,9 +12,6 @@ import (
 )
 
 func TestEnsureSSHKey(t *testing.T) {
-	if _, err := exec.LookPath("ssh-keygen"); err != nil {
-		t.Skip("no ssh-keygen")
-	}
 	path := filepath.Join(t.TempDir(), "keys", "errand_ed25519")
 	// Processes that make the key at once all end up with the same one.
 	publics := make([]string, 4)
@@ -34,9 +31,13 @@ func TestEnsureSSHKey(t *testing.T) {
 			t.Fatalf("public keys %q", publics)
 		}
 	}
-	derived, err := exec.Command("ssh-keygen", "-y", "-f", path).Output()
-	if err != nil || !strings.HasPrefix(publics[0], strings.TrimSpace(string(derived))) {
-		t.Fatalf("private key does not match: %q %v", derived, err)
+	// The key is OpenSSH's own format, which ssh-keygen reads, when it is
+	// installed; errand itself does not need it.
+	if _, err := exec.LookPath("ssh-keygen"); err == nil {
+		derived, err := exec.Command("ssh-keygen", "-y", "-f", path).Output()
+		if err != nil || !strings.HasPrefix(publics[0], strings.TrimSpace(string(derived))) {
+			t.Fatalf("private key does not match: %q %v", derived, err)
+		}
 	}
 	if info, err := os.Stat(path); err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("private key mode: %v %v", info.Mode(), err)
@@ -53,5 +54,23 @@ func TestEnsureSSHKey(t *testing.T) {
 	entries, _ := os.ReadDir(filepath.Dir(path))
 	if len(entries) != 2 {
 		t.Fatalf("left behind %v", entries)
+	}
+}
+
+// A client that never reaches a machine over SSH needs no OpenSSH to make
+// the key it sends with lease requests.
+func TestEnsureSSHKeyWithoutOpenSSH(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	path := filepath.Join(t.TempDir(), "errand_ed25519")
+	public, err := EnsureSSHKey(context.Background(), path, "errand")
+	if err != nil || !strings.HasPrefix(public, "ssh-ed25519 ") || !strings.HasSuffix(public, " errand") {
+		t.Fatalf("key %q: %v", public, err)
+	}
+	if err := os.WriteFile(path, []byte("not a key"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(path + ".pub")
+	if _, err := EnsureSSHKey(context.Background(), path, "errand"); err == nil {
+		t.Fatal("derived a public key from garbage")
 	}
 }

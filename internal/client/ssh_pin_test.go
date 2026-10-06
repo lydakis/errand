@@ -1,12 +1,18 @@
 package client
 
 import (
+	"context"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -21,16 +27,21 @@ func pinArgs(t *testing.T, target string) []string {
 	return args
 }
 
-func TestSSHPinArgs(t *testing.T) {
+// freshSSHTrust has a test start from a process that trusts nothing yet.
+func freshSSHTrust(t *testing.T) {
 	sshTrustMu.Lock()
 	saved := sshTrusted
-	sshTrusted = map[string]sshTrust{} // what this process trusts so far
+	sshTrusted = map[string]sshTrust{}
 	sshTrustMu.Unlock()
 	t.Cleanup(func() {
 		sshTrustMu.Lock()
 		sshTrusted = saved
 		sshTrustMu.Unlock()
 	})
+}
+
+func TestSSHPinArgs(t *testing.T) {
+	freshSSHTrust(t)
 	cache := filepath.Join(t.TempDir(), "cache dir") // ssh splits unquoted paths at spaces
 	t.Setenv("XDG_CACHE_HOME", cache)
 	t.Setenv("HOME", cache)
@@ -38,7 +49,7 @@ func TestSSHPinArgs(t *testing.T) {
 	if args := pinArgs(t, target); args != nil {
 		t.Fatalf("untrusted target got %q", args)
 	}
-	for _, bad := range []string{"", "ssh-ed25519", "ssh-ed25519 not*base64", "ssh-ed25519 AAAA\n@cert-authority * ssh-ed25519 AAAA", "SSH ED AAAA"} {
+	for _, bad := range []string{"ssh-ed25519", "ssh-ed25519 not*base64", "ssh-ed25519 AAAA\n@cert-authority * ssh-ed25519 AAAA", "SSH ED AAAA"} {
 		if err := TrustSSHHost(target, bad, ""); err == nil {
 			t.Fatalf("trusted %q", bad)
 		}
@@ -112,5 +123,76 @@ func TestRestoredSSHPeerKeepsHostKey(t *testing.T) {
 	args := pinArgs(t, target)
 	if !slices.Contains(args, "StrictHostKeyChecking=yes") || !slices.Contains(args, "/keys/errand") {
 		t.Fatalf("args %q", args)
+	}
+}
+
+// A target whose host key is not pinned still offers the lease's key, next
+// to the user's own, with the user's known_hosts.
+func TestSSHIdentityWithoutHostKey(t *testing.T) {
+	freshSSHTrust(t)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	target := "ubuntu@203.0.113.21"
+	if err := TrustSSHHost(target, "", "/keys/errand"); err != nil {
+		t.Fatal(err)
+	}
+	if args := pinArgs(t, target); !slices.Equal(args, []string{"-i", "/keys/errand"}) {
+		t.Fatalf("args %q", args)
+	}
+	// A host key learned later pins it, and keeps the identity.
+	if err := TrustSSHHost(target, testHostKey, ""); err != nil {
+		t.Fatal(err)
+	}
+	if args := pinArgs(t, target); !slices.Contains(args, "StrictHostKeyChecking=yes") || !slices.Contains(args, "/keys/errand") {
+		t.Fatalf("args %q", args)
+	}
+	restoreSSHPeer("ssh://peer-unpinned.errand", "ubuntu@203.0.113.22", "", "", "", []string{"/keys/errand"})
+	if args := pinArgs(t, "ubuntu@203.0.113.22"); !slices.Equal(args, []string{"-i", "/keys/errand"}) {
+		t.Fatalf("restored args %q", args)
+	}
+}
+
+// Connections to one target are pooled by what this process trusts about
+// it: one opened before a lease's host key was pinned is not reused for the
+// lease, while requests that trust the same keep sharing one connection.
+func TestSSHPoolSeparatesTrust(t *testing.T) {
+	freshSSHTrust(t)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer server.Close()
+	var mu sync.Mutex
+	var dials []sshTrust
+	oldDial := dialSSHConnection
+	dialSSHConnection = func(ctx context.Context, _, _ string, trust sshTrust) (net.Conn, error) {
+		mu.Lock()
+		dials = append(dials, trust)
+		mu.Unlock()
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, "tcp", server.Listener.Addr().String())
+	}
+	t.Cleanup(func() { dialSSHConnection = oldDial })
+	target := "ubuntu@203.0.113.23"
+	peer := ConfigureSSHPeer("ssh://"+target, "pool-test", "", "")
+	rt := &sshRoundTripper{}
+	get := func() {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodGet, peer+"/v0/info", nil)
+		resp, err := rt.RoundTrip(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
+	get()
+	get()
+	if err := TrustSSHHost(target, testHostKey, "/keys/errand"); err != nil {
+		t.Fatal(err)
+	}
+	get()
+	get()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(dials) != 2 || dials[0].hostKey != "" || dials[1].hostKey == "" || !slices.Equal(dials[1].identities, []string{"/keys/errand"}) {
+		t.Fatalf("dials %+v", dials)
 	}
 }

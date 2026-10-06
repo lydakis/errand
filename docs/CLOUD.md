@@ -188,8 +188,8 @@ Set up once:
    read.
 2. Restart the cloud peer with `errand setup`.
 
-That is all for SSH. The cloud peer needs `ssh` and `ssh-keygen`, and so do
-the machines you run errand from. On first use the cloud peer makes an SSH
+That is all for SSH. The cloud peer needs `ssh`, and so do the machines you
+run errand from. On first use the cloud peer makes an SSH
 key in its state directory and adds the public half to your Lambda account
 as `errand-<fingerprint>`; it installs errand and watches the runner with
 it. For each lease it also makes a fresh SSH host key and hands it to the
@@ -260,7 +260,10 @@ release. Stdout is limited to 16 KiB. Name the machine after `ERRAND_LEASE_ID` s
 when acquire was interrupted before printing anything. With `ssh`, a
 `host_key` field (`"ssh-ed25519 AAAA..."`) makes errand accept only that host
 key for the machine, which saves a `known_hosts` entry for a machine that just
-booted.
+booted. With or without it, clients offer the key they sent as
+`ERRAND_LEASE_SSH_KEY`, so the machine can admit them by it. A target that
+breaks these rules fails the launch as soon as acquire exits, and its machine
+is released then.
 
 **release** destroys the machine. It must succeed when run twice, and when
 `ERRAND_LEASE_STATE` is empty.
