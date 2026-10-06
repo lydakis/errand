@@ -40,13 +40,16 @@ errand: selected cabal-7f3a for gpu=h100 (0/1 slots, 0 staging, 0 queued)
 
 `--where gpu` rents the cheapest GPU with capacity, `--where gpu=h100` the
 cheapest H100, `--where gpus>=8` an eight-GPU box. Prices are shown before
-anything is rented, but if you would rather not be able to rent a $30/h
-machine because the $3/h ones are sold out, set a cap:
+anything is rented. Machines above `max_price_per_hour`, $10/h unless you
+say otherwise, are never rented: that covers every single-GPU type, and
+stops a sold-out $3/h type from quietly becoming a $30/h box. A request only
+a dearer type could serve is refused with the price and the setting to
+raise. Set the cap to `0` for no cap.
 
 ```toml
 [cloud.lambda]
 api_key_file = "/home/you/.config/errand/lambda-api-key"
-max_price_per_hour = 5
+max_price_per_hour = 20                                   # default 10; 0 for no cap
 # instance_types = ["gpu_1x_a10", "gpu_1x_h100_sxm5"]   # only these
 # regions = ["us-east-1", "us-west-1"]                    # preference order
 ```
@@ -191,7 +194,7 @@ CPUs, architecture and price come from the listing; no shape is configured.
 [cloud.lambda]
 api_key_file = "/home/you/.config/errand/lambda-api-key"
 # instance_types = ["gpu_1x_a10", "gpu_1x_h100_sxm5"]  # only these; default: every type
-# max_price_per_hour = 5                               # leave out dearer types
+# max_price_per_hour = 10                              # default 10; 0 for no cap
 # regions = ["us-east-1", "us-west-1"]                 # preference order; omit for any
 # idle_timeout = "20m"
 # max_lifetime = "12h"
@@ -266,8 +269,10 @@ MagicDNS names, so MagicDNS must be on.
 machine down from inside does not stop billing, so errand relies on the cloud
 peer: it terminates on release, after `idle_timeout`, and at `max_lifetime`,
 and keeps retrying a failed termination. `max_leases` caps how many instances
-can run at once and `max_price_per_hour` what each may cost. These limits hold only while the cloud peer runs; they are not
-a spending cap, and errand sets none on the Lambda account. If the cloud peer is
+can run at once and `max_price_per_hour` what each may cost per hour, so
+while the cloud peer runs no more than `max_leases` times `max_price_per_hour`
+is spent per hour. These limits hold only while the cloud peer runs; they
+are not a spending cap on the account, and errand sets none there. If the cloud peer is
 gone for good, terminate leftovers named `errand-*` in the Lambda console. Leases keep using the `api_key_file` they
 were made with, so keep that file, and the key in it, until they are released:
 a different key may belong to another account, so errand keeps retrying the

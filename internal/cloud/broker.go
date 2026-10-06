@@ -30,6 +30,10 @@ type Offer struct {
 	PricePerHour float64 // USD, informational
 	IdleTimeout  time.Duration
 	MaxLifetime  time.Duration
+	// Unavailable says why the offer cannot be leased from right now, such
+	// as a price above the cap. It is not advertised, and a request only
+	// it would match is refused with this reason.
+	Unavailable string
 }
 
 // ProbeFunc asks a leased runner for its info, offering identity (a private
@@ -121,6 +125,9 @@ type Broker struct {
 	leases map[string]*lease
 	closed bool
 	// catalog is the latest listing from cfg.Catalog, cheapest first.
+	// catalogMu lets one listing run at a time, so an older one cannot
+	// land after a newer one.
+	catalogMu sync.Mutex
 	catalog   []Offer
 	catalogAt time.Time
 
@@ -264,7 +271,9 @@ func (b *Broker) Offers() []proto.Offer {
 	defer b.mu.Unlock()
 	var out []proto.Offer
 	for _, o := range b.offersLocked() {
-		out = append(out, o.Offer())
+		if o.Unavailable == "" {
+			out = append(out, o.Offer())
+		}
 	}
 	return out
 }
@@ -381,6 +390,9 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	for i := range candidates {
 		o := &candidates[i]
 		missing := q.Missing(o.Facts)
+		if len(missing) == 0 && o.Unavailable != "" {
+			missing = []string{o.Unavailable}
+		}
 		if len(missing) == 0 {
 			if offer == nil || placement.CheaperOffer(o.Offer(), offer.Offer()) {
 				offer = o

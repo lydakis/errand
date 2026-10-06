@@ -35,11 +35,14 @@ func (b *Broker) refreshCatalog() {
 }
 
 // freshenCatalog lists the catalog again unless it was listed within
-// CatalogRefresh. Callers hold no lock.
+// CatalogRefresh. Callers hold no lock; one listing runs at a time, and a
+// caller that waited for another's sees that one as fresh.
 func (b *Broker) freshenCatalog() {
 	if b.cfg.Catalog == nil {
 		return
 	}
+	b.catalogMu.Lock()
+	defer b.catalogMu.Unlock()
 	b.mu.Lock()
 	fresh := !b.catalogAt.IsZero() && time.Since(b.catalogAt) < b.cfg.CatalogRefresh
 	b.mu.Unlock()

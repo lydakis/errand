@@ -209,13 +209,22 @@ idle_timeout = "10m"
 	if b, err := withOffer.Broker(); err != nil || b.Catalog == nil || len(b.Offers) != 1 {
 		t.Fatalf("catalog with offers: %+v %v", b, err)
 	}
+	// The price cap has a default; 0 lifts it.
+	if b, _ := withOffer.Broker(); b.Catalog.(*cloud.LambdaCatalog).MaxPricePerHour != DefaultLambdaMaxPrice {
+		t.Fatalf("default cap %v", b.Catalog)
+	}
+	zero := 0.0
+	uncapped := DaemonCloud{Lambda: &LambdaAccount{LambdaSettings: LambdaSettings{APIKeyFile: "/k"}, MaxPricePerHour: &zero}}
+	if b, err := uncapped.Broker(); err != nil || b.Catalog.(*cloud.LambdaCatalog).MaxPricePerHour != 0 {
+		t.Fatalf("uncapped: %+v %v", b, err)
+	}
 	for _, tc := range []struct {
 		edit func(*LambdaAccount)
 		want string
 	}{
 		{func(a *LambdaAccount) { a.APIKeyFile = "lambda.key" }, "api_key_file must be an absolute path"},
 		{func(a *LambdaAccount) { a.APIKeyFile = "" }, "api_key_file must be an absolute path"},
-		{func(a *LambdaAccount) { a.MaxPricePerHour = -1 }, "max_price_per_hour"},
+		{func(a *LambdaAccount) { minus := -1.0; a.MaxPricePerHour = &minus }, "max_price_per_hour"},
 		{func(a *LambdaAccount) { a.InstanceTypes = []string{"gpu-1x-a10"} }, "instance_types"},
 		{func(a *LambdaAccount) { a.InstanceTypes = []string{""} }, "instance_types"},
 		{func(a *LambdaAccount) { a.IdleTimeout = "0s" }, "idle_timeout"},

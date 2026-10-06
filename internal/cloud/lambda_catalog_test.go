@@ -59,13 +59,15 @@ func TestLambdaCatalogOffers(t *testing.T) {
 			t.Errorf("offer %s has provider %+v", o.Name, lp)
 		}
 	}
-	// A price cap and a list of types narrow the catalog.
+	// A price cap keeps dearer types only as unavailable, with the reason
+	// a refused request shows; a list of types narrows the catalog.
 	c.MaxPricePerHour = 2.49
-	if offers, _ = c.Offers(context.Background()); len(offers) != 3 || offers[2].Name != "gpu-1x-h100-pcie" {
+	offers, _ = c.Offers(context.Background())
+	if len(offers) != 4 || offers[2].Unavailable != "" || offers[3].Name != "gpu-8x-h100-sxm5" || offers[3].Unavailable != "costs $27.99/h, above max_price_per_hour = 2.49 in [cloud.lambda]" {
 		t.Fatalf("capped: %+v", offers)
 	}
 	c.InstanceTypes = []string{"gpu_8x_h100_sxm5", "gpu_1x_gh200"}
-	if offers, _ = c.Offers(context.Background()); len(offers) != 1 || offers[0].Name != "gpu-1x-gh200" {
+	if offers, _ = c.Offers(context.Background()); len(offers) != 2 || offers[0].Name != "gpu-1x-gh200" || offers[1].Unavailable == "" {
 		t.Fatalf("listed and capped: %+v", offers)
 	}
 	// Any region: the A10 is in.

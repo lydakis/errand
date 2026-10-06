@@ -58,11 +58,12 @@ type LambdaOffer struct {
 }
 
 // LambdaAccount offers every instance type of a Lambda account that has
-// capacity, or those in InstanceTypes, at up to MaxPricePerHour.
+// capacity, or those in InstanceTypes, at up to MaxPricePerHour: unset
+// means DefaultLambdaMaxPrice, and 0 means no cap.
 type LambdaAccount struct {
 	LambdaSettings
 	InstanceTypes   []string `toml:"instance_types"`
-	MaxPricePerHour float64  `toml:"max_price_per_hour"`
+	MaxPricePerHour *float64 `toml:"max_price_per_hour"`
 	IdleTimeout     string   `toml:"idle_timeout"` // default 20m
 	MaxLifetime     string   `toml:"max_lifetime"` // default 12h
 }
@@ -70,6 +71,10 @@ type LambdaAccount struct {
 const (
 	defaultLeaseIdle     = 20 * time.Minute
 	defaultLeaseLifetime = 12 * time.Hour
+	// DefaultLambdaMaxPrice is the cap on a Lambda machine's hourly price
+	// unless max_price_per_hour says otherwise: enough for any single-GPU
+	// type, not for a sold-out type to turn into an eight-GPU box.
+	DefaultLambdaMaxPrice = 10.0
 )
 
 // Broker validates the cloud section. Every runner has a broker: without
@@ -217,15 +222,19 @@ func (a LambdaAccount) catalog() (*cloud.LambdaCatalog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cloud lambda: %w", err)
 	}
-	if a.MaxPricePerHour < 0 || math.IsNaN(a.MaxPricePerHour) || math.IsInf(a.MaxPricePerHour, 0) {
-		return nil, fmt.Errorf("cloud lambda: max_price_per_hour must not be negative")
+	maxPrice := DefaultLambdaMaxPrice
+	if a.MaxPricePerHour != nil {
+		maxPrice = *a.MaxPricePerHour
+		if maxPrice < 0 || math.IsNaN(maxPrice) || math.IsInf(maxPrice, 0) {
+			return nil, fmt.Errorf("cloud lambda: max_price_per_hour must not be negative (0 means no cap)")
+		}
 	}
 	for _, t := range a.InstanceTypes {
 		if t == "" || strings.ContainsFunc(t, func(r rune) bool { return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_') }) {
 			return nil, fmt.Errorf("cloud lambda: instance_types entry %q is not a Lambda instance type name such as gpu_1x_a10", t)
 		}
 	}
-	c := &cloud.LambdaCatalog{Account: *p, InstanceTypes: a.InstanceTypes, MaxPricePerHour: a.MaxPricePerHour}
+	c := &cloud.LambdaCatalog{Account: *p, InstanceTypes: a.InstanceTypes, MaxPricePerHour: maxPrice}
 	if c.IdleTimeout, err = positiveDuration("cloud lambda idle_timeout", a.IdleTimeout, defaultLeaseIdle); err != nil {
 		return nil, err
 	}

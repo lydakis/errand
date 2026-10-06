@@ -1103,4 +1103,19 @@ func TestCatalogOffersAreLeased(t *testing.T) {
 	if l, err := only.Acquire("george", "", "gpus>=8", "", ""); err != nil || l.Offer != "gpu-8x-h100" {
 		t.Fatalf("catalog alone: %+v %v", l, err)
 	}
+	// An unavailable offer is neither advertised nor leased, but a request
+	// only it would match is refused with its reason.
+	capped := dear
+	capped.Unavailable = "costs $27.99/h, above max_price_per_hour = 10"
+	catalog.set([]Offer{capped, listed}, nil)
+	only.mu.Lock()
+	only.catalogAt = time.Time{}
+	only.mu.Unlock()
+	only.freshenCatalog()
+	if offers := only.Offers(); len(offers) != 1 || offers[0].Name != "gpu-1x-h100" {
+		t.Fatalf("unavailable offer advertised: %+v", offers)
+	}
+	if _, err := only.Acquire("bob", "", "gpus>=8", "", ""); err == nil || !strings.Contains(err.Error(), "gpu-8x-h100: costs $27.99/h, above max_price_per_hour = 10") {
+		t.Fatalf("capped refusal: %v", err)
+	}
 }

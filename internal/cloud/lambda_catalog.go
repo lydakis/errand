@@ -22,7 +22,8 @@ type LambdaCatalog struct {
 	// offer.
 	Account LambdaProvider
 	// InstanceTypes limits the offers to these Lambda names; empty means
-	// every type. MaxPricePerHour, when set, leaves out dearer types.
+	// every type. Dearer types than MaxPricePerHour are listed only as
+	// unavailable, so a request for one says what to raise; 0 means no cap.
 	InstanceTypes   []string
 	MaxPricePerHour float64
 	IdleTimeout     time.Duration
@@ -52,8 +53,9 @@ func (c *LambdaCatalog) Offers(ctx context.Context) ([]Offer, error) {
 			continue
 		}
 		price := float64(t.PriceCentsPerHour) / 100
+		unavailable := ""
 		if c.MaxPricePerHour > 0 && price > c.MaxPricePerHour {
-			continue
+			unavailable = fmt.Sprintf("costs $%.2f/h, above max_price_per_hour = %g in [cloud.lambda]", price, c.MaxPricePerHour)
 		}
 		arch := lambdaArch(t.Architecture)
 		if arch == "" {
@@ -63,7 +65,7 @@ func (c *LambdaCatalog) Offers(ctx context.Context) ([]Offer, error) {
 		p.InstanceType, p.Arch = t.Name, arch
 		offers = append(offers, Offer{
 			Name: lambdaOfferName(t.Name), Facts: t.facts(arch), Provider: &p, PricePerHour: price,
-			IdleTimeout: c.IdleTimeout, MaxLifetime: c.MaxLifetime,
+			IdleTimeout: c.IdleTimeout, MaxLifetime: c.MaxLifetime, Unavailable: unavailable,
 		})
 	}
 	sort.SliceStable(offers, func(i, j int) bool { return offers[i].PricePerHour < offers[j].PricePerHour })
