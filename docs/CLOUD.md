@@ -92,8 +92,8 @@ cloud peer still ends them when they go idle or reach their lifetime.
   The cheapest matching offer wins: an offer with `price_per_hour`, even
   `0`, before one without, and equal offers in random order. Neither your default peer nor how
   busy a cloud peer's own runner is plays a part. If a cloud peer turns the
-  request down before starting anything (no permission, nothing matches any
-  more, or it is at `max_leases`), the next one is asked. A cloud peer that
+  request down before starting anything (no permission or offers, nothing matches
+  any more, or at `max_leases`), the next one is asked. A cloud peer that
   does not answer is skipped, so keep offers on an always-on machine. A ready
   or launching lease of yours that already matches is reused, from any of
   your devices.
@@ -103,8 +103,12 @@ cloud peer still ends them when they go idle or reach their lifetime.
 
 If a run stops while its lease is still launching, from Ctrl-C or a failure,
 it withdraws its request, and the cloud peer cancels the launch unless another
-run is waiting for the same lease. Once a lease is ready, only the idle and
-lifetime rules below or `errand leases release` end it. A run that stops after
+run is waiting for the same lease. A request whose answer is lost is sent once
+more; if that does not bring the lease back either, the cloud peer may have
+started one nobody was told about, so the run withdraws the request and asks
+no other cloud peer, even when the second attempt was turned down. Once a
+lease is ready, only the idle and lifetime rules below or `errand leases
+release` end it. A run that stops after
 that, with or without a job, leaves the machine up for at most one idle
 window. Being given to a run counts as work, so a reused ready lease starts a
 full idle window.

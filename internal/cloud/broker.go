@@ -121,9 +121,10 @@ type Broker struct {
 	offers map[string]Offer
 	dir    string
 
-	mu     sync.Mutex
-	leases map[string]*lease
-	closed bool
+	mu        sync.Mutex
+	leases    map[string]*lease
+	withdrawn withdrawnRequests
+	closed    bool
 	// catalog is the latest listing from cfg.Catalog, cheapest first.
 	// catalogMu lets one listing run at a time, so an older one cannot
 	// land after a newer one.
@@ -370,6 +371,9 @@ func (b *Broker) acquire(owner, login, where string, q placement.Requirements, s
 			return l.view(), true, nil
 		}
 	}
+	if b.withdrawn.has(owner, requestID, time.Now()) {
+		return proto.Lease{}, true, &Error{http.StatusGone, "this request was withdrawn"}
+	}
 	// A launching lease handed to another request is waited on by that
 	// request too. A ready lease handed out starts a full idle window, so
 	// the request has time to submit its work.
@@ -544,10 +548,17 @@ func (b *Broker) Withdraw(owner, requestID string) (proto.Lease, error) {
 			l = c
 		}
 	}
-	b.mu.Unlock()
 	if l == nil {
+		// The request may still be on its way: unless it is remembered,
+		// the withdrawal settles nothing.
+		full := requestID != "" && !b.withdrawn.add(owner, requestID, time.Now())
+		b.mu.Unlock()
+		if full {
+			return proto.Lease{}, &Error{http.StatusServiceUnavailable, "too many recent withdrawals to record this one; try again later"}
+		}
 		return proto.Lease{}, &Error{http.StatusNotFound, "no lease was handed to that request"}
 	}
+	b.mu.Unlock()
 	err := b.update(l, func(r *record) bool {
 		i := slices.Index(r.Requests, requestID)
 		if i < 0 || r.State != proto.LeaseLaunching {
@@ -1077,6 +1088,7 @@ func (r *record) addProgress(line string) {
 		r.Progress = append(r.Progress[:0:0], r.Progress[1:]...)
 	}
 	r.Progress = append(r.Progress, line)
+	r.ProgressSeq++
 }
 
 // maxRequests bounds the runs waiting for one launching lease.
