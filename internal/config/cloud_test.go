@@ -6,7 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -129,7 +129,7 @@ allow_users = ["broker@example"]
 		t.Fatalf("offer %+v provider %+v", o, o.Provider)
 	}
 
-	lambda := LambdaOffer{InstanceType: "t", APIKeyFile: "/a", TailscaleAuthKeyFile: "/t", ErrandBinary: "/e"}
+	lambda := LambdaOffer{InstanceType: "t", LambdaSettings: LambdaSettings{APIKeyFile: "/a", TailscaleAuthKeyFile: "/t", ErrandBinary: "/e"}}
 	for _, tc := range []struct {
 		edit func(*CloudOffer)
 		want string
@@ -156,26 +156,85 @@ allow_users = ["broker@example"]
 		}
 	}
 	// Without a Tailscale key, the API key alone is enough.
-	ssh := LambdaOffer{InstanceType: "t", APIKeyFile: "/a", ErrandBinary: "/e"}
+	ssh := LambdaOffer{InstanceType: "t", LambdaSettings: LambdaSettings{APIKeyFile: "/a", ErrandBinary: "/e"}}
 	if b, err := (DaemonCloud{Offers: []CloudOffer{{Name: "x", Lambda: &ssh}}}).Broker(); err != nil {
 		t.Fatal(err)
 	} else if p := b.Offers[0].Provider.(*cloud.LambdaProvider); p.TailscaleAuthKeyFile != "" {
 		t.Fatalf("provider %+v", p)
 	}
-	// Without errand_binary the broker installs itself, which only fits a
-	// machine of its own platform.
+	// Without errand_binary any cloud peer can rent for any architecture:
+	// the Linux build is found or fetched when a machine is rented.
 	l := lambda
 	l.ErrandBinary = ""
-	other := "arm64"
-	if runtime.GOARCH == "arm64" {
-		other = "amd64"
-	}
-	if _, err := (DaemonCloud{Offers: []CloudOffer{{Name: "x", Arch: other, Lambda: &l}}}).Broker(); err == nil || !strings.Contains(err.Error(), "errand_binary must name a linux/"+other) {
+	if b, err := (DaemonCloud{Offers: []CloudOffer{{Name: "x", Arch: "arm64", Lambda: &l}}}).Broker(); err != nil || b.Offers[0].Provider.(*cloud.LambdaProvider).ErrandBinary != "" {
 		t.Errorf("foreign arch without errand_binary: %v", err)
 	}
 	// Command offers may now declare Windows machines.
 	if _, err := (DaemonCloud{Offers: []CloudOffer{{Name: "win", OS: "windows", Acquire: []string{"/a"}, Release: []string{"/r"}}}}).Broker(); err != nil {
 		t.Errorf("windows offer: %v", err)
+	}
+}
+
+// A [cloud.lambda] table offers the account's instance types as Lambda
+// lists them, with no offer configured for each.
+func TestLambdaAccount(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "errandd.toml")
+	os.WriteFile(path, []byte(`
+[cloud.lambda]
+api_key_file = "/etc/errand/lambda.key"
+instance_types = ["gpu_1x_a10", "gpu_1x_h100_sxm5"]
+max_price_per_hour = 3
+regions = ["us-east-1"]
+idle_timeout = "10m"
+`), 0600)
+	d, err := LoadDaemon(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := d.Cloud.Broker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, ok := b.Catalog.(*cloud.LambdaCatalog)
+	if !ok || len(b.Offers) != 0 || c.Account.APIKeyFile != "/etc/errand/lambda.key" || !slices.Equal(c.InstanceTypes, []string{"gpu_1x_a10", "gpu_1x_h100_sxm5"}) || c.Account.MaxPricePerHour != 3 ||
+		!slices.Equal(c.Account.Regions, []string{"us-east-1"}) || c.IdleTimeout != 10*time.Minute || c.MaxLifetime != 12*time.Hour || c.Account.InstanceType != "" {
+		t.Fatalf("catalog %+v", b.Catalog)
+	}
+	// The table and offers go together, and the account's settings are
+	// checked like an offer's.
+	withOffer := DaemonCloud{Lambda: &LambdaAccount{LambdaSettings: LambdaSettings{APIKeyFile: "/k"}}, Offers: []CloudOffer{{Name: "x", Acquire: []string{"/a"}, Release: []string{"/r"}}}}
+	if b, err := withOffer.Broker(); err != nil || b.Catalog == nil || len(b.Offers) != 1 {
+		t.Fatalf("catalog with offers: %+v %v", b, err)
+	}
+	// The price cap has a default; 0 lifts it.
+	if b, _ := withOffer.Broker(); b.Catalog.(*cloud.LambdaCatalog).Account.MaxPricePerHour != DefaultLambdaMaxPrice {
+		t.Fatalf("default cap %v", b.Catalog)
+	}
+	zero := 0.0
+	uncapped := DaemonCloud{Lambda: &LambdaAccount{LambdaSettings: LambdaSettings{APIKeyFile: "/k"}, MaxPricePerHour: &zero}}
+	if b, err := uncapped.Broker(); err != nil || b.Catalog.(*cloud.LambdaCatalog).Account.MaxPricePerHour != 0 {
+		t.Fatalf("uncapped: %+v %v", b, err)
+	}
+	for _, tc := range []struct {
+		edit func(*LambdaAccount)
+		want string
+	}{
+		{func(a *LambdaAccount) { a.APIKeyFile = "lambda.key" }, "api_key_file must be an absolute path"},
+		{func(a *LambdaAccount) { a.APIKeyFile = "" }, "api_key_file must be an absolute path"},
+		{func(a *LambdaAccount) { minus := -1.0; a.MaxPricePerHour = &minus }, "max_price_per_hour"},
+		{func(a *LambdaAccount) { a.InstanceTypes = []string{"gpu-1x-a10"} }, "instance_types"},
+		{func(a *LambdaAccount) { a.InstanceTypes = []string{""} }, "instance_types"},
+		{func(a *LambdaAccount) { a.IdleTimeout = "0s" }, "idle_timeout"},
+		{func(a *LambdaAccount) { a.MaxLifetime = "soon" }, "max_lifetime"},
+		{func(a *LambdaAccount) { a.AllowUsers = []string{"a@github"} }, "needs tailscale_auth_key_file"},
+		{func(a *LambdaAccount) { a.ErrandBinary = "errand" }, "errand_binary must be an absolute path"},
+	} {
+		a := LambdaAccount{LambdaSettings: LambdaSettings{APIKeyFile: "/k"}}
+		tc.edit(&a)
+		if _, err := (DaemonCloud{Lambda: &a}).Broker(); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v", tc.want, err)
+		}
 	}
 }
 

@@ -270,55 +270,39 @@ func lambdaArch(name string) (arch string, ok bool) {
 }
 
 func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, int, error) {
-	var types struct {
-		Data map[string]struct {
-			InstanceType struct {
-				PriceCentsPerHour int    `json:"price_cents_per_hour"`
-				Architecture      string `json:"architecture"`
-			} `json:"instance_type"`
-			Regions []struct {
-				Name string `json:"name"`
-			} `json:"regions_with_capacity_available"`
-		} `json:"data"`
+	types, err := p.instanceTypes(ctx, key)
+	if err != nil {
+		return "", 0, err
 	}
-	if err := p.call(ctx, key, http.MethodGet, "/instance-types", nil, &types); err != nil {
-		return "", 0, fmt.Errorf("listing Lambda instance types: %w", err)
-	}
-	t, ok := types.Data[p.InstanceType]
-	if !ok {
+	i := slices.IndexFunc(types, func(t lambdaInstanceType) bool { return t.Name == p.InstanceType })
+	if i < 0 {
 		return "", 0, fmt.Errorf("Lambda has no instance type %q", p.InstanceType)
 	}
+	t := types[i]
 	// errand_binary was checked against the offer's arch; the machine must
 	// match it, or the paid instance could never run errand.
-	arch, ok := lambdaArch(t.InstanceType.Architecture)
+	arch, ok := lambdaArch(t.Architecture)
 	if !ok {
-		return "", 0, fmt.Errorf("Lambda instance type %s has architecture %q, which errand does not know, so it cannot tell whether errand_binary runs there", p.InstanceType, t.InstanceType.Architecture)
+		return "", 0, fmt.Errorf("Lambda instance type %s has architecture %q, which errand does not know, so it cannot tell whether errand_binary runs there", p.InstanceType, t.Architecture)
 	}
 	if arch != p.Arch {
-		return "", 0, fmt.Errorf("Lambda instance type %s is %s but the offer says arch = %q", p.InstanceType, t.InstanceType.Architecture, p.Arch)
+		return "", 0, fmt.Errorf("Lambda instance type %s is %s but the offer says arch = %q", p.InstanceType, t.Architecture, p.Arch)
 	}
-	var available []string
-	for _, r := range t.Regions {
-		available = append(available, r.Name)
+	// The price may have changed since the offer was listed.
+	if price := float64(t.PriceCentsPerHour) / 100; p.MaxPricePerHour > 0 && price > p.MaxPricePerHour {
+		return "", 0, fmt.Errorf("Lambda now charges $%.2f/h for %s, above max_price_per_hour = %g in [cloud.lambda]", price, p.InstanceType, p.MaxPricePerHour)
 	}
-	regions := p.Regions
-	if len(p.FileSystems) > 0 {
-		// Lambda attaches a filesystem only to instances in its own region.
-		fsRegion, err := p.fileSystemRegion(ctx, key)
-		if err != nil {
-			return "", 0, err
-		}
-		if len(regions) > 0 && !slices.Contains(regions, fsRegion) {
-			return "", 0, fmt.Errorf("the offer's file systems are in %s, which regions does not list", fsRegion)
-		}
-		regions = []string{fsRegion}
+	regions, err := p.launchRegions(ctx, key)
+	if err != nil {
+		return "", 0, err
 	}
+	available := t.Regions
 	if len(regions) == 0 && len(available) > 0 {
-		return available[0], t.InstanceType.PriceCentsPerHour, nil
+		return available[0], t.PriceCentsPerHour, nil
 	}
 	for _, want := range regions {
 		if slices.Contains(available, want) {
-			return want, t.InstanceType.PriceCentsPerHour, nil
+			return want, t.PriceCentsPerHour, nil
 		}
 	}
 	where := "any region"
@@ -326,6 +310,24 @@ func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, in
 		where = strings.Join(regions, ", ")
 	}
 	return "", 0, fmt.Errorf("Lambda has no %s capacity in %s right now", p.InstanceType, where)
+}
+
+// launchRegions are the regions a launch may use, in preference order, or
+// none for any: the region of the offer's file systems when it attaches any,
+// since Lambda attaches a file system only to instances in its own region,
+// and otherwise Regions.
+func (p *LambdaProvider) launchRegions(ctx context.Context, key string) ([]string, error) {
+	if len(p.FileSystems) == 0 {
+		return p.Regions, nil
+	}
+	fsRegion, err := p.fileSystemRegion(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if len(p.Regions) > 0 && !slices.Contains(p.Regions, fsRegion) {
+		return nil, fmt.Errorf("the offer's file systems are in %s, which regions does not list", fsRegion)
+	}
+	return []string{fsRegion}, nil
 }
 
 type lambdaFileSystem struct {
