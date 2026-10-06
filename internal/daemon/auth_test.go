@@ -770,7 +770,8 @@ func TestInfoShowsOffersOnlyWithLeaseIDs(t *testing.T) {
 		Offers:    []cloud.Offer{{Name: "x", Provider: cloud.CommandProvider{AcquireCommand: []string{"/bin/false"}, ReleaseCommand: []string{"/bin/true"}}, IdleTimeout: time.Minute, MaxLifetime: time.Minute}},
 		Probe:     func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) { return proto.Info{}, nil },
 		AdmitKeys: func(context.Context, proto.LeaseTarget, string, []string) error { return nil },
-		Drain:     func(context.Context, proto.LeaseTarget, string) (func(context.Context) error, error) { return nil, nil },
+		Drain:     func(context.Context, proto.LeaseTarget, string, string) (string, error) { return "", nil },
+		Resume:    func(context.Context, proto.LeaseTarget, string, string) error { return nil },
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -820,7 +821,8 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 	d, err := New(Config{StateDir: t.TempDir(), TailscaledSocket: socket, Version: "test", GPUProbe: func(context.Context) []proto.GPU { return nil }, Cloud: &cloud.Config{
 		Offers:    []cloud.Offer{{Name: "x", Facts: proto.Facts{GPUs: gpu}, Provider: cloud.CommandProvider{AcquireCommand: []string{acquire}, ReleaseCommand: []string{release}}, IdleTimeout: time.Hour, MaxLifetime: time.Hour}},
 		AdmitKeys: func(context.Context, proto.LeaseTarget, string, []string) error { return nil },
-		Drain:     func(context.Context, proto.LeaseTarget, string) (func(context.Context) error, error) { return nil, nil },
+		Drain:     func(context.Context, proto.LeaseTarget, string, string) (string, error) { return "", nil },
+		Resume:    func(context.Context, proto.LeaseTarget, string, string) error { return nil },
 		Probe: func(context.Context, proto.LeaseTarget, string, string) (proto.Info, error) {
 			return proto.Info{Facts: proto.Facts{GPUs: gpu}}, nil
 		},

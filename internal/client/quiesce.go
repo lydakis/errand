@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -22,12 +23,22 @@ var ErrQuiesceRefused = errors.New("runner refused to be held idle")
 
 // QuiesceRunner has an idle runner refuse new jobs for a few minutes, as
 // errand setup does before a restart, and returns the token that ends it
-// early. A runner admits this only from its own user over its local socket,
-// so only a peer reached over SSH can be held this way.
-func QuiesceRunner(ctx context.Context, peerURL string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(peerURL, "/")+"/v0/setup/quiesce", http.NoBody)
+// early. With renew, the token of a hold taken earlier, it extends that
+// hold while it lasts, and takes it afresh once it has lapsed. A runner
+// admits this only from its own user over its local socket, so only a peer
+// reached over SSH can be held this way.
+func QuiesceRunner(ctx context.Context, peerURL, renew string) (string, error) {
+	var payload io.Reader = http.NoBody
+	if renew != "" {
+		raw, _ := json.Marshal(proto.SetupQuiesceRenew{Token: renew})
+		payload = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(peerURL, "/")+"/v0/setup/quiesce", payload)
 	if err != nil {
 		return "", err
+	}
+	if renew != "" {
+		req.Header.Set("Content-Type", "application/json")
 	}
 	res, err := directHTTP.Do(req)
 	if err != nil {

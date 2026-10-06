@@ -154,23 +154,27 @@ func TestLeasePeerNames(t *testing.T) {
 	if peer, ok, err := findLeasePeer(cfg, "cloud-00dd"); err != nil || !ok || peer.SSH != "ubuntu@203.0.113.9" || !strings.HasPrefix(admitted.Load().(string), "ssh-ed25519 ") {
 		t.Fatalf("other device's lease: %+v %v %v (sent %q)", peer, ok, err, admitted.Load())
 	}
-	// Only a command placing work claims the lease it names, so looking at
-	// a lease never extends it, whether or not this device was let in yet;
-	// a device let in by a run asks once.
+	// Looking a lease up never claims it, whether or not this device was
+	// let in yet; a command placing work claims the lease it names once it
+	// is ready to submit, in one request.
 	if got := asks(); !slices.Equal(got, []string{d + " false"}) {
-		t.Fatalf("a read from a new device asked %q", got)
+		t.Fatalf("looking leases up asked %q", got)
 	}
-	useNamedLeases = true
-	defer func() { useNamedLeases = false }()
 	for name, want := range map[string]string{"cloud-00dd": d + " true", "cloud-b7f3a": b + " true"} {
-		if _, ok, err := findLeasePeer(cfg, name); err != nil || !ok {
-			t.Fatalf("%s to run on: %v %v", name, ok, err)
+		claim := claimNamedLease(name)
+		if claim == nil {
+			t.Fatalf("%s is not known as a lease", name)
+		}
+		if err := claim(); err != nil {
+			t.Fatalf("claiming %s: %v", name, err)
 		}
 		if got := asks(); !slices.Equal(got, []string{want}) {
-			t.Fatalf("a run naming %s asked %q", name, got)
+			t.Fatalf("claiming %s asked %q", name, got)
 		}
 	}
-	useNamedLeases = false
+	if claimNamedLease("cloud") != nil {
+		t.Fatal("a cloud peer's own name claims a lease")
+	}
 	// A cloud peer whose offers were removed still lists the leases it
 	// has left.
 	if brokers, code := leaseBrokers(cfg, "cloud", io.Discard); code != 0 || len(brokers) != 1 {

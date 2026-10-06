@@ -296,8 +296,27 @@ cloud peer keeps the only lease record. See [cloud peers](CLOUD.md).
 1. A lease is recorded, with how to release its machine, before anything is acquired; only its own worker calls the provider.
 2. A lease ends only when its owner releases it or loses `submit`, when every run handed it withdraws while it is launching, after `idle_timeout` with no work and no new run handed it, at `max_lifetime`, or when its launch fails or a restart interrupts it.
 3. Withdrawing only cancels a launch: a run that gives up while its lease is launching withdraws, and the launch stops once no run is waiting for it. A ready lease belongs to no run. A request that reaches the cloud peer after its own withdrawal, within the hour, is refused and starts nothing. The cloud peer never forgets such a withdrawal early: when it has no room to record one (128 per owner, 4,096 in all), it refuses the withdrawal, and the run reports that the lease may exist.
-4. Every automatic release is decided against the lease record when the release is recorded, never against an earlier observation. Before an idle release the cloud peer asks the runner to refuse new jobs, which it does only while it has none, so a job admitted after the idle check keeps the lease and starts a full idle window, even one that ends before the next check. The runner takes that request only from its own user on its local socket, which the cloud peer reaches over SSH, for Lambda machines on the tailnet too. A hold that fails while the runner answers keeps the lease until a later idle check takes it, for at most one more `idle_timeout`; a runner idle all that time is then released without the hold, so a lost SSH route cannot keep a machine until `max_lifetime`. The release goes ahead without the hold only for a machine with no SSH route (a provider command's machine reached only over the tailnet), a runner that refuses the hold, or one the cloud peer cannot reach.
-5. A run handed a ready lease, or naming it with `--on` to run on, may use it for at least `idle_timeout` unless its owner releases it or `max_lifetime` passes. A ready lease is handed out only while the cloud peer's latest check of its runner, at launch or at the last idle check since the cloud peer started, reached it and found it still matching; one whose check failed is passed over and gets no new idle window. Nothing on the machine survives the lease.
+4. Every automatic release is decided against the lease record when the release is recorded, never against an earlier observation, and follows this lifecycle. `idle_timeout` runs from the lease's last sign of work, `max_lifetime` from its creation, and `max_lifetime` ends a lease in any state at the next check, without a hold and whatever its runner is doing.
+
+   | State | When | Next |
+   |---|---|---|
+   | launching | the machine answers as an errand runner and matches | ready |
+   | | every run handed it withdraws, its owner releases it, the launch fails, `acquire_timeout` or `max_lifetime` passes, or the cloud peer restarts | releasing |
+   | ready | an idle check or a drain finds work, a run is handed it, or a run names it with `--on` once it is ready to submit | ready, with a full `idle_timeout` from then |
+   | | `idle_timeout` passes without any of these | idle-due |
+   | | its owner releases it, or `max_lifetime` passes | releasing, without a hold |
+   | idle-due | the idle check finds work, or the drain does before `max_lifetime` | ready, with a full `idle_timeout` |
+   | | the runner cannot be reached, has no SSH route (a provider command's machine reached only over the tailnet), or refuses the hold | releasing, without a hold |
+   | | the runner agrees to refuse new jobs, which it does only while it has none | holding |
+   | | the hold fails while the runner answers | idle-due, tried again at each idle check; after one more `idle_timeout`, releasing without the hold |
+   | holding | still due when the release is recorded | releasing, with the hold |
+   | | handed out, or named to run on, meanwhile | ready, with the hold lifted |
+   | releasing | the provider confirms the machine is gone | released, or failed if its launch failed |
+   | | the provider is still terminating it, or fails | releasing, tried again with no deadline; the hold, which lapses on the runner after five minutes, is renewed every minute, across restarts of the cloud peer; a runner that took work after its hold lapsed is released anyway, and its progress says the hold was lost |
+   | released, failed | | kept as history: the last 32, for up to a week |
+
+   The runner takes the hold only from its own user on its local socket, which the cloud peer reaches over SSH, for Lambda machines on the tailnet too.
+5. A run handed a ready lease, or naming it with `--on` once it is ready to submit, may use it for at least `idle_timeout` unless its owner releases it or `max_lifetime` passes; a command that only reads, or a run that fails before it can submit, does not renew it. A ready lease is handed out only while the cloud peer's latest check of its runner, at launch or at the last idle check since the cloud peer started, reached it and found it still matching; one whose check failed is passed over and gets no new idle window. Nothing on the machine survives the lease.
 6. A lease counts as released only once the provider confirms the machine is gone; until then the release is retried.
 7. So, while the cloud peer runs, no machine bills past `max_lifetime` plus the time to confirm its release. If the cloud peer is gone for good, nothing ends its machines: there is no spending cap.
 
@@ -947,8 +966,8 @@ run from a lease that is still launching (lease guarantee 3), and is not a
 user-facing command; `GET /v0/leases` and `DELETE /v0/leases/<id>` list and
 release the caller's leases; `POST /v0/leases/<id>/ssh-keys` lets another
 of the caller's devices into a leased machine reached over SSH, and with
-`use` set is how a run that names a lease asks for it, in the same request;
-without `use` it leaves the idle window alone; and
+`use` set is how a run that names a lease asks for it once it is ready to
+submit; without `use` it leaves the idle window alone; and
 `GET /v0/info` returns facts. A negotiated blob disappearing before
 submission returns the machine-readable `snapshot_cache_miss` error code so
 the client can retry the same job ID with a complete snapshot. Curl-debuggable;

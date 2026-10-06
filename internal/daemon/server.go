@@ -770,13 +770,29 @@ func (d *Daemon) Handler() http.Handler {
 	return mux
 }
 
-func (d *Daemon) handleSetupQuiesce(w http.ResponseWriter, _ *http.Request, id Identity) {
+func (d *Daemon) handleSetupQuiesce(w http.ResponseWriter, r *http.Request, id Identity) {
 	if !id.Local {
 		httpError(w, http.StatusForbidden, "runner setup is available only through the local Unix socket")
 		return
 	}
+	// A cloud peer releasing the machine renews its hold until the machine
+	// is gone, since that can take longer than one hold lasts.
+	var renew proto.SetupQuiesceRenew
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&renew); err != nil && !errors.Is(err, io.EOF) {
+		httpError(w, http.StatusBadRequest, "invalid setup quiesce request: "+err.Error())
+		return
+	}
 	now := time.Now()
 	d.mu.Lock()
+	if renew.Token != "" && renew.Token == d.setupQuiesceToken && now.Before(d.setupQuiesceUntil) {
+		d.setupQuiesceUntil = now.Add(setupQuiesceDuration)
+		expiresAt := d.setupQuiesceUntil
+		d.mu.Unlock()
+		writeJSON(w, http.StatusCreated, proto.SetupQuiesce{Token: renew.Token, ExpiresAt: expiresAt})
+		return
+	}
 	if d.setupQuiesceToken != "" && now.Before(d.setupQuiesceUntil) {
 		d.mu.Unlock()
 		httpError(w, http.StatusConflict, "runner setup is already in progress")

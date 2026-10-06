@@ -23,7 +23,14 @@ func TestQuiesceRunner(t *testing.T) {
 			json.NewEncoder(w).Encode(proto.APIError{Error: "runner setup is available only through the local Unix socket"})
 			return
 		}
+		var renew proto.SetupQuiesceRenew
+		if r.Method == http.MethodPost {
+			json.NewDecoder(r.Body).Decode(&renew)
+		}
 		switch {
+		case r.Method == http.MethodPost && renew.Token != "" && renew.Token == token:
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(proto.SetupQuiesce{Token: token})
 		case r.Method == http.MethodPost && (jobs > 0 || token != ""):
 			w.WriteHeader(http.StatusConflict)
 			json.NewEncoder(w).Encode(proto.APIError{Error: "runner has active jobs (1 running)"})
@@ -45,21 +52,27 @@ func TestQuiesceRunner(t *testing.T) {
 	defer server.Close()
 	ctx := context.Background()
 	refuse = true
-	if _, err := QuiesceRunner(ctx, server.URL); !errors.Is(err, ErrQuiesceRefused) {
+	if _, err := QuiesceRunner(ctx, server.URL, ""); !errors.Is(err, ErrQuiesceRefused) {
 		t.Fatalf("refusing runner: %v", err)
 	}
 	refuse = false
 	jobs = 1
-	if _, err := QuiesceRunner(ctx, server.URL); !errors.Is(err, ErrRunnerNotIdle) {
+	if _, err := QuiesceRunner(ctx, server.URL, ""); !errors.Is(err, ErrRunnerNotIdle) {
 		t.Fatalf("busy runner: %v", err)
 	}
 	jobs = 0
-	got, err := QuiesceRunner(ctx, server.URL)
+	got, err := QuiesceRunner(ctx, server.URL, "")
 	if err != nil || got != "hold" {
 		t.Fatalf("idle runner: %q %v", got, err)
 	}
-	if _, err := QuiesceRunner(ctx, server.URL); !errors.Is(err, ErrRunnerNotIdle) {
+	if _, err := QuiesceRunner(ctx, server.URL, ""); !errors.Is(err, ErrRunnerNotIdle) {
 		t.Fatalf("held runner: %v", err)
+	}
+	if again, err := QuiesceRunner(ctx, server.URL, got); err != nil || again != got {
+		t.Fatalf("renewing the hold: %q %v", again, err)
+	}
+	if _, err := QuiesceRunner(ctx, server.URL, "other"); !errors.Is(err, ErrRunnerNotIdle) {
+		t.Fatalf("renewing another's hold: %v", err)
 	}
 	if err := ResumeRunner(ctx, server.URL, "other"); err == nil {
 		t.Fatal("resumed with another token")

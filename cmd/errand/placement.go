@@ -188,6 +188,16 @@ func runChoices(e config.EffectiveRun, rawURL bool, stderr io.Writer) ([]placeme
 	if !rawURL {
 		c.Target = client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
 	}
+	// A lease named to run on is asked for once the run is ready to submit,
+	// as a rented one is, so a run that fails locally does not renew it.
+	if claim := claimNamedLease(e.Peer); claim != nil && !rawURL {
+		return nil, func() (placementChoice, error) {
+			if err := claim(); err != nil {
+				return placementChoice{}, err
+			}
+			return c, nil
+		}, nil
+	}
 	return []placementChoice{c}, nil, nil
 }
 

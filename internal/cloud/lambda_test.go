@@ -1057,6 +1057,7 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 		},
 		AdmitKeys: machine.admit,
 		Drain:     machine.drain,
+		Resume:    machine.resume,
 		ReadyPoll: time.Millisecond,
 		IdlePoll:  time.Hour,
 	})

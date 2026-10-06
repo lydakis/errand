@@ -54,6 +54,13 @@ type SetupQuiesceRelease struct {
 	Token string `json:"token"`
 }
 
+// SetupQuiesceRenew, sent to take the hold, renews the hold Token names
+// while that hold lasts. Once it has lapsed, the hold is taken afresh, which
+// an idle runner grants as it would any other.
+type SetupQuiesceRenew struct {
+	Token string `json:"token"`
+}
+
 const (
 	EntryFile    = "file"
 	EntryDir     = "dir"

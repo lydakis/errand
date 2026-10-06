@@ -214,3 +214,41 @@ func TestSetupQuiesceIsLocalOnly(t *testing.T) {
 		t.Fatalf("tailnet setup quiesce = %s, want 403", res.Status)
 	}
 }
+
+// A hold is renewed by its token while it lasts. Another token does not
+// renew it, and once it has lapsed the token takes it afresh, as an idle
+// runner grants any hold.
+func TestSetupQuiesceRenewal(t *testing.T) {
+	d := &Daemon{jobs: map[string]*Job{}, running: map[string]*Job{}}
+	quiesce := func(token string) (int, proto.SetupQuiesce) {
+		var body io.Reader
+		if token != "" {
+			raw, _ := json.Marshal(proto.SetupQuiesceRenew{Token: token})
+			body = bytes.NewReader(raw)
+		}
+		w := httptest.NewRecorder()
+		d.handleSetupQuiesce(w, httptest.NewRequest(http.MethodPost, "/v0/setup/quiesce", body), Identity{Local: true})
+		var hold proto.SetupQuiesce
+		json.NewDecoder(w.Body).Decode(&hold)
+		return w.Code, hold
+	}
+	code, hold := quiesce("")
+	if code != http.StatusCreated || hold.Token == "" {
+		t.Fatalf("taking the hold = %d %+v", code, hold)
+	}
+	d.mu.Lock()
+	d.setupQuiesceUntil = time.Now().Add(time.Second) // nearly over
+	d.mu.Unlock()
+	if code, renewed := quiesce(hold.Token); code != http.StatusCreated || renewed.Token != hold.Token || time.Until(renewed.ExpiresAt) < setupQuiesceDuration-time.Minute {
+		t.Fatalf("renewing the hold = %d %+v", code, renewed)
+	}
+	if code, _ := quiesce("another"); code != http.StatusConflict {
+		t.Fatalf("renewing with another token = %d, want 409", code)
+	}
+	d.mu.Lock()
+	d.setupQuiesceUntil = time.Now().Add(-time.Second)
+	d.mu.Unlock()
+	if code, again := quiesce(hold.Token); code != http.StatusCreated || again.Token == "" || again.Token == hold.Token {
+		t.Fatalf("renewing a lapsed hold = %d %+v", code, again)
+	}
+}

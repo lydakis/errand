@@ -26,10 +26,12 @@ type fakeMachine struct {
 	down    atomic.Bool
 	probes  atomic.Int32
 
-	mu       sync.Mutex
-	admitted []string // keys added after launch
-	held     bool     // refusing new jobs
-	refuse   atomic.Bool
+	mu        sync.Mutex
+	admitted  []string  // keys added after launch
+	hold      string    // the token of the hold refusing new jobs
+	heldUntil time.Time // when that hold lapses
+	holdTTL   time.Duration
+	refuse    atomic.Bool
 }
 
 func (m *fakeMachine) admit(_ context.Context, target proto.LeaseTarget, _ string, keys []string) error {
@@ -95,6 +97,7 @@ func newHarness(t *testing.T, acquireBody string) *harness {
 		Probe:          h.machine.probe,
 		AdmitKeys:      h.machine.admit,
 		Drain:          h.machine.drain,
+		Resume:         h.machine.resume,
 		ReadyPoll:      10 * time.Millisecond,
 		IdlePoll:       10 * time.Millisecond,
 	}
@@ -1001,23 +1004,45 @@ func waitProgress(t *testing.T, b *Broker, id, line string) {
 	}
 }
 
-// drain holds an idle machine, as a runner refuses new jobs once quiesced.
-func (m *fakeMachine) drain(_ context.Context, _ proto.LeaseTarget, _ string) (func(context.Context) error, error) {
+// drain holds an idle machine, as a runner refuses new jobs once quiesced,
+// for holdTTL (default an hour); renew extends a hold that has not lapsed.
+func (m *fakeMachine) drain(_ context.Context, _ proto.LeaseTarget, _, renew string) (string, error) {
 	if m.down.Load() {
-		return nil, errors.New("connection refused")
+		return "", errors.New("connection refused")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.running.Load() > 0 || m.held {
-		return nil, fmt.Errorf("%w: 1 running", ErrRunnerBusy)
+	ttl := m.holdTTL
+	if ttl == 0 {
+		ttl = time.Hour
 	}
-	m.held = true
-	return func(context.Context) error {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		m.held = false
-		return nil
-	}, nil
+	held := time.Now().Before(m.heldUntil)
+	switch {
+	case renew != "" && renew == m.hold && held:
+	case m.running.Load() > 0 || held:
+		return "", fmt.Errorf("%w: 1 running", ErrRunnerBusy)
+	default:
+		m.hold = proto.NewULID()
+	}
+	m.heldUntil = time.Now().Add(ttl)
+	return m.hold, nil
+}
+
+func (m *fakeMachine) resume(_ context.Context, _ proto.LeaseTarget, _, token string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if token != m.hold {
+		return errors.New("setup quiesce token does not match")
+	}
+	m.hold, m.heldUntil = "", time.Time{}
+	return nil
+}
+
+// held reports whether the machine refuses new jobs.
+func (m *fakeMachine) held() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return time.Now().Before(m.heldUntil)
 }
 
 // testKey is a distinct, well-formed SSH public key line.
@@ -1375,9 +1400,7 @@ func TestJobAdmittedAtIdleDeadlineKeepsLease(t *testing.T) {
 	time.Sleep(150 * time.Millisecond) // the window the drain's find started
 	wake(b, l.ID)
 	waitState(t, b, "george", l.ID, proto.LeaseReleased)
-	h.machine.mu.Lock()
-	held := h.machine.held
-	h.machine.mu.Unlock()
+	held := h.machine.held()
 	if !held {
 		t.Fatal("released a runner that could still take jobs")
 	}
@@ -1393,12 +1416,12 @@ func TestDrainFindingWorkRestartsIdleWindow(t *testing.T) {
 	h.cfg.Offers[0].IdleTimeout = idle
 	var drains atomic.Int32
 	var foundWork atomic.Int64
-	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity string) (func(context.Context) error, error) {
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (string, error) {
 		if drains.Add(1) == 1 {
 			foundWork.Store(time.Now().UnixNano())
-			return nil, fmt.Errorf("%w: 1 running", ErrRunnerBusy) // done before the next check
+			return "", fmt.Errorf("%w: 1 running", ErrRunnerBusy) // done before the next check
 		}
-		return h.machine.drain(ctx, target, identity)
+		return h.machine.drain(ctx, target, identity, renew)
 	}
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", "", "")
@@ -1434,11 +1457,11 @@ func TestHandOutDuringDrainResumesRunner(t *testing.T) {
 	h.cfg.IdlePoll = time.Hour
 	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
 	draining, proceed := make(chan struct{}), make(chan struct{})
-	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity string) (func(context.Context) error, error) {
-		resume, err := h.machine.drain(ctx, target, identity)
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (string, error) {
+		token, err := h.machine.drain(ctx, target, identity, renew)
 		close(draining)
 		<-proceed
-		return resume, err
+		return token, err
 	}
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", "", "")
@@ -1454,9 +1477,7 @@ func TestHandOutDuringDrainResumesRunner(t *testing.T) {
 	}
 	close(proceed)
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
-		h.machine.mu.Lock()
-		held := h.machine.held
-		h.machine.mu.Unlock()
+		held := h.machine.held()
 		if !held {
 			break
 		}
@@ -1493,12 +1514,12 @@ func TestIdleReleaseWhenDrainFails(t *testing.T) {
 			var drains atomic.Int32
 			var failing atomic.Bool
 			failing.Store(true)
-			h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity string) (func(context.Context) error, error) {
+			h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (string, error) {
 				drains.Add(1)
 				if failing.Load() {
-					return nil, tc.drain
+					return "", tc.drain
 				}
-				return h.machine.drain(ctx, target, identity)
+				return h.machine.drain(ctx, target, identity, renew)
 			}
 			b := h.start(t)
 			l, err := b.Acquire("george", "", "gpu", testKey(0), "")
@@ -1544,12 +1565,12 @@ func TestDrainUsesProvidersDrainTarget(t *testing.T) {
 	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
 	h.cfg.Offers[0].Provider = drainProvider{h.cfg.Offers[0].Provider.(CommandProvider)}
 	drained := make(chan proto.LeaseTarget, 1)
-	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity string) (func(context.Context) error, error) {
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (string, error) {
 		select {
 		case drained <- target:
 		default:
 		}
-		return h.machine.drain(ctx, target, identity)
+		return h.machine.drain(ctx, target, identity, renew)
 	}
 	h.cfg.IdlePoll = time.Hour
 	b := h.start(t)
@@ -1612,8 +1633,8 @@ func TestHoldThatKeepsFailing(t *testing.T) {
 	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	h.cfg.IdlePoll = time.Hour // check only when woken
 	h.cfg.Offers[0].IdleTimeout = 300 * time.Millisecond
-	h.cfg.Drain = func(context.Context, proto.LeaseTarget, string) (func(context.Context) error, error) {
-		return nil, errors.New("ssh: connection timed out")
+	h.cfg.Drain = func(context.Context, proto.LeaseTarget, string, string) (string, error) {
+		return "", errors.New("ssh: connection timed out")
 	}
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", testKey(0), "")
@@ -2027,5 +2048,105 @@ func TestCatalogOffersAreLeased(t *testing.T) {
 	}
 	if _, err := only.Acquire("bob", "", "gpus>=8", "", ""); err == nil || !strings.Contains(err.Error(), "gpu-8x-h100: costs $27.99/h, above max_price_per_hour = 10") {
 		t.Fatalf("capped refusal: %v", err)
+	}
+}
+
+// pendingRelease reports the machine still terminating while pending is set.
+type pendingRelease struct {
+	CommandProvider
+	pending *atomic.Bool
+}
+
+func (p pendingRelease) Release(ctx context.Context, req ReleaseRequest) error {
+	if p.pending.Load() {
+		return &ReleasePending{"still terminating"}
+	}
+	return p.CommandProvider.Release(ctx, req)
+}
+
+// holdingThroughRelease starts a lease whose idle release took the hold
+// and whose machine keeps terminating until pending is cleared.
+func holdingThroughRelease(t *testing.T) (*harness, *Broker, proto.Lease, *atomic.Bool) {
+	t.Helper()
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	h.cfg.HoldRenew = 50 * time.Millisecond
+	h.machine.holdTTL = 200 * time.Millisecond
+	pending := new(atomic.Bool)
+	pending.Store(true)
+	h.cfg.Offers[0].Provider = pendingRelease{h.cfg.Offers[0].Provider.(CommandProvider), pending}
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	time.Sleep(150 * time.Millisecond)
+	wake(b, l.ID)
+	waitState(t, b, "george", l.ID, proto.LeaseReleasing)
+	return h, b, l, pending
+}
+
+// stayHeld fails unless the runner refuses jobs throughout d.
+func stayHeld(t *testing.T, h *harness, d time.Duration) {
+	t.Helper()
+	for end := time.Now().Add(d); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+		if !h.machine.held() {
+			t.Fatal("the runner took jobs again while its machine was being released")
+		}
+	}
+}
+
+// Lease guarantee 4: the hold an idle release takes lasts until the
+// machine is gone, however long the provider takes to confirm it, and
+// across a restart of the cloud peer.
+func TestReleaseKeepsTheRunnerHeld(t *testing.T) {
+	h, b, l, pending := holdingThroughRelease(t)
+	stayHeld(t, h, 3*h.machine.holdTTL)
+	b.Close()
+	b2 := h.start(t)
+	stayHeld(t, h, 3*h.machine.holdTTL)
+	pending.Store(false)
+	waitState(t, b2, "george", l.ID, proto.LeaseReleased)
+}
+
+// A runner whose hold lapsed and that took work is still released: the
+// decision was made, and the progress says the hold was lost.
+func TestReleaseGoesOnWhenTheHoldIsLost(t *testing.T) {
+	h, b, l, pending := holdingThroughRelease(t)
+	h.machine.mu.Lock()
+	h.machine.heldUntil = time.Now() // lapsed
+	h.machine.mu.Unlock()
+	h.machine.running.Store(1)
+	waitProgress(t, b, l.ID, "lost the hold on the machine, which may take jobs until it is gone; releasing it anyway: runner has work: 1 running")
+	pending.Store(false)
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+}
+
+// Lease guarantee 4: a drain that ends past the lease's lifetime does not
+// keep it, even when it found work.
+func TestLifetimeEndsALeaseWhoseDrainFoundWork(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	h.cfg.Offers[0].MaxLifetime = 500 * time.Millisecond
+	var expires atomic.Int64
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity, renew string) (string, error) {
+		time.Sleep(time.Until(time.Unix(0, expires.Load())) + 20*time.Millisecond)
+		return "", fmt.Errorf("%w: 1 running", ErrRunnerBusy)
+	}
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expires.Store(l.ExpiresAt.UnixNano())
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	time.Sleep(150 * time.Millisecond)
+	wake(b, l.ID)
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+	if got, _ := b.Get("george", l.ID); !strings.Contains(strings.Join(got.Progress, "\n"), "max lifetime") {
+		t.Fatalf("progress %q", got.Progress)
 	}
 }
