@@ -45,8 +45,8 @@ idle or reach their lifetime.
   runner that is busy queues the job; errand does not rent a second machine.
 - Never for `--where '*'`.
 - Every reachable cloud peer with a matching offer can supply the machine.
-  The cheapest matching offer wins: an offer with `price_per_hour` before one
-  without, and equal offers in random order. Neither your default peer nor how
+  The cheapest matching offer wins: an offer with `price_per_hour`, even
+  `0`, before one without, and equal offers in random order. Neither your default peer nor how
   busy a cloud peer's own runner is plays a part. If a cloud peer turns the
   request down before starting anything (no permission, nothing matches any
   more, or it is at `max_leases`), the next one is asked. A cloud peer that
@@ -165,9 +165,10 @@ launched together take turns.
 Clients reach the machine one of two ways:
 
 - **Over SSH** (the default). The runner listens on no port, and jobs reach
-  it over SSH on port 22, as they reach any SSH peer. Each machine you run
-  errand from makes an SSH key of its own and sends the public half with the
-  lease request; the leased machine admits only that key. The lease carries
+  it over SSH on port 22, as they reach any SSH peer, logged in as `ubuntu`,
+  the only login on Lambda's images. Each machine you run errand from makes
+  an SSH key of its own and sends the public half with the lease request; the
+  leased machine admits only that key. The lease carries
   the machine's host key, so errand checks it without a `known_hosts` entry.
 - **Over your tailnet**, when `tailscale_auth_key_file` is set. The machine
   joins as `errand-<lease id>`, and the runner listens only on the tailnet.
@@ -196,13 +197,15 @@ Lambda offers default to `os = "linux"` and `arch = "amd64"`. The machine
 runs the cloud peer's own errand executable when the cloud peer is
 `linux/amd64` too. Otherwise, for example a cloud peer on a Mac or an `arm64`
 GH200 offer, `errand_binary` must name a Linux build of errand for the offer's
-architecture. errand checks this before renting anything.
+architecture. errand checks this before renting anything, and installs the
+copy it checked even if the file changes while the machine boots.
 
 Set up once:
 
 1. Create a Lambda API key and save it alone in `api_key_file`, owned by the
    user errand runs as, with mode 600. errand refuses files other users can
-   read.
+   read; on Windows, that is any file whose ACL lets someone other than you,
+   SYSTEM or Administrators read it.
 2. Restart the cloud peer with `errand setup`.
 
 That is all for SSH. The cloud peer needs `ssh` and `ssh-keygen`, and so do

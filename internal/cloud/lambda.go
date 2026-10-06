@@ -37,7 +37,6 @@ type LambdaProvider struct {
 	InstanceType         string
 	Regions              []string // preference order; empty means any with capacity
 	FileSystems          []string
-	User                 string   // login on the instance; Lambda images use ubuntu
 	TailscaleAuthKeyFile string   // empty: clients reach the machine over SSH
 	ErrandBinary         string   // a linux build for Arch
 	Arch                 string   // the instance's architecture, amd64 or arm64
@@ -73,6 +72,12 @@ type lambdaState struct {
 	KeyID      string `json:"key_id"`
 	Region     string `json:"region"`
 	InstanceID string `json:"instance_id,omitempty"` // once Lambda answered
+	// Seen is set once Lambda has shown the instance. A lease has at most
+	// one instance: launch sends no attempt after one that Lambda did not
+	// refuse with 429, and a 429 created nothing. So once it has been seen,
+	// the launch has settled, and when Lambda no longer lists it, it has
+	// been terminated.
+	Seen bool `json:"seen,omitempty"`
 	proto.LeaseTarget
 }
 
@@ -108,9 +113,11 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 		}
 	}
 	// Everything the install needs is checked before paying for a machine.
-	if err := p.checkInstall(); err != nil {
+	binary, err := p.checkInstall()
+	if err != nil {
 		return Machine{}, err
 	}
+	defer removeCopy(binary)
 	keyName, err := p.registerKey(ctx, key)
 	if err != nil {
 		return Machine{}, err
@@ -166,12 +173,16 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 		return Machine{}, err
 	}
 
-	ip, err := p.waitActive(ctx, key, state.InstanceID, req.Progress)
+	seen := func() error {
+		state.Seen = true
+		return saveState(req, state)
+	}
+	ip, err := p.waitActive(ctx, key, state.InstanceID, req.Progress, seen)
 	if err != nil {
 		return Machine{}, err
 	}
 	req.Progress("instance is up at " + ip + "; installing errand")
-	if err := p.install(ctx, ip, hostPublic, name, authKey, req.Login, req.SSHKey); err != nil {
+	if err := p.install(ctx, binary, ip, hostPublic, name, authKey, req.Login, req.SSHKey); err != nil {
 		return Machine{}, err
 	}
 	if tailnet {
@@ -179,7 +190,7 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 	} else {
 		// The runner listens on no port; jobs reach it over SSH, as the
 		// login it runs as. This cloud peer watches it with its own key.
-		state.LeaseTarget = proto.LeaseTarget{SSH: p.user() + "@" + ip, HostKey: hostPublic}
+		state.LeaseTarget = proto.LeaseTarget{SSH: lambdaUser + "@" + ip, HostKey: hostPublic}
 	}
 	if err := saveState(req, state); err != nil {
 		return Machine{}, err
@@ -189,7 +200,7 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 	// way: on the tailnet only to hold the runner idle before releasing it.
 	m := Machine{Target: state.LeaseTarget, State: data, Identity: p.keyFile()}
 	if tailnet {
-		m.Drain = &proto.LeaseTarget{SSH: p.user() + "@" + ip, HostKey: hostPublic}
+		m.Drain = &proto.LeaseTarget{SSH: lambdaUser + "@" + ip, HostKey: hostPublic}
 	}
 	return m, nil
 }
@@ -249,13 +260,19 @@ func (p *LambdaProvider) Release(ctx context.Context, req ReleaseRequest) error 
 	if len(terminating) > 0 {
 		return &ReleasePending{"waiting for Lambda to finish terminating " + strings.Join(terminating, ", ")}
 	}
+	// Absence means something only to the key that launched: another key
+	// may belong to another account. To that key, an instance Lambda has
+	// shown and no longer lists has been terminated. Only one never seen may
+	// still be registering.
 	switch {
 	case ended:
 		return nil
-	case p.now().Sub(state.Sent) < lambdaLaunchSettle:
-		return fmt.Errorf("no instance named %s yet; checking again in case its launch is still registering", name)
 	case state.KeyID != keyID(key):
 		return fmt.Errorf("the Lambda API key changed since %s was launched and this key does not see it; restore the old key in api_key_file, or terminate %s in the Lambda console", name, name)
+	case state.Seen:
+		return nil
+	case p.now().Sub(state.Sent) < lambdaLaunchSettle:
+		return fmt.Errorf("no instance named %s yet; checking again in case its launch is still registering", name)
 	}
 	return nil
 }
@@ -270,13 +287,8 @@ func (p *LambdaProvider) useStateDir(dir string) {
 	}
 }
 
-// user is the login on the instance.
-func (p *LambdaProvider) user() string {
-	if p.User == "" {
-		return "ubuntu"
-	}
-	return p.User
-}
+// lambdaUser is the login on the instance, the only one Lambda's images have.
+const lambdaUser = "ubuntu"
 
 func (p *LambdaProvider) now() time.Time {
 	if p.Now != nil {
@@ -303,10 +315,10 @@ func keyID(key string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// readSecret reads a one-line credential from a file only this user can read.
-// readSecret reads a one-line secret from the file at path. Its errors name
-// the file by what it holds, never by path: they reach logs and clients, and
-// the path is in the cloud peer's own configuration.
+// readSecret reads a one-line secret from the file at path, which must be
+// this user's and readable by no one else. Its errors name the file by what
+// it holds, never by path: they reach logs and clients, and the path is in
+// the cloud peer's own configuration.
 func readSecret(path, what string) (string, error) {
 	fail := func(problem string, err error) (string, error) {
 		var pathErr *os.PathError
@@ -340,7 +352,12 @@ func readSecret(path, what string) (string, error) {
 	if owned, err := fsowner.OwnedByCurrentUser(f); err != nil || !owned {
 		return fail("must be owned by the user errand runs as", nil)
 	}
-	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+	if private, err := fsowner.Private(f); err != nil {
+		return fail("checking who can read it", err)
+	} else if !private {
+		if runtime.GOOS == "windows" {
+			return fail("is readable by other users; let only your user, SYSTEM and Administrators read it", nil)
+		}
 		return fail("is readable by other users; chmod 600 it", nil)
 	}
 	data, err := io.ReadAll(io.LimitReader(f, 64<<10))
