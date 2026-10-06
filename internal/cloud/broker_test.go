@@ -1005,7 +1005,9 @@ echo '{"url":"http://box:7443"}'
 func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	h.cfg.IdlePoll = time.Hour // probe only when woken
-	h.cfg.Offers[0].IdleTimeout = 200 * time.Millisecond
+	// The hand-out restarts the idle window, and the release is decided
+	// within it; it leaves that room on a loaded machine.
+	h.cfg.Offers[0].IdleTimeout = time.Second
 	// Once the lease is ready, each idle probe waits for the test.
 	var gate atomic.Bool
 	probing, answer := make(chan struct{}), make(chan struct{})
@@ -1024,8 +1026,8 @@ func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	gate.Store(true)
 	wake(b, l.ID)
-	<-probing                          // an idle probe, which will find the machine idle
-	time.Sleep(300 * time.Millisecond) // past the idle deadline
+	<-probing                           // an idle probe, which will find the machine idle
+	time.Sleep(1100 * time.Millisecond) // past the idle deadline
 	if again, err := b.Acquire("george", "", "gpu", "", proto.NewULID()); err != nil || again.ID != l.ID {
 		t.Fatalf("reuse: %+v %v", again, err)
 	}
@@ -1158,14 +1160,16 @@ func TestBusyObservedWithoutAWrite(t *testing.T) {
 func TestAdmissionRestartsIdleWindow(t *testing.T) {
 	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	h.cfg.IdlePoll = time.Hour // check only when woken
-	h.cfg.Offers[0].IdleTimeout = 300 * time.Millisecond
+	// The claim restarts the idle window, and the admission and the check
+	// after it happen within it; it leaves that room on a loaded machine.
+	h.cfg.Offers[0].IdleTimeout = time.Second
 	b := h.start(t)
 	l, err := b.Acquire("george", "", "gpu", testKey(0), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	time.Sleep(350 * time.Millisecond) // past the idle deadline
+	time.Sleep(1050 * time.Millisecond) // past the idle deadline
 	if _, err := b.Admit("george", "", l.ID, testKey(1), true); err != nil {
 		t.Fatal(err)
 	}
@@ -1903,7 +1907,10 @@ func (p pendingRelease) Release(ctx context.Context, req ReleaseRequest) error {
 func TestClaimAndIdleReleaseOneWins(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	h.cfg.IdlePoll = time.Hour // check only when woken
-	h.cfg.Offers[0].IdleTimeout = time.Second
+	// The claim restarts the idle window 400ms before the old deadline, and
+	// the check that began under it ends 300ms past it; the window leaves
+	// room for that on a loaded machine.
+	h.cfg.Offers[0].IdleTimeout = 2 * time.Second
 	pending := new(atomic.Bool)
 	pending.Store(true)
 	h.cfg.Offers[0].Provider = pendingRelease{h.cfg.Offers[0].Provider.(CommandProvider), pending}
@@ -1976,7 +1983,9 @@ func TestLeasePastDeadlines(t *testing.T) {
 
 	h := newHarness(t, okAcquire)
 	h.cfg.IdlePoll = time.Hour // check only when woken
-	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	// The hand-out restarts the idle window, and the check after it happens
+	// within it; it leaves that room on a loaded machine.
+	h.cfg.Offers[0].IdleTimeout = time.Second
 	b := h.start(t)
 	idle, err := b.Acquire("george", "", "gpu", "", "")
 	if err != nil {
