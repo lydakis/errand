@@ -156,8 +156,9 @@ The following properties must hold:
   apply run environment, workdir, or apply preferences to it.
 - Retries cannot execute an admitted job twice. Ambiguous state is reported and
   is never treated as permission to replay execution. A client that stops
-  hearing a running job's heartbeat reports the job's state as unknown and
-  does not resubmit it.
+  hearing a running job's heartbeat does not resubmit it: it reports the
+  state the runner gives when the runner still answers, and that the state
+  is unknown when it does not.
 - On Windows, the runner refuses to start a `.bat` or `.cmd` program with an
   argument that `cmd.exe` would reinterpret (`"`, `%`, `^`, `&`, `|`, `<`,
   `>` or a line break), so argv cannot become a different command.
@@ -185,7 +186,9 @@ Cloud peers and leases:
   withdrawing and releasing a lease all require that principal. A caller
   without `submit` is shown no lease targets, progress or errors.
 - Any request from a principal that has lost `submit` on the cloud peer ends
-  all of that principal's leases, whatever the request asked for.
+  all of that principal's leases, whatever the request asked for. If the
+  cloud peer cannot record that, the leases stay as they were, and the
+  principal's next request tries again.
 - A Lambda machine admits only the lease's owner, the cloud peer, and any
   logins the operator lists in the offer's `allow_users`. On the tailnet, its
   runner allows the tailnet login that asked for the lease plus
@@ -228,10 +231,12 @@ Cloud peers and leases:
   ready lease is released once its runner has been idle for the offer's
   `idle_timeout` (an unreachable runner counts as idle), or at its
   `max_lifetime` even with a job running, and a failed release is retried
-  until it succeeds. A restart releases launches it interrupted and starts a
+  until it succeeds. The idle and lifetime rules start a release; they do not
+  cut off access to a machine whose release keeps failing. A restart releases launches it interrupted and starts a
   full idle window for each ready lease, so restarts can extend a lease up
   to its `max_lifetime`. Removing an offer only stops new leases. A Lambda lease counts as released only once
-  Lambda lists its instance as terminated.
+  Lambda lists its instance as terminated or preempted, or no longer lists
+  an instance it listed before.
 - A cloud peer starts a new lease only while fewer than `max_leases` leases
   are active across all callers; lowering the setting does not end leases
   already active. Unless `max_price_per_hour` is `0`, the Lambda provider
@@ -292,8 +297,8 @@ outside a protected client or runner boundary are high-impact findings.
   images that login can use `sudo`.
 - Taking `submit` away on the cloud peer does not reach into machines
   already leased. The owner's leases end at its next request to the cloud
-  peer, and until then a leased machine still admits it, at most until
-  `idle_timeout` or `max_lifetime`. Taking only `lease` away leaves existing
+  peer, and until then a leased machine still admits it, until the cloud
+  peer releases the machine by its idle or lifetime rules. Taking only `lease` away leaves existing
   leases to their idle and lifetime rules.
 - Provider commands are operator configuration. They run as the cloud peer's
   user with its full environment, and separating successive owners of one
