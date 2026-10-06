@@ -57,10 +57,9 @@ func TestAcquireLeaseRepeatsLostRequest(t *testing.T) {
 func TestLeaseRefusalIsSafeOnlyBeforeALostAnswer(t *testing.T) {
 	for _, status := range []int{http.StatusForbidden, http.StatusNotFound, http.StatusGone, http.StatusPreconditionFailed, http.StatusTooManyRequests} {
 		for _, lost := range []bool{false, true} {
-			attempts := 0
+			var attempts atomic.Int32
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				attempts++
-				if lost && attempts == 1 {
+				if attempts.Add(1) == 1 && lost {
 					panic(http.ErrAbortHandler)
 				}
 				http.Error(w, `{"error":"no"}`, status)
