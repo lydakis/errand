@@ -20,26 +20,50 @@ const maxLeaseResponseBytes = 1 << 20
 // attempt up to timeout. The answer may be an existing lease of the caller's
 // that already matches. A request whose answer is lost may still have
 // started a lease, so it is sent once more under the same request ID, which
-// returns that lease. requestID is a ULID that also names the request to
-// WithdrawLeaseRequest.
+// returns that lease. If that does not settle it either, the error is one
+// LeaseUncertain reports. requestID is a ULID that also names the request
+// to WithdrawLeaseRequest.
 func AcquireLease(ctx context.Context, peerURL, requestID, where, sshKey string, timeout time.Duration) (proto.Lease, error) {
 	body, _ := json.Marshal(proto.LeaseRequest{RequestID: requestID, Where: where, SSHKey: sshKey})
 	endpoint := strings.TrimSuffix(peerURL, "/") + "/v0/leases"
 	var lease proto.Lease
 	var err error
-	for range 2 {
-		attempt, cancel := context.WithTimeout(ctx, timeout)
-		err = leaseRequest(attempt, http.MethodPost, endpoint, body, &lease)
+	for attempt := range 2 {
+		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
+		err = leaseRequest(attemptCtx, http.MethodPost, endpoint, body, &lease)
 		cancel()
-		var refused *controlHTTPError
-		if err == nil || errors.As(err, &refused) {
-			return lease, err
+		if err == nil {
+			return lease, nil
+		}
+		var answered *controlHTTPError
+		if errors.As(err, &answered) {
+			if attempt == 0 {
+				return lease, err
+			}
+			// A cloud peer can refuse a retry before it looks for what the
+			// first attempt started, so the refusal does not say whether
+			// that attempt started anything.
+			return lease, &uncertainLease{fmt.Errorf("%v, after the answer to the first attempt was lost", err)}
 		}
 		if ctx.Err() != nil {
 			break
 		}
 	}
-	return lease, fmt.Errorf("%w (if the cloud peer started a lease anyway, errand leases lists it, and it ends once idle)", err)
+	return lease, &uncertainLease{err}
+}
+
+// uncertainLease is AcquireLease failing after an attempt that may have
+// reached the cloud peer went unanswered.
+type uncertainLease struct{ err error }
+
+func (e *uncertainLease) Error() string { return e.err.Error() }
+
+// LeaseUncertain reports whether a lease request failed without settling
+// whether the cloud peer started a lease for it. Only withdrawing the
+// request settles it.
+func LeaseUncertain(err error) bool {
+	var uncertain *uncertainLease
+	return errors.As(err, &uncertain)
 }
 
 func GetLease(ctx context.Context, peerURL, id string) (proto.Lease, error) {
@@ -63,9 +87,15 @@ func ReleaseLease(ctx context.Context, peerURL, id string) (proto.Lease, error) 
 // WithdrawLeaseRequest tells a cloud peer that the run that sent requestID
 // gave up before its lease was ready. The cloud peer cancels the launch if
 // no other run is waiting for it; a ready lease is left to its idle rule.
+// The answer has no ID when the cloud peer has no lease recorded for the
+// request.
 func WithdrawLeaseRequest(ctx context.Context, peerURL, requestID string) (proto.Lease, error) {
 	var lease proto.Lease
 	err := leaseRequest(ctx, http.MethodDelete, strings.TrimSuffix(peerURL, "/")+"/v0/lease-requests/"+url.PathEscape(requestID), nil, &lease)
+	var answered *controlHTTPError
+	if errors.As(err, &answered) && answered.statusCode == http.StatusNotFound {
+		return proto.Lease{}, nil
+	}
 	return lease, err
 }
 
@@ -96,15 +126,17 @@ func leaseRequest(ctx context.Context, method, endpoint string, body []byte, dst
 }
 
 // LeaseRefused reports whether a cloud peer turned a lease request down
-// before starting anything: the caller may not lease there, nothing there
-// matches, or it is at its lease limit.
+// before starting anything: the caller may not lease there, it has no
+// offers any more, nothing there matches, or it is at its lease limit. A
+// refusal of a retry is not one: the first attempt may have started a
+// lease.
 func LeaseRefused(err error) bool {
 	var refused *controlHTTPError
-	if !errors.As(err, &refused) {
+	if LeaseUncertain(err) || !errors.As(err, &refused) {
 		return false
 	}
 	switch refused.statusCode {
-	case http.StatusForbidden, http.StatusPreconditionFailed, http.StatusTooManyRequests:
+	case http.StatusForbidden, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusTooManyRequests:
 		return true
 	}
 	return false

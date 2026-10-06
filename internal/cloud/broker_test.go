@@ -1000,3 +1000,15 @@ func waitProgress(t *testing.T, b *Broker, id, line string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// A lease keeps only the last of its progress lines, numbered so a client
+// can tell which ones it has not shown.
+func TestProgressTailIsNumbered(t *testing.T) {
+	var r record
+	for n := 1; n <= maxProgressLines+50; n++ {
+		r.addProgress(fmt.Sprintf("line %d", n))
+	}
+	if len(r.Progress) != maxProgressLines || r.ProgressSeq != maxProgressLines+50 || r.Progress[0] != "line 51" {
+		t.Fatalf("%d lines up to %d, starting %q", len(r.Progress), r.ProgressSeq, r.Progress[0])
+	}
+}

@@ -974,6 +974,7 @@ func (r *record) addProgress(line string) {
 		r.Progress = append(r.Progress[:0:0], r.Progress[1:]...)
 	}
 	r.Progress = append(r.Progress, line)
+	r.ProgressSeq++
 }
 
 // maxRequests bounds the runs waiting for one launching lease.

@@ -49,3 +49,38 @@ func TestAcquireLeaseRepeatsLostRequest(t *testing.T) {
 		t.Fatalf("refusal: %v after %d requests", err, len(requests))
 	}
 }
+
+// A refusal lets the caller ask another cloud peer only when no earlier
+// attempt of the request may have reached this one: a retry is refused
+// without regard to what a lost first attempt started.
+func TestLeaseRefusalIsSafeOnlyBeforeALostAnswer(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusTooManyRequests} {
+		for _, lost := range []bool{false, true} {
+			attempts := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				if lost && attempts == 1 {
+					panic(http.ErrAbortHandler)
+				}
+				http.Error(w, `{"error":"no"}`, status)
+			}))
+			_, err := AcquireLease(context.Background(), srv.URL, proto.NewULID(), "gpu", "", time.Second)
+			srv.Close()
+			if err == nil || LeaseRefused(err) == lost || LeaseUncertain(err) != lost {
+				t.Fatalf("%d (first answer lost: %v): refused %v, uncertain %v: %v", status, lost, LeaseRefused(err), LeaseUncertain(err), err)
+			}
+		}
+	}
+	// No answer at all leaves it uncertain too.
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) }))
+	defer srv.Close()
+	if _, err := AcquireLease(context.Background(), srv.URL, proto.NewULID(), "gpu", "", time.Second); !LeaseUncertain(err) || LeaseRefused(err) {
+		t.Fatalf("unanswered: %v", err)
+	}
+	// Withdrawing a request the cloud peer has no lease for answers no lease.
+	none := httptest.NewServer(http.NotFoundHandler())
+	defer none.Close()
+	if lease, err := WithdrawLeaseRequest(context.Background(), none.URL, proto.NewULID()); err != nil || lease.ID != "" {
+		t.Fatalf("withdrawing an unknown request: %+v %v", lease, err)
+	}
+}
