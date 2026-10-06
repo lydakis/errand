@@ -292,7 +292,7 @@ func TestLeaseAdmitsOwnersOtherDevices(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if _, err := b.Admit("george", "", l.ID, air); err != nil {
+	if _, err := b.Admit("george", "", l.ID, air, false); err != nil {
 		t.Fatal(err)
 	}
 	for got, _ := b.Get("george", l.ID); !slices.Contains(got.SSHKeys, air); got, _ = b.Get("george", l.ID) {
@@ -307,10 +307,10 @@ func TestLeaseAdmitsOwnersOtherDevices(t *testing.T) {
 	if !slices.Equal(admitted, []string{mini, air}) {
 		t.Fatalf("machine was asked to add %q", admitted)
 	}
-	if _, err := b.Admit("someone", "", l.ID, air); err == nil {
+	if _, err := b.Admit("someone", "", l.ID, air, false); err == nil {
 		t.Fatal("let another owner's device in")
 	}
-	if _, err := b.Admit("george", "", l.ID, "AAAA"); err == nil {
+	if _, err := b.Admit("george", "", l.ID, "AAAA", false); err == nil {
 		t.Fatal("admitted a malformed key")
 	}
 }
@@ -331,7 +331,7 @@ func TestReleaseCancelsAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 bWluaQ== errand"); err != nil {
+	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 bWluaQ== errand", false); err != nil {
 		t.Fatal(err)
 	}
 	<-admitting
@@ -1071,9 +1071,9 @@ func TestBusyObservedWithoutAWrite(t *testing.T) {
 	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 }
 
-// Lease guarantee 5: naming a ready lease to let a device in counts as a
-// hand-out, so a lease at its idle deadline is not released while the
-// machine admits the device.
+// Lease guarantee 5: naming a ready lease to run on counts as a hand-out,
+// so a lease at its idle deadline is not released while the machine admits
+// the device.
 func TestAdmissionRestartsIdleWindow(t *testing.T) {
 	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	h.cfg.IdlePoll = time.Hour // check only when woken
@@ -1085,7 +1085,7 @@ func TestAdmissionRestartsIdleWindow(t *testing.T) {
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	time.Sleep(350 * time.Millisecond) // past the idle deadline
-	if _, err := b.Admit("george", "", l.ID, testKey(1)); err != nil {
+	if _, err := b.Admit("george", "", l.ID, testKey(1), true); err != nil {
 		t.Fatal(err)
 	}
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
@@ -1102,6 +1102,30 @@ func TestAdmissionRestartsIdleWindow(t *testing.T) {
 	}
 }
 
+// Letting a device in only to look at a lease is not a hand-out: the idle
+// window stays where it was, whether or not the device brings a key.
+func TestAdmissionToLookKeepsIdleWindow(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 300 * time.Millisecond
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", testKey(0), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	before, _ := b.Get("george", l.ID)
+	time.Sleep(50 * time.Millisecond)
+	for _, key := range []string{testKey(1), ""} {
+		if got, err := b.Admit("george", "", l.ID, key, false); err != nil || !got.IdleUntil.Equal(before.IdleUntil) {
+			t.Fatalf("admitting %q to look: idle until %s, was %s (%v)", key, got.IdleUntil, before.IdleUntil, err)
+		}
+	}
+	time.Sleep(time.Until(before.IdleUntil) + 50*time.Millisecond)
+	wake(b, l.ID)
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+}
+
 // A lease admits a bounded number of keys, so its record stays readable.
 func TestLeaseKeysAreBounded(t *testing.T) {
 	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
@@ -1112,18 +1136,18 @@ func TestLeaseKeysAreBounded(t *testing.T) {
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	for i := 1; i < maxLeaseKeys; i++ {
-		if _, err := b.Admit("george", "", l.ID, testKey(i)); err != nil {
+		if _, err := b.Admit("george", "", l.ID, testKey(i), false); err != nil {
 			t.Fatalf("key %d: %v", i, err)
 		}
 	}
 	var refused *Error
-	if _, err := b.Admit("george", "", l.ID, testKey(maxLeaseKeys)); !errors.As(err, &refused) || refused.Status != http.StatusTooManyRequests {
+	if _, err := b.Admit("george", "", l.ID, testKey(maxLeaseKeys), false); !errors.As(err, &refused) || refused.Status != http.StatusTooManyRequests {
 		t.Fatalf("key past the bound: %v", err)
 	}
 	if _, err := b.Acquire("george", "", "gpu", testKey(maxLeaseKeys), ""); !errors.As(err, &refused) || refused.Status != http.StatusTooManyRequests {
 		t.Fatalf("hand-out past the bound: %v", err)
 	}
-	if again, err := b.Admit("george", "", l.ID, testKey(1)); err != nil || again.ID != l.ID {
+	if again, err := b.Admit("george", "", l.ID, testKey(1), false); err != nil || again.ID != l.ID {
 		t.Fatalf("a key already let in: %+v %v", again, err)
 	}
 }
@@ -1280,7 +1304,7 @@ func TestUnusableReadyLeaseNotHandedOut(t *testing.T) {
 				t.Fatalf("progress %q", got.Progress)
 			}
 			var refused *Error
-			if _, err := b.Admit("george", "", l.ID, ""); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, tc.reason) {
+			if _, err := b.Admit("george", "", l.ID, "", true); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, tc.reason) {
 				t.Fatalf("admission by name: %v", err)
 			}
 			if got, _ := b.Get("george", l.ID); !got.IdleUntil.Equal(before.IdleUntil) {
@@ -1347,7 +1371,8 @@ func TestJobAdmittedAtIdleDeadlineKeepsLease(t *testing.T) {
 		t.Fatalf("lease released under a job admitted at its idle deadline: %+v", got)
 	}
 	admitLate.Store(false)
-	h.machine.running.Store(0) // the job finished
+	h.machine.running.Store(0)         // the job finished
+	time.Sleep(150 * time.Millisecond) // the window the drain's find started
 	wake(b, l.ID)
 	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 	h.machine.mu.Lock()
@@ -1356,6 +1381,50 @@ func TestJobAdmittedAtIdleDeadlineKeepsLease(t *testing.T) {
 	if !held {
 		t.Fatal("released a runner that could still take jobs")
 	}
+}
+
+// A job admitted between the idle probe and the drain is seen only by the
+// drain when it ends before the next check, and still earns the lease a
+// full idle window.
+func TestDrainFindingWorkRestartsIdleWindow(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	idle := 300 * time.Millisecond
+	h.cfg.Offers[0].IdleTimeout = idle
+	var drains atomic.Int32
+	var foundWork atomic.Int64
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity string) (func(context.Context) error, error) {
+		if drains.Add(1) == 1 {
+			foundWork.Store(time.Now().UnixNano())
+			return nil, fmt.Errorf("%w: 1 running", ErrRunnerBusy) // done before the next check
+		}
+		return h.machine.drain(ctx, target, identity)
+	}
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	time.Sleep(idle + 50*time.Millisecond)
+	wake(b, l.ID)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		got, _ := b.Get("george", l.ID)
+		if found := foundWork.Load(); found != 0 && !got.IdleUntil.Before(time.Unix(0, found).Add(idle)) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("idle window not restarted by the work the drain found: %+v", got)
+		}
+	}
+	wake(b, l.ID)
+	time.Sleep(50 * time.Millisecond)
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady || drains.Load() != 1 {
+		t.Fatalf("released %d drains after the work the drain found: %+v", drains.Load(), got)
+	}
+	time.Sleep(idle)
+	wake(b, l.ID)
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 }
 
 // A lease handed out while its runner is being drained keeps the runner,
@@ -1523,7 +1592,7 @@ func TestRestoredLeaseWaitsForProbe(t *testing.T) {
 	}
 	b2 := h.start(t)
 	var refused *Error
-	if _, err := b2.Admit("george", "", l.ID, ""); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, "not checked since the cloud peer restarted") {
+	if _, err := b2.Admit("george", "", l.ID, "", true); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, "not checked since the cloud peer restarted") {
 		t.Fatalf("admission before the first probe: %v", err)
 	}
 	if other, err := b2.Acquire("george", "", "gpu", "", ""); err != nil || other.ID == l.ID {
@@ -1531,7 +1600,7 @@ func TestRestoredLeaseWaitsForProbe(t *testing.T) {
 	}
 	close(answer)
 	waitUnusable(t, b2, l.ID, false)
-	if again, err := b2.Admit("george", "", l.ID, ""); err != nil || again.ID != l.ID {
+	if again, err := b2.Admit("george", "", l.ID, "", true); err != nil || again.ID != l.ID {
 		t.Fatalf("admission after the first probe: %+v %v", again, err)
 	}
 }

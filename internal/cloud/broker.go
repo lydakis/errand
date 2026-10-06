@@ -474,10 +474,11 @@ func (b *Broker) end(owner, id, note string) (proto.Lease, error) {
 // devices by its SSH key, for a device that names the lease rather than
 // asking for a machine. The worker adds the key; the answer lists it in
 // SSHKeys once it has; a device already let in, or a lease not reached over
-// SSH, needs no key. Naming a ready lease to use it counts as a hand-out:
-// it starts a full idle window, so the lease is not released while the
-// machine admits the device.
-func (b *Broker) Admit(owner, login, id, sshKey string) (proto.Lease, error) {
+// SSH, needs no key. Only naming a ready lease to place work on it (use)
+// counts as a hand-out: it starts a full idle window, so the lease is not
+// released while the machine admits the device, and a lease Acquire would
+// pass over is refused. Letting a device in to look does neither.
+func (b *Broker) Admit(owner, login, id, sshKey string, use bool) (proto.Lease, error) {
 	if sshKey != "" && !ValidSSHPublicKey(sshKey) {
 		return proto.Lease{}, &Error{http.StatusBadRequest, "ssh_key is not one SSH public key"}
 	}
@@ -488,7 +489,7 @@ func (b *Broker) Admit(owner, login, id, sshKey string) (proto.Lease, error) {
 		return proto.Lease{}, &Error{http.StatusNotFound, "no active lease of yours has that ID"}
 	}
 	// A lease Acquire would pass over is not handed out by name either.
-	if l.State == proto.LeaseReady && l.unusable != "" {
+	if use && l.State == proto.LeaseReady && l.unusable != "" {
 		return proto.Lease{}, &Error{http.StatusConflict, fmt.Sprintf("lease %s cannot be used now: %s; it ends once idle", l.ID, l.unusable)}
 	}
 	var refused error
@@ -502,7 +503,7 @@ func (b *Broker) Admit(owner, login, id, sshKey string) (proto.Lease, error) {
 	if refused != nil {
 		return proto.Lease{}, refused
 	}
-	if l.State == proto.LeaseReady {
+	if use && l.State == proto.LeaseReady {
 		l.LastBusy = time.Now()
 	}
 	b.wakeLocked(l)
@@ -846,7 +847,13 @@ func (b *Broker) retire(l *lease, reached bool) bool {
 			l.holdFailing = time.Time{}
 			b.mu.Unlock()
 		case errors.Is(err, ErrRunnerBusy):
-			return false // the next check sees its work
+			// Work taken since the probe, which a short job may finish
+			// before the next check: it is seen here or not at all.
+			b.mu.Lock()
+			l.LastBusy = time.Now()
+			l.holdFailing = time.Time{}
+			b.mu.Unlock()
+			return false
 		case !errors.Is(err, ErrUndrainable):
 			b.mu.Lock()
 			if l.holdFailing.IsZero() {

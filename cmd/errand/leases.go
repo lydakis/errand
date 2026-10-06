@@ -194,13 +194,13 @@ func leasePeerNamed(cfg config.Client, name string) (leasePeer, bool, error) {
 	if !admits(*match, publicKey) {
 		// One of the owner's other devices asked for it: this one is let in
 		// by naming it.
-		return admitThisDevice(cfg, broker, target, match.ID, info)
+		return admitThisDevice(cfg, broker, target, match.ID, info, useNamedLeases)
 	}
 	if useNamedLeases {
 		// Naming a lease to run on counts as a hand-out: the cloud peer
 		// starts a full idle window, or refuses a lease it found unusable.
 		ctx, cancel := context.WithTimeout(context.Background(), leaseRequestTimeout)
-		lease, err := client.AdmitLeaseKey(ctx, target, match.ID, publicKey)
+		lease, err := client.AdmitLeaseKey(ctx, target, match.ID, publicKey, true)
 		cancel()
 		if err != nil {
 			return leasePeer{}, false, fmt.Errorf("using lease %s: %w", match.ID, err)
@@ -224,8 +224,9 @@ func leasePeerNamed(cfg config.Client, name string) (leasePeer, bool, error) {
 var useNamedLeases bool
 
 // admitThisDevice asks a cloud peer to let this device into the owner's
-// ready lease id, and waits until it has.
-func admitThisDevice(cfg config.Client, broker, target, id string, info proto.Info) (leasePeer, bool, error) {
+// ready lease id, and waits until it has. With use, the same request hands
+// the lease to a run.
+func admitThisDevice(cfg config.Client, broker, target, id string, info proto.Info, use bool) (leasePeer, bool, error) {
 	keyFile, err := leaseKeyFile()
 	if err != nil {
 		return leasePeer{}, false, err
@@ -237,7 +238,7 @@ func admitThisDevice(cfg config.Client, broker, target, id string, info proto.In
 		return leasePeer{}, false, err
 	}
 	fmt.Fprintf(os.Stderr, "errand: asking %s to let this device into lease %s\n", terminalSafeField(broker), id)
-	lease, err := client.AdmitLeaseKey(ctx, target, id, sshKey)
+	lease, err := client.AdmitLeaseKey(ctx, target, id, sshKey, use)
 	for err == nil && lease.State == proto.LeaseReady && !admits(lease, sshKey) {
 		select {
 		case <-ctx.Done():

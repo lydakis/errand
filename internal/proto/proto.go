@@ -538,6 +538,10 @@ type LeaseRequest struct {
 	// SSHKey is the caller's SSH public key. A leased machine reached over
 	// SSH admits the key of each of the owner's devices that asks for it.
 	SSHKey string `json:"ssh_key,omitempty"`
+	// Use, when letting a device into a lease, says the device names the
+	// lease to place work on it rather than only to look at it: the lease
+	// then counts as handed out.
+	Use bool `json:"use,omitempty"`
 }
 
 // LeaseTarget says how to reach a leased runner, with the same fields and

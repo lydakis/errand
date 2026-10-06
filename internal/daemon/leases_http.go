@@ -106,7 +106,7 @@ func (d *Daemon) handleLeaseAdmit(w http.ResponseWriter, r *http.Request, id Ide
 	if id.Local {
 		login = ""
 	}
-	lease, err := d.broker.Admit(leaseOwner(id), login, r.PathValue("id"), req.SSHKey)
+	lease, err := d.broker.Admit(leaseOwner(id), login, r.PathValue("id"), req.SSHKey, req.Use)
 	if err != nil {
 		leaseError(w, err)
 		return

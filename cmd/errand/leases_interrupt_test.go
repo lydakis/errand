@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -84,10 +86,28 @@ func TestLeasePeerNames(t *testing.T) {
 	otherF.ID = f
 	var admitted atomic.Value
 	admitted.Store("")
+	var asked struct {
+		sync.Mutex
+		uses []string // "<lease ID> <use>" for each admission request
+	}
+	asks := func() []string {
+		asked.Lock()
+		defer asked.Unlock()
+		got := asked.uses
+		asked.uses = nil
+		return got
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/v0/leases/"+d+"/ssh-keys" {
+		if id, ok := strings.CutSuffix(strings.TrimPrefix(r.URL.Path, "/v0/leases/"), "/ssh-keys"); ok && r.Method == http.MethodPost && (id == b || id == d) {
 			var req proto.LeaseRequest
 			json.NewDecoder(r.Body).Decode(&req)
+			asked.Lock()
+			asked.uses = append(asked.uses, fmt.Sprintf("%s %v", id, req.Use))
+			asked.Unlock()
+			if id == b {
+				json.NewEncoder(w).Encode(ready(b, "ubuntu@203.0.113.8"))
+				return
+			}
 			admitted.Store(req.SSHKey)
 			json.NewEncoder(w).Encode(other)
 			return
@@ -134,6 +154,23 @@ func TestLeasePeerNames(t *testing.T) {
 	if peer, ok, err := findLeasePeer(cfg, "cloud-00dd"); err != nil || !ok || peer.SSH != "ubuntu@203.0.113.9" || !strings.HasPrefix(admitted.Load().(string), "ssh-ed25519 ") {
 		t.Fatalf("other device's lease: %+v %v %v (sent %q)", peer, ok, err, admitted.Load())
 	}
+	// Only a command placing work claims the lease it names, so looking at
+	// a lease never extends it, whether or not this device was let in yet;
+	// a device let in by a run asks once.
+	if got := asks(); !slices.Equal(got, []string{d + " false"}) {
+		t.Fatalf("a read from a new device asked %q", got)
+	}
+	useNamedLeases = true
+	defer func() { useNamedLeases = false }()
+	for name, want := range map[string]string{"cloud-00dd": d + " true", "cloud-b7f3a": b + " true"} {
+		if _, ok, err := findLeasePeer(cfg, name); err != nil || !ok {
+			t.Fatalf("%s to run on: %v %v", name, ok, err)
+		}
+		if got := asks(); !slices.Equal(got, []string{want}) {
+			t.Fatalf("a run naming %s asked %q", name, got)
+		}
+	}
+	useNamedLeases = false
 	// A cloud peer whose offers were removed still lists the leases it
 	// has left.
 	if brokers, code := leaseBrokers(cfg, "cloud", io.Discard); code != 0 || len(brokers) != 1 {

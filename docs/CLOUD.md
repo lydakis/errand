@@ -64,7 +64,8 @@ lifetime rules below or `errand leases release` end it. A run that stops after
 that, with or without a job, leaves the machine up for at most one idle
 window. Being given to a run counts as work, so a reused ready lease starts a
 full idle window; so does naming it to run on with `--on`, from any device.
-Commands that only read, such as `errand ps` or `errand logs`, do not. Each
+Commands that only read, such as `errand ps` or `errand logs`, do not, even
+from a device that naming the lease lets in. Each
 idle check also confirms that the cloud peer can still reach the machine and
 that it still matches. A lease whose latest check failed is neither handed out
 nor run on by name, and its idle window is not renewed, so it ends once idle.
@@ -86,7 +87,8 @@ starting, running or queued jobs for the offer's `idle_timeout`, or when the
 lease reaches `max_lifetime`, even if a job is still running. A runner it
 cannot reach counts as idle. Before releasing an idle lease, the cloud peer
 has its runner refuse new jobs, so a job submitted just before the release is
-refused rather than lost. It does this over SSH, as the runner's own user, for
+refused rather than lost, and one that took a job just before keeps the
+lease for another full idle window. It does this over SSH, as the runner's own user, for
 Lambda machines on the tailnet too. If it cannot, while the machine still
 answers, the lease is kept and the release tried again at the next idle check,
 for up to one more `idle_timeout`. After that, a runner that stayed idle is

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -85,7 +86,12 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	brokerHandler := broker.Handler()
 	brokerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ssh-keys") {
-			admissions.Add(1)
+			body, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			var req proto.LeaseRequest
+			if json.Unmarshal(body, &req) == nil && req.Use {
+				admissions.Add(1)
+			}
 		}
 		brokerHandler.ServeHTTP(w, r)
 	}))
