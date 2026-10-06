@@ -72,6 +72,7 @@ type fakeLambda struct {
 	attempts    []time.Time                 // when each launch request arrived
 	keepAlive   int                         // terminate calls to accept without terminating
 	arch        string                      // gpu_1x_h100_pcie's architecture, if not x86_64
+	price       int                         // gpu_1x_h100_pcie's cents per hour, if not 249
 	forget      bool                        // stop listing terminated instances at once
 }
 
@@ -93,7 +94,7 @@ func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/instance-types":
 		types := map[string]any{}
-		h100 := fakeInstanceType{price: 249, arch: cmp.Or(f.arch, "x86_64"), gpu: "H100 (80 GB PCIe)", vcpus: 26, gpus: 1}
+		h100 := fakeInstanceType{price: cmp.Or(f.price, 249), arch: cmp.Or(f.arch, "x86_64"), gpu: "H100 (80 GB PCIe)", vcpus: 26, gpus: 1}
 		for name, t := range f.types {
 			types[name] = t.listing(name, f.capacity)
 		}
@@ -866,6 +867,43 @@ func TestLambdaLaunchCanceledWhileWaiting(t *testing.T) {
 // lands while a launch request is in flight leaves it uncertain, and its
 // state rightly stays saved. So rather than a wall-clock timeout, the
 // context ends as acquire saves the third attempt, before it is sent.
+// The price cap holds at the price Lambda lists as each launch attempt goes
+// out, not only when acquire began: waiting out a rate limit can take a
+// while, and the price can rise meanwhile.
+func TestLambdaPriceCheckedAsEachLaunchGoesOut(t *testing.T) {
+	p, api, _ := newLambda(t)
+	api.launchError = http.StatusTooManyRequests
+	p.LaunchGap, p.MaxPricePerHour = 10*time.Millisecond, 3
+	var saved []json.RawMessage
+	save := func(s json.RawMessage) error {
+		saved = append(saved, s)
+		if len(s) > 0 {
+			// The first attempt is about to go out; Lambda refuses it with
+			// 429 and raises the price before the next.
+			api.mu.Lock()
+			api.price = 499
+			api.mu.Unlock()
+		}
+		return nil
+	}
+	req := AcquireRequest{LeaseID: proto.NewULID(), Progress: func(string) {}, Save: save}
+	// Without the check, launches are refused until this deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := p.Acquire(ctx, req)
+	if err == nil || !strings.Contains(err.Error(), "Lambda now charges $4.99/h for gpu_1x_h100_pcie, above max_price_per_hour = 3") {
+		t.Fatalf("want the price refusal, got %v", err)
+	}
+	if len(saved) == 0 || len(saved[len(saved)-1]) != 0 {
+		t.Fatalf("a launch only ever refused must leave no state, saved %q", saved)
+	}
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if len(api.attempts) != 1 || len(api.launches) != 0 {
+		t.Fatalf("%d launch attempts sent, %d launched; want 1 refused and none at the new price", len(api.attempts), len(api.launches))
+	}
+}
+
 func TestLambdaLaunchRateLimitedUntilDeadline(t *testing.T) {
 	p, api, _ := newLambda(t)
 	key := "limited-key"

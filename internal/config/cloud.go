@@ -48,6 +48,9 @@ type LambdaSettings struct {
 	TailscaleAuthKeyFile string   `toml:"tailscale_auth_key_file"`
 	ErrandBinary         string   `toml:"errand_binary"`
 	AllowUsers           []string `toml:"allow_users"`
+	// MaxPricePerHour refuses machines Lambda lists at a higher hourly
+	// price: unset means DefaultLambdaMaxPrice, and 0 means no cap.
+	MaxPricePerHour *float64 `toml:"max_price_per_hour"`
 }
 
 // LambdaOffer rents one Lambda instance type as a configured offer.
@@ -57,14 +60,12 @@ type LambdaOffer struct {
 }
 
 // LambdaAccount offers every instance type of a Lambda account that has
-// capacity, or those in InstanceTypes, at up to MaxPricePerHour: unset
-// means DefaultLambdaMaxPrice, and 0 means no cap.
+// capacity, or those in InstanceTypes, at up to MaxPricePerHour.
 type LambdaAccount struct {
 	LambdaSettings
-	InstanceTypes   []string `toml:"instance_types"`
-	MaxPricePerHour *float64 `toml:"max_price_per_hour"`
-	IdleTimeout     string   `toml:"idle_timeout"` // default 20m
-	MaxLifetime     string   `toml:"max_lifetime"` // default 12h
+	InstanceTypes []string `toml:"instance_types"`
+	IdleTimeout   string   `toml:"idle_timeout"` // default 20m
+	MaxLifetime   string   `toml:"max_lifetime"` // default 12h
 }
 
 const (
@@ -221,19 +222,11 @@ func (a LambdaAccount) catalog() (*cloud.LambdaCatalog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cloud lambda: %w", err)
 	}
-	maxPrice := DefaultLambdaMaxPrice
-	if a.MaxPricePerHour != nil {
-		maxPrice = *a.MaxPricePerHour
-		if maxPrice < 0 || math.IsNaN(maxPrice) || math.IsInf(maxPrice, 0) {
-			return nil, fmt.Errorf("cloud lambda: max_price_per_hour must not be negative (0 means no cap)")
-		}
-	}
 	for _, t := range a.InstanceTypes {
 		if t == "" || strings.ContainsFunc(t, func(r rune) bool { return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_') }) {
 			return nil, fmt.Errorf("cloud lambda: instance_types entry %q is not a Lambda instance type name such as gpu_1x_a10", t)
 		}
 	}
-	p.MaxPricePerHour = maxPrice
 	c := &cloud.LambdaCatalog{Account: *p, InstanceTypes: a.InstanceTypes}
 	if c.IdleTimeout, err = positiveDuration("cloud lambda idle_timeout", a.IdleTimeout, defaultLeaseIdle); err != nil {
 		return nil, err
@@ -266,8 +259,16 @@ func (l LambdaSettings) provider() (*cloud.LambdaProvider, error) {
 	if l.ErrandBinary != "" && !filepath.IsAbs(l.ErrandBinary) {
 		return nil, fmt.Errorf("lambda errand_binary must be an absolute path")
 	}
+	maxPrice := DefaultLambdaMaxPrice
+	if l.MaxPricePerHour != nil {
+		maxPrice = *l.MaxPricePerHour
+		if maxPrice < 0 || math.IsNaN(maxPrice) || math.IsInf(maxPrice, 0) {
+			return nil, fmt.Errorf("lambda max_price_per_hour must not be negative (0 means no cap)")
+		}
+	}
 	return &cloud.LambdaProvider{
 		APIKeyFile: l.APIKeyFile, Regions: l.Regions, FileSystems: l.FileSystems,
 		TailscaleAuthKeyFile: l.TailscaleAuthKeyFile, ErrandBinary: l.ErrandBinary, AllowUsers: l.AllowUsers,
+		MaxPricePerHour: maxPrice,
 	}, nil
 }

@@ -114,6 +114,7 @@ api_key_file = "/etc/errand/lambda.key"
 tailscale_auth_key_file = "/etc/errand/ts.key"
 errand_binary = "/opt/errand-linux-amd64"
 allow_users = ["broker@example"]
+max_price_per_hour = 3
 `), 0600)
 	d, err := LoadDaemon(path)
 	if err != nil {
@@ -125,7 +126,7 @@ allow_users = ["broker@example"]
 	}
 	o := b.Offers[0]
 	p, ok := o.Provider.(*cloud.LambdaProvider)
-	if !ok || p.InstanceType != "gpu_1x_h100_pcie" || p.ErrandBinary != "/opt/errand-linux-amd64" || o.PricePerHour == nil || *o.PricePerHour != 2.49 || o.Facts.OS != "linux" || o.Facts.Arch != "amd64" {
+	if !ok || p.InstanceType != "gpu_1x_h100_pcie" || p.ErrandBinary != "/opt/errand-linux-amd64" || o.PricePerHour == nil || *o.PricePerHour != 2.49 || o.Facts.OS != "linux" || o.Facts.Arch != "amd64" || p.MaxPricePerHour != 3 {
 		t.Fatalf("offer %+v provider %+v", o, o.Provider)
 	}
 
@@ -147,6 +148,7 @@ allow_users = ["broker@example"]
 		{func(o *CloudOffer) { o.Price = new(-1.0) }, "price_per_hour"},
 		{func(o *CloudOffer) { o.Price = new(math.NaN()) }, "price_per_hour"},
 		{func(o *CloudOffer) { o.Price = new(math.Inf(1)) }, "price_per_hour"},
+		{func(o *CloudOffer) { o.Lambda.MaxPricePerHour = new(-1.0) }, "max_price_per_hour"},
 	} {
 		l := lambda
 		o := CloudOffer{Name: "x", Lambda: &l}
@@ -159,7 +161,8 @@ allow_users = ["broker@example"]
 	ssh := LambdaOffer{InstanceType: "t", LambdaSettings: LambdaSettings{APIKeyFile: "/a", ErrandBinary: "/e"}}
 	if b, err := (DaemonCloud{Offers: []CloudOffer{{Name: "x", Lambda: &ssh}}}).Broker(); err != nil {
 		t.Fatal(err)
-	} else if p := b.Offers[0].Provider.(*cloud.LambdaProvider); p.TailscaleAuthKeyFile != "" {
+	} else if p := b.Offers[0].Provider.(*cloud.LambdaProvider); p.TailscaleAuthKeyFile != "" || p.MaxPricePerHour != DefaultLambdaMaxPrice {
+		// A configured offer is capped like the listed ones.
 		t.Fatalf("provider %+v", p)
 	}
 	// Without errand_binary any cloud peer can rent for any architecture:
@@ -212,7 +215,7 @@ idle_timeout = "10m"
 		t.Fatalf("default cap %v", b.Catalog)
 	}
 	zero := 0.0
-	uncapped := DaemonCloud{Lambda: &LambdaAccount{LambdaSettings: LambdaSettings{APIKeyFile: "/k"}, MaxPricePerHour: &zero}}
+	uncapped := DaemonCloud{Lambda: &LambdaAccount{LambdaSettings: LambdaSettings{APIKeyFile: "/k", MaxPricePerHour: &zero}}}
 	if b, err := uncapped.Broker(); err != nil || b.Catalog.(*cloud.LambdaCatalog).Account.MaxPricePerHour != 0 {
 		t.Fatalf("uncapped: %+v %v", b, err)
 	}
