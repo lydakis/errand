@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/lydakis/errand/internal/placement"
-	"github.com/lydakis/errand/internal/proto"
 )
 
 // A Catalog lists offers that come and go, such as a cloud account's
@@ -20,17 +19,31 @@ type Catalog interface {
 // catalogTimeout bounds one listing.
 const catalogTimeout = 15 * time.Second
 
-// refreshCatalog keeps the catalog listed, every CatalogRefresh, until the
-// broker closes. A listing that fails leaves the last one in place.
+// catalogRetry is how soon a listing that failed is tried again. Each
+// failure in a row doubles it, up to CatalogRefresh.
+var catalogRetry = 5 * time.Second
+
+// refreshCatalog keeps the catalog listed until the broker closes: every
+// CatalogRefresh, and sooner after a listing that failed, which leaves the
+// last one in place.
 func (b *Broker) refreshCatalog() {
 	defer b.wg.Done()
 	b.freshenCatalog()
 	close(b.listed)
+	retry := catalogRetry
 	for {
+		b.mu.Lock()
+		wait := time.Until(b.catalogAt.Add(b.cfg.CatalogRefresh))
+		b.mu.Unlock()
+		if wait > 0 {
+			retry = catalogRetry
+		} else {
+			wait, retry = min(retry, b.cfg.CatalogRefresh), min(2*retry, b.cfg.CatalogRefresh)
+		}
 		select {
 		case <-b.ctx.Done():
 			return
-		case <-time.After(b.cfg.CatalogRefresh):
+		case <-time.After(wait):
 		}
 		b.freshenCatalog()
 	}
@@ -77,13 +90,4 @@ func (b *Broker) freshenCatalog() {
 	b.mu.Lock()
 	b.catalog, b.catalogAt = listed, time.Now()
 	b.mu.Unlock()
-}
-
-// offerFacts are the facts of the offer a launching lease was made from, or
-// none when a catalog no longer lists it. The caller holds b.mu.
-func (l *lease) offerFacts(b *Broker) (facts proto.Facts) {
-	if o, ok := b.offerLocked(l.Offer); ok {
-		return o.Facts
-	}
-	return facts
 }

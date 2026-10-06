@@ -111,9 +111,9 @@ type record struct {
 // wakes the worker.
 type lease struct {
 	record
-	provider Provider           // the offer's provider when the lease was made
-	stop     context.CancelFunc // cancels the running acquire or probe
-	wake     chan struct{}
+	offer Offer              // the offer it was made from, which a catalog may since have dropped
+	stop  context.CancelFunc // cancels the running acquire or probe
+	wake  chan struct{}
 }
 
 type Broker struct {
@@ -336,23 +336,38 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	if len(b.offers) == 0 && b.cfg.Catalog == nil {
 		return proto.Lease{}, &Error{http.StatusNotFound, "this runner has no cloud offers"}
 	}
-	// A catalog that may have changed since the client saw it is listed
-	// again, so a lease is not made from an offer that is gone.
-	b.freshenCatalog()
+	if requestID == "" {
+		requestID = proto.NewULID()
+	}
+	// Only a new lease needs the catalog. A catalog that may have changed
+	// since the client saw it is listed again first, so a lease is not made
+	// from an offer that is gone, but a lease the owner already has is
+	// handed out without waiting for that.
+	if b.cfg.Catalog != nil {
+		if l, done, err := b.acquire(owner, login, where, q, sshKey, requestID, false); done {
+			return l, err
+		}
+		b.freshenCatalog()
+	}
+	l, _, err := b.acquire(owner, login, where, q, sshKey, requestID, true)
+	return l, err
+}
+
+// acquire hands out the lease a request already has or the owner's matching
+// one, and otherwise, when launch is set, makes a new one. done is false when
+// it found no lease to hand out and did not launch.
+func (b *Broker) acquire(owner, login, where string, q placement.Requirements, sshKey, requestID string, launch bool) (_ proto.Lease, done bool, _ error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return proto.Lease{}, &Error{http.StatusServiceUnavailable, "cloud broker is shutting down"}
-	}
-	if requestID == "" {
-		requestID = proto.NewULID()
+		return proto.Lease{}, true, &Error{http.StatusServiceUnavailable, "cloud broker is shutting down"}
 	}
 	var launching *lease
 	active := 0
 	// A request asked again, after its answer was lost, gets the same lease.
 	for _, l := range b.sorted() {
 		if l.Owner == owner && slices.Contains(l.Requests, requestID) {
-			return l.view(), nil
+			return l.view(), true, nil
 		}
 	}
 	// A launching lease handed to another request is waited on by that
@@ -389,13 +404,18 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 		}
 		switch {
 		case l.State == proto.LeaseReady && l.Facts != nil && len(q.Missing(*l.Facts)) == 0:
-			return share(l)
-		case l.State == proto.LeaseLaunching && launching == nil && len(q.Missing(l.offerFacts(b))) == 0:
+			lease, err := share(l)
+			return lease, true, err
+		case l.State == proto.LeaseLaunching && launching == nil && len(q.Missing(l.offer.Facts)) == 0:
 			launching = l
 		}
 	}
 	if launching != nil {
-		return share(launching)
+		lease, err := share(launching)
+		return lease, true, err
+	}
+	if !launch {
+		return proto.Lease{}, false, nil
 	}
 	var offer *Offer
 	var reasons []string
@@ -415,25 +435,25 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 		reasons = append(reasons, o.Name+": "+strings.Join(missing, "; "))
 	}
 	if offer == nil {
-		return proto.Lease{}, &Error{http.StatusPreconditionFailed, fmt.Sprintf("no offer matches %q: %s", where, strings.Join(reasons, "; "))}
+		return proto.Lease{}, true, &Error{http.StatusPreconditionFailed, fmt.Sprintf("no offer matches %q: %s", where, strings.Join(reasons, "; "))}
 	}
 	if active >= b.cfg.MaxLeases {
-		return proto.Lease{}, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease limit reached (%d active, max_leases = %d)", active, b.cfg.MaxLeases)}
+		return proto.Lease{}, true, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease limit reached (%d active, max_leases = %d)", active, b.cfg.MaxLeases)}
 	}
 	now := time.Now()
-	l := &lease{wake: make(chan struct{}, 1), provider: offer.Provider, record: record{
+	l := &lease{wake: make(chan struct{}, 1), offer: *offer, record: record{
 		Owner: owner, Login: login, Requests: []string{requestID}, Release: offer.Provider.ReleaseSpec(), IdleTimeout: offer.IdleTimeout,
 		Lease: proto.Lease{ID: proto.NewULID(), Offer: offer.Name, Where: where, SSHKeys: keyList(sshKey), State: proto.LeaseLaunching, CreatedAt: now, ExpiresAt: now.Add(offer.MaxLifetime)},
 	}}
 	l.addProgress("launching " + offer.Name)
 	// Recorded before acquiring, so a crash cannot forget a machine being paid for.
 	if err := b.persist(&l.record); err != nil {
-		return proto.Lease{}, &Error{http.StatusInternalServerError, "recording lease: " + err.Error()}
+		return proto.Lease{}, true, &Error{http.StatusInternalServerError, "recording lease: " + err.Error()}
 	}
 	log.Printf("lease %s (%s): launching for where %q", l.ID, l.Offer, where)
 	b.leases[l.ID] = l
 	b.start(l)
-	return l.view(), nil
+	return l.view(), true, nil
 }
 
 // Release ends an owner's lease. A launching lease stops its acquire first.
@@ -651,9 +671,9 @@ func (b *Broker) launch(l *lease) {
 		b.mu.Unlock()
 		return // released before the acquire started
 	}
-	// Only this process's leases are launching, and each keeps the provider
-	// of the offer it was made from, which a catalog may since have dropped.
-	provider, offerName := l.provider, l.Offer
+	// Only this process's leases are launching, and each keeps the offer it
+	// was made from, which a catalog may since have dropped.
+	provider, offerName := l.offer.Provider, l.Offer
 	// The hard stop holds while launching too.
 	created := l.CreatedAt
 	deadline := earlier(created.Add(b.cfg.AcquireTimeout), l.ExpiresAt)

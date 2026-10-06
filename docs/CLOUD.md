@@ -186,8 +186,8 @@ Until then the machine still admits it, at most until `idle_timeout` or
 ## Lambda
 
 `[cloud.lambda]` rents [Lambda Cloud](https://lambda.ai) instances. The cloud
-peer lists the account's instance types every two minutes and before each
-lease, and offers every type that has capacity in a wanted region, named
+peer lists the account's instance types every two minutes (sooner after a
+listing fails) and before launching a new machine, and offers every type that has capacity in a wanted region, named
 after Lambda's own name with hyphens (`gpu-1x-h100-sxm5`). An offer's GPUs,
 CPUs, architecture and price come from the listing; no shape is configured.
 
