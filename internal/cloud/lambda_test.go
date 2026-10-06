@@ -948,11 +948,24 @@ func sendLaunch(ctx context.Context, p *LambdaProvider, name string) error {
 	return p.launch(ctx, "k", map[string]any{"name": name}, nil, func() error { return nil })
 }
 
-// Launches arrive launchGap apart, and all requests requestGap apart,
-// however they interleave.
+// Launches go through launchGap apart, and all requests requestGap apart,
+// however they interleave. The times are the ones each gate records as it
+// lets a caller through: a request may reach Lambda any time later, so
+// arrival times would bound nothing.
 func TestLambdaPacingKeepsGaps(t *testing.T) {
 	const requestGap, launchGap = 20 * time.Millisecond, 120 * time.Millisecond
 	p, log := newPacedLambda(requestGap, launchGap)
+	var mu sync.Mutex
+	var requests, launches []time.Time
+	p.Pacing.passed = func(launch bool, at time.Time) {
+		mu.Lock()
+		defer mu.Unlock()
+		if launch {
+			launches = append(launches, at)
+		} else {
+			requests = append(requests, at)
+		}
+	}
 	var wg sync.WaitGroup
 	for i := range 9 {
 		wg.Go(func() {
@@ -969,17 +982,17 @@ func TestLambdaPacingKeepsGaps(t *testing.T) {
 	}
 	wg.Wait()
 	check := func(what string, times []time.Time, gap time.Duration) {
-		slices.SortFunc(times, func(x, y time.Time) int { return x.Compare(y) })
 		for i := 1; i < len(times); i++ {
-			if d := times[i].Sub(times[i-1]); d < gap-5*time.Millisecond {
-				t.Errorf("%s %d arrived %v after the one before, want at least %v", what, i, d, gap)
+			if d := times[i].Sub(times[i-1]); d < gap {
+				t.Errorf("%s %d went through %v after the one before, want at least %v", what, i, d, gap)
 			}
 		}
 	}
-	check("request", log.requests, requestGap)
-	check("launch", log.launches, launchGap)
-	if len(log.requests) != 9 || len(log.launches) != 3 {
-		t.Fatalf("%d requests, %d launches", len(log.requests), len(log.launches))
+	// Each gate records its callers in turn, so the times are in order.
+	check("request", requests, requestGap)
+	check("launch", launches, launchGap)
+	if len(requests) != 9 || len(launches) != 3 || len(log.requests) != 9 || len(log.launches) != 3 {
+		t.Fatalf("%d requests and %d launches went through, %d and %d were sent", len(requests), len(launches), len(log.requests), len(log.launches))
 	}
 }
 
