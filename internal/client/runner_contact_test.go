@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -36,16 +37,96 @@ func logFrame(seq int64, data string) string {
 	return fmt.Sprintf("id: %d\nevent: log\ndata: %s\n\n", seq, b)
 }
 
+// streamClock is a clock for the follower's idle reads that moves only when
+// a test advances it, so how long a stream was silent does not depend on
+// how promptly the machine running the test schedules anything.
+type streamClock struct {
+	mu      sync.Mutex
+	now     time.Duration
+	reads   int // idle waits started so far
+	pending []*streamWait
+}
+
+type streamWait struct {
+	at      time.Duration
+	expired chan time.Time
+	done    bool
+}
+
+func useStreamClock(t *testing.T) *streamClock {
+	t.Helper()
+	c := &streamClock{}
+	previous := idleTimer
+	idleTimer = c.wait
+	t.Cleanup(func() { idleTimer = previous })
+	return c
+}
+
+func (c *streamClock) wait(d time.Duration) (<-chan time.Time, func() bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	w := &streamWait{at: c.now + d, expired: make(chan time.Time, 1)}
+	c.reads++
+	c.pending = append(c.pending, w)
+	return w.expired, func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		stopped := !w.done
+		w.done = true
+		return stopped
+	}
+}
+
+// advance moves the clock on by d, ending the waits that run out, and
+// returns how many reads had started by then.
+func (c *streamClock) advance(d time.Duration) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now += d
+	for _, w := range c.pending {
+		if !w.done && w.at <= c.now {
+			w.done = true
+			w.expired <- time.Time{}
+		}
+	}
+	return c.reads
+}
+
+// readsSince waits until a read starts after the one numbered n.
+func (c *streamClock) readsSince(n int) bool {
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		c.mu.Lock()
+		reads := c.reads
+		c.mu.Unlock()
+		if reads > n {
+			return true
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return false
+}
+
 func TestHeartbeatsKeepAQuietJobAttached(t *testing.T) {
 	shortRunnerContact(t, 100*time.Millisecond, 200*time.Millisecond)
+	clock := useStreamClock(t)
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
 		w.Header().Set("Content-Type", "text/event-stream")
-		for range 20 { // 600ms of silence from the job, well past idle and window
+		// 600ms of silence from the job, well past idle and window, with a
+		// heartbeat every 30ms. The clock moves on only once the follower
+		// has taken the last heartbeat and is reading again, as a runner's
+		// heartbeats would reach it in time.
+		seen := 0
+		for range 20 {
 			io.WriteString(w, ":\n\n")
 			w.(http.Flusher).Flush()
-			time.Sleep(30 * time.Millisecond)
+			if !clock.readsSince(seen) {
+				t.Error("the follower stopped reading")
+				return
+			}
+			seen = clock.advance(30 * time.Millisecond)
 		}
 		io.WriteString(w, "event: status\ndata: {\"id\":\"job\",\"state\":\"exited\",\"result\":{}}\n\n")
 	}))
@@ -58,6 +139,36 @@ func TestHeartbeatsKeepAQuietJobAttached(t *testing.T) {
 	}
 	if final.State != proto.StateExited || requests.Load() != 1 {
 		t.Fatalf("final = %+v after %d connections, want one uninterrupted stream", final, requests.Load())
+	}
+}
+
+// Without heartbeats, the same silence on the same clock ends the stream,
+// so the test above shows the heartbeats, not the clock, keep it open.
+func TestStreamClockEndsASilentStream(t *testing.T) {
+	shortRunnerContact(t, 100*time.Millisecond, time.Hour)
+	clock := useStreamClock(t)
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) > 1 {
+			w.Header().Set("Content-Type", "text/event-stream")
+			io.WriteString(w, "event: status\ndata: {\"id\":\"job\",\"state\":\"exited\",\"result\":{}}\n\n")
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.(http.Flusher).Flush()
+		if !clock.readsSince(0) {
+			t.Error("the follower never read")
+			return
+		}
+		clock.advance(100 * time.Millisecond)
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	final, err := streamContext(context.Background(), RunOptions{PeerURL: server.URL}, "job",
+		proto.JobStatus{ID: "job", State: proto.StateRunning})
+	if err != nil || final.State != proto.StateExited || requests.Load() != 2 {
+		t.Fatalf("final = %+v, %v after %d connections, want a reconnect", final, err, requests.Load())
 	}
 }
 

@@ -1466,6 +1466,13 @@ type idleReadCloser struct {
 	timeout time.Duration
 }
 
+// idleTimer starts the wait of one idleReadCloser read. Tests replace it to
+// put stream silence on a clock of their own.
+var idleTimer = func(d time.Duration) (expired <-chan time.Time, stop func() bool) {
+	t := time.NewTimer(d)
+	return t.C, t.Stop
+}
+
 type streamIdleError struct {
 	timeout time.Duration
 }
@@ -1558,12 +1565,12 @@ func (r *idleReadCloser) Read(p []byte) (int, error) {
 		n, err := r.ReadCloser.Read(p)
 		ch <- result{n: n, err: err}
 	}()
-	timer := time.NewTimer(r.timeout)
-	defer timer.Stop()
+	expired, stop := idleTimer(r.timeout)
+	defer stop()
 	select {
 	case got := <-ch:
 		return got.n, got.err
-	case <-timer.C:
+	case <-expired:
 		_ = r.ReadCloser.Close()
 		return 0, &streamIdleError{timeout: r.timeout}
 	}
