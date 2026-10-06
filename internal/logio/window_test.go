@@ -3,6 +3,7 @@ package logio
 import (
 	"encoding/base64"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,11 +67,12 @@ func TestFindWindowTailsLinesAcrossFramesAndStreams(t *testing.T) {
 		{tail: 4, want: "three\noops\nfour\nfive"},
 		{tail: 5, want: "two\nthree\noops\nfour\nfive"},
 		{tail: 100, want: "one\ntwo\nthree\noops\nfour\nfive"},
+		{tail: math.MaxInt, want: "one\ntwo\nthree\noops\nfour\nfive"},
 		{tail: -1, since: 3000, want: "oops\nfour\nfive"},
 		{tail: 1, since: 3000, want: "five"},
 		{tail: -1, since: 9000, want: ""},
 	} {
-		w, err := FindWindow(path, tc.since, tc.tail)
+		w, err := FindWindow(path, tc.since, tc.tail, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,7 +89,7 @@ func TestFindWindowCountsAFinalNewlineAsTheEndOfALine(t *testing.T) {
 	chunks := []string{"a\n", "b\nc\n"}
 	path := writeFrames(t, chunks...)
 	for tail, want := range map[int]string{1: "c\n", 2: "b\nc\n", 3: "a\nb\nc\n"} {
-		w, err := FindWindow(path, 0, tail)
+		w, err := FindWindow(path, 0, tail, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -105,12 +107,16 @@ func TestFindWindowLeavesOutARecordStillBeingWritten(t *testing.T) {
 	}
 	f.WriteString(`{"seq":2,"stream":"stdout","data_b64":"`)
 	f.Close()
-	w, err := FindWindow(path, 0, 10)
+	w, err := FindWindow(path, 0, 10, &Writer{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if w.Start != 1 || w.Cut != 0 || w.Last != 1 {
 		t.Fatalf("window = %+v, want frame 1 only", w)
+	}
+	// Once the writer is gone, the same record means the log was cut short.
+	if _, err := FindWindow(path, 0, 10, nil); !IsIntegrityError(err) {
+		t.Fatalf("finished log with a partial record: err = %v, want an integrity error", err)
 	}
 }
 

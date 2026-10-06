@@ -106,3 +106,23 @@ func TestLogReplayWithoutFollowEndsWhileTheJobRuns(t *testing.T) {
 		t.Fatalf("negative tail = %s %s, want 400", resp.Status, body)
 	}
 }
+
+// Following from a since later than everything written so far holds back
+// output written before that time, live output included.
+func TestLogFollowHoldsBackOutputBeforeAFutureSince(t *testing.T) {
+	_, ts := testDaemon(t)
+	root := workspaceWith(t, nil)
+	id := proto.NewULID()
+	resp := rawSubmit(t, ts.URL, id, root, []string{"/bin/sh", "-c", "printf 'one\\n'; sleep 1; printf 'two\\n'"})
+	resp.Body.Close()
+	t.Cleanup(func() { waitTerminal(t, ts.URL, id) })
+
+	future := time.Now().Add(time.Hour).UnixMilli()
+	output, closing := readLogEvents(t, ts.URL+"/v0/jobs/"+id+"/logs?from=0&since="+strconv.FormatInt(future, 10))
+	if closing != "status" {
+		t.Fatalf("follow closed with %q, want status", closing)
+	}
+	if output != "" {
+		t.Fatalf("since an hour from now followed %q", output)
+	}
+}

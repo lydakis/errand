@@ -1662,7 +1662,7 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 		}
 		window := logio.Window{Start: from + 1, Last: -1}
 		if windowed || !follow {
-			found, err := logio.FindWindow(logPath, sinceMS, tail)
+			found, err := logio.FindWindow(logPath, sinceMS, tail, live)
 			if err != nil {
 				replayErr(err)
 				return
@@ -1675,19 +1675,25 @@ func (d *Daemon) handleLogs(w http.ResponseWriter, r *http.Request, id Identity)
 			}
 		}
 		if follow || window.Start <= window.Last {
+			sent := false
 			if err := logio.Follow(ctx, logPath, window.Start-1, live, func(f proto.LogFrame) error {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
-				if f.Seq == window.Start {
-					var err error
-					if f, err = logio.TrimFrame(f, window.Cut); err != nil {
+				// A since later than everything written so far holds back
+				// live output until it reaches that time.
+				if !windowed || sent || f.TUnixMS >= sinceMS {
+					if f.Seq == window.Start {
+						var err error
+						if f, err = logio.TrimFrame(f, window.Cut); err != nil {
+							return err
+						}
+					}
+					b, _ := json.Marshal(f)
+					if err := stream.write(fmt.Sprintf("id: %d\nevent: log\ndata: %s\n\n", f.Seq, b)); err != nil {
 						return err
 					}
-				}
-				b, _ := json.Marshal(f)
-				if err := stream.write(fmt.Sprintf("id: %d\nevent: log\ndata: %s\n\n", f.Seq, b)); err != nil {
-					return err
+					sent = true
 				}
 				if !follow && f.Seq >= window.Last {
 					return errReplayDone
