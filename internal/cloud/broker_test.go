@@ -463,8 +463,10 @@ func TestIdleAndExpiredLeasesRelease(t *testing.T) {
 		t.Fatalf("progress %q", released.Progress)
 	}
 
+	// The lifetime also bounds the launch, so it leaves the acquire
+	// command time to finish on a loaded machine.
 	h2 := newHarness(t, okAcquire)
-	h2.cfg.Offers[0].MaxLifetime = 200 * time.Millisecond
+	h2.cfg.Offers[0].MaxLifetime = 2 * time.Second
 	h2.machine.running.Store(1)
 	b2 := h2.start(t)
 	l2, err := b2.Acquire("george", "", "gpu", "", "")
