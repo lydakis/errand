@@ -1248,7 +1248,14 @@ func TestUnusableReadyLeaseNotHandedOut(t *testing.T) {
 				t.Fatal(err)
 			}
 			waitState(t, b, "george", l.ID, proto.LeaseReady)
-			// A lease just made ready is handed out without another probe.
+			// The worker probes once while launching and once as it starts
+			// watching, then sleeps until woken. Counting from there, the
+			// hand-out may wake it for one more probe, but not probe itself.
+			for deadline := time.Now().Add(5 * time.Second); h.machine.probes.Load() < 2; time.Sleep(time.Millisecond) {
+				if time.Now().After(deadline) {
+					t.Fatal("the watch never probed")
+				}
+			}
 			probes := h.machine.probes.Load()
 			if again, err := b.Acquire("george", "", "gpu", "", proto.NewULID()); err != nil || again.ID != l.ID {
 				t.Fatalf("fresh lease not handed out: %+v %v", again, err)
@@ -1413,7 +1420,7 @@ func TestIdleReleaseWhenDrainFails(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t, tc.acquire)
 			h.cfg.IdlePoll = time.Hour // check only when woken
-			h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+			h.cfg.Offers[0].IdleTimeout = 500 * time.Millisecond
 			var drains atomic.Int32
 			var failing atomic.Bool
 			failing.Store(true)
@@ -1431,7 +1438,7 @@ func TestIdleReleaseWhenDrainFails(t *testing.T) {
 			}
 			waitState(t, b, "george", l.ID, proto.LeaseReady)
 			h.machine.down.Store(tc.down)
-			time.Sleep(150 * time.Millisecond)
+			time.Sleep(550 * time.Millisecond)
 			wake(b, l.ID)
 			if tc.released {
 				waitState(t, b, "george", l.ID, proto.LeaseReleased)
@@ -1527,4 +1534,58 @@ func TestRestoredLeaseWaitsForProbe(t *testing.T) {
 	if again, err := b2.Admit("george", "", l.ID, ""); err != nil || again.ID != l.ID {
 		t.Fatalf("admission after the first probe: %+v %v", again, err)
 	}
+}
+
+// A hold that keeps failing while the runner stays idle keeps the lease for
+// one more idle window, not until its lifetime. Work seen meanwhile starts
+// the wait again.
+func TestHoldThatKeepsFailing(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 300 * time.Millisecond
+	h.cfg.Drain = func(context.Context, proto.LeaseTarget, string) (func(context.Context) error, error) {
+		return nil, errors.New("ssh: connection timed out")
+	}
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", testKey(0), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	const retrying = "could not hold the machine idle before releasing it; retrying: ssh: connection timed out"
+	failures := func() int {
+		got, _ := b.Get("george", l.ID)
+		n := 0
+		for _, line := range got.Progress {
+			if line == retrying {
+				n++
+			}
+		}
+		return n
+	}
+	fail := func(n int) {
+		t.Helper()
+		wake(b, l.ID)
+		for deadline := time.Now().Add(5 * time.Second); failures() < n; time.Sleep(5 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatalf("hold failure %d never seen", n)
+			}
+		}
+		if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
+			t.Fatalf("released before the extra idle window: %+v", got)
+		}
+	}
+	time.Sleep(350 * time.Millisecond)
+	fail(1)
+	// Work resets the wait: the next failure starts a new window.
+	h.machine.running.Store(1)
+	wake(b, l.ID)
+	time.Sleep(50 * time.Millisecond)
+	h.machine.running.Store(0)
+	time.Sleep(350 * time.Millisecond)
+	fail(2)
+	time.Sleep(350 * time.Millisecond)
+	wake(b, l.ID)
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+	waitProgress(t, b, l.ID, "could not hold the machine idle for another 300ms; releasing it without the hold: ssh: connection timed out")
 }

@@ -135,6 +135,10 @@ type lease struct {
 	// machine unreachable or no longer matching the lease's where, or empty.
 	// A lease just made ready was checked by its launch.
 	unusable string
+	// holdFailing is when an idle release of the lease first could not take
+	// the hold on its runner, since which the lease has stayed due for
+	// release; zero otherwise.
+	holdFailing time.Time
 }
 
 type Broker struct {
@@ -432,8 +436,9 @@ func (b *Broker) EndAll(owner, why string) error {
 func (b *Broker) end(owner, id, note string) (proto.Lease, error) {
 	b.mu.Lock()
 	l, ok := b.leases[id]
+	ok = ok && l.Owner == owner // the worker rewrites the record under the lock
 	b.mu.Unlock()
-	if !ok || l.Owner != owner {
+	if !ok {
 		return proto.Lease{}, &Error{http.StatusNotFound, "no such lease"}
 	}
 	// The release is acknowledged only once it is recorded, so a restart
@@ -780,6 +785,9 @@ func (b *Broker) watch(l *lease) {
 			l.LastBusy = time.Now()
 		}
 		due := l.State == proto.LeaseReady && l.releaseReason(time.Now()) != ""
+		if !due {
+			l.holdFailing = time.Time{}
+		}
 		b.mu.Unlock()
 		if due && b.retire(l, reached) {
 			return
@@ -801,7 +809,10 @@ func (b *Broker) watch(l *lease) {
 // only to its own user over its local socket, so the cloud peer asks over
 // SSH: through the lease's target, or its DrainTarget for a machine clients
 // reach on the tailnet. A drain that fails is retried at the next idle
-// check, and the lease kept until then. The release goes ahead without the
+// check, and the lease kept until then, but for no more than one more idle
+// window: a runner idle all that time is then released without the hold,
+// so a lost SSH route cannot keep a machine until its lifetime. The release
+// goes ahead without the
 // hold only when no one can be holding it: the machine has no SSH route
 // (a provider command's machine reached only over the tailnet), its runner
 // refuses the hold, or the cloud peer's probe could not reach it (reached
@@ -830,13 +841,28 @@ func (b *Broker) retire(l *lease, reached bool) bool {
 		resume, err = b.cfg.Drain(ctx, target, r.Identity)
 		cancel()
 		switch {
+		case err == nil:
+			b.mu.Lock()
+			l.holdFailing = time.Time{}
+			b.mu.Unlock()
 		case errors.Is(err, ErrRunnerBusy):
 			return false // the next check sees its work
-		case err != nil && !errors.Is(err, ErrUndrainable):
-			if !b.stopped(l) {
-				b.note(l, "could not hold the machine idle before releasing it; retrying: "+err.Error())
+		case !errors.Is(err, ErrUndrainable):
+			b.mu.Lock()
+			if l.holdFailing.IsZero() {
+				l.holdFailing = time.Now()
 			}
-			return false
+			giveUp := time.Since(l.holdFailing) >= l.IdleTimeout
+			ready := l.State == proto.LeaseReady
+			b.mu.Unlock()
+			if !ready {
+				return false
+			}
+			if !giveUp {
+				b.note(l, "could not hold the machine idle before releasing it; retrying: "+err.Error())
+				return false
+			}
+			b.note(l, fmt.Sprintf("could not hold the machine idle for another %s; releasing it without the hold: %v", r.IdleTimeout, err))
 		}
 	}
 	released := false

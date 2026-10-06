@@ -88,12 +88,13 @@ cannot reach counts as idle. Before releasing an idle lease, the cloud peer
 has its runner refuse new jobs, so a job submitted just before the release is
 refused rather than lost. It does this over SSH, as the runner's own user, for
 Lambda machines on the tailnet too. If it cannot, while the machine still
-answers, the lease is kept and the release tried again at the next idle check.
-A provider command's machine that the cloud peer reaches only over the tailnet
-cannot be asked, so it is released on the idle check alone. A cloud peer keeps
-its 32 most recent ended leases, for up to a week, for `errand leases` to
-list. Persistent workspaces and retained results on a leased machine end with
-the lease, so fetch what you need first.
+answers, the lease is kept and the release tried again at the next idle check,
+for up to one more `idle_timeout`. After that, a runner that stayed idle is
+released without the hold. A provider command's machine that the cloud peer
+reaches only over the tailnet cannot be asked, so it is released on the idle
+check alone. A cloud peer keeps its 32 most recent ended leases, for up to a
+week, for `errand leases` to list. Persistent workspaces and retained results
+on a leased machine end with the lease, so fetch what you need first.
 
 Leases are recorded in the cloud peer's state directory before anything is
 acquired, and each record keeps how to release its machine: the release
