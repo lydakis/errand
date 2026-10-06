@@ -931,15 +931,17 @@ func (b *Broker) watch(l *lease) {
 // run asking for one or naming it, or is empty when it can. It is the one
 // rule every hand-out follows, and depends only on what the cloud peer has
 // recorded of the lease and its worker's latest check: a lease that is not
-// ready, that releaseReason would release now (past its lifetime, or idle
-// past its deadline, though its worker has not released it yet), or whose
-// latest check failed or has not happened since a restart, is refused.
+// ready, at or past its lifetime (which no hand-out extends, though its
+// worker may not have released it yet), or whose latest check failed or has
+// not happened since a restart, is refused. A lease past its idle deadline
+// but not released is handed out: the hand-out restarts its idle window
+// under the lock the release is decided under, so it is then not released.
 func (l *lease) refusal(now time.Time) string {
-	if l.State != proto.LeaseReady {
+	switch {
+	case l.State != proto.LeaseReady:
 		return "it is " + l.State
-	}
-	if reason := l.releaseReason(now); reason != "" {
-		return "it is due for release: " + reason
+	case !now.Before(l.ExpiresAt):
+		return "it has reached its max lifetime"
 	}
 	return l.checkFailed
 }

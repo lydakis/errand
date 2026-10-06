@@ -138,7 +138,7 @@ lease reaches `max_lifetime`, even if a job is still running. A runner it
 cannot reach counts as idle. A run asks the cloud peer for its lease right
 before it submits, and the cloud peer decides that and the idle release one at
 a time: a run that asks first keeps the lease for a full idle window, and one
-that asks after the idle deadline, or once the release is recorded, is
+that asks once the release is recorded, or at the lease's lifetime, is
 refused before it submits anything. A cloud peer keeps its 32 most recent ended leases, for up to a
 week, for `errand leases` to list. Persistent workspaces and retained results
 on a leased machine end with the lease, so fetch what you need first.
