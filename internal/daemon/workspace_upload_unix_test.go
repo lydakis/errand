@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"testing"
 
+	changeops "github.com/lydakis/errand/internal/changes"
 	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/proto"
 	"github.com/lydakis/errand/internal/snapshot"
@@ -29,13 +30,17 @@ func TestWaitingWorkspacePushesHoldNoDataHandle(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := func() (*bytes.Buffer, string, int) {
+		delta, err := changeops.PrepareSourceDelta(t.Context(), ws.Manifest, ws.Manifest, proto.DefaultLimits().MaxChangeBytes)
+		if err != nil {
+			t.Fatal(err)
+		}
 		var payload bytes.Buffer
 		mw := multipart.NewWriter(&payload)
 		part, err := mw.CreateFormField("metadata")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := json.NewEncoder(part).Encode(proto.PushRequest{ID: proto.NewULID(), ClientID: "0123456789abcdef0123456789abcdef", Manifest: ws.Manifest}); err != nil {
+		if err := json.NewEncoder(part).Encode(proto.PushRequest{ID: proto.NewULID(), ClientID: "0123456789abcdef0123456789abcdef", Delta: &delta, SourceRoot: ws.Manifest.RootHash()}); err != nil {
 			t.Fatal(err)
 		}
 		part, err = mw.CreateFormFile("workspace", "workspace.tar")
@@ -43,7 +48,7 @@ func TestWaitingWorkspacePushesHoldNoDataHandle(t *testing.T) {
 			t.Fatal(err)
 		}
 		split := payload.Len()
-		if err := snapshot.PackPartial(part, root, ws.Manifest, nil); err != nil {
+		if err := snapshot.PackPartial(part, root, delta.RemoteManifest, nil); err != nil {
 			t.Fatal(err)
 		}
 		if err := mw.Close(); err != nil {

@@ -68,14 +68,23 @@ func negotiateSnapshotAt(ctx context.Context, endpoint string, manifest proto.Ma
 	}
 	switch resp.StatusCode {
 	case http.StatusOK:
-	case http.StatusNotFound: // Snapshot caching is disabled on this runner.
-		return shipPlan{}, nil
 	default:
 		return shipPlan{}, &controlHTTPError{statusCode: resp.StatusCode, err: fmt.Errorf("snapshot negotiation: %s: %s", resp.Status, apiError(raw))}
 	}
 	var diff proto.SnapshotDiffResponse
 	if err := json.Unmarshal(raw, &diff); err != nil {
 		return shipPlan{}, err
+	}
+	for _, h := range diff.Missing {
+		if !seen[h] {
+			return shipPlan{}, fmt.Errorf("snapshot negotiation returned an unrequested or duplicate hash")
+		}
+		delete(seen, h)
+	}
+	// Cold and disabled caches need every body. Avoid retaining another hash
+	// map and checking it for each entry while packing a complete archive.
+	if len(diff.Missing) == len(refs) {
+		return shipPlan{}, nil
 	}
 	ship := make(map[string]bool, len(diff.Missing))
 	for _, h := range diff.Missing {

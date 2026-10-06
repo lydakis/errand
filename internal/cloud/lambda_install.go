@@ -18,6 +18,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/lydakis/errand/internal/client"
 	"github.com/lydakis/errand/internal/limitbuf"
 	"github.com/lydakis/errand/internal/nowindow"
 )
@@ -176,11 +177,6 @@ func writeInstallBundle(w io.Writer, binary *os.File, config []byte, hostname, a
 
 // checkInstall checks the tools the install needs before anything is rented.
 func (p *LambdaProvider) checkInstall() error {
-	if p.HostKey == nil || p.Keygen == nil {
-		if _, err := exec.LookPath("ssh-keygen"); err != nil {
-			return fmt.Errorf("renting Lambda machines needs ssh-keygen: %w", err)
-		}
-	}
 	if p.SSH == nil {
 		if _, err := exec.LookPath("ssh"); err != nil {
 			return fmt.Errorf("installing errand on Lambda machines needs ssh: %w", err)
@@ -237,27 +233,8 @@ func (p *LambdaProvider) hostKey() func(context.Context) (string, string, error)
 	if p.HostKey != nil {
 		return p.HostKey
 	}
-	return func(ctx context.Context) (string, string, error) {
-		dir, err := os.MkdirTemp("", "errand-lease-host-key-")
-		if err != nil {
-			return "", "", err
-		}
-		defer os.RemoveAll(dir)
-		path := dir + "/key"
-		cmd := exec.CommandContext(ctx, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "errand-lease", "-f", path)
-		nowindow.Hide(cmd)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return "", "", fmt.Errorf("ssh-keygen: %v %s", err, lastLine(out))
-		}
-		private, err := os.ReadFile(path)
-		if err != nil {
-			return "", "", err
-		}
-		public, err := os.ReadFile(path + ".pub")
-		if err != nil {
-			return "", "", err
-		}
-		return strings.ReplaceAll(string(private), "\r\n", "\n"), strings.TrimSpace(string(public)), nil
+	return func(context.Context) (string, string, error) {
+		return client.NewSSHKey("errand-lease")
 	}
 }
 

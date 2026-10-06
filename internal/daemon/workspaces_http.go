@@ -18,14 +18,6 @@ import (
 )
 
 func (d *Daemon) handleWorkspaceCreate(w http.ResponseWriter, r *http.Request, id Identity) {
-	d.createWorkspaceUpload(w, r, id, false)
-}
-
-func (d *Daemon) handleWorkspaceCreateSnapshot(w http.ResponseWriter, r *http.Request, id Identity) {
-	d.createWorkspaceUpload(w, r, id, true)
-}
-
-func (d *Daemon) createWorkspaceUpload(w http.ResponseWriter, r *http.Request, id Identity, partial bool) {
 	var request proto.Workspace
 	key := r.PathValue("id")
 	if !proto.ValidULID(key) {
@@ -117,13 +109,9 @@ func (d *Daemon) createWorkspaceUpload(w http.ResponseWriter, r *http.Request, i
 		httpError(w, 500, err.Error())
 		return
 	}
-	var extractOptions archive.ExtractOptions
-	var restored map[string]bool
-	if partial {
-		extractOptions, restored = d.snapshotExtractOptions(r.Context(), nil)
-	}
+	extractOptions, restored := d.snapshotExtractOptions(r.Context(), nil)
 	if err := archive.ExtractWith(&contextReader{ctx: r.Context(), r: input}, data, request.Manifest, d.cfg.MaxLimits.MaxWorkspaceBytes, extractOptions); err != nil {
-		if partial && errors.Is(err, archive.ErrCacheMiss) {
+		if errors.Is(err, archive.ErrCacheMiss) {
 			httpErrorCode(w, http.StatusConflict, proto.ErrorCodeSnapshotCacheMiss, err.Error())
 			return
 		}

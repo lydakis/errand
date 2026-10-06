@@ -41,26 +41,23 @@ type sshRoundTripper struct {
 	transports            sync.Map
 }
 
+// sshTransportKey names the pool of connections to one endpoint.
 type sshTransportKey struct {
 	target  string
 	command string
 	socket  string
 }
 
+// sshPool is an endpoint's connections, all opened trusting the same host
+// key and offering the same identities.
+type sshPool struct {
+	trust     string
+	transport *http.Transport
+}
+
 func (rt *sshRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	endpoint := sshEndpointForRequest(req.URL)
-	key := sshTransportKey{target: endpoint.target, command: endpoint.command, socket: endpoint.socket}
-	value, _ := rt.transports.LoadOrStore(key, &http.Transport{
-		Proxy: nil,
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return dialSSHConnection(ctx, endpoint.target, sshRemoteInvocation(endpoint))
-		},
-		ResponseHeaderTimeout: rt.responseHeaderTimeout,
-		DisableCompression:    true,
-		MaxIdleConnsPerHost:   4,
-		IdleConnTimeout:       90 * time.Second,
-	})
-	inner := value.(*http.Transport)
+	inner := rt.pool(endpoint).transport
 
 	clone := req.Clone(req.Context())
 	u := *req.URL
@@ -70,6 +67,46 @@ func (rt *sshRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	clone.URL = &u
 	clone.Host = "errand"
 	return inner.RoundTrip(clone)
+}
+
+// pool returns endpoint's pool for what this process now trusts about its
+// target. When that changed, as when a lease's address is reused, a new
+// pool replaces the old one, whose idle connections are closed; requests
+// already on them finish.
+func (rt *sshRoundTripper) pool(endpoint sshEndpoint) *sshPool {
+	trust, _ := sshTrustFor(endpoint.target)
+	key := sshTransportKey{target: endpoint.target, command: endpoint.command, socket: endpoint.socket}
+	for {
+		value, ok := rt.transports.Load(key)
+		if ok && value.(*sshPool).trust == trust.poolKey() {
+			return value.(*sshPool)
+		}
+		fresh := &sshPool{trust: trust.poolKey(), transport: rt.newTransport(endpoint, trust)}
+		if !ok {
+			if _, loaded := rt.transports.LoadOrStore(key, fresh); !loaded {
+				return fresh
+			}
+			continue
+		}
+		if rt.transports.CompareAndSwap(key, value, fresh) {
+			value.(*sshPool).transport.CloseIdleConnections()
+			return fresh
+		}
+	}
+}
+
+// newTransport dials endpoint with trust as it was when the pool was made.
+func (rt *sshRoundTripper) newTransport(endpoint sshEndpoint, trust sshTrust) *http.Transport {
+	return &http.Transport{
+		Proxy: nil,
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return dialSSHConnection(ctx, endpoint.target, sshRemoteInvocation(endpoint), trust)
+		},
+		ResponseHeaderTimeout: rt.responseHeaderTimeout,
+		DisableCompression:    true,
+		MaxIdleConnsPerHost:   4,
+		IdleConnTimeout:       90 * time.Second,
+	}
 }
 
 var dialSSHConnection = dialSSH
@@ -101,11 +138,9 @@ func restoreSSHPeer(peerURL, target, command, socket, hostKey string, identities
 	if !IsSSHPeer(peerURL) || target == "" {
 		return
 	}
-	if hostKey != "" {
-		_ = TrustSSHHost(target, hostKey, "")
-		for _, identity := range identities {
-			_ = TrustSSHHost(target, hostKey, identity)
-		}
+	_ = TrustSSHHost(target, hostKey, "")
+	for _, identity := range identities {
+		_ = TrustSSHHost(target, hostKey, identity)
 	}
 	sshEndpoints.Store(strings.TrimSuffix(peerURL, "/"), sshEndpoint{
 		target: target, command: effectiveSSHCommand(command), socket: socket,
@@ -166,12 +201,12 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
-func dialSSH(ctx context.Context, target, remoteInvocation string) (net.Conn, error) {
+func dialSSH(ctx context.Context, target, remoteInvocation string, trust sshTrust) (net.Conn, error) {
 	controlDir, err := sshControlDir()
 	if err != nil {
 		return nil, err
 	}
-	pin, err := sshPinArgs(target)
+	pin, err := trust.args(target)
 	if err != nil {
 		return nil, err
 	}

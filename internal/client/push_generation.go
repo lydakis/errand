@@ -12,7 +12,7 @@ func (s *pushWatchState) observeGeneration(dir string) error {
 		return err
 	}
 	if s.generation != generation {
-		s.manifest, s.base, s.baseChecked = "", nil, false
+		s.manifest, s.base = "", nil
 		s.generation = generation
 	}
 	return nil

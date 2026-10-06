@@ -16,7 +16,7 @@ import (
 	"github.com/lydakis/errand/internal/snapshot"
 )
 
-// Allow the runner's 64 MiB manifest plus creation metadata in a descriptor.
+// Allow the runner's 64 MiB manifest plus creation metadata in a full read.
 const maxWorkspaceResponseBytes = 65 << 20
 
 // Names resolve to the current workspace identity. IDs also work after removal,
@@ -42,7 +42,7 @@ func GetWorkspace(peerURL, name string) (proto.Workspace, error) {
 }
 
 // getWorkspaceDescriptor requests identity and selection metadata without the
-// creation manifest. Older runners may ignore the query and return the full row.
+// creation manifest.
 func getWorkspaceDescriptor(peerURL, name string) (proto.Workspace, error) {
 	return getWorkspace(peerURL, name, true)
 }
@@ -52,12 +52,17 @@ func getWorkspace(peerURL, name string, omitManifest bool) (proto.Workspace, err
 	ctx, cancel := context.WithTimeout(context.Background(), controlRequestTimeout)
 	defer cancel()
 	endpoint := strings.TrimSuffix(peerURL, "/") + "/v0/workspaces/" + url.PathEscape(name)
+	responseLimit := int64(maxWorkspaceResponseBytes)
 	if omitManifest {
 		endpoint += "?manifest=omit"
+		responseLimit = 2 << 20 // selection metadata plus descriptor framing
 	}
-	err := getJSONContext(ctx, endpoint, maxWorkspaceResponseBytes, "workspace", &result)
+	err := getJSONContext(ctx, endpoint, responseLimit, "workspace", &result)
 	if err == nil && (!proto.ValidULID(result.ID) || proto.ValidateWorkspaceName(result.Name) != nil) {
 		err = fmt.Errorf("runner returned an invalid workspace")
+	}
+	if err == nil && omitManifest && len(result.Manifest.Entries) != 0 {
+		err = fmt.Errorf("runner did not omit the creation manifest")
 	}
 	return result, err
 }
@@ -139,9 +144,7 @@ func createPreparedWorkspace(opts RunOptions, prep snapshotPreparation, request 
 	endpoint := strings.TrimSuffix(opts.PeerURL, "/") + "/v0/workspaces/" + request.ID + "/snapshot/diff"
 	plan, err := negotiateSnapshotAt(context.Background(), endpoint, prep.manifest)
 	if err != nil {
-		// Like job submission, cache negotiation is optional. A complete
-		// upload uses the original endpoint and is safe without capability.
-		plan = shipPlan{}
+		return proto.Workspace{}, err
 	}
 	if err := prep.guard.Verify(); err != nil {
 		return proto.Workspace{}, err
@@ -199,9 +202,6 @@ func createPreparedWorkspaceOnce(opts RunOptions, prep snapshotPreparation, requ
 	ctx, cancel := context.WithTimeout(context.Background(), submitRequestTimeout)
 	defer cancel()
 	endpoint := strings.TrimSuffix(opts.PeerURL, "/") + "/v0/workspaces/" + request.ID
-	if plan.partial {
-		endpoint += "/snapshot"
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, pr)
 	if err != nil {
 		return result, err

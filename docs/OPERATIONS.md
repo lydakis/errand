@@ -304,8 +304,8 @@ earlier errand, follows the `--older-than` boundary: no command can fetch,
 apply or recover through it, so keeping it protects nothing. Each record GC
 cannot collect is named with the reason, and the exit status is nonzero.
 Cache previews report the selected runner and separate snapshot/named-cache
-expiry and byte budgets supplied by that runner. Older runners without policy
-reporting are labeled explicitly; the client does not guess their settings.
+expiry and byte budgets supplied by that runner. Policy reporting is required;
+the client rejects incomplete responses.
 Cache collection can remove idle caches across owners; leased named caches
 remain protected.
 

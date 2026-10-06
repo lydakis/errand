@@ -16,18 +16,16 @@ import (
 
 func TestWhereSelectionFiltersAndBalances(t *testing.T) {
 	e := config.EffectiveRun{Where: "os=linux,go"}
-	for _, name := range []string{"offline", "wrong-os", "unsupported", "busy", "loaded", "available"} {
+	for _, name := range []string{"offline", "wrong-os", "busy", "loaded", "available"} {
 		e.Candidates = append(e.Candidates, config.RunCandidate{Name: name, URL: name})
 	}
 	selection, err := chooseRunners(context.Background(), e, func(_ context.Context, url, where string, _ time.Duration) (proto.Info, error) {
-		i := proto.Info{Placement: true, MaxJobs: 4, Facts: proto.Facts{OS: "linux", Tools: map[string]string{"go": "/bin/go"}}}
+		i := proto.Info{MaxJobs: 4, Facts: proto.Facts{OS: "linux", Tools: map[string]string{"go": "/bin/go"}}}
 		switch url {
 		case "offline":
 			return i, fmt.Errorf("unreachable")
 		case "wrong-os":
 			i.Facts.OS = "darwin"
-		case "unsupported":
-			i.Placement = false
 		case "busy":
 			i.Busy = true
 		case "loaded":
@@ -44,7 +42,7 @@ func TestWhereSelectionFiltersAndBalances(t *testing.T) {
 	}
 	var errOut bytes.Buffer
 	selection.printExcluded(&errOut)
-	for _, s := range []string{"offline", "wrong-os", "unsupported", "busy"} {
+	for _, s := range []string{"offline", "wrong-os", "busy"} {
 		if !strings.Contains(errOut.String(), s) {
 			t.Fatalf("missing exclusion %s: %s", s, &errOut)
 		}
@@ -113,7 +111,7 @@ func TestDoctorWhereReportsChoiceWithoutSubmitting(t *testing.T) {
 		if target != "http://runner.invalid" || where != "go" {
 			t.Errorf("probe %s %s", target, where)
 		}
-		return proto.Info{Placement: true, Version: version, MaxJobs: 1, Facts: proto.Facts{Tools: map[string]string{"go": "/bin/go"}}}, nil
+		return proto.Info{Version: version, MaxJobs: 1, Facts: proto.Facts{Tools: map[string]string{"go": "/bin/go"}}}, nil
 	}, probe: func(context.Context, string) (proto.Info, error) {
 		t.Fatal("redundant probe")
 		return proto.Info{}, nil
@@ -131,7 +129,7 @@ func TestDoctorWhereKeepsSSHDisplayURL(t *testing.T) {
 		if target == "ssh://host" {
 			t.Error("custom SSH transport was not registered")
 		}
-		return proto.Info{Placement: true, Version: version, MaxJobs: 1}, nil
+		return proto.Info{Version: version, MaxJobs: 1}, nil
 	}, ssh: func(context.Context, string) error {
 		t.Fatal("repeated SSH inspection after successful info probe")
 		return nil
@@ -145,7 +143,7 @@ func TestDoctorWhereKeepsSSHDisplayURL(t *testing.T) {
 // so only your own config, a profile you chose or --where may lease.
 func TestWorkspaceWhereNeverLeases(t *testing.T) {
 	broker := func(_ context.Context, _, _ string, _ time.Duration) (proto.Info, error) {
-		return proto.Info{Placement: true, MaxJobs: 1, Facts: proto.Facts{OS: "linux"}, Offers: []proto.Offer{{Name: "h100", Facts: proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 81920}}}}}}, nil
+		return proto.Info{MaxJobs: 1, Facts: proto.Facts{OS: "linux"}, Offers: []proto.Offer{{Name: "h100", Facts: proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 81920}}}}}}, nil
 	}
 	e := config.EffectiveRun{Where: "gpu", Candidates: []config.RunCandidate{{Name: "cloud", URL: "cloud"}}}
 	selection, err := chooseRunners(context.Background(), e, broker)
@@ -168,7 +166,7 @@ func TestReadyLeasesAreReusedThroughTheirCloudPeer(t *testing.T) {
 	var probed []string
 	probe := func(_ context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
 		probed = append(probed, target)
-		info := proto.Info{Placement: true, MaxJobs: 1, Facts: proto.Facts{OS: "linux"}}
+		info := proto.Info{MaxJobs: 1, Facts: proto.Facts{OS: "linux"}}
 		if target == "http://cloud:7443" {
 			info.Offers = []proto.Offer{{Name: "h100", Facts: h100}}
 			info.Leases = []proto.Lease{{ID: proto.NewULID(), Offer: "h100", State: proto.LeaseReady, Target: &proto.LeaseTarget{URL: "http://box:7443"}, Facts: &h100}}
@@ -193,7 +191,7 @@ func TestLeaseSuppliersRankedByOffer(t *testing.T) {
 			return proto.Info{}, errors.New("unreachable")
 		}
 		busy := map[string]int{"cabal": 1}[target]
-		return proto.Info{Placement: true, MaxJobs: 1, RunningJobs: busy, Facts: proto.Facts{OS: "linux"}, Offers: offers[target]}, nil
+		return proto.Info{MaxJobs: 1, RunningJobs: busy, Facts: proto.Facts{OS: "linux"}, Offers: offers[target]}, nil
 	}
 	order := func(peers ...string) []string {
 		e := config.EffectiveRun{Where: "gpu=h100", WhereMayLease: true}

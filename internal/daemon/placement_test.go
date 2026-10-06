@@ -125,7 +125,7 @@ func TestWhereChecksEffectiveExecutePermission(t *testing.T) {
 func TestWhereInfoAndWorkspaceCreation(t *testing.T) {
 	_, ts := testDaemon(t)
 	info, err := client.ProbeWhereInfo(context.Background(), ts.URL, "os="+runtime.GOOS, time.Second)
-	if err != nil || !info.Placement || info.Facts.OS != runtime.GOOS {
+	if err != nil || info.Facts.OS != runtime.GOOS {
 		t.Fatalf("info=%+v %v", info, err)
 	}
 	wrongOS := "linux"
