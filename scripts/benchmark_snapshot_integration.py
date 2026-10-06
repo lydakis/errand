@@ -14,6 +14,7 @@ import signal
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 
 from snapshot_provenance import comparison_inputs, harness_inputs, require_matching_inputs
@@ -95,25 +96,37 @@ def benchmark_cases(scope):
     return cases
 
 
+def kill_group(process):
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
 def run(command, root, env, log, timeout=1200, read_output=True):
     # Go's test timeout does not bound benchmarks. Bound the entire process
     # group, including commands launched by a benchmark, and retain partial logs.
     with log.open("w") as output:
         process = subprocess.Popen(command, cwd=root, env=env, stdout=output,
                                    stderr=subprocess.STDOUT, text=True, start_new_session=True)
+        # A timer bounds the wait. Popen.wait(timeout) polls under a lock that
+        # Ctrl-C can leave held, and the reap below would then hang on it.
+        expired = threading.Event()
+        watchdog = threading.Timer(timeout, lambda: (expired.set(), kill_group(process)))
+        watchdog.daemon = True
         try:
-            process.wait(timeout=timeout)
-        except BaseException as exc:
+            watchdog.start()
+            process.wait()
+        except BaseException:
             # Ctrl-C interrupts this driver, not the child's separate session.
             # Stop and reap that group before propagating any interrupted wait.
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            kill_group(process)
             process.wait()
-            if isinstance(exc, subprocess.TimeoutExpired):
-                raise RuntimeError(f"{command} exceeded {timeout}s; see {log}") from exc
             raise
+        finally:
+            watchdog.cancel()
+    if expired.is_set():
+        raise RuntimeError(f"{command} exceeded {timeout}s; see {log}")
     if process.returncode:
         raise RuntimeError(f"{command} exited {process.returncode}; see {log}")
     return log.read_text() if read_output else None
