@@ -567,7 +567,9 @@ func TestFailedLaunchesAreReleased(t *testing.T) {
 	// A machine that never matches the requirements is not handed out.
 	h2 := newHarness(t, okAcquire)
 	h2.machine.gpus = nil
-	h2.cfg.AcquireTimeout = 200 * time.Millisecond
+	// Long enough for the acquire command itself on a loaded machine; the
+	// lease fails when it runs out waiting for a matching machine.
+	h2.cfg.AcquireTimeout = 2 * time.Second
 	b2 := h2.start(t)
 	l2, _ := b2.Acquire("george", "", "gpu", "", "")
 	failed = waitState(t, b2, "george", l2.ID, proto.LeaseFailed)
@@ -616,9 +618,17 @@ func TestReleaseRetriesUntilItSucceeds(t *testing.T) {
 	l, _ := b.Acquire("george", "", "gpu", "", "")
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
 	b.Release("george", l.ID)
-	time.Sleep(100 * time.Millisecond)
-	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReleasing || !strings.Contains(strings.Join(got.Progress, "\n"), "release failed: exit status 1 api 503; retrying") {
-		t.Fatalf("lease %+v", got)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		got, _ := b.Get("george", l.ID)
+		if got.State != proto.LeaseReleasing {
+			t.Fatalf("lease %+v", got)
+		}
+		if strings.Contains(strings.Join(got.Progress, "\n"), "release failed: exit status 1 api 503; retrying") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("release never failed: %+v", got)
+		}
 	}
 	os.WriteFile(marker, nil, 0600)
 	waitState(t, b, "george", l.ID, proto.LeaseReleased)
