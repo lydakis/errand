@@ -106,14 +106,15 @@ def kill_group(process):
 def run(command, root, env, log, timeout=1200, read_output=True):
     # Go's test timeout does not bound benchmarks. Bound the entire process
     # group, including commands launched by a benchmark, and retain partial logs.
+    # A timer bounds the wait. Popen.wait(timeout) polls under a lock that
+    # Ctrl-C can leave held, and the reap below would then hang on it. Build it
+    # before spawning, so only the spawn itself comes before the try.
+    expired = threading.Event()
+    watchdog = threading.Timer(timeout, lambda: (expired.set(), kill_group(process)))
+    watchdog.daemon = True
     with log.open("w") as output:
         process = subprocess.Popen(command, cwd=root, env=env, stdout=output,
                                    stderr=subprocess.STDOUT, text=True, start_new_session=True)
-        # A timer bounds the wait. Popen.wait(timeout) polls under a lock that
-        # Ctrl-C can leave held, and the reap below would then hang on it.
-        expired = threading.Event()
-        watchdog = threading.Timer(timeout, lambda: (expired.set(), kill_group(process)))
-        watchdog.daemon = True
         try:
             watchdog.start()
             process.wait()
