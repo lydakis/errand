@@ -1021,10 +1021,11 @@ func (b *Broker) stopped(l *lease) bool {
 	return l.State != proto.LeaseReady
 }
 
-// busy reports whether the machine has work, jobs or the results of jobs it
-// admitted during the lease that no client has fetched yet, asking no later
-// than the lease's hard stop, and why it cannot be handed out, if it cannot:
-// it did not answer, or its facts no longer match the lease's where.
+// busy reports whether the machine has work, jobs, workspace transfers
+// such as a push still uploading, or the results of jobs it admitted during
+// the lease that no client has fetched yet, asking no later than the
+// lease's hard stop, and why it cannot be handed out, if it cannot: it did
+// not answer, or its facts no longer match the lease's where.
 func (b *Broker) busy(l *lease, r record) (busy bool, failed string) {
 	ctx, cancel, ok := b.readyCall(l, r, probeTimeout)
 	defer cancel()
@@ -1038,7 +1039,7 @@ func (b *Broker) busy(l *lease, r record) (busy bool, failed string) {
 	} else if missing := q.Missing(info.Facts); len(missing) > 0 {
 		failed = "it no longer matches " + r.Where + ": " + strings.Join(missing, "; ")
 	}
-	active := info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs > 0
+	active := info.StagingJobs+info.StartingJobs+info.RunningJobs+info.QueuedJobs+info.Transfers > 0
 	// Both times are the machine's, so its clock is never compared with
 	// this peer's.
 	results := info.LatestUnfetched.After(r.AdmittedBefore)

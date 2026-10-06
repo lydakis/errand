@@ -510,6 +510,10 @@ type Info struct {
 	Offers []Offer `json:"offers,omitempty"`
 	Leases []Lease `json:"leases,omitempty"`
 
+	// Transfers counts workspace transfers in progress (creations, push
+	// uploads and applies): work the runner is doing that no job counts.
+	Transfers int `json:"transfers"`
+
 	// LatestAdmitted is when the runner admitted its most recent job, and
 	// LatestUnfetched when it admitted the most recent finished job whose
 	// retained workspace changes no client has downloaded yet: results that
