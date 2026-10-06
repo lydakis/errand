@@ -185,9 +185,11 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 		return Machine{}, err
 	}
 	data, _ := json.Marshal(state)
-	m := Machine{Target: state.LeaseTarget, State: data}
-	if !tailnet {
-		m.Identity = p.keyFile()
+	// This cloud peer reaches the machine over SSH with its own key either
+	// way: on the tailnet only to hold the runner idle before releasing it.
+	m := Machine{Target: state.LeaseTarget, State: data, Identity: p.keyFile()}
+	if tailnet {
+		m.Drain = &proto.LeaseTarget{SSH: p.user() + "@" + ip, HostKey: hostPublic}
 	}
 	return m, nil
 }

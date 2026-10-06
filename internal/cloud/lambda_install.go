@@ -112,8 +112,11 @@ func (p *LambdaProvider) install(ctx context.Context, ip, hostPublic, hostname, 
 }
 
 // lambdaRunnerConfig is the errandd.toml of a leased machine's runner: on
-// the tailnet it admits allowUsers and refuses SSH clients, so the tailnet
-// policy decides who gets in; otherwise it is reached only over SSH.
+// the tailnet it admits allowUsers, so the tailnet policy decides who gets
+// in; otherwise it is reached only over SSH. Either way it also takes SSH:
+// a tailnet machine admits no client key, only this cloud peer's, which
+// already has root there, and the cloud peer uses it to hold the runner idle
+// before releasing it.
 func lambdaRunnerConfig(tailnet bool, allowUsers []string) ([]byte, error) {
 	var b bytes.Buffer
 	if !tailnet {
@@ -126,7 +129,7 @@ func lambdaRunnerConfig(tailnet bool, allowUsers []string) ([]byte, error) {
 		Transport  string   `toml:"transport"`
 		Listen     string   `toml:"listen"`
 		AllowUsers []string `toml:"allow_users"`
-	}{"tailscale", "tailnet:7443", allowUsers})
+	}{"both", "tailnet:7443", allowUsers})
 	return b.Bytes(), err
 }
 

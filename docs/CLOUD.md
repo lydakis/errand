@@ -82,12 +82,14 @@ release attempts.
 The cloud peer releases a ready lease when its runner has had no staging,
 starting, running or queued jobs for the offer's `idle_timeout`, or when the
 lease reaches `max_lifetime`, even if a job is still running. A runner it
-cannot reach counts as idle. Over SSH, the cloud peer first has an idle runner
-refuse new jobs, so a job submitted just before the release is refused rather
-than lost; over the tailnet the runner does not let the cloud peer do that. A
-cloud peer keeps its 32 most recent ended leases, for up to a week, for
-`errand leases` to list. Persistent workspaces and retained results on a
-leased machine end with the lease, so fetch what you need first.
+cannot reach counts as idle. Before releasing an idle lease, the cloud peer
+has its runner refuse new jobs, so a job submitted just before the release is
+refused rather than lost. It does this over SSH, as the runner's own user, for
+Lambda machines on the tailnet too. A provider command's machine that the
+cloud peer reaches only over the tailnet cannot be asked, so it is released on
+the idle check alone. A cloud peer keeps its 32 most recent ended leases, for
+up to a week, for `errand leases` to list. Persistent workspaces and retained
+results on a leased machine end with the lease, so fetch what you need first.
 
 Leases are recorded in the cloud peer's state directory before anything is
 acquired, and each record keeps how to release its machine: the release
@@ -164,6 +166,8 @@ Clients reach the machine one of two ways:
   the machine's host key, so errand checks it without a `known_hosts` entry.
 - **Over your tailnet**, when `tailscale_auth_key_file` is set. The machine
   joins as `errand-<lease id>`, and the runner listens only on the tailnet.
+  Over SSH it admits only the cloud peer's own key, which the cloud peer uses
+  to hold the runner idle before releasing it.
 
 ```toml
 [[cloud.offers]]

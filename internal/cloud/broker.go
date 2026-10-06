@@ -111,6 +111,8 @@ type record struct {
 	// Identity is the private key file this cloud peer reaches the machine
 	// with, when the provider made one.
 	Identity string `json:"identity,omitempty"`
+	// DrainTarget is Machine.Drain.
+	DrainTarget *proto.LeaseTarget `json:"drain_target,omitempty"`
 	// LastBusy is when a ready lease was last seen with work or handed out.
 	// It is kept only in memory, since a restart starts a full idle window
 	// anyway, so no failed write can lose it.
@@ -667,7 +669,7 @@ func (b *Broker) launch(l *lease) {
 	}
 	if err == nil {
 		if err = b.update(l, func(r *record) bool {
-			r.ProviderState, r.Identity = machine.State, machine.Identity
+			r.ProviderState, r.Identity, r.DrainTarget = machine.State, machine.Identity, machine.Drain
 			return true
 		}); err != nil {
 			err = fmt.Errorf("recording the machine: %w", err)
@@ -779,9 +781,12 @@ func (b *Broker) watch(l *lease) {
 // retire releases a ready lease that is idle or out of lifetime, and
 // reports whether it did. A runner idle past its deadline is first asked to
 // refuse new jobs: one that took a job since the idle check keeps its
-// lease, and once it has agreed no job can start there. A runner that
-// cannot be asked, such as one reached over the tailnet, is released on the
-// idle check alone.
+// lease, and once it has agreed no job can start there. The runner agrees
+// only to its own user over its local socket, so the cloud peer asks over
+// SSH: through the lease's target, or its DrainTarget for a machine clients
+// reach on the tailnet. A runner that cannot be asked, such as a provider
+// command's machine reached only over the tailnet, is released on the idle
+// check alone.
 //
 // The probe and the drain took time, and requests may have changed the
 // record meanwhile, so the decision is made against the record as it is
@@ -796,7 +801,11 @@ func (b *Broker) retire(l *lease) bool {
 		ctx, cancel, ok := b.readyCall(l, r, probeTimeout)
 		var err error
 		if ok {
-			resume, err = b.cfg.Drain(ctx, *r.Target, r.Identity)
+			target := *r.Target
+			if r.DrainTarget != nil {
+				target = *r.DrainTarget
+			}
+			resume, err = b.cfg.Drain(ctx, target, r.Identity)
 		}
 		cancel()
 		if errors.Is(err, ErrRunnerBusy) {

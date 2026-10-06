@@ -296,7 +296,7 @@ cloud peer keeps the only lease record. See [cloud peers](CLOUD.md).
 1. A lease is recorded, with how to release its machine, before anything is acquired; only its own worker calls the provider.
 2. A lease ends only when its owner releases it or loses `submit`, when every run handed it withdraws while it is launching, after `idle_timeout` with no work and no new run handed it, at `max_lifetime`, or when its launch fails or a restart interrupts it.
 3. Withdrawing only cancels a launch: a run that gives up while its lease is launching withdraws, and the launch stops once no run is waiting for it. A ready lease belongs to no run.
-4. Every automatic release is decided against the lease record when the release is recorded, never against an earlier observation. Before an idle release the cloud peer asks the runner to refuse new jobs, which it does only while it has none, so a job admitted after the idle check keeps the lease. A runner reached over the tailnet does not take that request from the cloud peer, so there a job submitted in the moment before the release can still be lost.
+4. Every automatic release is decided against the lease record when the release is recorded, never against an earlier observation. Before an idle release the cloud peer asks the runner to refuse new jobs, which it does only while it has none, so a job admitted after the idle check keeps the lease. The runner takes that request only from its own user on its local socket, which the cloud peer reaches over SSH, for Lambda machines on the tailnet too; a provider command's machine it reaches only over the tailnet is released on the idle check alone.
 5. A run handed a ready lease, or a device let into it, may use it for at least `idle_timeout` unless its owner releases it or `max_lifetime` passes. A ready lease is handed out only while the cloud peer's latest check of its runner, at launch or at the last idle check, reached it and found it still matching; one whose check failed is passed over and gets no new idle window. Nothing on the machine survives the lease.
 6. A lease counts as released only once the provider confirms the machine is gone; until then the release is retried.
 7. So, while the cloud peer runs, no machine bills past `max_lifetime` plus the time to confirm its release. If the cloud peer is gone for good, nothing ends its machines: there is no spending cap.
@@ -888,10 +888,11 @@ long-form.
 changing config or service files. The daemon grants it only while idle and
 atomically refuses new admissions until restart, so setup cannot race a newly
 submitted job. A cloud peer takes the same lease on a runner it leased, over
-SSH, before releasing it for idleness. If an existing local socket cannot be
-reserved, setup refuses the restart. Its generated SSH peer block includes the
-effective `remote_socket` and an absolute `remote_command` unless setup proved
-that `/usr/local/bin/errand` resolves to the installed executable.
+SSH as the runner's user, before releasing it for idleness. If an existing
+local socket cannot be reserved, setup refuses the restart. Its generated SSH
+peer block includes the effective `remote_socket` and an absolute
+`remote_command` unless setup proved that `/usr/local/bin/errand` resolves to
+the installed executable.
 
 Without `--detach`: streams, exits per the two-layer status rule — drop-in
 for scripts. With `--detach`: prints the peer-qualified handle and returns.

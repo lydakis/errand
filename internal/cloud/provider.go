@@ -83,6 +83,10 @@ type Machine struct {
 	// Identity is a private key file the cloud peer reaches the machine with
 	// over SSH, when the provider made one.
 	Identity string
+	// Drain is how the cloud peer reaches the runner's local socket to hold
+	// it idle before an idle release, when that is not Target: over SSH, for
+	// a machine clients reach on the tailnet. Nil means Target.
+	Drain *proto.LeaseTarget
 }
 
 // ReleasePending is what Release returns when the provider has accepted the

@@ -1402,3 +1402,44 @@ func TestUndrainableRunnerReleasedWhenIdle(t *testing.T) {
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 }
+
+// drainProvider reaches its machines' runners over SSH to hold them idle,
+// while clients reach them at the URL it names.
+type drainProvider struct{ CommandProvider }
+
+func (p drainProvider) Acquire(ctx context.Context, req AcquireRequest) (Machine, error) {
+	m, err := p.CommandProvider.Acquire(ctx, req)
+	m.Drain = &proto.LeaseTarget{SSH: "ubuntu@box", HostKey: "ssh-ed25519 aG9zdA== box"}
+	return m, err
+}
+
+// A machine clients reach on the tailnet is held idle through the way its
+// provider named for that, which outlives a restart.
+func TestDrainUsesProvidersDrainTarget(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	h.cfg.Offers[0].Provider = drainProvider{h.cfg.Offers[0].Provider.(CommandProvider)}
+	drained := make(chan proto.LeaseTarget, 1)
+	h.cfg.Drain = func(ctx context.Context, target proto.LeaseTarget, identity string) (func(context.Context) error, error) {
+		select {
+		case drained <- target:
+		default:
+		}
+		return h.machine.drain(ctx, target, identity)
+	}
+	h.cfg.IdlePoll = time.Hour
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	b.Close()
+	b2 := h.start(t)
+	time.Sleep(150 * time.Millisecond)
+	wake(b2, l.ID)
+	waitState(t, b2, "george", l.ID, proto.LeaseReleased)
+	if got := <-drained; got.SSH != "ubuntu@box" || got.URL != "" {
+		t.Fatalf("drained through %+v", got)
+	}
+}
