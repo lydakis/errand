@@ -1034,24 +1034,51 @@ func TestRequestArrivingAfterItsWithdrawalStartsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The record is bounded by age and count, for each owner on its own.
+	// The record is bounded by count, for each owner and in all, and an
+	// entry is dropped only once it expires: a withdrawal finding no room is
+	// refused, never acknowledged.
 	var w withdrawnRequests
 	now := time.Now()
-	w = w.add("george", "old", now.Add(-2*withdrawnRequestAge))
-	w = w.add("george", "kept", now)
-	for i := range 10 * maxWithdrawnPerOwner {
-		w = w.add("flood", fmt.Sprint(i), now.Add(time.Duration(i)))
+	if !w.add("george", "old", now.Add(-2*withdrawnRequestAge)) || !w.add("george", "kept", now) {
+		t.Fatal("refused a withdrawal with room for it")
 	}
-	if len(w["flood"]) != maxWithdrawnPerOwner || w.has("flood", "0", now) || !w.has("flood", fmt.Sprint(10*maxWithdrawnPerOwner-1), now) {
-		t.Fatalf("%d withdrawals kept for one owner", len(w["flood"]))
+	for i := range maxWithdrawnPerOwner {
+		if !w.add("flood", fmt.Sprint(i), now) {
+			t.Fatalf("refused withdrawal %d of an owner's %d", i, maxWithdrawnPerOwner)
+		}
+	}
+	if w.add("flood", "more", now) || w.has("flood", "more", now) || !w.has("flood", "0", now) {
+		t.Fatal("an owner's full record took another entry")
 	}
 	if !w.has("george", "kept", now) || w.has("george", "old", now) {
-		t.Fatal("another owner's flood evicted a live withdrawal")
+		t.Fatal("another owner's flood dropped a live withdrawal")
 	}
-	for i := range maxWithdrawnOwners {
-		w = w.add(fmt.Sprint("owner", i), "x", now.Add(time.Minute))
+	for i := 0; ; i++ {
+		if !w.add(fmt.Sprint("owner", i/maxWithdrawnPerOwner), fmt.Sprint(i), now) {
+			break
+		}
 	}
-	if len(w) != maxWithdrawnOwners || w.has("george", "kept", now) {
-		t.Fatalf("%d owners kept", len(w))
+	if total := func() (n int) {
+		for _, r := range w {
+			n += len(r)
+		}
+		return n
+	}(); total != maxWithdrawn || !w.has("george", "kept", now) || w.add("george", "new", now) {
+		t.Fatalf("%d withdrawals kept in all", total)
+	}
+
+	// A broker whose record is full refuses the withdrawal rather than
+	// settling it.
+	b.mu.Lock()
+	b.withdrawn = w
+	b.mu.Unlock()
+	if _, err := b.Withdraw("george", proto.NewULID()); !errors.As(err, &e) || e.Status != http.StatusServiceUnavailable {
+		t.Fatalf("withdrawing with no room: %v", err)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	// Expired entries make room.
+	if !b.withdrawn.add("george", "new", now.Add(withdrawnRequestAge+time.Second)) {
+		t.Fatal("expired withdrawals were not dropped")
 	}
 }

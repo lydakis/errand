@@ -451,11 +451,13 @@ func (b *Broker) Withdraw(owner, requestID string) (proto.Lease, error) {
 		}
 	}
 	if l == nil {
-		// The request may still be on its way.
-		if requestID != "" {
-			b.withdrawn = b.withdrawn.add(owner, requestID, time.Now())
-		}
+		// The request may still be on its way: unless it is remembered,
+		// the withdrawal settles nothing.
+		full := requestID != "" && !b.withdrawn.add(owner, requestID, time.Now())
 		b.mu.Unlock()
+		if full {
+			return proto.Lease{}, &Error{http.StatusServiceUnavailable, "too many recent withdrawals to record this one; try again later"}
+		}
 		return proto.Lease{}, &Error{http.StatusNotFound, "no lease was handed to that request"}
 	}
 	b.mu.Unlock()

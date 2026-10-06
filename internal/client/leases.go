@@ -88,16 +88,33 @@ func ReleaseLease(ctx context.Context, peerURL, id string) (proto.Lease, error) 
 // gave up before its lease was ready. The cloud peer cancels the launch if
 // no other run is waiting for it; a ready lease is left to its idle rule.
 // The answer has no ID when the cloud peer has no lease recorded for the
-// request.
+// request, and will refuse the request if it arrives later. A cloud peer
+// that cannot record that yet is asked again until ctx ends.
 func WithdrawLeaseRequest(ctx context.Context, peerURL, requestID string) (proto.Lease, error) {
-	var lease proto.Lease
-	err := leaseRequest(ctx, http.MethodDelete, strings.TrimSuffix(peerURL, "/")+"/v0/lease-requests/"+url.PathEscape(requestID), nil, &lease)
-	var answered *controlHTTPError
-	if errors.As(err, &answered) && answered.statusCode == http.StatusNotFound {
-		return proto.Lease{}, nil
+	endpoint := strings.TrimSuffix(peerURL, "/") + "/v0/lease-requests/" + url.PathEscape(requestID)
+	for {
+		var lease proto.Lease
+		err := leaseRequest(ctx, http.MethodDelete, endpoint, nil, &lease)
+		var answered *controlHTTPError
+		if !errors.As(err, &answered) {
+			return lease, err
+		}
+		switch answered.statusCode {
+		case http.StatusNotFound:
+			return proto.Lease{}, nil
+		case http.StatusServiceUnavailable:
+			select {
+			case <-ctx.Done():
+				return lease, err
+			case <-time.After(withdrawRetryInterval):
+				continue
+			}
+		}
+		return lease, err
 	}
-	return lease, err
 }
+
+var withdrawRetryInterval = time.Second
 
 func leaseRequest(ctx context.Context, method, endpoint string, body []byte, dst *proto.Lease) error {
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(body))

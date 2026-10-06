@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -82,5 +83,33 @@ func TestLeaseRefusalIsSafeOnlyBeforeALostAnswer(t *testing.T) {
 	defer none.Close()
 	if lease, err := WithdrawLeaseRequest(context.Background(), none.URL, proto.NewULID()); err != nil || lease.ID != "" {
 		t.Fatalf("withdrawing an unknown request: %+v %v", lease, err)
+	}
+}
+
+// A cloud peer that cannot record a withdrawal yet has not settled it: the
+// client asks again until it can, or reports the failure.
+func TestWithdrawRetriesUntilRecorded(t *testing.T) {
+	defer func(d time.Duration) { withdrawRetryInterval = d }(withdrawRetryInterval)
+	withdrawRetryInterval = time.Millisecond
+	var asked atomic.Int32
+	var busyFor atomic.Int32
+	busyFor.Store(3)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if asked.Add(1) <= busyFor.Load() {
+			http.Error(w, `{"error":"too many recent withdrawals"}`, http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, `{"error":"no lease was handed to that request"}`, http.StatusNotFound)
+	}))
+	defer srv.Close()
+	if lease, err := WithdrawLeaseRequest(context.Background(), srv.URL, proto.NewULID()); err != nil || lease.ID != "" || asked.Load() != 4 {
+		t.Fatalf("%+v %v after %d requests", lease, err, asked.Load())
+	}
+	asked.Store(0)
+	busyFor.Store(1 << 30)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := WithdrawLeaseRequest(ctx, srv.URL, proto.NewULID()); err == nil || asked.Load() < 2 {
+		t.Fatalf("a withdrawal never recorded counted as settled: %v after %d requests", err, asked.Load())
 	}
 }

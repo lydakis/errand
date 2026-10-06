@@ -8,67 +8,49 @@ import "time"
 // refused rather than starting a lease nobody waits for. A restart ends
 // every request in flight, so memory is enough.
 //
-// Each owner's withdrawals are bounded on their own, so one owner's flood
-// only ever evicts that owner's entries. The number of owners is bounded
-// too; owners are callers authorized to lease here.
+// Owners include whoever the tailnet policy grants the lease action, which
+// this runner does not bound, so an entry is never dropped before it expires: a
+// withdrawal that finds no room, for its owner or in all, is refused
+// instead, and the caller is not told the request is settled.
 type withdrawnRequests map[string]map[string]time.Time
 
 const (
 	maxWithdrawnPerOwner = 128
-	maxWithdrawnOwners   = 1024
+	maxWithdrawn         = 4096
 	withdrawnRequestAge  = time.Hour
 )
 
-// add records a withdrawal. It drops the owner's expired entries, then its
-// oldest ones beyond the cap. A new owner beyond the owner cap replaces
-// the owner whose last withdrawal is oldest.
-func (w withdrawnRequests) add(owner, requestID string, now time.Time) withdrawnRequests {
-	if w == nil {
-		w = withdrawnRequests{}
+// add records a withdrawal after dropping expired entries, and reports
+// whether there was room for it.
+func (w *withdrawnRequests) add(owner, requestID string, now time.Time) bool {
+	if *w == nil {
+		*w = withdrawnRequests{}
 	}
-	requests := w[owner]
-	if requests == nil {
-		if len(w) >= maxWithdrawnOwners {
-			stalest, stalestAt := "", time.Time{}
-			for o, rs := range w {
-				if at := latest(rs); stalest == "" || at.Before(stalestAt) {
-					stalest, stalestAt = o, at
-				}
-			}
-			delete(w, stalest)
-		}
-		requests = map[string]time.Time{}
-		w[owner] = requests
-	}
-	for id, at := range requests {
-		if now.Sub(at) > withdrawnRequestAge {
-			delete(requests, id)
-		}
-	}
-	for len(requests) >= maxWithdrawnPerOwner {
-		oldest := ""
+	total := 0
+	for o, requests := range *w {
 		for id, at := range requests {
-			if oldest == "" || at.Before(requests[oldest]) {
-				oldest = id
+			if now.Sub(at) > withdrawnRequestAge {
+				delete(requests, id)
 			}
 		}
-		delete(requests, oldest)
+		if len(requests) == 0 {
+			delete(*w, o)
+		}
+		total += len(requests)
+	}
+	requests := (*w)[owner]
+	if _, ok := requests[requestID]; !ok && (len(requests) >= maxWithdrawnPerOwner || total >= maxWithdrawn) {
+		return false
+	}
+	if requests == nil {
+		requests = map[string]time.Time{}
+		(*w)[owner] = requests
 	}
 	requests[requestID] = now
-	return w
+	return true
 }
 
 func (w withdrawnRequests) has(owner, requestID string, now time.Time) bool {
 	at, ok := w[owner][requestID]
 	return ok && now.Sub(at) <= withdrawnRequestAge
-}
-
-func latest(requests map[string]time.Time) time.Time {
-	var last time.Time
-	for _, at := range requests {
-		if at.After(last) {
-			last = at
-		}
-	}
-	return last
 }
