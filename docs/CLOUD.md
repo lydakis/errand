@@ -133,8 +133,9 @@ The cloud peer logs each lease's launch, readiness, release and any failed
 release attempts.
 
 The cloud peer releases a ready lease when its runner has had no staging,
-starting, running or queued jobs for the offer's `idle_timeout`, or when the
-lease reaches `max_lifetime`, even if a job is still running. A runner it
+starting, running or queued jobs, and no workspace being created, pushed to or
+applied, for the offer's `idle_timeout`, or when the lease reaches
+`max_lifetime`, even if a job or upload is still running. A runner it
 cannot reach counts as idle. A run asks the cloud peer for its lease right
 before it submits, and the cloud peer decides that and the idle release one at
 a time: a run that asks first keeps the lease for a full idle window, and one

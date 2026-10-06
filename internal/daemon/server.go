@@ -125,6 +125,11 @@ type Daemon struct {
 	lockFile          *os.File
 	closeOnce         sync.Once
 	closeErr          error
+
+	// transfers counts workspace transfers in progress: creations, push
+	// uploads and push applies. They are work the runner is doing for a
+	// client, though no job counts them. Protected by mu.
+	transfers int
 }
 
 func New(cfg Config) (*Daemon, error) {
@@ -733,11 +738,11 @@ func (d *Daemon) runQueue() {
 func (d *Daemon) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v0/gc/changes", d.auth(proto.ActionGCJobs, d.handleTransferGC))
-	mux.HandleFunc("POST /v0/workspaces/{id}/push", d.auth(proto.ActionSubmit, d.handleWorkspacePush))
+	mux.HandleFunc("POST /v0/workspaces/{id}/push", d.auth(proto.ActionSubmit, d.transferring(d.handleWorkspacePush)))
 	mux.HandleFunc("POST /v0/workspaces/{id}/push/diff", d.auth(proto.ActionSubmit, d.handleWorkspacePushDiff))
 	mux.HandleFunc("GET /v0/workspaces/{id}/push/base", d.auth(proto.ActionSubmit, d.handleWorkspacePushBase))
-	mux.HandleFunc("POST /v0/workspaces/{id}/push/{transfer}/apply", d.auth(proto.ActionSubmit, d.handleWorkspacePushApply))
-	mux.HandleFunc("POST /v0/workspaces/{id}", d.auth(proto.ActionSubmit, d.handleWorkspaceCreate))
+	mux.HandleFunc("POST /v0/workspaces/{id}/push/{transfer}/apply", d.auth(proto.ActionSubmit, d.transferring(d.handleWorkspacePushApply)))
+	mux.HandleFunc("POST /v0/workspaces/{id}", d.auth(proto.ActionSubmit, d.transferring(d.handleWorkspaceCreate)))
 	mux.HandleFunc("POST /v0/workspaces/{id}/snapshot/diff", d.auth(proto.ActionSubmit, d.handleWorkspaceCreateDiff))
 	mux.HandleFunc("GET /v0/workspaces", d.auth(proto.ActionReadOwn, d.handleWorkspaceList))
 	mux.HandleFunc("GET /v0/workspaces/{id}", d.auth(proto.ActionReadOwn, d.handleWorkspaceGet))
@@ -786,6 +791,11 @@ func (d *Daemon) handleSetupQuiesce(w http.ResponseWriter, _ *http.Request, id I
 		httpError(w, http.StatusConflict, "runner has active jobs ("+active+"); wait until it is idle before restarting")
 		return
 	}
+	if o.transfers > 0 {
+		d.mu.Unlock()
+		httpError(w, http.StatusConflict, fmt.Sprintf("runner has %d workspace transfers in progress; wait until it is idle before restarting", o.transfers))
+		return
+	}
 	token := proto.NewULID()
 	expiresAt := now.Add(setupQuiesceDuration)
 	d.setupQuiesceToken = token
@@ -819,6 +829,22 @@ func (d *Daemon) handleSetupQuiesceRelease(w http.ResponseWriter, r *http.Reques
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request, Identity)
+
+// transferring counts a workspace transfer as in progress while h runs, so
+// that /v0/info reports it.
+func (d *Daemon) transferring(h handlerFunc) handlerFunc {
+	return func(w http.ResponseWriter, r *http.Request, id Identity) {
+		d.mu.Lock()
+		d.transfers++
+		d.mu.Unlock()
+		defer func() {
+			d.mu.Lock()
+			d.transfers--
+			d.mu.Unlock()
+		}()
+		h(w, r, id)
+	}
+}
 
 // auth resolves the caller and requires the given action ("" means any
 // authorization suffices, e.g. for /v0/info). Fail closed.
@@ -893,6 +919,7 @@ func (d *Daemon) handleInfo(w http.ResponseWriter, r *http.Request, id Identity)
 		StartingJobs: o.starting,
 		RunningJobs:  o.running,
 		QueuedJobs:   o.queued,
+		Transfers:    o.transfers,
 		MaxJobs:      d.cfg.MaxJobs,
 		MaxQueued:    d.cfg.MaxQueued,
 		Facts:        facts,
@@ -1302,10 +1329,11 @@ func (d *Daemon) removeQueuedLocked(j *Job) bool {
 }
 
 type occupancy struct {
-	staging  int
-	queued   int
-	starting int
-	running  int
+	staging   int
+	queued    int
+	starting  int
+	running   int
+	transfers int // workspace transfers, which are no job's
 }
 
 func activeJobSummary(o occupancy) string {
@@ -1330,7 +1358,7 @@ func activeJobSummary(o occupancy) string {
 // occupancyLocked derives the public phase counts from scheduler ownership.
 // d.mu must be held so queue and running membership cannot change mid-snapshot.
 func (d *Daemon) occupancyLocked() occupancy {
-	var o occupancy
+	o := occupancy{transfers: d.transfers}
 	for _, j := range d.queue {
 		j.mu.Lock()
 		if j.state == proto.StateStaging {
