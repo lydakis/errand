@@ -258,16 +258,16 @@ func (e *lambdaAPIError) Error() string {
 	return fmt.Sprintf("Lambda API %d: %s", e.Status, e.Msg)
 }
 
-// lambdaArch maps Lambda's architecture names to Go's; unknown names map
-// to "" and are not checked.
-func lambdaArch(name string) string {
+// lambdaArch maps Lambda's architecture names to Go's. ok is false for a
+// name errand does not know.
+func lambdaArch(name string) (arch string, ok bool) {
 	switch strings.ToLower(name) {
 	case "x86_64", "amd64":
-		return "amd64"
+		return "amd64", true
 	case "arm64", "aarch64":
-		return "arm64"
+		return "arm64", true
 	}
-	return ""
+	return "", false
 }
 
 func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, int, error) {
@@ -291,7 +291,11 @@ func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, in
 	}
 	// errand_binary was checked against the offer's arch; the machine must
 	// match it, or the paid instance could never run errand.
-	if arch := lambdaArch(t.InstanceType.Architecture); arch != "" && p.Arch != "" && arch != p.Arch {
+	arch, ok := lambdaArch(t.InstanceType.Architecture)
+	if !ok {
+		return "", 0, fmt.Errorf("Lambda instance type %s has architecture %q, which errand does not know, so it cannot tell whether errand_binary runs there", p.InstanceType, t.InstanceType.Architecture)
+	}
+	if arch != p.Arch {
 		return "", 0, fmt.Errorf("Lambda instance type %s is %s but the offer says arch = %q", p.InstanceType, t.InstanceType.Architecture, p.Arch)
 	}
 	var available []string
@@ -455,7 +459,10 @@ func (p *LambdaProvider) instances(ctx context.Context, key string) ([]lambdaIns
 	}
 }
 
-func (p *LambdaProvider) waitActive(ctx context.Context, key, id string, progress func(string)) (string, error) {
+// waitActive polls the instance until it is active and returns its address.
+// seen runs once, the first time Lambda shows the instance, and stops the
+// wait if it fails.
+func (p *LambdaProvider) waitActive(ctx context.Context, key, id string, progress func(string), seen func() error) (string, error) {
 	last := ""
 	for {
 		var got struct {
@@ -476,6 +483,12 @@ func (p *LambdaProvider) waitActive(ctx context.Context, key, id string, progres
 				return "", err
 			}
 			continue
+		}
+		if seen != nil {
+			if err := seen(); err != nil {
+				return "", err
+			}
+			seen = nil
 		}
 		in := got.Data
 		if in.Status != last {

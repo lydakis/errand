@@ -54,8 +54,8 @@ func matchingOffer(q placement.Requirements, offers []proto.Offer) (proto.Offer,
 
 // describeOffer names an offer with its price when the cloud peer sets one.
 func describeOffer(o proto.Offer) string {
-	if o.PricePerHour > 0 {
-		return fmt.Sprintf("%s ($%.2f/h)", o.Name, o.PricePerHour)
+	if o.PricePerHour != nil {
+		return fmt.Sprintf("%s ($%.2f/h)", o.Name, *o.PricePerHour)
 	}
 	return o.Name
 }

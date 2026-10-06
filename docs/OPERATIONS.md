@@ -299,7 +299,10 @@ identity records, verified downloads, and interrupted download staging;
 pending apply transactions are always protected. Records whose submission never began follow
 the requested `--older-than` boundary. Unresolved submitted jobs remain
 protected for 30 days, after which an explicit local GC may retire abandoned
-state.
+state. A job record this version cannot decode, such as one written by an
+earlier errand, follows the `--older-than` boundary: no command can fetch,
+apply or recover through it, so keeping it protects nothing. Each record GC
+cannot collect is named with the reason, and the exit status is nonzero.
 Cache previews report the selected runner and separate snapshot/named-cache
 expiry and byte budgets supplied by that runner. Older runners without policy
 reporting are labeled explicitly; the client does not guess their settings.

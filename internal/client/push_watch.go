@@ -63,7 +63,7 @@ func WatchPush(ctx context.Context, opts PushOptions, report func(PushWatchEvent
 	if err != nil {
 		return err
 	}
-	if err := validateApplyCallerWorkspace(origin.Root, opts.Root); err != nil {
+	if err := validatePushCaller(origin, opts.Workspace, opts.Root); err != nil {
 		return err
 	}
 	opts.origin = &origin

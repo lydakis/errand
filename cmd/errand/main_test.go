@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -536,6 +538,63 @@ url = %q
 	}
 	if strings.Index(out, "cabal") > strings.Index(out, "mac-mini") {
 		t.Fatalf("ps rows are not globally newest-first: %q", out)
+	}
+}
+
+func TestCmdPsAsksForLeasesWhileListingJobs(t *testing.T) {
+	leasedJob := "01" + strings.Repeat("L", 24)
+	leasedRead := make(chan struct{})
+	var leasedOnce sync.Once
+	leased := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		leasedOnce.Do(func() { close(leasedRead) })
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]proto.JobListEntry{{ID: leasedJob, State: proto.StateRunning, Project: "leased", Command: `"true"`}})
+	}))
+	defer leased.Close()
+	listed := make(chan struct{})
+	var listOnce sync.Once
+	var concurrent, leasedFirst atomic.Bool
+	cloud := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/v0/info" {
+			listOnce.Do(func() { close(listed) })
+			// The leased machine must not wait for this slow listing.
+			select {
+			case <-leasedRead:
+				leasedFirst.Store(true)
+			case <-time.After(time.Second):
+			}
+			fmt.Fprintln(w, `[]`)
+			return
+		}
+		// The job listing must not wait for the leases.
+		select {
+		case <-listed:
+			concurrent.Store(true)
+		case <-time.After(time.Second):
+		}
+		json.NewEncoder(w).Encode(proto.Info{Proto: proto.ProtoVersion, Version: version, Leases: []proto.Lease{{
+			ID: "01JZ0000000000000000007F3A", Offer: "h100", State: proto.LeaseReady, Target: &proto.LeaseTarget{URL: leased.URL},
+		}}})
+	}))
+	defer cloud.Close()
+	writeClientConfig(t, fmt.Sprintf(`default_peer = "cloud"
+[peers.cloud]
+url = %q
+`, cloud.URL))
+
+	var stdout, stderr bytes.Buffer
+	if code := cmdPsTo(nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("ps exit = %d; stderr=%q", code, stderr.String())
+	}
+	if !concurrent.Load() {
+		t.Fatal("ps listed jobs only after asking for leases")
+	}
+	if !leasedFirst.Load() {
+		t.Fatal("ps read the leased machine only after its cloud peer's job listing")
+	}
+	if !strings.Contains(stdout.String(), "cloud-") || !strings.Contains(stdout.String(), "leased") {
+		t.Fatalf("ps did not list the leased machine's job: %q", stdout.String())
 	}
 }
 

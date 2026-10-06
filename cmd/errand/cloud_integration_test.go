@@ -66,7 +66,7 @@ func TestCLIWhereLeasesFromCloudPeer(t *testing.T) {
 	os.WriteFile(acquire, []byte(fmt.Sprintf("#!/bin/sh\necho \"booting $ERRAND_OFFER\" >&2\necho \"$ERRAND_LEASE_SSH_KEY\" > %q\necho '{\"url\":%q}'\n", sentKey, boxServer.URL)), 0700)
 	os.WriteFile(release, []byte(fmt.Sprintf("#!/bin/sh\necho \"$ERRAND_LEASE_ID\" >> %q\n", releaseLog)), 0700)
 	brokerCfg, err := config.DaemonCloud{Offers: []config.CloudOffer{{
-		Name: "h100", OS: runtime.GOOS, GPU: "H100 80GB", VRAM: 80, Price: 2.49,
+		Name: "h100", OS: runtime.GOOS, GPU: "H100 80GB", VRAM: 80, Price: new(2.49),
 		Acquire: []string{acquire}, Release: []string{release},
 	}}}.Broker()
 	if err != nil {
