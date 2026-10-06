@@ -77,11 +77,12 @@ own SSH key, and a machine reached over SSH lets in only the keys the cloud
 peer added. The cloud peer adds a device's key when that device asks for a
 machine the lease matches, or names the lease with `--on cabal-7f3a`; the
 device waits until it has. Until then the lease is not a peer on that device,
-though `errand leases` lists it. No private key leaves its device. All this
-needs the cloud peer to answer: if you point the name `cabal` at another
-runner, its leases, and job handles such as `cabal-7f3a/01K...`, are no longer
-reachable by name, and `errand leases release` cannot reach them either. The
-cloud peer still ends them when they go idle or reach their lifetime.
+though `errand leases` lists it. A lease lets in at most 16 devices. No
+private key leaves its device. All this needs the cloud peer to answer: if you
+point the name `cabal` at another runner, its leases, and job handles such as
+`cabal-7f3a/01K...`, are no longer reachable by name, and `errand leases
+release` cannot reach them either. The cloud peer still ends them when they go
+idle or reach their lifetime.
 
 ## When errand leases
 
@@ -111,7 +112,14 @@ lease is ready, only the idle and lifetime rules below or `errand leases
 release` end it. A run that stops after
 that, with or without a job, leaves the machine up for at most one idle
 window. Being given to a run counts as work, so a reused ready lease starts a
-full idle window.
+full idle window; so does naming it with `--on` to run on, create a workspace
+on, or push to, from any device, once the command is ready to submit. Commands that only read, such as `errand ps`
+or `errand logs`, do not, even from a device that naming the lease lets in,
+and neither does a run that fails before it can submit. Each
+idle check also confirms that the cloud peer can still reach the machine and
+that it still matches. A lease whose latest check failed is neither handed out
+nor run on by name, and its idle window is not renewed, so it ends once idle.
+After the cloud peer restarts, its ready leases wait for their first check.
 
 ## Leases
 
@@ -127,8 +135,13 @@ release attempts.
 The cloud peer releases a ready lease when its runner has had no staging,
 starting, running or queued jobs for the offer's `idle_timeout`, or when the
 lease reaches `max_lifetime`, even if a job is still running. A runner it
-cannot reach counts as idle. Persistent workspaces and retained results on a
-leased machine end with the lease, so fetch what you need first.
+cannot reach counts as idle. A run asks the cloud peer for its lease right
+before it submits, and the cloud peer decides that and the idle release one at
+a time: a run that asks first keeps the lease for a full idle window, and one
+that asks once the release is recorded, or at the lease's lifetime, is
+refused before it submits anything. A cloud peer keeps its 32 most recent ended leases, for up to a
+week, for `errand leases` to list. Persistent workspaces and retained results
+on a leased machine end with the lease, so fetch what you need first.
 
 Leases are recorded in the cloud peer's state directory before anything is
 acquired, and each record keeps how to release its machine: the release

@@ -67,7 +67,7 @@ func TestPushAllowsStagingBeyondControlDeadline(t *testing.T) {
 		json.NewEncoder(w).Encode(proto.PushResult{ID: "transfer", WorkspaceID: "workspace"})
 	}))
 	defer server.Close()
-	if _, err := uploadPushOnce(server.URL, "workspace", t.TempDir(), proto.PushRequest{ID: "transfer", Delta: &proto.ChangeBundle{}}, nil, shipPlan{}); err != nil {
+	if _, err := uploadPushOnce(server.URL, "workspace", t.TempDir(), proto.PushRequest{ID: "transfer", Delta: &proto.ChangeBundle{}}, nil, shipPlan{}, nil); err != nil {
 		t.Fatalf("valid slow staging was cut off by the control timeout: %v", err)
 	}
 }
@@ -127,7 +127,7 @@ func TestPushFallbackRequiresExplicitCacheMissAndStopsAfterFullUpload(t *testing
 				json.NewEncoder(w).Encode(proto.APIError{Code: tc.code, Error: "rejected"})
 			}))
 			defer server.Close()
-			if _, err := uploadPush(server.URL, "workspace", root, proto.PushRequest{ID: "transfer", Delta: &proto.ChangeBundle{RemoteManifest: manifest}, SourceRoot: manifest.RootHash()}, nil); err == nil {
+			if _, err := uploadPush(server.URL, "workspace", root, proto.PushRequest{ID: "transfer", Delta: &proto.ChangeBundle{RemoteManifest: manifest}, SourceRoot: manifest.RootHash()}, nil, nil); err == nil {
 				t.Fatal("rejected push succeeded")
 			}
 			if uploads != tc.uploads {

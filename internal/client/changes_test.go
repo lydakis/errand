@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -2227,5 +2228,83 @@ func TestChangeGCRescansDownloadRenamedIntoPlaceAfterScan(t *testing.T) {
 	}
 	if _, err := os.Stat(dest); !os.IsNotExist(err) {
 		t.Fatalf("expired download kept: %v", err)
+	}
+}
+
+// BeforeSubmit runs only once every local step and check has succeeded,
+// right before the submission goes out, and once for the attempt: a run
+// whose snapshot negotiation fails, or whose selection changed, never
+// reaches it; one it refuses sends no submission and keeps no change
+// state; and a submission retried after a lost connection is not claimed
+// again.
+func TestBeforeSubmitRunsOnlyRightBeforeSubmission(t *testing.T) {
+	for _, tc := range []struct {
+		name                   string
+		negotiate, change      bool
+		refuse, drop           bool
+		claims, puts, otherReq int32
+	}{
+		{name: "negotiation fails"},
+		{name: "selection changed", negotiate: true, change: true},
+		{name: "claim refused", negotiate: true, refuse: true, claims: 1},
+		{name: "submission retried", negotiate: true, drop: true, claims: 1, puts: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stateHome := t.TempDir()
+			t.Setenv("XDG_STATE_HOME", stateHome)
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, ".errandignore"), nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "input"), []byte("data"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var puts, other atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff" && tc.negotiate:
+					if tc.change {
+						if err := os.WriteFile(filepath.Join(root, "late"), []byte("changed"), 0o600); err != nil {
+							t.Error(err)
+						}
+					}
+					replyMissingSnapshotBlobs(t, w, r)
+				case r.Method == http.MethodPost && r.URL.Path == "/v0/snapshot/diff":
+					http.Error(w, "disk full", http.StatusInternalServerError)
+				case r.Method == http.MethodPut && tc.drop:
+					puts.Add(1)
+					io.Copy(io.Discard, r.Body)
+					conn, _, err := w.(http.Hijacker).Hijack()
+					if err == nil {
+						conn.Close()
+					}
+				default:
+					other.Add(1)
+					http.Error(w, "unexpected", http.StatusInternalServerError)
+				}
+			}))
+			defer server.Close()
+			var claims atomic.Int32
+			code := runWithDetachNotifications(RunOptions{
+				PeerURL: server.URL, Root: root, Argv: []string{"/bin/true"},
+				Stdout: io.Discard, Stderr: io.Discard,
+				BeforeSubmit: func(RunTarget) error {
+					claims.Add(1)
+					if tc.refuse {
+						return errors.New("lease is released")
+					}
+					return nil
+				},
+			}, make(chan os.Signal, 1), testInterruptNotifications(), nil)
+			if code != ExitTransaction || claims.Load() != tc.claims || puts.Load() != tc.puts || other.Load() != tc.otherReq {
+				t.Fatalf("exit %d after %d claims, %d submissions and %d other requests", code, claims.Load(), puts.Load(), other.Load())
+			}
+			if tc.drop {
+				return // the job may have been admitted, so its change state stays
+			}
+			if entries, _ := os.ReadDir(filepath.Join(stateHome, "errand", "jobs")); len(entries) != 0 {
+				t.Fatalf("unsubmitted change state survived: %v", entries)
+			}
+		})
 	}
 }

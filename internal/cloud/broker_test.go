@@ -1,7 +1,10 @@
 package cloud
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,7 +54,10 @@ func (m *fakeMachine) probe(_ context.Context, target proto.LeaseTarget, _, _ st
 	if m.down.Load() {
 		return proto.Info{}, errors.New("connection refused")
 	}
-	return proto.Info{MaxJobs: 1, RunningJobs: int(m.running.Load()), Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: m.gpus}}, nil
+	m.mu.Lock()
+	gpus := m.gpus
+	m.mu.Unlock()
+	return proto.Info{MaxJobs: 1, RunningJobs: int(m.running.Load()), Facts: proto.Facts{OS: "linux", Arch: "amd64", GPUs: gpus}}, nil
 }
 
 func script(t *testing.T, dir, name, body string) string {
@@ -286,7 +292,7 @@ func TestLeaseAdmitsOwnersOtherDevices(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if _, err := b.Admit("george", "", l.ID, air); err != nil {
+	if _, err := b.Admit("george", "", l.ID, air, false); err != nil {
 		t.Fatal(err)
 	}
 	for got, _ := b.Get("george", l.ID); !slices.Contains(got.SSHKeys, air); got, _ = b.Get("george", l.ID) {
@@ -301,10 +307,10 @@ func TestLeaseAdmitsOwnersOtherDevices(t *testing.T) {
 	if !slices.Equal(admitted, []string{mini, air}) {
 		t.Fatalf("machine was asked to add %q", admitted)
 	}
-	if _, err := b.Admit("someone", "", l.ID, air); err == nil {
+	if _, err := b.Admit("someone", "", l.ID, air, false); err == nil {
 		t.Fatal("let another owner's device in")
 	}
-	if _, err := b.Admit("george", "", l.ID, "AAAA"); err == nil {
+	if _, err := b.Admit("george", "", l.ID, "AAAA", false); err == nil {
 		t.Fatal("admitted a malformed key")
 	}
 }
@@ -325,7 +331,7 @@ func TestReleaseCancelsAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand"); err != nil {
+	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand", false); err != nil {
 		t.Fatal(err)
 	}
 	<-admitting
@@ -592,10 +598,10 @@ func TestLeaseKeysComparedWithoutComments(t *testing.T) {
 	if again, err := b.Acquire("george", "", "gpu", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB", ""); err != nil || again.ID != l.ID || !slices.Equal(again.SSHKeys, []string{mac}) {
 		t.Fatalf("same key without its comment: %+v %v", again, err)
 	}
-	if _, err := b.Admit("george", "", l.ID, mini); err != nil {
+	if _, err := b.Admit("george", "", l.ID, mini, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC rebuilt"); err != nil {
+	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC rebuilt", false); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(5 * time.Second)
@@ -793,8 +799,7 @@ func TestLeaseNotReadyUnlessRecorded(t *testing.T) {
 	}
 }
 
-// Ended leases are forgotten after a week by a running broker too, so its
-// lease list does not grow without bound.
+// Ended leases are forgotten after a week by a running broker too.
 func TestOldEndedLeasesAreForgotten(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	b := h.start(t)
@@ -810,14 +815,8 @@ func TestOldEndedLeasesAreForgotten(t *testing.T) {
 	b.mu.Lock()
 	b.leases[l.ID].ReleasedAt = time.Now().Add(-endedLeaseHistory - time.Minute)
 	b.mu.Unlock()
-	wake(b, l.ID)
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		if _, ok := b.Get("george", l.ID); !ok {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("old ended lease still listed")
-		}
+	if listed := b.List("george"); len(listed) != 0 {
+		t.Fatalf("old ended lease still listed: %+v", listed)
 	}
 	if _, err := os.Stat(filepath.Join(h.cfg.StateDir, "leases", l.ID+".json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("old ended lease still recorded: %v", err)
@@ -974,12 +973,11 @@ func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	h.cfg.IdlePoll = time.Hour // probe only when woken
 	h.cfg.Offers[0].IdleTimeout = 200 * time.Millisecond
-	// Each idle probe (not the readiness check) waits for the test.
-	var hold atomic.Bool
-	hold.Store(true)
+	// Once the lease is ready, each idle probe waits for the test.
+	var gate atomic.Bool
 	probing, answer := make(chan struct{}), make(chan struct{})
 	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
-		if where == "" && hold.Load() {
+		if gate.Load() {
 			probing <- struct{}{}
 			<-answer
 		}
@@ -991,12 +989,14 @@ func TestReuseDuringIdleProbeKeepsLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	<-probing                          // the first idle probe, which will find the machine idle
+	gate.Store(true)
+	wake(b, l.ID)
+	<-probing                          // an idle probe, which will find the machine idle
 	time.Sleep(300 * time.Millisecond) // past the idle deadline
 	if again, err := b.Acquire("george", "", "gpu", "", proto.NewULID()); err != nil || again.ID != l.ID {
 		t.Fatalf("reuse: %+v %v", again, err)
 	}
-	hold.Store(false)
+	gate.Store(false)
 	answer <- struct{}{}
 	time.Sleep(100 * time.Millisecond)
 	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
@@ -1061,6 +1061,419 @@ func waitProgress(t *testing.T, b *Broker, id, line string) {
 			t.Fatalf("progress never showed %q", line)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// testKey is a distinct, well-formed SSH public key line.
+func testKey(i int) string {
+	blob := binary.BigEndian.AppendUint32(nil, uint32(len("ssh-ed25519")))
+	blob = append(blob, "ssh-ed25519"...)
+	blob = binary.BigEndian.AppendUint32(blob, 32)
+	blob = append(blob, bytes.Repeat([]byte{byte(i + 1)}, 32)...)
+	return "ssh-ed25519 " + base64.StdEncoding.EncodeToString(blob) + " errand"
+}
+
+// blockRecord makes a lease's record unwritable and returns a function that
+// restores it.
+func blockRecord(t *testing.T, h *harness, id string) func() {
+	t.Helper()
+	path := filepath.Join(h.cfg.StateDir, "leases", id+".json")
+	saved, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(path, "blocked"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	return func() {
+		os.RemoveAll(path)
+		if err := os.WriteFile(path, saved, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A busy machine keeps its idle deadline moving even when its record
+// cannot be written, so the lease is not released soon after the work ends.
+func TestBusyObservedWithoutAWrite(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.Offers[0].IdleTimeout = 150 * time.Millisecond
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	h.machine.running.Store(1)
+	restore := blockRecord(t, h, l.ID)
+	time.Sleep(400 * time.Millisecond)
+	got, _ := b.Get("george", l.ID)
+	if got.State != proto.LeaseReady || !got.IdleUntil.After(time.Now()) {
+		t.Fatalf("busy lease lost its busy observations: %+v", got)
+	}
+	restore()
+	h.machine.running.Store(0)
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+}
+
+// Lease guarantee 5: naming a ready lease to run on counts as a hand-out,
+// so a lease past its idle deadline, but not yet released, is not released
+// while the machine admits the device.
+func TestAdmissionRestartsIdleWindow(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 300 * time.Millisecond
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", testKey(0), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	time.Sleep(350 * time.Millisecond) // past the idle deadline
+	if _, err := b.Admit("george", "", l.ID, testKey(1), true); err != nil {
+		t.Fatal(err)
+	}
+	wake(b, l.ID) // an idle check after the claim
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		got, _ := b.Get("george", l.ID)
+		if got.State != proto.LeaseReady {
+			t.Fatalf("lease released while admitting a device: %+v", got)
+		}
+		if slices.Contains(got.SSHKeys, testKey(1)) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("device never admitted: %+v", got)
+		}
+	}
+}
+
+// Letting a device in only to look at a lease is not a hand-out: the idle
+// window stays where it was, whether or not the device brings a key.
+func TestAdmissionToLookKeepsIdleWindow(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 300 * time.Millisecond
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", testKey(0), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	before, _ := b.Get("george", l.ID)
+	time.Sleep(50 * time.Millisecond)
+	for _, key := range []string{testKey(1), ""} {
+		if got, err := b.Admit("george", "", l.ID, key, false); err != nil || !got.IdleUntil.Equal(before.IdleUntil) {
+			t.Fatalf("admitting %q to look: idle until %s, was %s (%v)", key, got.IdleUntil, before.IdleUntil, err)
+		}
+	}
+	time.Sleep(time.Until(before.IdleUntil) + 50*time.Millisecond)
+	wake(b, l.ID)
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+}
+
+// A lease admits a bounded number of keys, so its record stays readable.
+func TestLeaseKeysAreBounded(t *testing.T) {
+	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", testKey(0), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	for i := 1; i < maxLeaseKeys; i++ {
+		if _, err := b.Admit("george", "", l.ID, testKey(i), false); err != nil {
+			t.Fatalf("key %d: %v", i, err)
+		}
+	}
+	var refused *Error
+	if _, err := b.Admit("george", "", l.ID, testKey(maxLeaseKeys), false); !errors.As(err, &refused) || refused.Status != http.StatusTooManyRequests {
+		t.Fatalf("key past the bound: %v", err)
+	}
+	if _, err := b.Acquire("george", "", "gpu", testKey(maxLeaseKeys), ""); !errors.As(err, &refused) || refused.Status != http.StatusTooManyRequests {
+		t.Fatalf("hand-out past the bound: %v", err)
+	}
+	if again, err := b.Admit("george", "", l.ID, testKey(1), false); err != nil || again.ID != l.ID {
+		t.Fatalf("a key already let in: %+v %v", again, err)
+	}
+}
+
+// Ended leases have no worker, and only those that ended last are kept, so
+// churn grows neither goroutines nor the lease list. A lease made long ago
+// that ends now is kept over newer ones that ended before it.
+func TestEndedLeasesAreBounded(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	b.Close()
+	dir := filepath.Join(h.cfg.StateDir, "leases")
+	for range maxEndedLeases + 8 {
+		r := record{Owner: "george", Release: h.cfg.Offers[0].Provider.ReleaseSpec(), Lease: proto.Lease{ID: proto.NewULID(), Offer: "h100", State: proto.LeaseReleased, ReleasedAt: time.Now().Add(-time.Hour)}}
+		data, _ := json.Marshal(r)
+		if err := os.WriteFile(filepath.Join(dir, r.ID+".json"), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := runtime.NumGoroutine()
+	b2 := h.start(t)
+	if n := len(b2.List("george")); n != maxEndedLeases+1 {
+		t.Fatalf("%d leases kept, want %d ended and the ready one", n, maxEndedLeases)
+	}
+	if n := runtime.NumGoroutine() - before; n > 3 {
+		t.Fatalf("%d goroutines for one ready lease", n)
+	}
+	b2.Release("george", l.ID)
+	waitState(t, b2, "george", l.ID, proto.LeaseReleased)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		files, _ := os.ReadDir(dir)
+		listed := b2.List("george")
+		if len(listed) == maxEndedLeases && len(files) == maxEndedLeases && slices.ContainsFunc(listed, func(x proto.Lease) bool { return x.ID == l.ID }) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d listed, %d recorded", len(listed), len(files))
+		}
+	}
+}
+
+// A request asked again after its answer was lost gets its lease even when
+// the cloud peer has since lost its offers.
+func TestRepeatedRequestAfterOffersRemoved(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	b := h.start(t)
+	request := proto.NewULID()
+	l, err := b.Acquire("george", "", "gpu", "", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	b.Close()
+	h.cfg.Offers = nil
+	b2 := h.start(t)
+	waitUnusable(t, b2, l.ID, false) // checked since the restart
+	if again, err := b2.Acquire("george", "", "gpu", "", request); err != nil || again.ID != l.ID {
+		t.Fatalf("repeated request: %+v %v", again, err)
+	}
+	var refused *Error
+	if _, err := b2.Acquire("george", "", "gpu", "", proto.NewULID()); !errors.As(err, &refused) || refused.Status != http.StatusNotFound {
+		t.Fatalf("new request without offers: %v", err)
+	}
+}
+
+// A request asked again is handed its ready lease only as any request
+// would be: not before the lease has been checked since a restart, nor once
+// its latest check failed. It is passed over, and the request gets another.
+func TestRepeatedRequestFollowsHandOutRule(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("failed=%v", failed), func(t *testing.T) {
+			h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
+			h.cfg.MaxLeases = 3
+			b := h.start(t)
+			request := proto.NewULID()
+			l, err := b.Acquire("george", "", "gpu", "", request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			waitState(t, b, "george", l.ID, proto.LeaseReady)
+			b.Close()
+			var b2 *Broker
+			if failed {
+				h.machine.down.Store(true)
+				b2 = h.start(t)
+				waitUnusable(t, b2, l.ID, true)
+			} else {
+				// The restored lease's first check waits until the test ends.
+				checking, checked := make(chan struct{}), make(chan struct{})
+				var first atomic.Bool
+				first.Store(true)
+				h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
+					if first.CompareAndSwap(true, false) {
+						close(checking)
+						<-checked
+					}
+					return h.machine.probe(ctx, target, identity, where)
+				}
+				b2 = h.start(t)
+				t.Cleanup(func() { close(checked) }) // before the broker closes
+				<-checking
+			}
+			again, err := b2.Acquire("george", "", "gpu", "", request)
+			if err != nil || again.ID == l.ID {
+				t.Fatalf("repeated request handed a lease no request may have: %+v %v", again, err)
+			}
+			if third, err := b2.Acquire("george", "", "gpu", "", request); err != nil || third.ID != again.ID {
+				t.Fatalf("asked a third time: %+v %v, want %s", third, err, again.ID)
+			}
+		})
+	}
+}
+
+// A request handed a ready lease is tied to it: asked again, it gets that
+// lease even after the lease ended, and not another. Only the most recent
+// requests are kept.
+func TestRepeatedRequestForReadyLease(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.MaxLeases = 3
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", proto.NewULID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	request := proto.NewULID()
+	if handed, err := b.Acquire("george", "", "gpu", "", request); err != nil || handed.ID != l.ID {
+		t.Fatalf("hand-out: %+v %v", handed, err)
+	}
+	for range maxRequests {
+		b.Acquire("george", "", "gpu", "", proto.NewULID())
+	}
+	b.mu.Lock()
+	kept := len(b.leases[l.ID].Requests)
+	b.mu.Unlock()
+	if kept != maxRequests {
+		t.Fatalf("%d requests kept", kept)
+	}
+	recent := proto.NewULID()
+	b.Acquire("george", "", "gpu", "", recent)
+	b.Release("george", l.ID)
+	if again, err := b.Acquire("george", "", "gpu", "", recent); err != nil || again.ID != l.ID {
+		t.Fatalf("repeated request: %+v %v", again, err)
+	}
+}
+
+// A ready lease is handed out only if the worker's latest probe reached it
+// and found it still matching. One that failed is passed over without a new
+// idle window, and handed out again once a probe succeeds.
+func TestUnusableReadyLeaseNotHandedOut(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		break_, mend func(*fakeMachine)
+		reason       string
+	}{
+		{"unreachable", func(m *fakeMachine) { m.down.Store(true) }, func(m *fakeMachine) { m.down.Store(false) }, "this cloud peer cannot reach it"},
+		{"mismatched", func(m *fakeMachine) { m.gpus = nil }, func(m *fakeMachine) { m.gpus = []proto.GPU{{Name: "NVIDIA H100 80GB HBM3", MemoryMiB: 81559}} }, "it no longer matches gpu"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, okAcquire)
+			h.cfg.IdlePoll = time.Hour // probe only when woken
+			h.cfg.MaxLeases = 3
+			b := h.start(t)
+			l, err := b.Acquire("george", "", "gpu", "", proto.NewULID())
+			if err != nil {
+				t.Fatal(err)
+			}
+			waitState(t, b, "george", l.ID, proto.LeaseReady)
+			// The worker probes once while launching and once as it starts
+			// watching, then sleeps until woken. Counting from there, the
+			// hand-out may wake it for one more probe, but not probe itself.
+			for deadline := time.Now().Add(5 * time.Second); h.machine.probes.Load() < 2; time.Sleep(time.Millisecond) {
+				if time.Now().After(deadline) {
+					t.Fatal("the watch never probed")
+				}
+			}
+			probes := h.machine.probes.Load()
+			if again, err := b.Acquire("george", "", "gpu", "", proto.NewULID()); err != nil || again.ID != l.ID {
+				t.Fatalf("fresh lease not handed out: %+v %v", again, err)
+			}
+			if h.machine.probes.Load() > probes+1 { // at most the worker's own
+				t.Fatal("hand-out probed the machine")
+			}
+			h.machine.mu.Lock()
+			tc.break_(h.machine)
+			h.machine.mu.Unlock()
+			waitUnusable(t, b, l.ID, true)
+			before, _ := b.Get("george", l.ID)
+			other, err := b.Acquire("george", "", "gpu", "", proto.NewULID())
+			if err != nil || other.ID == l.ID {
+				t.Fatalf("handed out an unusable lease: %+v %v", other, err)
+			}
+			got, _ := b.Get("george", l.ID)
+			if !got.IdleUntil.Equal(before.IdleUntil) {
+				t.Fatalf("idle window restarted: %s, was %s", got.IdleUntil, before.IdleUntil)
+			}
+			if !strings.Contains(strings.Join(got.Progress, "\n"), "not handed out: "+tc.reason) {
+				t.Fatalf("progress %q", got.Progress)
+			}
+			var refused *Error
+			if _, err := b.Admit("george", "", l.ID, "", true); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, tc.reason) {
+				t.Fatalf("admission by name: %v", err)
+			}
+			if got, _ := b.Get("george", l.ID); !got.IdleUntil.Equal(before.IdleUntil) {
+				t.Fatalf("admission by name restarted the idle window")
+			}
+			h.machine.mu.Lock()
+			tc.mend(h.machine)
+			h.machine.mu.Unlock()
+			waitUnusable(t, b, l.ID, false)
+			if _, err := b.Release("george", other.ID); err != nil { // newer, so it would be handed out first
+				t.Fatal(err)
+			}
+			if again, err := b.Acquire("george", "", "gpu", "", proto.NewULID()); err != nil || again.ID != l.ID {
+				t.Fatalf("mended lease not handed out: %+v %v", again, err)
+			}
+		})
+	}
+}
+
+// waitUnusable wakes a lease's worker until its latest probe found the
+// lease refused for hand-outs, or not.
+func waitUnusable(t *testing.T, b *Broker, id string, unusable bool) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		b.mu.Lock()
+		got := b.leases[id].refusal(time.Now()) != ""
+		b.mu.Unlock()
+		if got == unusable {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("lease unusable = %v, want %v", got, unusable)
+		}
+		wake(b, id)
+	}
+}
+
+// A ready lease restored after a restart is handed out, by request or by
+// name, only once the worker's first probe has reached it.
+func TestRestoredLeaseWaitsForProbe(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.MaxLeases = 3
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	b.Close()
+	answer := make(chan struct{})
+	probe := h.cfg.Probe
+	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
+		select {
+		case <-answer:
+		case <-ctx.Done():
+			return proto.Info{}, ctx.Err()
+		}
+		return probe(ctx, target, identity, where)
+	}
+	b2 := h.start(t)
+	var refused *Error
+	if _, err := b2.Admit("george", "", l.ID, "", true); !errors.As(err, &refused) || refused.Status != http.StatusConflict || !strings.Contains(refused.Msg, "not checked since the cloud peer restarted") {
+		t.Fatalf("admission before the first probe: %v", err)
+	}
+	if other, err := b2.Acquire("george", "", "gpu", "", ""); err != nil || other.ID == l.ID {
+		t.Fatalf("handed out before the first probe: %+v %v", other, err)
+	}
+	close(answer)
+	waitUnusable(t, b2, l.ID, false)
+	if again, err := b2.Admit("george", "", l.ID, "", true); err != nil || again.ID != l.ID {
+		t.Fatalf("admission after the first probe: %+v %v", again, err)
 	}
 }
 
@@ -1432,5 +1845,122 @@ func TestCatalogOffersAreLeased(t *testing.T) {
 	}
 	if _, err := only.Acquire("bob", "", "gpus>=8", "", ""); err == nil || !strings.Contains(err.Error(), "gpu-8x-h100: costs $27.99/h, above max_price_per_hour = 10") {
 		t.Fatalf("capped refusal: %v", err)
+	}
+}
+
+// pendingRelease reports the machine still terminating while pending is set.
+type pendingRelease struct {
+	CommandProvider
+	pending *atomic.Bool
+}
+
+func (p pendingRelease) Release(ctx context.Context, req ReleaseRequest) error {
+	if p.pending.Load() {
+		return &ReleasePending{"still terminating"}
+	}
+	return p.CommandProvider.Release(ctx, req)
+}
+
+// Lease guarantee 4: a run's claim of a lease and its idle release are
+// decided under one lock, so whichever is recorded first wins. A claim made
+// while the idle check runs keeps the lease even when the check's answer
+// comes past the deadline it began under; one made once the release is
+// recorded is refused with 409. A release the provider is still confirming
+// is shown once, not at every poll.
+func TestClaimAndIdleReleaseOneWins(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = time.Second
+	pending := new(atomic.Bool)
+	pending.Store(true)
+	h.cfg.Offers[0].Provider = pendingRelease{h.cfg.Offers[0].Provider.(CommandProvider), pending}
+	var gate atomic.Bool
+	probing, answer := make(chan struct{}), make(chan struct{})
+	h.cfg.Probe = func(ctx context.Context, target proto.LeaseTarget, identity, where string) (proto.Info, error) {
+		if gate.Load() {
+			probing <- struct{}{}
+			<-answer
+		}
+		return h.machine.probe(ctx, target, identity, where)
+	}
+	b := h.start(t)
+	t.Cleanup(func() { gate.Store(false); close(answer) }) // before the broker closes
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready := waitState(t, b, "george", l.ID, proto.LeaseReady)
+	time.Sleep(time.Until(ready.IdleUntil) - 400*time.Millisecond)
+	gate.Store(true)
+	wake(b, l.ID)
+	<-probing // an idle check, which will find the machine idle
+	claimed, err := b.Admit("george", "", l.ID, "", true)
+	if err != nil {
+		t.Fatalf("claim during the idle check: %v", err)
+	}
+	time.Sleep(time.Until(ready.IdleUntil) + 200*time.Millisecond) // past the deadline the check began under
+	gate.Store(false)
+	answer <- struct{}{}
+	time.Sleep(100 * time.Millisecond)
+	if got, _ := b.Get("george", l.ID); got.State != proto.LeaseReady {
+		t.Fatalf("a lease claimed during the idle check was released: %+v", got)
+	}
+	time.Sleep(time.Until(claimed.IdleUntil) + 50*time.Millisecond)
+	wake(b, l.ID)
+	waitState(t, b, "george", l.ID, proto.LeaseReleasing)
+	var refused *Error
+	if _, err := b.Admit("george", "", l.ID, "", true); !errors.As(err, &refused) || refused.Status != http.StatusConflict {
+		t.Fatalf("claim after the release was recorded: %v", err)
+	}
+	waitProgress(t, b, l.ID, "release: still terminating")
+	time.Sleep(100 * time.Millisecond) // many polls
+	got, _ := b.Get("george", l.ID)
+	if n := slices.Index(got.Progress, "release: still terminating"); slices.Contains(got.Progress[n+1:], "release: still terminating") {
+		t.Fatalf("each poll of the release was shown: %q", got.Progress)
+	}
+	pending.Store(false)
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+}
+
+// A lease at its lifetime is not handed out, even before its worker has
+// released it: no hand-out extends the lifetime. One past its idle deadline
+// but not yet released is: the hand-out restarts its idle window, and the
+// release, decided under the same lock, then does not happen.
+func TestLeasePastDeadlines(t *testing.T) {
+	now := time.Now()
+	l := &lease{record: record{Lease: proto.Lease{State: proto.LeaseReady, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}, IdleTimeout: time.Minute, LastBusy: now}}
+	for _, tc := range []struct {
+		at   time.Time
+		want string
+	}{
+		{now.Add(time.Hour - time.Second), ""},
+		{now.Add(time.Hour), "it has reached its max lifetime"},
+	} {
+		if got := l.refusal(tc.at); got != tc.want {
+			t.Fatalf("refusal at %s: %q, want %q", tc.at.Sub(now), got, tc.want)
+		}
+	}
+
+	h := newHarness(t, okAcquire)
+	h.cfg.IdlePoll = time.Hour // check only when woken
+	h.cfg.Offers[0].IdleTimeout = 100 * time.Millisecond
+	b := h.start(t)
+	idle, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready := waitState(t, b, "george", idle.ID, proto.LeaseReady)
+	time.Sleep(time.Until(ready.IdleUntil) + 50*time.Millisecond)
+	if got, _ := b.Get("george", idle.ID); got.State != proto.LeaseReady {
+		t.Fatalf("released without a check: %+v", got)
+	}
+	again, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil || again.ID != idle.ID {
+		t.Fatalf("hand-out of a lease past its idle deadline: %+v %v", again, err)
+	}
+	wake(b, idle.ID)
+	time.Sleep(50 * time.Millisecond)
+	if got, _ := b.Get("george", idle.ID); got.State != proto.LeaseReady {
+		t.Fatalf("released after it was handed out: %+v", got)
 	}
 }

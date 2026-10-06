@@ -81,6 +81,13 @@ func cmdPushToContext(ctx context.Context, args []string, out, stderr io.Writer)
 	// Apply is always explicit for push. Run profiles' automatic-apply preference
 	// controls successful jobs, not remote workspace mutation.
 	opts := client.PushOptions{PeerURL: peer, Workspace: workspace, Root: effective.Root, Path: fs.Arg(0), Apply: *apply, MaterializeConflicts: *conflicts, IncludeAll: *includeAll}
+	// A lease named to push to is asked for only right before the push
+	// changes the workspace, as a run asks for one, so the lease is not
+	// released mid-upload, and a push that fails before then does not renew
+	// it.
+	if settings.url == "" {
+		opts.BeforeSubmit = claimNamedLease(effective.Peer)
+	}
 	target := "to workspace " + workspace + " on " + cmpOr(effective.Peer, peer)
 	if *watch {
 		ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)

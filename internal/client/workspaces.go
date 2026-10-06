@@ -152,6 +152,7 @@ func createPreparedWorkspace(opts RunOptions, prep snapshotPreparation, request 
 	if err := recordWorkspaceOrigin(opts, request.ID, prep.manifest); err != nil {
 		return proto.Workspace{}, fmt.Errorf("recording workspace origin: %w", err)
 	}
+	opts.claim = claimOnce(opts)
 	var result proto.Workspace
 	err = uploadWithSnapshotFallback(plan, func(attempt shipPlan) error {
 		var err error
@@ -207,6 +208,13 @@ func createPreparedWorkspaceOnce(opts RunOptions, prep snapshotPreparation, requ
 		return result, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	// The last step before the request goes out.
+	if opts.claim != nil {
+		if err := opts.claim(); err != nil {
+			pr.CloseWithError(err)
+			return result, err
+		}
+	}
 	// Durable reconstruction and admission may outlast the control-request
 	// header budget. Keep the existing upload context and uncertainty handling.
 	resp, err := maintenanceHTTP.Do(req)

@@ -14,6 +14,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -193,17 +194,58 @@ func leasePeerNamed(cfg config.Client, name string) (leasePeer, bool, error) {
 	if match == nil {
 		return leasePeer{}, false, fmt.Errorf("%s has no ready lease of yours whose ID ends in %s; see errand leases", broker, suffix)
 	}
+	_, publicKey := clientLeaseIdentity()
+	if !admits(*match, publicKey) {
+		// One of the owner's other devices asked for it: this one is let in
+		// by naming it.
+		lp, ok, err := admitThisDevice(cfg, broker, target, match.ID, info)
+		if ok && err == nil {
+			namedLeases.Store(name, namedLease{target, match.ID})
+		}
+		return lp, ok, err
+	}
 	for _, lp := range leasePeersOf(cfg, broker, info) {
 		if lp.Lease.ID == match.ID {
+			namedLeases.Store(name, namedLease{target, match.ID})
 			return lp, true, nil
 		}
 	}
-	if _, publicKey := clientLeaseIdentity(); admits(*match, publicKey) {
-		return leasePeer{}, false, fmt.Errorf("lease %s has an unusable target", match.ID)
+	if match.State != proto.LeaseReady {
+		return leasePeer{}, false, fmt.Errorf("lease %s is %s", match.ID, match.State)
 	}
-	// One of the owner's other devices asked for it: this one is let in by
-	// naming it.
-	return admitThisDevice(cfg, broker, target, match.ID, info)
+	return leasePeer{}, false, fmt.Errorf("lease %s has an unusable target", match.ID)
+}
+
+// namedLease is a lease a peer name resolved to in this process, and the
+// cloud peer it is asked for through.
+type namedLease struct{ broker, id string }
+
+var namedLeases sync.Map // peer name → namedLease
+
+// claimNamedLease returns how a command placing work on the lease a peer
+// name resolved to asks the cloud peer for it, as a hand-out: the cloud
+// peer starts a full idle window, or refuses a lease it found unusable. It
+// is nil for a name that is not a lease's. Only the claim renews the lease;
+// resolving the name only looks it up.
+func claimNamedLease(name string) func() error {
+	v, ok := namedLeases.Load(name)
+	if !ok {
+		return nil
+	}
+	nl := v.(namedLease)
+	return func() error {
+		_, publicKey := clientLeaseIdentity()
+		ctx, cancel := context.WithTimeout(context.Background(), leaseRequestTimeout)
+		defer cancel()
+		lease, err := client.AdmitLeaseKey(ctx, nl.broker, nl.id, publicKey, true)
+		if err != nil {
+			return fmt.Errorf("using lease %s: %w", nl.id, err)
+		}
+		if lease.State != proto.LeaseReady {
+			return fmt.Errorf("lease %s is %s", nl.id, lease.State)
+		}
+		return nil
+	}
 }
 
 // admitThisDevice asks a cloud peer to let this device into the owner's
@@ -220,7 +262,7 @@ func admitThisDevice(cfg config.Client, broker, target, id string, info proto.In
 		return leasePeer{}, false, err
 	}
 	fmt.Fprintf(os.Stderr, "errand: asking %s to let this device into lease %s\n", terminalSafeField(broker), id)
-	lease, err := client.AdmitLeaseKey(ctx, target, id, sshKey)
+	lease, err := client.AdmitLeaseKey(ctx, target, id, sshKey, false)
 	for err == nil && lease.State == proto.LeaseReady && !admits(lease, sshKey) {
 		select {
 		case <-ctx.Done():

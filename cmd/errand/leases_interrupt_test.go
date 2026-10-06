@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -87,10 +88,28 @@ func TestLeasePeerNames(t *testing.T) {
 	otherF.ID = f
 	var admitted atomic.Value
 	admitted.Store("")
+	var asked struct {
+		sync.Mutex
+		uses []string // "<lease ID> <use>" for each admission request
+	}
+	asks := func() []string {
+		asked.Lock()
+		defer asked.Unlock()
+		got := asked.uses
+		asked.uses = nil
+		return got
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/v0/leases/"+d+"/ssh-keys" {
+		if id, ok := strings.CutSuffix(strings.TrimPrefix(r.URL.Path, "/v0/leases/"), "/ssh-keys"); ok && r.Method == http.MethodPost && (id == b || id == d) {
 			var req proto.LeaseRequest
 			json.NewDecoder(r.Body).Decode(&req)
+			asked.Lock()
+			asked.uses = append(asked.uses, fmt.Sprintf("%s %v", id, req.Use))
+			asked.Unlock()
+			if id == b {
+				json.NewEncoder(w).Encode(ready(b, "ubuntu@203.0.113.8"))
+				return
+			}
 			admitted.Store(req.SSHKey)
 			json.NewEncoder(w).Encode(other)
 			return
@@ -138,6 +157,27 @@ func TestLeasePeerNames(t *testing.T) {
 	// name that tells it apart from all the cloud peer's leases.
 	if lp, ok, err := leasePeerNamed(cfg, "cloud-00dd"); err != nil || !ok || lp.Peer.SSH != "ubuntu@203.0.113.9" || lp.Name != "cloud-000dd" || !strings.HasPrefix(admitted.Load().(string), "ssh-ed25519 ") {
 		t.Fatalf("other device's lease: %+v %v %v (sent %q)", lp, ok, err, admitted.Load())
+	}
+	// Looking a lease up never claims it, whether or not this device was
+	// let in yet; a command placing work claims the lease it names once it
+	// is ready to submit, in one request.
+	if got := asks(); !slices.Equal(got, []string{d + " false"}) {
+		t.Fatalf("looking leases up asked %q", got)
+	}
+	for name, want := range map[string]string{"cloud-00dd": d + " true", "cloud-b7f3a": b + " true"} {
+		claim := claimNamedLease(name)
+		if claim == nil {
+			t.Fatalf("%s is not known as a lease", name)
+		}
+		if err := claim(); err != nil {
+			t.Fatalf("claiming %s: %v", name, err)
+		}
+		if got := asks(); !slices.Equal(got, []string{want}) {
+			t.Fatalf("claiming %s asked %q", name, got)
+		}
+	}
+	if claimNamedLease("cloud") != nil {
+		t.Fatal("a cloud peer's own name claims a lease")
 	}
 	// A cloud peer whose offers were removed still lists the leases it
 	// has left.
