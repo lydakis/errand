@@ -72,13 +72,13 @@ func TestLeasePeerNames(t *testing.T) {
 	if _, err := leaseTargetPeer(bad, ""); err == nil {
 		t.Fatal("trusted a host key with a second line")
 	}
-	const hostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 errand-lease"
+	const hostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUF errand-lease"
 	t.Setenv("XDG_STATE_HOME", t.TempDir()) // no lease key yet
 	a, b, c, d := "01JZ00000000000000000A7F3A", "01JZ00000000000000000B7F3A", "01JZ00000000000000000000CC", "01JZ00000000000000000000DD"
 	ready := func(id, ssh string) proto.Lease {
 		return proto.Lease{ID: id, Offer: "h100", State: proto.LeaseReady, Target: &proto.LeaseTarget{SSH: ssh, HostKey: hostKey}}
 	}
-	other := proto.Lease{ID: d, Offer: "h100", State: proto.LeaseReady, SSHKeys: []string{"ssh-ed25519 bWluaQ== errand"}, Target: &proto.LeaseTarget{SSH: "ubuntu@203.0.113.9", HostKey: hostKey}}
+	other := proto.Lease{ID: d, Offer: "h100", State: proto.LeaseReady, SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand"}, Target: &proto.LeaseTarget{SSH: "ubuntu@203.0.113.9", HostKey: hostKey}}
 	// Two leases share an ending, and this device is let into only one.
 	e, f := "01JZ0000000000000000AEE11A", "01JZ0000000000000000BEE11A"
 	// Another lease shares the end of d's ID, so d's peer needs a longer name.
@@ -296,8 +296,8 @@ func TestLeaseIdentityWithoutHostKey(t *testing.T) {
 // A device whose public key lost its comment, as one rebuilt from the
 // private key does, is still the device a lease admits.
 func TestLeaseAdmitsKeyWithoutComment(t *testing.T) {
-	l := proto.Lease{State: proto.LeaseReady, Target: &proto.LeaseTarget{SSH: "ubuntu@box"}, SSHKeys: []string{"ssh-ed25519 bWFj errand"}}
-	if !admits(l, "ssh-ed25519 bWFj") || admits(l, "ssh-ed25519 bWluaQ==") {
+	l := proto.Lease{State: proto.LeaseReady, Target: &proto.LeaseTarget{SSH: "ubuntu@box"}, SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand"}}
+	if !admits(l, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB") || admits(l, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC") {
 		t.Fatal("keys compared with their comments")
 	}
 }
@@ -313,7 +313,7 @@ func TestAdmitLeaseKeysAppendsEachKeyOnce(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	const mac, mini = "ssh-ed25519 bWFj errand", "ssh-ed25519 bWluaQ== errand"
+	const mac, mini = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand"
 	target := proto.LeaseTarget{SSH: "ubuntu@box"}
 	for range 2 {
 		if err := admitLeaseKeys(context.Background(), target, "", []string{mac, mini}); err != nil {
@@ -325,7 +325,7 @@ func TestAdmitLeaseKeysAppendsEachKeyOnce(t *testing.T) {
 		t.Fatalf("authorized_keys %q %v", got, err)
 	}
 	// A hand-edited file whose last line has no newline keeps that line.
-	const air = "ssh-ed25519 YWly errand"
+	const air = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD errand"
 	os.WriteFile(filepath.Join(home, ".ssh", "authorized_keys"), []byte(mac), 0o600)
 	if err := admitLeaseKeys(context.Background(), target, "", []string{air}); err != nil {
 		t.Fatal(err)

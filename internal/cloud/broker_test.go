@@ -220,12 +220,12 @@ func TestReleaseCancelsHangingProbe(t *testing.T) {
 func TestTailnetLeaseReusedAcrossClientKeys(t *testing.T) {
 	h := newHarness(t, okAcquire)
 	b := h.start(t)
-	l, err := b.Acquire("george", "george@github", "gpu", "ssh-ed25519 bWFj errand", "")
+	l, err := b.Acquire("george", "george@github", "gpu", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	if same, err := b.Acquire("george", "george@github", "gpu", "ssh-ed25519 bWluaQ== errand", ""); err != nil || same.ID != l.ID {
+	if same, err := b.Acquire("george", "george@github", "gpu", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand", ""); err != nil || same.ID != l.ID {
 		t.Fatalf("an HTTP lease must be reused across keys: %+v %v", same, err)
 	}
 }
@@ -236,7 +236,7 @@ echo '{"ssh":"ubuntu@box"}'
 `)
 	h.cfg.MaxLeases = 3
 	b := h.start(t)
-	const mac, mini = "ssh-ed25519 bWFj errand", "ssh-ed25519 bWluaQ== errand"
+	const mac, mini = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand"
 	l, err := b.Acquire("george", "", "gpu", mac, "")
 	if err != nil {
 		t.Fatal(err)
@@ -263,7 +263,7 @@ func TestLeaseAdmitsOwnersOtherDevices(t *testing.T) {
 	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	h.cfg.IdlePoll = 20 * time.Millisecond
 	b := h.start(t)
-	const mac, mini, air = "ssh-ed25519 bWFj errand", "ssh-ed25519 bWluaQ== errand", "ssh-ed25519 YWly errand"
+	const mac, mini, air = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD errand"
 	l, err := b.Acquire("george", "", "gpu", mac, "")
 	if err != nil {
 		t.Fatal(err)
@@ -320,12 +320,12 @@ func TestReleaseCancelsAdmission(t *testing.T) {
 		return ctx.Err()
 	}
 	b := h.start(t)
-	l, err := b.Acquire("george", "", "gpu", "ssh-ed25519 bWFj errand", "")
+	l, err := b.Acquire("george", "", "gpu", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 bWluaQ== errand"); err != nil {
+	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand"); err != nil {
 		t.Fatal(err)
 	}
 	<-admitting
@@ -583,19 +583,19 @@ func TestUnusableTargetsFailAtOnce(t *testing.T) {
 func TestLeaseKeysComparedWithoutComments(t *testing.T) {
 	h := newHarness(t, `echo '{"ssh":"ubuntu@box"}'`)
 	b := h.start(t)
-	const mac, mini = "ssh-ed25519 bWFj errand", "ssh-ed25519 bWluaQ== errand"
+	const mac, mini = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC errand"
 	l, err := b.Acquire("george", "", "gpu", mac, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitState(t, b, "george", l.ID, proto.LeaseReady)
-	if again, err := b.Acquire("george", "", "gpu", "ssh-ed25519 bWFj", ""); err != nil || again.ID != l.ID || !slices.Equal(again.SSHKeys, []string{mac}) {
+	if again, err := b.Acquire("george", "", "gpu", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB", ""); err != nil || again.ID != l.ID || !slices.Equal(again.SSHKeys, []string{mac}) {
 		t.Fatalf("same key without its comment: %+v %v", again, err)
 	}
 	if _, err := b.Admit("george", "", l.ID, mini); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 bWluaQ== rebuilt"); err != nil {
+	if _, err := b.Admit("george", "", l.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC rebuilt"); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(5 * time.Second)

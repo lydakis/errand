@@ -1,7 +1,10 @@
 package proto
 
 import (
+	"crypto/ecdh"
+	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"net/url"
 	"strings"
@@ -62,13 +65,17 @@ func (t LeaseTarget) Check() error {
 
 // SSHKeyBody returns the key type and base64 data of one authorized_keys
 // line without options, dropping its comment. ok is false for anything
-// else.
+// else: the data must be a well-formed public key of the declared type,
+// one of ed25519, RSA, NIST ECDSA, or their security-key forms.
 func SSHKeyBody(s string) (body string, ok bool) {
 	fields := strings.Fields(s)
-	if len(fields) < 2 || len(s) > 16<<10 || strings.ContainsAny(s, "\r\n") || !sshKeyType(fields[0]) {
+	if len(fields) < 2 || len(s) > 16<<10 || strings.ContainsAny(s, "\r\n") {
 		return "", false
 	}
-	if _, err := base64.StdEncoding.DecodeString(fields[1]); err != nil {
+	// Strict decoding gives each key one spelling, so equal keys compare
+	// equal as text.
+	blob, err := base64.StdEncoding.Strict().DecodeString(fields[1])
+	if err != nil || !sshPublicKeyBlob(fields[0], string(blob)) {
 		return "", false
 	}
 	return fields[0] + " " + fields[1], true
@@ -85,14 +92,63 @@ func SameSSHKey(a, b string) bool {
 	return ok && x == y
 }
 
-func sshKeyType(s string) bool {
-	if !strings.HasPrefix(s, "ssh-") && !strings.HasPrefix(s, "ecdsa-") && !strings.HasPrefix(s, "sk-") {
+// sshPublicKeyBlob reports whether blob is a public key of keyType in the
+// SSH wire format: the type again, then exactly that type's fields.
+func sshPublicKeyBlob(keyType, blob string) bool {
+	var name string
+	if !sshRead(&blob, &name) || name != keyType {
 		return false
 	}
-	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '.' || r == '@') {
-			return false
-		}
+	ok := false
+	switch keyType {
+	case "ssh-ed25519":
+		ok = sshEd25519(&blob)
+	case "sk-ssh-ed25519@openssh.com":
+		ok = sshEd25519(&blob) && sshRead(&blob, new(string))
+	case "ssh-rsa":
+		ok = sshMpint(&blob) && sshMpint(&blob)
+	case "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521":
+		ok = sshECDSA(&blob, strings.TrimPrefix(keyType, "ecdsa-sha2-"))
+	case "sk-ecdsa-sha2-nistp256@openssh.com":
+		ok = sshECDSA(&blob, "nistp256") && sshRead(&blob, new(string))
 	}
+	return ok && blob == ""
+}
+
+func sshEd25519(data *string) bool {
+	var key string
+	return sshRead(data, &key) && len(key) == ed25519.PublicKeySize
+}
+
+// sshMpint reads a positive integer in its shortest encoding.
+func sshMpint(data *string) bool {
+	var n string
+	return sshRead(data, &n) && n != "" && n[0]&0x80 == 0 && (n[0] != 0 || len(n) > 1 && n[1]&0x80 != 0)
+}
+
+// sshECDSA reads a curve name and a point on that curve.
+func sshECDSA(data *string, curve string) bool {
+	var name, point string
+	if !sshRead(data, &name) || name != curve || !sshRead(data, &point) {
+		return false
+	}
+	c := map[string]ecdh.Curve{"nistp256": ecdh.P256(), "nistp384": ecdh.P384(), "nistp521": ecdh.P521()}[curve]
+	if c == nil {
+		return false
+	}
+	_, err := c.NewPublicKey([]byte(point))
+	return err == nil
+}
+
+// sshRead takes one SSH wire string off the front of data.
+func sshRead(data, s *string) bool {
+	if len(*data) < 4 {
+		return false
+	}
+	n := binary.BigEndian.Uint32([]byte((*data)[:4]))
+	if uint64(len(*data)-4) < uint64(n) {
+		return false
+	}
+	*s, *data = (*data)[4:4+n], (*data)[4+n:]
 	return true
 }

@@ -306,7 +306,7 @@ func newLambda(t *testing.T) (*LambdaProvider, *fakeLambda, *fakeSSH) {
 		}
 		return path
 	}
-	api := &fakeLambda{capacity: []string{"us-west-1", "us-east-1"}, instances: map[string]*lambdaInstance{}, sshKeys: map[string]string{"laptop": "ssh-ed25519 AAAAlaptop george@mac"}}
+	api := &fakeLambda{capacity: []string{"us-west-1", "us-east-1"}, instances: map[string]*lambdaInstance{}, sshKeys: map[string]string{"laptop": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYG george@mac"}}
 	srv := httptest.NewServer(api)
 	t.Cleanup(srv.Close)
 	ssh := &fakeSSH{refusals: 2, staleKeys: 2}
@@ -317,7 +317,7 @@ func newLambda(t *testing.T) (*LambdaProvider, *fakeLambda, *fakeSSH) {
 		Regions:      []string{"us-east-1"},
 		KeyDir:       filepath.Join(dir, "lambda"),
 		Keygen: func(context.Context, string, string) (string, error) {
-			return "ssh-ed25519 AAAApeer errand-cloud-peer", nil
+			return "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE errand-cloud-peer", nil
 		},
 		TailscaleAuthKeyFile: write("ts.key", "tskey-auth-FAKE\n"),
 		ErrandBinary:         copyFile(t, fakeErrand(t, "linux", "amd64"), filepath.Join(dir, "errand")),
@@ -326,7 +326,7 @@ func newLambda(t *testing.T) (*LambdaProvider, *fakeLambda, *fakeSSH) {
 		BaseURL:              srv.URL,
 		SSH:                  ssh.run,
 		HostKey: func(context.Context) (string, string, error) {
-			return "-----BEGIN OPENSSH PRIVATE KEY-----\nhost-key-body\n-----END OPENSSH PRIVATE KEY-----\n", "ssh-ed25519 AAAAhost errand-lease", nil
+			return "-----BEGIN OPENSSH PRIVATE KEY-----\nhost-key-body\n-----END OPENSSH PRIVATE KEY-----\n", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUF errand-lease", nil
 		},
 		Poll:       time.Millisecond,
 		LaunchGap:  time.Millisecond,
@@ -358,8 +358,8 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 	}
 	// The cloud peer's own key is added to the account once and named on
 	// every launch; the account's other keys are left alone.
-	keyName := "errand-" + keyID("ssh-ed25519 AAAApeer")
-	if names, _ := launch["ssh_key_names"].([]any); len(names) != 1 || names[0] != keyName || api.sshKeys[keyName] != "ssh-ed25519 AAAApeer errand-cloud-peer" || len(api.sshKeys) != 2 {
+	keyName := "errand-" + keyID("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE")
+	if names, _ := launch["ssh_key_names"].([]any); len(names) != 1 || names[0] != keyName || api.sshKeys[keyName] != "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE errand-cloud-peer" || len(api.sshKeys) != 2 {
 		t.Fatalf("ssh keys: launch %v, account %v", launch["ssh_key_names"], api.sshKeys)
 	}
 	if !slices.Contains(ssh.lastArgs, filepath.Join(p.KeyDir, "lambda_ed25519")) {
@@ -368,10 +368,10 @@ func TestLambdaAcquireAndRelease(t *testing.T) {
 	// The instance gets the host key SSH then pins; the Tailscale key never
 	// travels in launch metadata.
 	userData, _ := launch["user_data"].(string)
-	if !strings.Contains(userData, "    -----BEGIN OPENSSH PRIVATE KEY-----\n    host-key-body\n") || !strings.Contains(userData, "ed25519_public: ssh-ed25519 AAAAhost errand-lease") || strings.Contains(userData, "tskey") {
+	if !strings.Contains(userData, "    -----BEGIN OPENSSH PRIVATE KEY-----\n    host-key-body\n") || !strings.Contains(userData, "ed25519_public: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUF errand-lease") || strings.Contains(userData, "tskey") {
 		t.Fatalf("user_data %q", userData)
 	}
-	if ssh.knownHosts != "203.0.113.7 ssh-ed25519 AAAAhost errand-lease\n" || !slices.Contains(ssh.lastArgs, "StrictHostKeyChecking=yes") {
+	if ssh.knownHosts != "203.0.113.7 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUF errand-lease\n" || !slices.Contains(ssh.lastArgs, "StrictHostKeyChecking=yes") {
 		t.Fatalf("host key not pinned: %q %q", ssh.knownHosts, ssh.lastArgs)
 	}
 	// That a launch was sent is saved before sending it, and the instance ID
@@ -442,11 +442,11 @@ func TestLambdaAcquireOverSSH(t *testing.T) {
 	id := proto.NewULID()
 	// A request without a tailnet login is fine: the client's key decides
 	// who gets in.
-	machine, err := p.Acquire(context.Background(), AcquireRequest{LeaseID: id, Offer: "h100", Where: "gpu", SSHKey: "ssh-ed25519 AAAAmac errand", Progress: func(string) {}, Save: noSave})
+	machine, err := p.Acquire(context.Background(), AcquireRequest{LeaseID: id, Offer: "h100", Where: "gpu", SSHKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand", Progress: func(string) {}, Save: noSave})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (proto.LeaseTarget{SSH: "ubuntu@203.0.113.7", HostKey: "ssh-ed25519 AAAAhost errand-lease"}); machine.Target != want {
+	if want := (proto.LeaseTarget{SSH: "ubuntu@203.0.113.7", HostKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUF errand-lease"}); machine.Target != want {
 		t.Fatalf("target %+v", machine.Target)
 	}
 	if !strings.Contains(string(machine.State), `"ssh":"ubuntu@203.0.113.7"`) {
@@ -459,7 +459,7 @@ func TestLambdaAcquireOverSSH(t *testing.T) {
 	if _, ok := ssh.files["tailscale-auth-key"]; ok {
 		t.Fatal("bundle carries an auth key")
 	}
-	if got := ssh.files["authorized-keys"]; got != "ssh-ed25519 AAAAmac errand\n" {
+	if got := ssh.files["authorized-keys"]; got != "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB errand\n" {
 		t.Fatalf("authorized-keys %q", got)
 	}
 	// This cloud peer watches the machine with its own key.
