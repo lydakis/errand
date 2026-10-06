@@ -572,7 +572,7 @@ func peerTargets(rawURL, on string) ([]peerTarget, []error, error) {
 // caller leased, which their cloud peers list when asked. Each target is
 // asked for its leases while it is queried, so listing them costs a fleet
 // read no round trip, and an unreachable peer only one connection attempt;
-// leased machines are queried once their cloud peers have answered.
+// a cloud peer's leased machines are queried as soon as it has answered.
 func queryFleet[T any](targets []peerTarget, leases bool, query func(string) (T, error)) ([]peerTarget, []peerQueryResult[T]) {
 	var cfg config.Client
 	if leases {
@@ -581,15 +581,16 @@ func queryFleet[T any](targets []peerTarget, leases bool, query func(string) (T,
 		leases = err == nil
 	}
 	results := make([]peerQueryResult[T], len(targets))
-	leased := make([][]peerTarget, len(targets))
+	leased := make([][]peerQueryResult[T], len(targets))
 	var wg sync.WaitGroup
+	read := func(r *peerQueryResult[T], target peerTarget) {
+		defer wg.Done()
+		value, err := query(target.url)
+		*r = peerQueryResult[T]{target: target, value: value, err: err}
+	}
 	for i, target := range targets {
 		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			value, err := query(target.url)
-			results[i] = peerQueryResult[T]{target: target, value: value, err: err}
-		}()
+		go read(&results[i], target)
 		if !leases {
 			continue
 		}
@@ -600,18 +601,24 @@ func queryFleet[T any](targets []peerTarget, leases bool, query func(string) (T,
 			if err != nil {
 				return // the query reports the peer
 			}
-			for _, lp := range leasePeersOf(cfg, target.name, info) {
+			lps := leasePeersOf(cfg, target.name, info)
+			leased[i] = make([]peerQueryResult[T], len(lps))
+			for j, lp := range lps {
 				c := leaseCandidate(lp)
-				leased[i] = append(leased[i], peerTarget{name: lp.Name, url: client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)})
+				wg.Add(1)
+				go read(&leased[i][j], peerTarget{name: lp.Name, url: client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)})
 			}
 		}()
 	}
 	wg.Wait()
-	more := slices.Concat(leased...)
-	if len(more) == 0 {
-		return targets, results
+	all := slices.Clone(targets)
+	for _, l := range leased {
+		for _, r := range l {
+			all = append(all, r.target)
+			results = append(results, r)
+		}
 	}
-	return slices.Concat(targets, more), append(results, queryPeerTargets(more, query)...)
+	return all, results
 }
 
 func cmdPs(args []string) int {

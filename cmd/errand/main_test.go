@@ -543,18 +543,27 @@ url = %q
 
 func TestCmdPsAsksForLeasesWhileListingJobs(t *testing.T) {
 	leasedJob := "01" + strings.Repeat("L", 24)
+	leasedRead := make(chan struct{})
+	var leasedOnce sync.Once
 	leased := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		leasedOnce.Do(func() { close(leasedRead) })
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]proto.JobListEntry{{ID: leasedJob, State: proto.StateRunning, Project: "leased", Command: `"true"`}})
 	}))
 	defer leased.Close()
 	listed := make(chan struct{})
 	var listOnce sync.Once
-	var concurrent atomic.Bool
+	var concurrent, leasedFirst atomic.Bool
 	cloud := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path != "/v0/info" {
 			listOnce.Do(func() { close(listed) })
+			// The leased machine must not wait for this slow listing.
+			select {
+			case <-leasedRead:
+				leasedFirst.Store(true)
+			case <-time.After(time.Second):
+			}
 			fmt.Fprintln(w, `[]`)
 			return
 		}
@@ -580,6 +589,9 @@ url = %q
 	}
 	if !concurrent.Load() {
 		t.Fatal("ps listed jobs only after asking for leases")
+	}
+	if !leasedFirst.Load() {
+		t.Fatal("ps read the leased machine only after its cloud peer's job listing")
 	}
 	if !strings.Contains(stdout.String(), "cloud-") || !strings.Contains(stdout.String(), "leased") {
 		t.Fatalf("ps did not list the leased machine's job: %q", stdout.String())
