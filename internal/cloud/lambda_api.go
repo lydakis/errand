@@ -112,7 +112,7 @@ func (p *LambdaProvider) call(ctx context.Context, key, method, path string, bod
 
 // launch sends a launch request, keeping to both limits and retrying while
 // Lambda rate-limits it. sending runs before each attempt goes out, records
-// when, and can stop it. The request follows within lambdaSendSlack of that
+// when, and can stop it, and its refusal is the error returned. The request follows within lambdaSendSlack of that
 // record: if saving it or waiting for the request gate took longer, sending
 // runs again. The error wraps errNotSent when every attempt was stopped
 // before going out or refused with 429, so nothing was created.
@@ -127,10 +127,14 @@ func (p *LambdaProvider) launch(ctx context.Context, key string, body, out any, 
 		err := sleep(ctx, time.Until(a.launch.last.Add(p.launchGap())))
 		for err == nil {
 			started := time.Now()
-			err = sending()
-			if err == nil {
-				err = a.wait(ctx, p.requestGap())
+			if err = sending(); err != nil {
+				if ctx.Err() == nil {
+					// sending's own refusal says more than a 429 before it.
+					return fmt.Errorf("%w (%w)", err, errNotSent)
+				}
+				break
 			}
+			err = a.wait(ctx, p.requestGap())
 			if err == nil {
 				// Saving may have outlasted the deadline; then nothing is sent.
 				err = ctx.Err()
@@ -299,8 +303,8 @@ func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, in
 		return "", 0, fmt.Errorf("Lambda instance type %s is %s but the offer says arch = %q", p.InstanceType, t.Architecture, p.Arch)
 	}
 	// The price may have changed since the offer was listed.
-	if price := float64(t.PriceCentsPerHour) / 100; p.MaxPricePerHour > 0 && price > p.MaxPricePerHour {
-		return "", 0, fmt.Errorf("Lambda now charges $%.2f/h for %s, above max_price_per_hour = %g in [cloud.lambda]", price, p.InstanceType, p.MaxPricePerHour)
+	if err := p.overPrice(t); err != nil {
+		return "", 0, err
 	}
 	regions, err := p.launchRegions(ctx, key)
 	if err != nil {
@@ -320,6 +324,28 @@ func (p *LambdaProvider) pickRegion(ctx context.Context, key string) (string, in
 		where = strings.Join(regions, ", ")
 	}
 	return "", 0, fmt.Errorf("Lambda has no %s capacity in %s right now", p.InstanceType, where)
+}
+
+// overPrice refuses t when Lambda lists it above max_price_per_hour.
+func (p *LambdaProvider) overPrice(t lambdaInstanceType) error {
+	if price := float64(t.PriceCentsPerHour) / 100; p.MaxPricePerHour > 0 && price > p.MaxPricePerHour {
+		return fmt.Errorf("Lambda now charges $%.2f/h for %s, above max_price_per_hour = %g in [cloud.lambda]", price, p.InstanceType, p.MaxPricePerHour)
+	}
+	return nil
+}
+
+// checkPrice lists the offer's instance type again and refuses it when its
+// price is now above max_price_per_hour.
+func (p *LambdaProvider) checkPrice(ctx context.Context, key string) error {
+	types, err := p.instanceTypes(ctx, key)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(types, func(t lambdaInstanceType) bool { return t.Name == p.InstanceType })
+	if i < 0 {
+		return fmt.Errorf("Lambda has no instance type %q", p.InstanceType)
+	}
+	return p.overPrice(types[i])
 }
 
 // launchRegions are the regions a launch may use, in preference order, or
