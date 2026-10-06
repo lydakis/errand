@@ -330,13 +330,14 @@ func TestRunReportsRetainedChangesUntilExplicitFetch(t *testing.T) {
 
 func TestRunAppliesRetainedChangesOnSuccessWhenRequested(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	_, ts := testDaemon(t)
+	d, ts := testDaemon(t)
 	root := workspaceWith(t, map[string]string{"report.txt": "old"})
 	var stderr bytes.Buffer
 	code := client.Run(client.RunOptions{
 		PeerURL: ts.URL, Root: root, Argv: []string{"/bin/sh", "-c", "printf applied > report.txt"},
 		ApplyOnSuccess: true, Stdout: io.Discard, Stderr: &stderr,
 	})
+	waitForAutomaticApplyWorker(t, lastJobID(t, d))
 	if code != 0 {
 		t.Fatalf("run exit = %d; stderr: %s", code, stderr.String())
 	}
@@ -351,13 +352,14 @@ func TestRunAppliesRetainedChangesOnSuccessWhenRequested(t *testing.T) {
 
 func TestRunDoesNotApplyChangesFromFailedCommand(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	_, ts := testDaemon(t)
+	d, ts := testDaemon(t)
 	root := workspaceWith(t, map[string]string{"report.txt": "old"})
 	code := client.Run(client.RunOptions{
 		PeerURL: ts.URL, Root: root,
 		Argv:           []string{"/bin/sh", "-c", "printf remote > report.txt; exit 7"},
 		ApplyOnSuccess: true, Stdout: io.Discard, Stderr: io.Discard,
 	})
+	waitForAutomaticApplyWorker(t, lastJobID(t, d))
 	if code != 7 {
 		t.Fatalf("run exit = %d, want 7", code)
 	}
