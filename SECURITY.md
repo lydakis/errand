@@ -230,9 +230,8 @@ Cloud peers and leases:
   Administrators). Errors name these files by what they hold, not by path.
   The tailnet auth key goes to the machine only over its pinned SSH
   connection, never in Lambda launch metadata or a command line. The install
-  script deletes it when it exits, which is after the runner has started, so
-  jobs admitted during that window, or after an install that crashed, can
-  read it.
+  script deletes it right after the machine joins the tailnet, before the
+  runner starts.
 - The errand build installed on a Lambda machine is checked to be a Linux
   errand build for the machine's architecture before anything is rented. A
   downloaded release must match the release's published checksums, and the
@@ -248,13 +247,10 @@ Cloud peers and leases:
   to its `max_lifetime`. Removing an offer only stops new leases.
 - A cloud peer starts a new lease only while fewer than `max_leases` leases
   are active across all callers; lowering the setting does not end leases
-  already active. For offers from `[cloud.lambda]`, unless
-  `max_price_per_hour` is `0`, the Lambda provider refuses a type whose
-  listed price is above that cap. A configured `[[cloud.offers]]` entry with
-  a `[cloud.offers.lambda]` table has no price cap; its `price_per_hour` is
-  only shown and used for ranking. The price is checked
-  once per lease, before the launch waits its turn behind Lambda's launch
-  rate limit, and is not checked again while it waits or retries.
+  already active. Unless `max_price_per_hour` is `0`, the Lambda provider
+  refuses a type whose listed price is above that cap, for `[cloud.lambda]`
+  and configured `[cloud.offers.lambda]` offers alike, checking the price as
+  each launch request goes out.
 
 ## Reportable Findings and Severity
 
@@ -298,7 +294,7 @@ outside a protected client or runner boundary are high-impact findings.
   independently reportable unless it bypasses an Errand-enforced limit or
   crosses another caller's boundary.
 - A `lease` grant intentionally lets the caller spend money on the cloud
-  peer's provider account. `max_leases` and, for `[cloud.lambda]` offers,
+  peer's provider account. `max_leases` and, for Lambda,
   `max_price_per_hour` limit only new launches, and only while the cloud
   peer runs; they are not a spending cap on the provider account.
 - Configuring a cloud peer trusts it as much as a configured peer: it chooses
