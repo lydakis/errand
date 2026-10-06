@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -273,9 +274,10 @@ func leaseCandidate(lp leasePeer) config.RunCandidate {
 // leaseRunner acquires a machine from the first cloud peer among options
 // that does not turn the request down, waits until it runs errand, and
 // returns it as an ordinary placement choice. A failure or Ctrl-C before
-// the machine is ready withdraws the run's lease request, which cancels a
-// launch no other run is waiting for. From ready on, the cloud peer's idle
-// rule decides when the lease ends.
+// the machine is ready, including a request whose answer was lost, withdraws
+// the run's lease request, which cancels a launch no other run is waiting
+// for. From ready on, the cloud peer's idle rule decides when the lease
+// ends.
 func leaseRunner(options []leaseOption, where string, stderr io.Writer) (placementChoice, error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -302,6 +304,11 @@ func leaseRunner(options []leaseOption, where string, stderr io.Writer) (placeme
 			break
 		}
 		err = fmt.Errorf("leasing from %s: %w", terminalSafeField(broker.Name), err)
+		// The cloud peer may hold a lease for this request that no answer
+		// named.
+		if client.LeaseUncertain(err) {
+			return placementChoice{}, withdrawn(ctx, err, broker, requestID, "")
+		}
 		// Another supplier is asked only when this one started nothing.
 		if !client.LeaseRefused(err) || i == len(options)-1 || ctx.Err() != nil {
 			return placementChoice{}, err
@@ -310,30 +317,42 @@ func leaseRunner(options []leaseOption, where string, stderr io.Writer) (placeme
 	}
 	choice, err := followLease(ctx, broker, lease, where, keyFile, sshKey, stderr)
 	if err != nil {
-		outcome := withdrawLease(broker, requestID, lease.ID)
-		if ctx.Err() != nil {
-			return placementChoice{}, fmt.Errorf("interrupted; %s", outcome)
-		}
-		return placementChoice{}, fmt.Errorf("%w; %s", err, outcome)
+		return placementChoice{}, withdrawn(ctx, err, broker, requestID, lease.ID)
 	}
 	return choice, nil
+}
+
+// withdrawn withdraws a run's lease request after err, and says what became
+// of the lease.
+func withdrawn(ctx context.Context, err error, broker placementChoice, requestID, id string) error {
+	outcome := withdrawLease(broker, requestID, id)
+	if ctx.Err() != nil {
+		return fmt.Errorf("interrupted; %s", outcome)
+	}
+	return fmt.Errorf("%w; %s", err, outcome)
 }
 
 // followLease waits until a lease is ready, lets this device in, and this
 // device reaches it.
 func followLease(ctx context.Context, broker placementChoice, lease proto.Lease, where, keyFile, sshKey string, stderr io.Writer) (placementChoice, error) {
 	brokerName := terminalSafeField(broker.Name)
-	shown := 0
+	shown := 0 // the number of the last progress line shown
 	var admitBy time.Time
 	if lease.State == proto.LeaseReady {
 		// An existing lease of yours already matches; its history is old news.
-		shown = len(lease.Progress)
+		shown = lease.ProgressSeq
 		fmt.Fprintf(stderr, "errand: %s: reusing your ready lease %s\n", brokerName, lease.ID)
 	}
 	for ctx.Err() == nil {
-		for ; shown < len(lease.Progress); shown++ {
-			fmt.Fprintf(stderr, "errand: %s: %s\n", brokerName, terminalSafeField(lease.Progress[shown]))
+		// Progress is a bounded tail of the lease's lines, the last of which
+		// is numbered ProgressSeq.
+		first := lease.ProgressSeq - len(lease.Progress) + 1
+		for i, line := range lease.Progress {
+			if first+i > shown {
+				fmt.Fprintf(stderr, "errand: %s: %s\n", brokerName, terminalSafeField(line))
+			}
 		}
+		shown = max(shown, lease.ProgressSeq)
 		if lease.State != proto.LeaseLaunching && (lease.State != proto.LeaseReady || admits(lease, sshKey)) {
 			break
 		}
@@ -350,17 +369,12 @@ func followLease(ctx context.Context, broker placementChoice, lease proto.Lease,
 			continue
 		case <-time.After(leasePollInterval):
 		}
-		before := len(lease.Progress)
 		next, err := client.GetLease(ctx, broker.Target, lease.ID)
 		if err != nil {
 			if ctx.Err() != nil {
 				continue
 			}
 			return placementChoice{}, fmt.Errorf("following lease %s: %w", lease.ID, err)
-		}
-		// Progress is a bounded tail; restart numbering if it was trimmed.
-		if len(next.Progress) < before {
-			shown = 0
 		}
 		lease = next
 	}
@@ -378,20 +392,26 @@ func followLease(ctx context.Context, broker placementChoice, lease proto.Lease,
 }
 
 // withdrawLease tells the cloud peer a run no longer needs the lease its
-// request was given, and says what became of it.
+// request was given, and says what became of it. id is empty when no
+// answer named the lease.
 func withdrawLease(broker placementChoice, requestID, id string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	lease, err := client.WithdrawLeaseRequest(ctx, broker.Target, requestID)
 	switch {
+	case err != nil && id == "":
+		return fmt.Sprintf("withdrawing the request failed: %v (if %s started a lease anyway, errand leases lists it)", err, terminalSafeField(broker.Name))
 	case err != nil:
 		return fmt.Sprintf("withdrawing lease %s failed: %v (errand leases release --on %s %s releases it)", id, err, broker.Name, id)
+	case lease.ID == "" && id == "":
+		return fmt.Sprintf("%s started no lease for it", terminalSafeField(broker.Name))
+	case lease.ID == "" || lease.State == proto.LeaseReady:
+		// A ready lease handed to a run is not recorded against its request.
+		return fmt.Sprintf("lease %s stays until idle", cmp.Or(lease.ID, id))
 	case lease.State == proto.LeaseLaunching:
-		return fmt.Sprintf("lease %s keeps launching for another run", id)
-	case lease.State == proto.LeaseReady:
-		return fmt.Sprintf("lease %s stays until idle", id)
+		return fmt.Sprintf("lease %s keeps launching for another run", lease.ID)
 	}
-	return fmt.Sprintf("released lease %s", id)
+	return fmt.Sprintf("released lease %s", lease.ID)
 }
 
 // leaseKeyFile is the SSH key this client sends with lease requests. Its

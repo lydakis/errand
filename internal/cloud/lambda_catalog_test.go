@@ -34,7 +34,7 @@ func TestLambdaCatalogOffers(t *testing.T) {
 		"gpu_1x_future":    {price: 1, arch: "riscv", gpu: "X (1 GB)", vcpus: 1, gpus: 1},
 	}
 	c := &LambdaCatalog{Account: *p, IdleTimeout: time.Minute, MaxLifetime: time.Hour}
-	c.Account.InstanceType, c.Account.Arch, c.Account.ErrandBinary = "", "", ""
+	c.Account.InstanceType, c.Account.Arch, c.Account.ErrandBinary, c.Account.Version = "", "", "", "v1.2.3"
 	offers, err := c.Offers(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -76,11 +76,26 @@ func TestLambdaCatalogOffers(t *testing.T) {
 	if offers, _ = c.Offers(context.Background()); len(offers) != 5 || offers[1].Name != "gpu-1x-a10" {
 		t.Fatalf("any region: %+v", offers)
 	}
-	// An errand_binary for amd64 cannot run on the arm64 GH200.
+	// An errand_binary for amd64 cannot run on the arm64 GH200, which is
+	// listed as unavailable with what to change.
 	c.Account.ErrandBinary = p.ErrandBinary
-	if offers, _ = c.Offers(context.Background()); len(offers) != 4 || slices.ContainsFunc(offers, func(o Offer) bool { return o.Facts.Arch != "amd64" }) {
+	offers, _ = c.Offers(context.Background())
+	if len(offers) != 5 || slices.ContainsFunc(offers, func(o Offer) bool {
+		return (o.Unavailable != "") != (o.Facts.Arch == "arm64")
+	}) || offers[2].Name != "gpu-1x-gh200" || offers[2].Unavailable != "errand_binary is a linux/amd64 build, which cannot run on linux/arm64 machines" {
 		t.Fatalf("errand_binary for amd64: %+v", offers)
 	}
+	// A development build without errand_binary has no release to install,
+	// so only its own architecture, and only when it is a Linux errand
+	// build itself, is available. The test binary is not one.
+	c.Account.ErrandBinary, c.Account.Version = "", "0.1.0-dev"
+	offers, _ = c.Offers(context.Background())
+	if len(offers) != 5 || slices.ContainsFunc(offers, func(o Offer) bool {
+		return !strings.Contains(o.Unavailable, "development build") || !strings.Contains(o.Unavailable, "set errand_binary to a linux/"+o.Facts.Arch)
+	}) {
+		t.Fatalf("development build: %+v", offers)
+	}
+	c.Account.Version = "v1.2.3"
 	os.WriteFile(p.APIKeyFile, []byte("wrong"), 0600)
 	if _, err := c.Offers(context.Background()); err == nil || !strings.Contains(err.Error(), "API key was invalid") {
 		t.Fatalf("bad key: %v", err)

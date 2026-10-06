@@ -47,12 +47,10 @@ func (c *LambdaCatalog) Offers(ctx context.Context) ([]Offer, error) {
 	if err != nil {
 		return nil, err
 	}
-	// errand_binary runs on one architecture. One that cannot be read
-	// leaves every type listed, so a lease says what is wrong with it.
-	binaryArch := ""
-	if c.Account.ErrandBinary != "" {
-		binaryArch, _ = linuxBinaryArch(c.Account.ErrandBinary)
-	}
+	// A type this cloud peer has no errand build for, such as one of
+	// another architecture than errand_binary or a development build, is
+	// listed as unavailable, so a request for it says what to set.
+	noBuild := map[string]string{}
 	var offers []Offer
 	for _, t := range types {
 		if len(c.InstanceTypes) > 0 && !slices.Contains(c.InstanceTypes, t.Name) {
@@ -61,14 +59,19 @@ func (c *LambdaCatalog) Offers(ctx context.Context) ([]Offer, error) {
 		if !slices.ContainsFunc(t.Regions, func(r string) bool { return len(regions) == 0 || slices.Contains(regions, r) }) {
 			continue
 		}
-		price := float64(t.PriceCentsPerHour) / 100
-		unavailable := ""
-		if limit := c.Account.MaxPricePerHour; limit > 0 && price > limit {
-			unavailable = fmt.Sprintf("costs $%.2f/h, above max_price_per_hour = %g in [cloud.lambda]", price, limit)
-		}
 		arch, ok := lambdaArch(t.Architecture)
-		if !ok || binaryArch != "" && arch != binaryArch {
-			continue // errand has no build for it, or errand_binary is for another
+		if !ok {
+			continue // errand has no build for it
+		}
+		problem, seen := noBuild[arch]
+		if !seen {
+			problem = c.Account.buildProblem(arch)
+			noBuild[arch] = problem
+		}
+		price := float64(t.PriceCentsPerHour) / 100
+		unavailable := problem
+		if limit := c.Account.MaxPricePerHour; unavailable == "" && limit > 0 && price > limit {
+			unavailable = fmt.Sprintf("costs $%.2f/h, above max_price_per_hour = %g in [cloud.lambda]", price, limit)
 		}
 		p := c.Account
 		p.InstanceType, p.Arch = t.Name, arch

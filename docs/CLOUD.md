@@ -92,8 +92,8 @@ cloud peer still ends them when they go idle or reach their lifetime.
   The cheapest matching offer wins: an offer with `price_per_hour`, even
   `0`, before one without, and equal offers in random order. Neither your default peer nor how
   busy a cloud peer's own runner is plays a part. If a cloud peer turns the
-  request down before starting anything (no permission, nothing matches any
-  more, or it is at `max_leases`), the next one is asked. A cloud peer that
+  request down before starting anything (no permission or offers, nothing matches
+  any more, or at `max_leases`), the next one is asked. A cloud peer that
   does not answer is skipped, so keep offers on an always-on machine. A ready
   or launching lease of yours that already matches is reused, from any of
   your devices.
@@ -103,8 +103,12 @@ cloud peer still ends them when they go idle or reach their lifetime.
 
 If a run stops while its lease is still launching, from Ctrl-C or a failure,
 it withdraws its request, and the cloud peer cancels the launch unless another
-run is waiting for the same lease. Once a lease is ready, only the idle and
-lifetime rules below or `errand leases release` end it. A run that stops after
+run is waiting for the same lease. A request whose answer is lost is sent once
+more; if that does not bring the lease back either, the cloud peer may have
+started one nobody was told about, so the run withdraws the request and asks
+no other cloud peer, even when the second attempt was turned down. Once a
+lease is ready, only the idle and lifetime rules below or `errand leases
+release` end it. A run that stops after
 that, with or without a job, leaves the machine up for at most one idle
 window. Being given to a run counts as work, so a reused ready lease starts a
 full idle window.
@@ -224,8 +228,10 @@ or for an `arm64` GH200 from an `amd64` box, it downloads the release of its
 own version for that architecture from GitHub once, checks it against the
 release's checksums, and keeps it in its state directory. A development build
 of errand has no release, so a cloud peer running one needs `errand_binary`
-set to a Linux build, and offers only instance types of that build's
-architecture. Everything is checked before anything is rented, and the
+set to a Linux build. An instance type of another architecture than
+`errand_binary`'s, or one a development build has no release for, is listed
+as unavailable, so a request only it matches says what to set.
+Everything is checked before anything is rented, and the
 machine gets the copy that was checked, even if the file changes while it
 boots.
 
