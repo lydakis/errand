@@ -66,11 +66,28 @@ func TestPushUsesConfiguredPeerAndExplicitApply(t *testing.T) {
 		t.Fatalf("explicit workspace did not override profile: %d %s", code, &stderr)
 	}
 	// A different checkout cannot accidentally replace this workspace's source.
+	// Plain push, watch and apply all name the checkout that push requires.
+	wrongCheckout := fmt.Sprintf("push to workspace %s must be run from the checkout that created it, at %q", ws.Name, root)
+	clone := t.TempDir()
+	for name, body := range map[string]string{".errandignore": "", "value": "clone\n"} {
+		if err := os.WriteFile(filepath.Join(clone, name), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(clone)
+	for _, extra := range [][]string{nil, {"--apply"}, {"--watch"}} {
+		out.Reset()
+		stderr.Reset()
+		code := cmdPushTo(append([]string{"--profile", "dev"}, extra...), &out, &stderr)
+		if code == 0 || !strings.Contains(stderr.String(), wrongCheckout) || strings.Contains(stderr.String(), "--apply must") {
+			t.Fatalf("push %v from another clone: %d %s", extra, code, &stderr)
+		}
+	}
 	t.Chdir(t.TempDir())
 	out.Reset()
 	stderr.Reset()
-	if code := cmdPushTo([]string{"--workspace", ws.Name, "--profile", "dev", "--workspace-root", filepath.Dir(root)}, &out, &stderr); code == 0 {
-		t.Fatal("accepted another origin")
+	if code := cmdPushTo([]string{"--workspace", ws.Name, "--profile", "dev", "--workspace-root", filepath.Dir(root)}, &out, &stderr); code == 0 || !strings.Contains(stderr.String(), wrongCheckout) {
+		t.Fatalf("accepted another origin: %d %s", code, &stderr)
 	}
 }
 func TestPushRejectsAmbiguousInterface(t *testing.T) {

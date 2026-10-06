@@ -432,28 +432,52 @@ func validateApplyCallerWorkspace(recordedRoot, callerDir string) error {
 	if callerDir == "" {
 		return fmt.Errorf("--apply must be run from the workspace that submitted the job")
 	}
-	recorded, err := filepath.Abs(recordedRoot)
+	within, err := callerWithinRoot(recordedRoot, callerDir)
 	if err != nil {
 		return err
 	}
-	recorded, err = filepath.EvalSymlinks(recorded)
-	if err != nil {
-		return err
-	}
-	caller, err := filepath.Abs(callerDir)
-	if err != nil {
-		return err
-	}
-	caller, err = filepath.EvalSymlinks(caller)
-	if err != nil {
-		return err
-	}
-	rel, err := filepath.Rel(recorded, caller)
-	if err != nil {
-		return err
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if !within {
 		return fmt.Errorf("--apply must be run from within the workspace at %q", recordedRoot)
 	}
 	return nil
+}
+
+// validatePushCaller requires the checkout that created the workspace, with
+// or without --apply: push snapshots that checkout and no other.
+func validatePushCaller(origin workspaceOrigin, workspace, callerDir string) error {
+	within, err := callerWithinRoot(origin.Root, callerDir)
+	if err != nil {
+		return err
+	}
+	if !within {
+		return fmt.Errorf("push to workspace %s must be run from the checkout that created it, at %q", workspace, origin.Root)
+	}
+	return nil
+}
+
+func callerWithinRoot(recordedRoot, callerDir string) (bool, error) {
+	if callerDir == "" {
+		return false, nil
+	}
+	recorded, err := filepath.Abs(recordedRoot)
+	if err != nil {
+		return false, err
+	}
+	recorded, err = filepath.EvalSymlinks(recorded)
+	if err != nil {
+		return false, err
+	}
+	caller, err := filepath.Abs(callerDir)
+	if err != nil {
+		return false, err
+	}
+	caller, err = filepath.EvalSymlinks(caller)
+	if err != nil {
+		return false, err
+	}
+	rel, err := filepath.Rel(recorded, caller)
+	if err != nil {
+		return false, err
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)), nil
 }
