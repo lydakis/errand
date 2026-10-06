@@ -42,6 +42,9 @@ const (
 // in turn, while other requests keep passing the request gate.
 type lambdaPacing struct {
 	request, launch gate
+	// passed, when set, sees each time a gate lets a caller through, as
+	// that gate records it. Tests use it to check the gaps.
+	passed func(launch bool, at time.Time)
 }
 
 var sharedLambdaPacing lambdaPacing
@@ -77,6 +80,9 @@ func (a *lambdaPacing) wait(ctx context.Context, gap time.Duration) error {
 		return err
 	}
 	a.request.last = time.Now()
+	if a.passed != nil {
+		a.passed(false, a.request.last)
+	}
 	return nil
 }
 
@@ -137,6 +143,9 @@ func (p *LambdaProvider) launch(ctx context.Context, key string, body, out any, 
 			return fmt.Errorf("%w (%w)", firstErr(limited, err), errNotSent)
 		}
 		a.launch.last = time.Now() // the gap runs from here, as no launch can pass this one
+		if a.passed != nil {
+			a.passed(true, a.launch.last)
+		}
 		err = p.callOnce(ctx, key, http.MethodPost, "/instance-operations/launch", body, out)
 		if !isRateLimited(err) {
 			return err

@@ -861,16 +861,31 @@ func TestLambdaLaunchCanceledWhileWaiting(t *testing.T) {
 
 // Every launch attempt keeps to the launch gap, and a launch that Lambda
 // rate-limited until the deadline counts as refused, leaving no state.
+//
+// The deadline must land while acquire waits between attempts: one that
+// lands while a launch request is in flight leaves it uncertain, and its
+// state rightly stays saved. So rather than a wall-clock timeout, the
+// context ends as acquire saves the third attempt, before it is sent.
 func TestLambdaLaunchRateLimitedUntilDeadline(t *testing.T) {
 	p, api, _ := newLambda(t)
 	key := "limited-key"
 	os.WriteFile(p.APIKeyFile, []byte(key), 0600)
 	api.apiKey, api.launchError = key, http.StatusTooManyRequests
 	p.LaunchGap = 100 * time.Millisecond
-	var saved []json.RawMessage
-	ctx, cancel := context.WithTimeout(context.Background(), 450*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	req := AcquireRequest{LeaseID: proto.NewULID(), Progress: func(string) {}, Save: func(s json.RawMessage) error { saved = append(saved, s); return nil }}
+	var saved []json.RawMessage
+	var sending []time.Time // when acquire readied each attempt
+	save := func(s json.RawMessage) error {
+		saved = append(saved, s)
+		if len(s) > 0 {
+			if sending = append(sending, time.Now()); len(sending) == 3 {
+				cancel()
+			}
+		}
+		return nil
+	}
+	req := AcquireRequest{LeaseID: proto.NewULID(), Progress: func(string) {}, Save: save}
 	_, err := p.Acquire(ctx, req)
 	var api429 *lambdaAPIError
 	if !errors.As(err, &api429) || api429.Status != http.StatusTooManyRequests {
@@ -881,10 +896,17 @@ func TestLambdaLaunchRateLimitedUntilDeadline(t *testing.T) {
 	}
 	api.mu.Lock()
 	defer api.mu.Unlock()
-	// 450ms at one launch per 100ms allows five attempts at most; retrying
-	// at the general request pace would make dozens.
-	if n := len(api.attempts); n < 2 || n > 5 {
-		t.Fatalf("%d launch attempts, want 2 to 5", n)
+	// The third attempt was readied but never sent.
+	if n := len(api.attempts); n != 2 || len(sending) != 3 {
+		t.Fatalf("%d launch attempts sent of %d readied, want 2 of 3", n, len(sending))
+	}
+	// Each attempt is readied only once the launch gap has passed since the
+	// previous one went out, which was after it was readied. Retrying at
+	// the general request pace would ready them closer together.
+	for i := 1; i < len(sending); i++ {
+		if gap := sending[i].Sub(sending[i-1]); gap < p.LaunchGap {
+			t.Fatalf("attempt %d readied %v after the one before, want at least %v", i+1, gap, p.LaunchGap)
+		}
 	}
 }
 
@@ -923,11 +945,24 @@ func sendLaunch(ctx context.Context, p *LambdaProvider, name string) error {
 	return p.launch(ctx, "k", map[string]any{"name": name}, nil, func() error { return nil })
 }
 
-// Launches arrive launchGap apart, and all requests requestGap apart,
-// however they interleave.
+// Launches go through launchGap apart, and all requests requestGap apart,
+// however they interleave. The times are the ones each gate records as it
+// lets a caller through: a request may reach Lambda any time later, so
+// arrival times would bound nothing.
 func TestLambdaPacingKeepsGaps(t *testing.T) {
 	const requestGap, launchGap = 20 * time.Millisecond, 120 * time.Millisecond
 	p, log := newPacedLambda(requestGap, launchGap)
+	var mu sync.Mutex
+	var requests, launches []time.Time
+	p.Pacing.passed = func(launch bool, at time.Time) {
+		mu.Lock()
+		defer mu.Unlock()
+		if launch {
+			launches = append(launches, at)
+		} else {
+			requests = append(requests, at)
+		}
+	}
 	var wg sync.WaitGroup
 	for i := range 9 {
 		wg.Go(func() {
@@ -944,17 +979,17 @@ func TestLambdaPacingKeepsGaps(t *testing.T) {
 	}
 	wg.Wait()
 	check := func(what string, times []time.Time, gap time.Duration) {
-		slices.SortFunc(times, func(x, y time.Time) int { return x.Compare(y) })
 		for i := 1; i < len(times); i++ {
-			if d := times[i].Sub(times[i-1]); d < gap-5*time.Millisecond {
-				t.Errorf("%s %d arrived %v after the one before, want at least %v", what, i, d, gap)
+			if d := times[i].Sub(times[i-1]); d < gap {
+				t.Errorf("%s %d went through %v after the one before, want at least %v", what, i, d, gap)
 			}
 		}
 	}
-	check("request", log.requests, requestGap)
-	check("launch", log.launches, launchGap)
-	if len(log.requests) != 9 || len(log.launches) != 3 {
-		t.Fatalf("%d requests, %d launches", len(log.requests), len(log.launches))
+	// Each gate records its callers in turn, so the times are in order.
+	check("request", requests, requestGap)
+	check("launch", launches, launchGap)
+	if len(requests) != 9 || len(launches) != 3 || len(log.requests) != 9 || len(log.launches) != 3 {
+		t.Fatalf("%d requests and %d launches went through, %d and %d were sent", len(requests), len(launches), len(log.requests), len(log.launches))
 	}
 }
 
