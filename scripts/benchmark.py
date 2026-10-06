@@ -32,10 +32,12 @@ def parse_transfer(stderr, scenario):
         return {"snapshot_files": 0, "snapshot_bytes": 0, "shipped_files": 0, "shipped_bytes": 0}
     snapshot = re.search(r"^errand: snapshot contains (\d+) files, (\d+) bytes$", stderr, re.M)
     shipped = re.search(r"^errand: shipping (\d+) of (\d+) files \((\d+) bytes;", stderr, re.M)
-    if not snapshot or not shipped or "re-shipping" in stderr or "negotiation failed" in stderr:
+    if not snapshot or "re-shipping" in stderr or "snapshot negotiation" in stderr:
         raise ValueError("cache behavior was not verified; inspect stderr")
     files, size = map(int, snapshot.groups())
-    sent, total, sent_bytes = map(int, shipped.groups())
+    # The CLI reports shipping only when the runner's cache let it skip bodies;
+    # without that line it sent the whole snapshot.
+    sent, total, sent_bytes = map(int, shipped.groups()) if shipped else (files, files, size)
     if files != total or files == 0:
         raise ValueError("unexpected snapshot accounting")
     if scenario == "cached" and (sent != 0 or sent_bytes != 0):

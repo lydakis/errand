@@ -5,8 +5,10 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
+import unittest.mock
 
 from benchmark_snapshot_integration import benchmark_order, parse_sample, run
 
@@ -27,6 +29,18 @@ class SnapshotBenchmarkOrderTests(unittest.TestCase):
                 run([sys.executable, "-c", "import time; print('started', flush=True); time.sleep(60)"],
                     directory, os.environ, log, timeout=0.5)
             self.assertIn("started", log.read_text())
+
+    def test_run_finishing_after_its_deadline_counts_as_over_time(self):
+        # The child outlives the deadline, but the watchdog never gets to stop it.
+        class LateTimer(threading.Timer):
+            def start(self):
+                pass
+
+        with tempfile.TemporaryDirectory() as directory, \
+                unittest.mock.patch("benchmark_snapshot_integration.threading.Timer", LateTimer):
+            with self.assertRaisesRegex(RuntimeError, "exceeded"):
+                run([sys.executable, "-c", "import time; time.sleep(0.3)"],
+                    directory, os.environ, Path(directory) / "run.txt", timeout=0.1)
 
     def test_interrupt_stops_detached_child_and_preserves_log(self):
         with tempfile.TemporaryDirectory() as directory:

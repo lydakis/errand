@@ -8,13 +8,16 @@ from benchmark import parse_transfer, summarize, write_fixture
 class BenchmarkTest(unittest.TestCase):
     def test_transfer_classification_requires_observed_cache_behavior(self):
         snapshot = "errand: snapshot contains 2 files, 16 bytes\n"
-        cold = snapshot + "errand: shipping 2 of 2 files (16 bytes; the rest is cached on the runner)\n"
+        cold = snapshot + "errand: job local/j1 (2 files)\n"
+        partial = snapshot + "errand: shipping 1 of 2 files (8 bytes; the rest is cached on the runner)\n"
         cached = snapshot + "errand: shipping 0 of 2 files (0 bytes; the rest is cached on the runner)\n"
         self.assertEqual(parse_transfer(cold, "cold")["shipped_bytes"], 16)
         self.assertEqual(parse_transfer(cached, "cached")["shipped_bytes"], 0)
         self.assertEqual(parse_transfer("", "no-snapshot")["snapshot_bytes"], 0)
-        for text, mode in [(snapshot, "cached"), (cold, "cached"), (cached, "cold"), (cold, "no-snapshot"),
-                           (cached + "errand: runner evicted negotiated blobs; re-shipping the full snapshot", "cached")]:
+        for text, mode in [("", "cold"), (cold, "cached"), (partial, "cached"), (partial, "cold"), (cached, "cold"),
+                           (cold, "no-snapshot"),
+                           (cached + "errand: runner evicted negotiated blobs; re-shipping the full snapshot", "cached"),
+                           (snapshot + "errand: snapshot negotiation: 500 Internal Server Error\n", "cold")]:
             with self.subTest(mode=mode, text=text), self.assertRaises(ValueError):
                 parse_transfer(text, mode)
 
