@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -496,7 +497,7 @@ var errNoUsablePeers = errors.New("no usable peers configured; check ~/.config/e
 // results, report peer-specific failures, and fail the command if any selected
 // peer could not be read.
 func readFleet[T any](rawURL, on string, stderr io.Writer, query func(string) (T, error)) (fleetRead[T], error) {
-	targets, warnings, err := fleetTargets(rawURL, on)
+	targets, warnings, err := peerTargets(rawURL, on)
 	if err != nil {
 		return fleetRead[T]{}, err
 	}
@@ -507,7 +508,9 @@ func readFleet[T any](rawURL, on string, stderr io.Writer, query func(string) (T
 	if len(targets) == 0 {
 		return read, errNoUsablePeers
 	}
-	for _, result := range queryPeerTargets(targets, query) {
+	var results []peerQueryResult[T]
+	read.targets, results = queryFleet(targets, rawURL == "" && on == "", query)
+	for _, result := range results {
 		if result.err != nil {
 			read.fail(result.target.name, result.err)
 			continue
@@ -565,30 +568,50 @@ func peerTargets(rawURL, on string) ([]peerTarget, []error, error) {
 	return targets, warnings, nil
 }
 
-// fleetTargets is peerTargets plus, unless narrowed, the machines the
-// caller leased, which their cloud peers list when asked.
-func fleetTargets(rawURL, on string) ([]peerTarget, []error, error) {
-	targets, warnings, err := peerTargets(rawURL, on)
-	if err != nil || rawURL != "" || on != "" {
-		return targets, warnings, err
+// queryFleet queries targets and, when leases is set, the machines the
+// caller leased, which their cloud peers list when asked. Each target is
+// asked for its leases while it is queried, so listing them costs a fleet
+// read no round trip, and an unreachable peer only one connection attempt;
+// leased machines are queried once their cloud peers have answered.
+func queryFleet[T any](targets []peerTarget, leases bool, query func(string) (T, error)) ([]peerTarget, []peerQueryResult[T]) {
+	var cfg config.Client
+	if leases {
+		var err error
+		cfg, err = config.LoadClient()
+		leases = err == nil
 	}
-	cfg, err := config.LoadClient()
-	if err != nil {
-		return targets, warnings, nil
-	}
-	infos := queryPeerTargets(targets, func(url string) (proto.Info, error) {
-		return client.ProbeInfo(context.Background(), url, 2*time.Second)
-	})
-	for _, r := range infos {
-		if r.err != nil {
-			continue // the fleet read reports it
+	results := make([]peerQueryResult[T], len(targets))
+	leased := make([][]peerTarget, len(targets))
+	var wg sync.WaitGroup
+	for i, target := range targets {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			value, err := query(target.url)
+			results[i] = peerQueryResult[T]{target: target, value: value, err: err}
+		}()
+		if !leases {
+			continue
 		}
-		for _, lp := range leasePeersOf(cfg, r.target.name, r.value) {
-			c := leaseCandidate(lp)
-			targets = append(targets, peerTarget{name: lp.Name, url: client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)})
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			info, err := client.ProbeInfo(context.Background(), target.url, 2*time.Second)
+			if err != nil {
+				return // the query reports the peer
+			}
+			for _, lp := range leasePeersOf(cfg, target.name, info) {
+				c := leaseCandidate(lp)
+				leased[i] = append(leased[i], peerTarget{name: lp.Name, url: client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)})
+			}
+		}()
 	}
-	return targets, warnings, nil
+	wg.Wait()
+	more := slices.Concat(leased...)
+	if len(more) == 0 {
+		return targets, results
+	}
+	return slices.Concat(targets, more), append(results, queryPeerTargets(more, query)...)
 }
 
 func cmdPs(args []string) int {
@@ -644,7 +667,7 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 	for _, record := range local {
 		byPeer[record.PeerURL] = append(byPeer[record.PeerURL], record)
 	}
-	targets, warnings, err := fleetTargets(*rawURL, *on)
+	targets, warnings, err := peerTargets(*rawURL, *on)
 	if err != nil {
 		fmt.Fprintln(stderr, "errand:", err)
 		return 1
@@ -661,9 +684,11 @@ func cmdPsTo(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	rows := make([]psRow, 0)
-	for _, result := range queryPeerTargets(targets, func(url string) ([]psRow, error) {
+	var results []peerQueryResult[[]psRow]
+	read.targets, results = queryFleet(targets, *rawURL == "" && *on == "", func(url string) ([]psRow, error) {
 		return psPeerRows(url, *workspace, !all && last == 0, byPeer[url])
-	}) {
+	})
+	for _, result := range results {
 		if result.err != nil {
 			read.fail(result.target.name, result.err)
 		} else {
