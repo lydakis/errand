@@ -133,8 +133,6 @@ type workspaceCreation struct {
 }
 
 func createPreparedWorkspace(opts RunOptions, prep snapshotPreparation, request proto.Workspace) (proto.Workspace, error) {
-	outcome := notAdmitted
-	defer func() { opts.claim.settle(outcome) }()
 	if err := prep.guard.Verify(); err != nil {
 		return proto.Workspace{}, err
 	}
@@ -154,16 +152,16 @@ func createPreparedWorkspace(opts RunOptions, prep snapshotPreparation, request 
 	var result proto.Workspace
 	err = uploadWithSnapshotFallback(plan, func(attempt shipPlan) error {
 		var err error
-		result, outcome, err = createPreparedWorkspaceOnce(opts, prep, request, attempt)
+		result, err = createPreparedWorkspaceOnce(opts, prep, request, attempt)
 		return err
 	}, nil)
 	return result, err
 }
 
-func createPreparedWorkspaceOnce(opts RunOptions, prep snapshotPreparation, request proto.Workspace, plan shipPlan) (proto.Workspace, admission, error) {
+func createPreparedWorkspaceOnce(opts RunOptions, prep snapshotPreparation, request proto.Workspace, plan shipPlan) (proto.Workspace, error) {
 	var result proto.Workspace
 	if err := prep.guard.Verify(); err != nil {
-		return result, notAdmitted, err
+		return result, err
 	}
 	pr, pw := io.Pipe()
 	defer pr.Close()
@@ -206,14 +204,14 @@ func createPreparedWorkspaceOnce(opts RunOptions, prep snapshotPreparation, requ
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, pr)
 	if err != nil {
-		return result, notAdmitted, err
+		return result, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	// Durable reconstruction and admission may outlast the control-request
 	// header budget. Keep the existing upload context and uncertainty handling.
 	resp, err := maintenanceHTTP.Do(req)
 	if err != nil {
-		return result, maybeAdmitted, fmt.Errorf("creating workspace (check workspaces before retrying): %w", err)
+		return result, fmt.Errorf("creating workspace (check workspaces before retrying): %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
@@ -222,7 +220,7 @@ func createPreparedWorkspaceOnce(opts RunOptions, prep snapshotPreparation, requ
 		if resp.StatusCode == http.StatusConflict && json.Unmarshal(raw, &payload) == nil && payload.Code == proto.ErrorCodeSnapshotCacheMiss {
 			// The receiver has not published a workspace. Keep the origin and
 			// creation ID for the one permitted full-body retry.
-			return result, notAdmitted, fmt.Errorf("creating workspace: %w: %s", errSnapshotCacheMiss, payload.Error)
+			return result, fmt.Errorf("creating workspace: %w: %s", errSnapshotCacheMiss, payload.Error)
 		}
 		var err error = fmt.Errorf("creating workspace: %s: %s", resp.Status, apiError(raw))
 		if resp.StatusCode == http.StatusPreconditionFailed {
@@ -233,12 +231,12 @@ func createPreparedWorkspaceOnce(opts RunOptions, prep snapshotPreparation, requ
 		switch resp.StatusCode {
 		case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden,
 			http.StatusConflict, http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge:
-			return result, notAdmitted, errors.Join(err, discardWorkspaceOrigin(opts.PeerURL, request.ID))
+			err = errors.Join(err, discardWorkspaceOrigin(opts.PeerURL, request.ID))
 		}
-		return result, maybeAdmitted, err
+		return result, err
 	}
 	err = json.NewDecoder(io.LimitReader(resp.Body, maxWorkspaceResponseBytes)).Decode(&result)
-	return result, admitted, err
+	return result, err
 }
 
 func prepareWorkspaceRun(opts RunOptions) snapshotPreparation {

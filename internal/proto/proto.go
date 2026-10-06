@@ -562,10 +562,7 @@ type Lease struct {
 	// SSHKeys are the client keys a machine reached over SSH admits: one
 	// for each of the owner's devices that asked for the lease, once the
 	// cloud peer has added it. A client uses a lease once its key is here.
-	SSHKeys []string `json:"ssh_keys,omitempty"`
-	// Shared, in the answer to a lease request or a withdrawal, marks a
-	// lease other runs still hold.
-	Shared     bool      `json:"shared,omitempty"`
+	SSHKeys    []string  `json:"ssh_keys,omitempty"`
 	Facts      *Facts    `json:"facts,omitempty"` // measured once ready
 	Progress   []string  `json:"progress,omitempty"`
 	Error      string    `json:"error,omitempty"`

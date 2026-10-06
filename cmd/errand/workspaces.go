@@ -76,7 +76,7 @@ func cmdWorkspacesTo(args []string, out, stderr io.Writer) int {
 	var url, label string
 	var opts client.RunOptions
 	var creationChoices []placementChoice
-	var creationLease func() (placementChoice, *client.Claim, error)
+	var creationLease func() (placementChoice, error)
 	var err error
 	if verb == "create" {
 		if err := proto.ValidateWorkspaceName(fs.Arg(0)); err != nil {

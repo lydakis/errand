@@ -75,12 +75,12 @@ type record struct {
 	proto.Lease
 	Owner string `json:"owner"`
 	Login string `json:"login,omitempty"` // admitted by the machine
-	// Holders are the requests this lease was handed that have not
-	// withdrawn. Used records that the machine was seen with work; from then
-	// on holders no longer matter and only the idle and lifetime rules end
-	// the lease (see "Lease guarantees" in docs/DESIGN.md).
-	Holders []string `json:"holders,omitempty"`
-	Used    bool     `json:"used,omitempty"`
+	// Requests are the runs this lease was handed while it was launching
+	// that have not withdrawn. A request asked again gets the same lease,
+	// and a launch every request withdrew from is cancelled. A ready lease
+	// is ended only by the idle and lifetime rules (see "Lease guarantees"
+	// in docs/DESIGN.md).
+	Requests []string `json:"requests,omitempty"`
 	// PendingKeys are SSH keys of the owner's devices that asked for the
 	// lease after it was launched, for the worker to add to the machine
 	// once it is ready. Added keys move to SSHKeys.
@@ -277,26 +277,22 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	active := 0
 	// A request asked again, after its answer was lost, gets the same lease.
 	for _, l := range b.sorted() {
-		if l.Owner == owner && slices.Contains(l.Holders, requestID) {
-			return l.handed(), nil
+		if l.Owner == owner && slices.Contains(l.Requests, requestID) {
+			return l.view(), nil
 		}
 	}
-	// A launching lease handed to another request is held by that request
-	// too. Handing out a ready lease counts as use: the request gets a full
-	// idle window to submit its work, and from then only the idle and
-	// lifetime rules end the lease. Earlier requests whose jobs ran between
-	// two idle checks never withdraw, so holders could otherwise pile up;
-	// only the latest is kept, so it can still ask again or withdraw.
+	// A launching lease handed to another request is waited on by that
+	// request too. A ready lease handed out starts a full idle window, so
+	// the request has time to submit its work.
 	share := func(l *lease) (proto.Lease, error) {
-		if !l.Used && l.State == proto.LeaseLaunching && len(l.Holders) >= maxHolders {
-			return proto.Lease{}, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease %s already has %d runs waiting to use it", l.ID, maxHolders)}
+		if l.State == proto.LeaseLaunching && len(l.Requests) >= maxRequests {
+			return proto.Lease{}, &Error{http.StatusTooManyRequests, fmt.Sprintf("lease %s already has %d runs waiting for it", l.ID, maxRequests)}
 		}
 		err := b.applyLocked(l, func(r *record) bool {
-			switch {
-			case r.State == proto.LeaseReady:
-				r.LastBusy, r.Used, r.Holders = time.Now(), true, []string{requestID}
-			case !r.Used:
-				r.Holders = append(slices.Clone(r.Holders), requestID)
+			if r.State == proto.LeaseReady {
+				r.LastBusy = time.Now()
+			} else {
+				r.Requests = append(slices.Clone(r.Requests), requestID)
 			}
 			r.admit(sshKey)
 			return true
@@ -305,7 +301,7 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 			return proto.Lease{}, &Error{http.StatusInternalServerError, "recording the lease: " + err.Error()}
 		}
 		b.wakeLocked(l)
-		return l.handed(), nil
+		return l.view(), nil
 	}
 	for _, l := range b.sorted() {
 		if l.Active() {
@@ -348,7 +344,7 @@ func (b *Broker) Acquire(owner, login, where, sshKey, requestID string) (proto.L
 	}
 	now := time.Now()
 	l := &lease{wake: make(chan struct{}, 1), record: record{
-		Owner: owner, Login: login, Holders: []string{requestID}, Release: offer.Provider.ReleaseSpec(), IdleTimeout: offer.IdleTimeout,
+		Owner: owner, Login: login, Requests: []string{requestID}, Release: offer.Provider.ReleaseSpec(), IdleTimeout: offer.IdleTimeout,
 		Lease: proto.Lease{ID: proto.NewULID(), Offer: offer.Name, Where: where, SSHKeys: keyList(sshKey), State: proto.LeaseLaunching, CreatedAt: now, ExpiresAt: now.Add(offer.MaxLifetime)},
 	}}
 	l.addProgress("launching " + offer.Name)
@@ -439,30 +435,28 @@ func (b *Broker) Admit(owner, login, id, sshKey string) (proto.Lease, error) {
 	return l.view(), nil
 }
 
-// Withdraw is a run's answer when it admitted no job on the lease it was
-// handed: it no longer holds the lease. A lease nobody holds and no job
-// has used ends: at once while launching, and at the next check when
-// ready, unless a job is running on it then. The answer is marked Shared
-// if the lease stays.
+// Withdraw is a run's answer when it gives up before the lease it was
+// handed is ready. A launch every request withdrew from is cancelled. A
+// lease that is already ready is left to the idle rule.
 func (b *Broker) Withdraw(owner, requestID string) (proto.Lease, error) {
 	b.mu.Lock()
 	var l *lease
 	for _, c := range b.leases {
-		if c.Owner == owner && requestID != "" && slices.Contains(c.Holders, requestID) {
+		if c.Owner == owner && requestID != "" && slices.Contains(c.Requests, requestID) {
 			l = c
 		}
 	}
 	b.mu.Unlock()
 	if l == nil {
-		return proto.Lease{}, &Error{http.StatusNotFound, "no lease is held by that request"}
+		return proto.Lease{}, &Error{http.StatusNotFound, "no lease was handed to that request"}
 	}
 	err := b.update(l, func(r *record) bool {
-		i := slices.Index(r.Holders, requestID)
-		if i < 0 {
+		i := slices.Index(r.Requests, requestID)
+		if i < 0 || r.State != proto.LeaseLaunching {
 			return false
 		}
-		r.Holders = slices.Delete(slices.Clone(r.Holders), i, i+1)
-		if r.unheld() && r.State == proto.LeaseLaunching {
+		r.Requests = slices.Delete(slices.Clone(r.Requests), i, i+1)
+		if len(r.Requests) == 0 {
 			r.State = proto.LeaseReleasing
 			r.addProgress("release requested while launching")
 		}
@@ -480,9 +474,7 @@ func (b *Broker) Withdraw(owner, requestID string) (proto.Lease, error) {
 	case l.wake <- struct{}{}:
 	default:
 	}
-	view := l.view()
-	view.Shared = !l.unheld() && l.Active()
-	return view, nil
+	return l.view(), nil
 }
 
 // update is the only way a lease changes. change edits a copy of the record,
@@ -716,8 +708,7 @@ func (b *Broker) watch(l *lease) {
 				if !busy {
 					return false
 				}
-				// Used: from here only the idle and lifetime rules end it.
-				r.LastBusy, r.Used, r.Holders = now, true, nil
+				r.LastBusy = now
 				return true
 			}
 			r.State = proto.LeaseReleasing
@@ -784,8 +775,6 @@ func (r *record) releaseReason(now time.Time, busy bool) string {
 		return fmt.Sprintf("max lifetime of %s reached", r.ExpiresAt.Sub(r.CreatedAt).Round(time.Second))
 	case busy:
 		return ""
-	case r.unheld():
-		return "every run that asked for it gave it up"
 	case !now.Before(r.LastBusy.Add(r.IdleTimeout)):
 		return fmt.Sprintf("idle for %s", r.IdleTimeout)
 	}
@@ -987,19 +976,8 @@ func (r *record) addProgress(line string) {
 	r.Progress = append(r.Progress, line)
 }
 
-// maxHolders bounds the runs waiting to use one lease.
-const maxHolders = 32
-
-// unheld reports whether no run holds the lease and no job has used it.
-func (r *record) unheld() bool { return !r.Used && len(r.Holders) == 0 }
-
-// handed is the lease as an answer to a request: Shared when it does not
-// end with this request's withdrawal.
-func (l *lease) handed() proto.Lease {
-	v := l.view()
-	v.Shared = len(l.Holders) > 1 || l.Used
-	return v
-}
+// maxRequests bounds the runs waiting for one launching lease.
+const maxRequests = 32
 
 func (l *lease) view() proto.Lease {
 	v := l.Lease

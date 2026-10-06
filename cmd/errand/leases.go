@@ -262,22 +262,21 @@ func leaseCandidate(lp leasePeer) config.RunCandidate {
 
 // leaseRunner acquires a machine from the first cloud peer among options
 // that does not turn the request down, waits until it runs errand, and
-// returns it as an ordinary placement choice. A failure or Ctrl-C here
-// withdraws the run's lease request. Otherwise the run settles the returned
-// claim: if no job was admitted there, it withdraws the request, so a
-// machine nobody uses does not keep running; if one was, or may have been,
-// the cloud peer's idle rule decides.
-func leaseRunner(options []leaseOption, where string, stderr io.Writer) (placementChoice, *client.Claim, error) {
+// returns it as an ordinary placement choice. A failure or Ctrl-C before
+// the machine is ready withdraws the run's lease request, which cancels a
+// launch no other run is waiting for. From ready on, the cloud peer's idle
+// rule decides when the lease ends.
+func leaseRunner(options []leaseOption, where string, stderr io.Writer) (placementChoice, error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	// A machine reached over SSH admits this client by its own errand key.
 	keyFile, err := leaseKeyFile()
 	if err != nil {
-		return placementChoice{}, nil, err
+		return placementChoice{}, err
 	}
 	sshKey, err := client.EnsureSSHKey(ctx, keyFile, "errand")
 	if err != nil {
-		return placementChoice{}, nil, err
+		return placementChoice{}, err
 	}
 	var broker placementChoice
 	var lease proto.Lease
@@ -295,7 +294,7 @@ func leaseRunner(options []leaseOption, where string, stderr io.Writer) (placeme
 		err = fmt.Errorf("leasing from %s: %w", terminalSafeField(broker.Name), err)
 		// Another supplier is asked only when this one started nothing.
 		if !client.LeaseRefused(err) || i == len(options)-1 || ctx.Err() != nil {
-			return placementChoice{}, nil, err
+			return placementChoice{}, err
 		}
 		fmt.Fprintf(stderr, "errand: %v\n", err)
 	}
@@ -303,14 +302,11 @@ func leaseRunner(options []leaseOption, where string, stderr io.Writer) (placeme
 	if err != nil {
 		outcome := withdrawLease(broker, requestID, lease.ID)
 		if ctx.Err() != nil {
-			return placementChoice{}, nil, fmt.Errorf("interrupted; %s", outcome)
+			return placementChoice{}, fmt.Errorf("interrupted; %s", outcome)
 		}
-		return placementChoice{}, nil, fmt.Errorf("%w; %s", err, outcome)
+		return placementChoice{}, fmt.Errorf("%w; %s", err, outcome)
 	}
-	claim := client.NewClaim(func() {
-		fmt.Fprintf(stderr, "errand: no job was admitted on lease %s; %s\n", lease.ID, withdrawLease(broker, requestID, lease.ID))
-	})
-	return choice, claim, nil
+	return choice, nil
 }
 
 // followLease waits until a lease is ready, lets this device in, and this
@@ -372,8 +368,7 @@ func followLease(ctx context.Context, broker placementChoice, lease proto.Lease,
 }
 
 // withdrawLease tells the cloud peer a run no longer needs the lease its
-// request was given, and says what became of it. The lease ends unless
-// another run still holds it or a job has run on it.
+// request was given, and says what became of it.
 func withdrawLease(broker placementChoice, requestID, id string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -381,10 +376,10 @@ func withdrawLease(broker placementChoice, requestID, id string) string {
 	switch {
 	case err != nil:
 		return fmt.Sprintf("withdrawing lease %s failed: %v (errand leases release --on %s %s releases it)", id, err, broker.Name, id)
-	case lease.Shared:
-		return fmt.Sprintf("lease %s is held by another run or was used by a job, so it stays until idle", id)
+	case lease.State == proto.LeaseLaunching:
+		return fmt.Sprintf("lease %s keeps launching for another run", id)
 	case lease.State == proto.LeaseReady:
-		return fmt.Sprintf("lease %s will be released unless a job is running on it", id)
+		return fmt.Sprintf("lease %s stays until idle", id)
 	}
 	return fmt.Sprintf("released lease %s", id)
 }
