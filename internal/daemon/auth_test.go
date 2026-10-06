@@ -845,6 +845,13 @@ func TestLeasesEndWithoutSubmit(t *testing.T) {
 		return res.StatusCode, info
 	}
 	ready := func() proto.Lease {
+		// The lease before it is ending; a lease still releasing counts
+		// toward max_leases, so wait until it has gone.
+		for deadline := time.Now().Add(5 * time.Second); len(d.broker.Active(leaseOwner(owner))) > 0; time.Sleep(10 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatalf("earlier leases never ended: %+v", d.broker.Active(leaseOwner(owner)))
+			}
+		}
 		lease, err := d.broker.Acquire(leaseOwner(owner), owner.Login, "gpu", "", proto.NewULID())
 		if err != nil {
 			t.Fatal(err)

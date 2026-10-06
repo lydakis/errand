@@ -1,21 +1,66 @@
 # Cloud peers (experimental)
 
-A cloud peer is a runner that can lease machines it does not have. It
-advertises **offers**, machine shapes such as "1x H100 80 GB, linux/amd64".
-When `--where` asks for something none of your runners has, errand asks the
-cloud peer for a **lease**. The leased machine runs errand like any other
-runner, and your job runs on it directly. The cloud peer never relays jobs.
+A cloud peer is a runner that can rent machines it does not have. When
+`--where` asks for something none of your runners has, errand asks the cloud
+peer for a **lease**: it rents a machine, installs errand on it, and your job
+runs there directly, as on any runner. The machine is released once it has sat
+idle. The cloud peer never relays jobs.
+
+## Quick start with Lambda
+
+Pick a runner that is always on, since it is what ends the machines when your
+laptop is asleep. On it:
+
+1. Save a [Lambda Cloud](https://lambda.ai) API key alone in a file owned by
+   the user errand runs as, with mode 600. errand refuses files other users
+   can read; on Windows, that is any file whose ACL lets someone other than
+   you, SYSTEM or Administrators read it.
+2. Add to its `errandd.toml`:
+
+   ```toml
+   [cloud.lambda]
+   api_key_file = "/home/you/.config/errand/lambda-api-key"
+   ```
+
+3. Restart it with `errand setup`.
+
+That is all. Every instance type the account can launch right now is an offer,
+with its GPUs, CPUs, architecture and price as Lambda lists them, and the
+cheapest one that matches `--where` is rented:
 
 ```console
 $ errand --where gpu=h100 -- python train.py
 errand: where skipped cabal: requires 1 GPU matching h100 (has none)
-errand: no runner of yours matches gpu=h100; leasing h100 from cabal
-errand: cabal: launching h100
+errand: no runner of yours matches gpu=h100; leasing gpu-1x-h100-sxm5 ($2.99/h) from cabal
+errand: cabal: launching gpu-1x-h100-sxm5
+errand: cabal: launching gpu_1x_h100_sxm5 in us-east-1 ($2.99/h)
 errand: cabal: waiting for errand on the machine
 errand: cabal: ready after 2m41s
 errand: lease cabal-7f3a ready (linux/amd64, 26 cpu, 1x NVIDIA H100 80GB HBM3 (80 GiB))
 errand: selected cabal-7f3a for gpu=h100 (0/1 slots, 0 staging, 0 queued)
 ```
+
+`--where gpu` rents the cheapest GPU with capacity, `--where gpu=h100` the
+cheapest H100, `--where gpus>=8` an eight-GPU box. Prices are shown before
+anything is rented. Machines above `max_price_per_hour`, $10/h unless you
+say otherwise, are never rented, at the price Lambda lists right before the
+launch: that covers every single-GPU type, and
+stops a sold-out $3/h type from quietly becoming a $30/h box. A request only
+a dearer type could serve is refused with the price and the setting to
+raise. Set the cap to `0` for no cap.
+
+```toml
+[cloud.lambda]
+api_key_file = "/home/you/.config/errand/lambda-api-key"
+max_price_per_hour = 20                                   # default 10; 0 for no cap
+# instance_types = ["gpu_1x_a10", "gpu_1x_h100_sxm5"]   # only these
+# regions = ["us-east-1", "us-west-1"]                    # preference order
+```
+
+Callers over the tailnet need the `lease` action in the errand capability
+besides `submit`; `allow_users` grants both. The cloud peer and the machines
+you run errand from need `ssh` and `ssh-keygen`. [Lambda](#lambda) below has
+the rest of the settings.
 
 The lease is then a peer named after the cloud peer and the end of the lease
 ID. While it exists, `--on cabal-7f3a`, job handles such as
@@ -109,16 +154,21 @@ existing ones still end on time and are released the way they were made, and
 
 ## Configure a cloud peer
 
-Any runner becomes a cloud peer by adding offers to its `errandd.toml`, then
-restarting it with `errand setup`:
+Any runner becomes a cloud peer by adding a `[cloud]` section to its
+`errandd.toml` and restarting it with `errand setup`. Offers come from a
+[Lambda](#lambda) account, from [provider commands](#provider-commands) you
+write for any other cloud, or both:
 
 ```toml
 [cloud]
 max_leases = 2            # active leases across all callers (default 2)
 acquire_timeout = "15m"   # acquire plus waiting for errand (default 15m)
 
-[[cloud.offers]]
-name = "h100"
+[cloud.lambda]            # offers every instance type with capacity
+api_key_file = "/home/you/.config/errand/lambda-api-key"
+
+[[cloud.offers]]          # an offer backed by your own commands
+name = "box"
 os = "linux"
 arch = "amd64"
 cpus = 26
@@ -132,8 +182,9 @@ max_lifetime = "12h"      # default 12h
 ```
 
 `tools = ["python3", "docker"]` declares tools an offer's machines have, and
-`os` may be `linux`, `darwin` or `windows`. An offer gets its machines either
-from [Lambda](#lambda) or from [provider commands](#provider-commands).
+`os` may be `linux`, `darwin` or `windows`. A configured offer's facts are a
+claim: the lease becomes ready only once the machine answers as an errand
+runner whose measured facts match.
 
 Configuring a cloud peer trusts it the way adding peers does: it names the
 machines your jobs, workspace snapshots and `--passenv` values go to. Only
@@ -153,8 +204,28 @@ Until then the machine still admits it, at most until `idle_timeout` or
 
 ## Lambda
 
-A `[cloud.offers.lambda]` table rents [Lambda Cloud](https://lambda.ai)
-instances. For each lease the cloud peer launches an instance named
+`[cloud.lambda]` rents [Lambda Cloud](https://lambda.ai) instances. The cloud
+peer lists the account's instance types every two minutes (sooner after a
+listing fails) and before launching a new machine, and offers every type
+that has capacity in a wanted region, named after Lambda's own name with
+hyphens (`gpu-1x-h100-sxm5`). An offer's GPUs,
+CPUs, architecture and price come from the listing; no shape is configured.
+
+```toml
+[cloud.lambda]
+api_key_file = "/home/you/.config/errand/lambda-api-key"
+# instance_types = ["gpu_1x_a10", "gpu_1x_h100_sxm5"]  # only these; default: every type
+# max_price_per_hour = 10                              # default 10; 0 for no cap
+# regions = ["us-east-1", "us-west-1"]                 # preference order; omit for any
+# idle_timeout = "20m"
+# max_lifetime = "12h"
+# file_systems = ["datasets"]            # Lambda filesystems to attach (one region)
+# errand_binary = "/path/to/linux-amd64/errand"
+# tailscale_auth_key_file = "/home/you/.config/errand/tailscale-lease-key"
+# allow_users = ["you@github"]           # with Tailscale: extra logins the machine admits
+```
+
+For each lease the cloud peer launches an instance named
 `errand-<lease id>`, waits for it to boot, and then connects over SSH. It
 sends errand, the runner's config and any keys as one archive and runs a
 fixed install script from it
@@ -164,69 +235,46 @@ instance, and a lease counts as released only once Lambda lists its instance
 as terminated. Lambda accepts one launch per account every 12 seconds, so leases
 launched together take turns.
 
-Clients reach the machine one of two ways:
+**The errand build for the machine.** The cloud peer installs itself when it
+is a Linux build for the machine's architecture. Otherwise, from a Mac say,
+or for an `arm64` GH200 from an `amd64` box, it downloads the release of its
+own version for that architecture from GitHub once, checks it against the
+release's checksums, and keeps it in its state directory. A development build
+of errand has no release, so a cloud peer running one needs `errand_binary`
+set to a Linux build, and offers only instance types of that build's
+architecture. Everything is checked before anything is rented, and the
+machine gets the copy that was checked, even if the file changes while it
+boots.
+
+**Reaching the machine.** Clients reach it one of two ways:
 
 - **Over SSH** (the default). The runner listens on no port, and jobs reach
   it over SSH on port 22, as they reach any SSH peer, logged in as `ubuntu`,
   the only login on Lambda's images. Each machine you run errand from makes
   an SSH key of its own and sends the public half with the lease request; the
-  leased machine admits only that key. The lease carries
+  leased machine admits only the keys the cloud peer added. The lease carries
   the machine's host key, so errand checks it without a `known_hosts` entry.
 - **Over your tailnet**, when `tailscale_auth_key_file` is set. The machine
   joins as `errand-<lease id>`, and the runner listens only on the tailnet.
   Over SSH it admits only the cloud peer's own key, which the cloud peer uses
   to hold the runner idle before releasing it.
 
-```toml
-[[cloud.offers]]
-name = "h100"
-gpu = "H100 PCIe"
-vram = 80
-cpus = 26
-price_per_hour = 2.49
-
-[cloud.offers.lambda]
-instance_type = "gpu_1x_h100_pcie"
-regions = ["us-east-1", "us-west-1"]     # preference order; omit for any
-api_key_file = "/home/you/.config/errand/lambda-api-key"
-# file_systems = ["datasets"]            # Lambda filesystems to attach (one region)
-# errand_binary = "/path/to/linux-amd64/errand"
-# tailscale_auth_key_file = "/home/you/.config/errand/tailscale-lease-key"
-# allow_users = ["you@github"]           # with Tailscale: extra logins the machine admits
-```
-
-Lambda offers default to `os = "linux"` and `arch = "amd64"`. The machine
-runs the cloud peer's own errand executable when the cloud peer is
-`linux/amd64` too. Otherwise, for example a cloud peer on a Mac or an `arm64`
-GH200 offer, `errand_binary` must name a Linux build of errand for the offer's
-architecture. errand checks this before renting anything, and installs the
-copy it checked even if the file changes while the machine boots.
-
-Set up once:
-
-1. Create a Lambda API key and save it alone in `api_key_file`, owned by the
-   user errand runs as, with mode 600. errand refuses files other users can
-   read; on Windows, that is any file whose ACL lets someone other than you,
-   SYSTEM or Administrators read it.
-2. Restart the cloud peer with `errand setup`.
-
-That is all for SSH. The cloud peer needs `ssh` and `ssh-keygen`, and so do
-the machines you run errand from. On first use the cloud peer makes an SSH
-key in its state directory and adds the public half to your Lambda account
-as `errand-<fingerprint>`; it installs errand and watches the runner with
-it. For each lease it also makes a fresh SSH host key and hands it to the
+For SSH nothing more is needed. On first use the cloud peer makes an SSH key
+in its state directory and adds the public half to your Lambda account as
+`errand-<fingerprint>`; it installs errand and watches the runner with it.
+For each lease it also makes a fresh SSH host key and hands it to the
 instance through cloud-init, then refuses any other host key, so no
 connection to the machine can be intercepted. Clients get the same host key
 with the lease. The host key's private half is in that lease's Lambda launch
 data.
 
-To use your tailnet instead, do these too before restarting:
+To use your tailnet instead:
 
 1. Create a reusable, ephemeral, pre-approved auth key tagged
    `tag:errand-lease` and save it in `tailscale_auth_key_file`, with the same
-   ownership and mode. The key goes to the machine over SSH, never in
-   Lambda's launch metadata. Ephemeral nodes leave the tailnet on their own
-   once terminated.
+   ownership and mode as the API key. The key goes to the machine over SSH,
+   never in Lambda's launch metadata. Ephemeral nodes leave the tailnet on
+   their own once terminated.
 2. Let your devices reach the tag in your tailnet policy:
 
    ```jsonc
@@ -243,12 +291,14 @@ it is a tagged node, add a login that can reach it to `allow_users` or grant
 it the errand capability on `tag:errand-lease`. Lease peer names are
 MagicDNS names, so MagicDNS must be on.
 
-Lambda bills from launch until the instance is terminated. Shutting the
+**Billing.** Lambda bills from launch until the instance is terminated. Shutting the
 machine down from inside does not stop billing, so errand relies on the cloud
 peer: it terminates on release, after `idle_timeout`, and at `max_lifetime`,
 and keeps retrying a failed termination. `max_leases` caps how many instances
-can run at once. These limits hold only while the cloud peer runs; they are not
-a spending cap, and errand sets none on the Lambda account. If the cloud peer is
+can run at once and `max_price_per_hour` what each may cost per hour, so
+while the cloud peer runs no more than `max_leases` times `max_price_per_hour`
+is spent per hour. These limits hold only while the cloud peer runs; they
+are not a spending cap on the account, and errand sets none there. If the cloud peer is
 gone for good, terminate leftovers named `errand-*` in the Lambda console. Leases keep using the `api_key_file` they
 were made with, so keep that file, and the key in it, until they are released:
 a different key may belong to another account, so errand keeps retrying the
@@ -257,7 +307,30 @@ release of any lease whose machine the key cannot see.
 When no listed region has capacity, the lease fails at once with a message
 saying so. errand does not wait for capacity. With `file_systems`, the machine
 can only launch in the region that holds them, so that is the one region
-errand tries; the file systems must all be in that region.
+errand tries, and only instance types with capacity there are offered; the
+file systems must all be in that region.
+
+**One instance type as a configured offer.** A `[[cloud.offers]]` entry with
+a `[cloud.offers.lambda]` table rents one instance type with a shape, price
+and timeouts of your own, and takes the same settings as `[cloud.lambda]`
+plus `instance_type`. A configured offer hides a listed one of the same name.
+
+```toml
+[[cloud.offers]]
+name = "h100"
+gpu = "H100 PCIe"
+vram = 80
+cpus = 26
+price_per_hour = 2.49
+idle_timeout = "5m"
+
+[cloud.offers.lambda]
+instance_type = "gpu_1x_h100_pcie"
+api_key_file = "/home/you/.config/errand/lambda-api-key"
+```
+
+Lambda offers default to `os = "linux"` and `arch = "amd64"`; set `arch =
+"arm64"` for a GH200.
 
 ## Provider commands
 

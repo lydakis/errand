@@ -38,15 +38,20 @@ type LambdaProvider struct {
 	Regions              []string // preference order; empty means any with capacity
 	FileSystems          []string
 	TailscaleAuthKeyFile string   // empty: clients reach the machine over SSH
-	ErrandBinary         string   // a linux build for Arch
+	ErrandBinary         string   // a linux build for Arch; empty: this build, or its release
 	Arch                 string   // the instance's architecture, amd64 or arm64
+	Version              string   // errand's version, for fetching its release
 	AllowUsers           []string // tailnet logins admitted besides the caller
+	// MaxPricePerHour refuses a launch at a higher price than this, in USD,
+	// as Lambda lists it right before launching; 0 means no cap.
+	MaxPricePerHour float64
 	// KeyDir holds the cloud peer's own SSH key, made and registered with
 	// Lambda on first use. The broker sets it to its state directory.
 	KeyDir string
 
 	// Tests replace these.
 	BaseURL    string
+	ReleaseURL string
 	HTTP       *http.Client
 	SSH        func(ctx context.Context, args []string, stdin io.Reader) ([]byte, error)
 	HostKey    func(ctx context.Context) (private, public string, err error)
@@ -112,8 +117,12 @@ func (p *LambdaProvider) Acquire(ctx context.Context, req AcquireRequest) (Machi
 			return Machine{}, err
 		}
 	}
-	// Everything the install needs is checked before paying for a machine.
-	binary, err := p.checkInstall()
+	// Everything the install needs is checked, and fetched, before paying
+	// for a machine.
+	if err := p.checkInstall(); err != nil {
+		return Machine{}, err
+	}
+	binary, err := p.errandBinary(ctx, req.Progress)
 	if err != nil {
 		return Machine{}, err
 	}

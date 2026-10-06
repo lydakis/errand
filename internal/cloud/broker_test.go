@@ -655,7 +655,7 @@ func TestLeaseReleasesAsItWasMade(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(b4.Close)
-	if len(b4.Offers()) != 0 {
+	if len(b4.Offers(context.Background())) != 0 {
 		t.Fatal("offers without configuration")
 	}
 	var refused *Error
@@ -1657,4 +1657,293 @@ func TestHoldThatKeepsFailing(t *testing.T) {
 	wake(b, l.ID)
 	waitState(t, b, "george", l.ID, proto.LeaseReleased)
 	waitProgress(t, b, l.ID, "could not hold the machine idle for another 300ms; releasing it without the hold: ssh: connection timed out")
+}
+
+// fakeCatalog lists whatever offers it is given, counting listings.
+type fakeCatalog struct {
+	mu     sync.Mutex
+	offers []Offer
+	err    error
+	listed int
+	gate   chan struct{} // when set, listing waits until it is closed
+}
+
+func (c *fakeCatalog) Offers(context.Context) ([]Offer, error) {
+	c.mu.Lock()
+	c.listed++
+	offers, err, gate := slices.Clone(c.offers), c.err, c.gate
+	c.mu.Unlock()
+	if gate != nil {
+		<-gate
+	}
+	return offers, err
+}
+
+func (c *fakeCatalog) listings() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.listed
+}
+
+func (c *fakeCatalog) set(offers []Offer, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.offers, c.err = offers, err
+}
+
+// A client asking right after the broker starts is told the catalog's
+// offers once the first listing is in, not that there are none.
+func TestOffersWaitForTheFirstListing(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	listed := h.cfg.Offers[0]
+	listed.Name = "gpu-1x-h100"
+	catalog := &fakeCatalog{offers: []Offer{listed}, gate: make(chan struct{})}
+	h.cfg.Catalog, h.cfg.CatalogRefresh = catalog, time.Hour
+	b := h.start(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if offers := b.Offers(ctx); len(offers) != 1 || ctx.Err() == nil {
+		t.Fatalf("before the first listing: %+v, %v", offers, ctx.Err())
+	}
+	got := make(chan []proto.Offer, 1)
+	go func() { got <- b.Offers(context.Background()) }()
+	select {
+	case offers := <-got:
+		t.Fatalf("did not wait for the first listing: %+v", offers)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(catalog.gate)
+	if offers := <-got; len(offers) != 2 || offers[1].Name != "gpu-1x-h100" {
+		t.Fatalf("after the first listing: %+v", offers)
+	}
+}
+
+// Requests that wait for a listing in progress take its outcome, even a
+// failure, instead of each listing again.
+func TestWaitersShareAFailedListing(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	catalog := &fakeCatalog{err: errors.New("api down"), gate: make(chan struct{})}
+	h.cfg.Catalog, h.cfg.CatalogRefresh = catalog, time.Hour
+	b := h.start(t)
+	for deadline := time.Now().Add(5 * time.Second); catalog.listings() == 0 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+	}
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			b.freshenCatalog()
+		}()
+	}
+	time.Sleep(20 * time.Millisecond) // let them queue behind the listing
+	close(catalog.gate)
+	wg.Wait()
+	if n := catalog.listings(); n != 1 {
+		t.Fatalf("%d listings, want the one the waiters waited for", n)
+	}
+	// A later request lists again.
+	b.freshenCatalog()
+	if n := catalog.listings(); n != 2 {
+		t.Fatalf("%d listings after a later request, want 2", n)
+	}
+}
+
+// A listing that fails is tried again soon, not a whole CatalogRefresh
+// later, so the catalog's offers are not missing for that long.
+func TestFailedListingIsRetriedSoon(t *testing.T) {
+	retry := catalogRetry
+	catalogRetry = 10 * time.Millisecond
+	t.Cleanup(func() { catalogRetry = retry })
+	h := newHarness(t, okAcquire)
+	listed := h.cfg.Offers[0]
+	listed.Name = "gpu-1x-h100"
+	catalog := &fakeCatalog{err: errors.New("api down")}
+	h.cfg.Catalog, h.cfg.CatalogRefresh = catalog, time.Hour
+	b := h.start(t)
+	if offers := b.Offers(context.Background()); len(offers) != 1 {
+		t.Fatalf("offers after a failed listing: %+v", offers)
+	}
+	catalog.set([]Offer{listed}, nil)
+	deadline := time.Now().Add(5 * time.Second)
+	for len(b.Offers(context.Background())) != 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("catalog not listed again after %d listings", catalog.listings())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// A lease the owner already has is handed out without waiting for a
+// listing; only a new lease waits for one.
+func TestLeasesAreReusedWithoutListing(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	listed := h.cfg.Offers[0]
+	listed.Name = "gpu-1x-h100"
+	catalog := &fakeCatalog{offers: []Offer{listed}}
+	h.cfg.Offers, h.cfg.Catalog, h.cfg.CatalogRefresh = nil, catalog, time.Hour
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	// The listing is stale, and the next one hangs.
+	gate := make(chan struct{})
+	t.Cleanup(func() { close(gate) })
+	catalog.mu.Lock()
+	catalog.gate = gate
+	catalog.mu.Unlock()
+	b.mu.Lock()
+	b.catalogAt = time.Time{}
+	b.mu.Unlock()
+	listings := catalog.listings()
+	got := make(chan error, 1)
+	go func() {
+		again, err := b.Acquire("george", "", "gpu", "", "")
+		if err == nil && again.ID != l.ID {
+			err = fmt.Errorf("got lease %s, want %s", again.ID, l.ID)
+		}
+		got <- err
+	}()
+	select {
+	case err := <-got:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("handing out a ready lease waited for the catalog")
+	}
+	if n := catalog.listings(); n != listings {
+		t.Fatalf("%d listings, want %d", n, listings)
+	}
+}
+
+// A launching lease keeps the facts of the offer it was made from, so a
+// matching request still shares it after the catalog drops that offer,
+// rather than paying for another machine.
+func TestLaunchingLeaseOutlivesItsOffer(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	h.machine.down.Store(true) // the machine never gets ready
+	listed := h.cfg.Offers[0]
+	listed.Name = "gpu-1x-h100"
+	catalog := &fakeCatalog{offers: []Offer{listed}}
+	h.cfg.Offers, h.cfg.Catalog, h.cfg.CatalogRefresh = nil, catalog, time.Hour
+	b := h.start(t)
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Leasing the last machine of its kind takes the offer off the catalog.
+	catalog.set(nil, nil)
+	b.mu.Lock()
+	b.catalogAt = time.Time{}
+	b.mu.Unlock()
+	b.freshenCatalog()
+	if offers := b.Offers(context.Background()); len(offers) != 0 {
+		t.Fatalf("offers: %+v", offers)
+	}
+	again, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil || again.ID != l.ID {
+		t.Fatalf("got %+v, %v; want to share lease %s", again, err, l.ID)
+	}
+}
+
+// Offers a catalog lists are leased like configured ones, and a lease keeps
+// going, and is released, as it was made when the catalog no longer lists
+// its offer. The catalog is listed again before leasing from a listing that
+// may be stale.
+func TestCatalogOffersAreLeased(t *testing.T) {
+	h := newHarness(t, okAcquire)
+	base := h.cfg.Offers[0]
+	listed := base
+	listed.Name, listed.PricePerHour = "gpu-1x-h100", new(2.49)
+	dear := base
+	dear.Name, dear.PricePerHour = "gpu-8x-h100", new(27.99)
+	dear.Facts.GPUs = slices.Repeat(base.Facts.GPUs, 8)
+	shadowed := base
+	shadowed.Name, shadowed.PricePerHour = "h100", new(0.01) // a configured offer's name
+	catalog := &fakeCatalog{offers: []Offer{dear, shadowed, listed}}
+	h.cfg.Catalog = catalog
+	h.cfg.CatalogRefresh = time.Hour
+	b := h.start(t)
+	// Right after the start, the offers wait for the first listing.
+	var names []string
+	for _, o := range b.Offers(context.Background()) {
+		price := "unpriced"
+		if o.PricePerHour != nil {
+			price = fmt.Sprintf("$%.2f", *o.PricePerHour)
+		}
+		names = append(names, o.Name+" "+price)
+	}
+	// Configured offers come first and hide a listed one of the same name;
+	// listed ones follow, cheapest first.
+	if want := []string{"h100 unpriced", "gpu-1x-h100 $2.49", "gpu-8x-h100 $27.99"}; !slices.Equal(names, want) {
+		t.Fatalf("offers %q, want %q", names, want)
+	}
+	// With the configured offer unpriced, the cheapest match is the listed one.
+	l, err := b.Acquire("george", "", "gpu", "", "")
+	if err != nil || l.Offer != "gpu-1x-h100" {
+		t.Fatalf("leased %q: %v", l.Offer, err)
+	}
+	// The lease outlives its offer leaving the catalog, and is released the
+	// way it was made.
+	catalog.set([]Offer{dear}, nil)
+	b.mu.Lock()
+	b.catalogAt = time.Time{} // the next request lists again
+	b.mu.Unlock()
+	waitState(t, b, "george", l.ID, proto.LeaseReady)
+	b.Release("george", l.ID)
+	waitState(t, b, "george", l.ID, proto.LeaseReleased)
+	if !strings.Contains(h.releases(), l.ID+" gpu-1x-h100") {
+		t.Fatalf("releases: %q", h.releases())
+	}
+	second, err := b.Acquire("bob", "", "gpus>=8", "", "")
+	if err != nil || second.Offer != "gpu-8x-h100" {
+		t.Fatalf("leased %q: %v", second.Offer, err)
+	}
+	if offers := b.Offers(context.Background()); len(offers) != 2 || catalog.listed < 2 {
+		t.Fatalf("catalog not listed again: %+v after %d listings", offers, catalog.listed)
+	}
+	b.Release("bob", second.ID)
+	// A listing that fails keeps the last one.
+	catalog.set(nil, errors.New("api down"))
+	b.mu.Lock()
+	b.catalogAt = time.Time{}
+	b.mu.Unlock()
+	b.freshenCatalog()
+	if offers := b.Offers(context.Background()); len(offers) != 2 {
+		t.Fatalf("failed listing changed the offers: %+v", offers)
+	}
+	// A request is matched against a fresh listing, not the last one.
+	catalog.set(nil, nil)
+	b.mu.Lock()
+	b.catalogAt = time.Time{}
+	b.mu.Unlock()
+	if _, err := b.Acquire("bob", "", "gpus>=8", "", ""); err == nil || !strings.Contains(err.Error(), "no offer matches") || strings.Contains(err.Error(), "gpu-8x-h100") {
+		t.Fatalf("stale listing used: %v", err)
+	}
+	// Offers only a catalog has still count as offers.
+	catalog.set([]Offer{dear}, nil)
+	h.cfg.Offers = nil
+	h.cfg.StateDir = filepath.Join(h.dir, "state2")
+	only := h.start(t)
+	if l, err := only.Acquire("george", "", "gpus>=8", "", ""); err != nil || l.Offer != "gpu-8x-h100" {
+		t.Fatalf("catalog alone: %+v %v", l, err)
+	}
+	// An unavailable offer is advertised but not leased: a request only it
+	// would match reaches the broker and is refused with its reason.
+	capped := dear
+	capped.Unavailable = "costs $27.99/h, above max_price_per_hour = 10"
+	catalog.set([]Offer{capped, listed}, nil)
+	only.mu.Lock()
+	only.catalogAt = time.Time{}
+	only.mu.Unlock()
+	only.freshenCatalog()
+	if offers := only.Offers(context.Background()); len(offers) != 2 || offers[0].Name != "gpu-1x-h100" || offers[1].Name != "gpu-8x-h100" {
+		t.Fatalf("offers: %+v", offers)
+	}
+	if _, err := only.Acquire("bob", "", "gpus>=8", "", ""); err == nil || !strings.Contains(err.Error(), "gpu-8x-h100: costs $27.99/h, above max_price_per_hour = 10") {
+		t.Fatalf("capped refusal: %v", err)
+	}
 }

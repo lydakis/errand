@@ -27,6 +27,31 @@ import (
 	"github.com/lydakis/errand/internal/proto"
 )
 
+// fakeInstanceType is one entry of the fake's instance type listing.
+type fakeInstanceType struct {
+	price       int
+	arch, gpu   string
+	vcpus, gpus int
+	regions     []string // with capacity; nil means the fake's capacity
+}
+
+func (t fakeInstanceType) listing(name string, capacity []string) map[string]any {
+	var regions []map[string]string
+	if t.regions == nil {
+		t.regions = capacity
+	}
+	for _, r := range t.regions {
+		regions = append(regions, map[string]string{"name": r, "description": r})
+	}
+	return map[string]any{
+		"instance_type": map[string]any{
+			"name": name, "description": "1x " + t.gpu, "gpu_description": t.gpu, "price_cents_per_hour": t.price, "architecture": t.arch,
+			"specs": map[string]any{"vcpus": t.vcpus, "memory_gib": 4 * t.vcpus, "storage_gib": 512, "gpus": t.gpus},
+		},
+		"regions_with_capacity_available": regions,
+	}
+}
+
 // fakeLambda serves the slice of the Lambda Cloud API the provider uses.
 type fakeLambda struct {
 	mu          sync.Mutex
@@ -35,18 +60,19 @@ type fakeLambda struct {
 	launches    []map[string]any
 	terminated  []string
 	polls       int
-	rateLimited int               // requests to refuse with 429 first
-	fileSystems map[string]string // name → region
-	sshKeys     map[string]string // name → public key
-	keysAdded   int               // POST /ssh-keys calls
-	launchError int               // status to refuse launches with
-	pollErrors  int               // status polls to fail with 502 first
-	pageSize    int               // instances per page, when set
-	apiKey      string            // the account's key, if not secret-key
-	attempts    []time.Time       // when each launch request arrived
-	keepAlive   int               // terminate calls to accept without terminating
-	arch        string            // the instance type's architecture, if not x86_64
-	forget      bool              // stop listing terminated instances at once
+	rateLimited int                         // requests to refuse with 429 first
+	fileSystems map[string]string           // name → region
+	sshKeys     map[string]string           // name → public key
+	keysAdded   int                         // POST /ssh-keys calls
+	launchError int                         // status to refuse launches with
+	pollErrors  int                         // status polls to fail with 502 first
+	pageSize    int                         // instances per page, when set
+	apiKey      string                      // the account's key, if not secret-key
+	types       map[string]fakeInstanceType // instance types besides gpu_1x_h100_pcie
+	attempts    []time.Time                 // when each launch request arrived
+	keepAlive   int                         // terminate calls to accept without terminating
+	arch        string                      // gpu_1x_h100_pcie's architecture, if not x86_64
+	forget      bool                        // stop listing terminated instances at once
 }
 
 func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -66,14 +92,13 @@ func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/instance-types":
-		var regions []map[string]string
-		for _, name := range f.capacity {
-			regions = append(regions, map[string]string{"name": name, "description": name})
+		types := map[string]any{}
+		h100 := fakeInstanceType{price: 249, arch: cmp.Or(f.arch, "x86_64"), gpu: "H100 (80 GB PCIe)", vcpus: 26, gpus: 1}
+		for name, t := range f.types {
+			types[name] = t.listing(name, f.capacity)
 		}
-		reply(map[string]any{"gpu_1x_h100_pcie": map[string]any{
-			"instance_type":                   map[string]any{"name": "gpu_1x_h100_pcie", "price_cents_per_hour": 249, "architecture": cmp.Or(f.arch, "x86_64")},
-			"regions_with_capacity_available": regions,
-		}})
+		types["gpu_1x_h100_pcie"] = h100.listing("gpu_1x_h100_pcie", f.capacity)
+		reply(types)
 	case r.Method == http.MethodGet && r.URL.Path == "/ssh-keys":
 		var list []map[string]string
 		for name, public := range f.sshKeys {
@@ -643,6 +668,13 @@ func TestLambdaRefusals(t *testing.T) {
 	if _, err := pa.Acquire(context.Background(), req); err == nil || !strings.Contains(err.Error(), `is x86_64 but the offer says arch = "arm64"`) || len(apiA.launches) != 0 {
 		t.Fatalf("arch mismatch: %v, %d launches", err, len(apiA.launches))
 	}
+	// A price above the cap, as Lambda lists it right before launching,
+	// launches nothing, even when the offer was listed cheaper.
+	pc, apiC, _ := newLambda(t)
+	pc.MaxPricePerHour = 2
+	if _, err := pc.Acquire(context.Background(), req); err == nil || !strings.Contains(err.Error(), "Lambda now charges $2.49/h for gpu_1x_h100_pcie, above max_price_per_hour = 2") || len(apiC.launches) != 0 {
+		t.Fatalf("price above the cap: %v, %d launches", err, len(apiC.launches))
+	}
 	// So does an instance type whose architecture errand does not know.
 	pu, apiU, _ := newLambda(t)
 	apiU.arch = "riscv64"
@@ -1032,7 +1064,7 @@ func TestBrokerWithLambdaProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	if offers := b.Offers(); offers[0].PricePerHour == nil || *offers[0].PricePerHour != 2.49 {
+	if offers := b.Offers(context.Background()); offers[0].PricePerHour == nil || *offers[0].PricePerHour != 2.49 {
 		t.Fatalf("offers %+v", offers)
 	}
 	l, err := b.Acquire("george", "george@github", "gpu=h100", "", "")
