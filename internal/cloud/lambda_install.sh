@@ -4,7 +4,7 @@
 # so nothing is ever quoted into this script.
 set -euo pipefail
 dir=$(cd "$(dirname "$0")" && pwd)
-# The directory holds the tailnet auth key; it goes however this ends.
+# The directory goes however this ends.
 trap 'rm -rf "$dir"' EXIT
 cd "$dir"
 
@@ -16,6 +16,9 @@ if [ -f tailscale-auth-key ]; then
   command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
   tailscale up --auth-key="file:$dir/tailscale-auth-key" --hostname="$(cat hostname)"
 fi
+# The directory belongs to the login the runner and its jobs run as, so the
+# reusable auth key goes before the runner starts, not when this ends.
+rm -f tailscale-auth-key
 if [ -f authorized-keys ]; then
   home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
   install -d -m 0700 -o "$SUDO_USER" -g "$(id -gn "$SUDO_USER")" "$home/.ssh"

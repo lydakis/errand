@@ -1173,6 +1173,16 @@ func TestMain(m *testing.M) {
 
 // The remote command unpacks the bundle with the real tar into a private
 // directory and hands the script, which must parse, to sudo.
+// The runner and its jobs run as the login that owns the bundle directory,
+// so the reusable tailnet auth key must be gone before the runner starts.
+func TestLambdaInstallRemovesAuthKeyBeforeRunnerStarts(t *testing.T) {
+	removed := strings.Index(lambdaInstallScriptFile, "\nrm -f tailscale-auth-key\n")
+	started := strings.Index(lambdaInstallScriptFile, "systemctl enable --now errand.service")
+	if removed < 0 || started < 0 || removed > started {
+		t.Fatalf("auth key removed at %d, runner started at %d", removed, started)
+	}
+}
+
 func TestLambdaInstallCommandUnpacksBundle(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the remote side is Linux")
