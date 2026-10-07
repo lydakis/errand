@@ -24,16 +24,7 @@ func (c Client) WithLocalPeer() Client {
 	if _, exists := c.Peers["local"]; exists {
 		return c
 	}
-	installed := c.DefaultPeer == "local"
-	if path, err := DaemonPath(); err == nil {
-		if _, err := os.Stat(path); err == nil {
-			d, err := LoadDaemon(path)
-			// Tailscale-only sockets expose health/setup but refuse job APIs.
-			// Do not add an unusable target to every unqualified ps invocation.
-			installed = installed || err != nil || d.Transport != TransportTailscale
-		}
-	}
-	if installed {
+	if c.DefaultPeer == "local" || localRunnerInstalled() {
 		c.Peers = maps.Clone(c.Peers)
 		if c.Peers == nil {
 			c.Peers = map[string]Peer{}
@@ -41,4 +32,29 @@ func (c Client) WithLocalPeer() Client {
 		c.Peers["local"] = Peer{}
 	}
 	return c
+}
+
+// localRunnerInstalled reports whether this machine has a runner config whose
+// socket takes jobs. Tailscale-only sockets expose health/setup but refuse job
+// APIs, so they are not offered as a target.
+func localRunnerInstalled() bool {
+	_, ok := installedLocalRunner()
+	return ok
+}
+
+// installedLocalRunner is localRunnerInstalled with the runner's config, which
+// is empty when the file exists but cannot be loaded.
+func installedLocalRunner() (Daemon, bool) {
+	path, err := DaemonPath()
+	if err != nil {
+		return Daemon{}, false
+	}
+	if _, err := os.Stat(path); err != nil {
+		return Daemon{}, false
+	}
+	d, err := LoadDaemon(path)
+	if err != nil {
+		return Daemon{}, true
+	}
+	return d, d.Transport != TransportTailscale
 }
