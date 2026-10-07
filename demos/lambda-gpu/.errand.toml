@@ -1,0 +1,11 @@
+[workspace]
+root = true
+
+[changes]
+apply_on_success = false
+
+[artifacts]
+paths = ["out"]
+
+[env]
+set = { PYTHONUNBUFFERED = "1" }
