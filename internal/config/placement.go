@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/lydakis/errand/internal/placement"
@@ -94,10 +95,17 @@ func resolvePlacement(out *EffectiveRun, personal Client, selected workspace.Sel
 		}
 		out.Candidates = append(out.Candidates, RunCandidate{Name: name, URL: url, RemoteCommand: personal.SSHRemoteCommand(name), RemoteSocket: personal.SSHRemoteSocket(name)})
 	}
-	if len(out.Candidates) == 0 {
-		if path, err := ClientPath(); err == nil && localRunnerInstalled() {
-			return fmt.Errorf("where has no personally configured runners; add a peer, or add [peers.local] to %s to use the runner installed here", path)
+	// The runner installed here is run on only once added, but one with
+	// cloud offers may still rent: configuring them is the choice to rent
+	// through it.
+	if !slices.ContainsFunc(out.Candidates, func(c RunCandidate) bool { return c.Name == "local" }) {
+		if d, ok := installedLocalRunner(); ok && (d.Cloud.Lambda != nil || len(d.Cloud.Offers) > 0) {
+			if url, err := personal.PeerURL("local"); err == nil {
+				out.Suppliers = []RunCandidate{{Name: "local", URL: url}}
+			}
 		}
+	}
+	if len(out.Candidates) == 0 && len(out.Suppliers) == 0 {
 		return fmt.Errorf("where has no personally configured runners; add a peer first")
 	}
 	return nil

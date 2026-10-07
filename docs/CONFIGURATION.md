@@ -108,6 +108,8 @@ job handle. There is no shared scheduler.
 Only personal peer entries participate. An installed local daemon is not
 included automatically. Add an empty `[peers.local]` table, a personal socket
 alias, or set `default_peer = "local"` to permit automatic selection of it.
+One with cloud offers still supplies leases when no runner matches, without
+being run on ([only one machine](CLOUD.md#only-one-machine)).
 Workspace configuration cannot add transport targets.
 
 The runner rechecks executable access in the job's effective PATH before

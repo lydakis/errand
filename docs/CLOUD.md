@@ -9,7 +9,7 @@ idle. The cloud peer never relays jobs.
 ## Quick start with Lambda
 
 Pick a runner that is always on, since it is what ends the machines when your
-laptop is asleep. On it:
+laptop is asleep ([only one machine?](#only-one-machine)). On it:
 
 1. Save a [Lambda Cloud](https://lambda.ai) API key alone in a file owned by
    the user errand runs as, with mode 600. errand refuses files other users
@@ -93,15 +93,16 @@ runner on it, so:
    reach.
 2. Add `[cloud.lambda]` with your `api_key_file` to its `errandd.toml`, as
    above, and run `errand setup` again.
-3. Add `default_peer = "local"` to `~/.config/errand/config.toml`. `--where`
-   picks only from runners you have added, and an installed local runner is
-   never picked otherwise.
 
-Then `errand --where gpu=h100 -- python train.py` rents from the laptop. The
-cloud peer is what ends machines, so while the laptop sleeps nothing releases
-them, whatever `idle_timeout` and `max_lifetime` say, and Lambda keeps billing
-until it wakes. Before you close the lid, end your leases with `errand leases
-release <name>`.
+Then `errand --where gpu=h100 -- python train.py` rents from the laptop. A
+runner installed here with cloud offers supplies leases without being added
+as a peer. `--where` still never runs jobs on it unless you add `[peers.local]`
+to `~/.config/errand/config.toml`.
+
+The cloud peer is what ends machines, so while the laptop sleeps nothing
+releases them, whatever `idle_timeout` and `max_lifetime` say, and Lambda
+keeps billing until it wakes. Before you close the lid, end your leases with
+`errand leases release <name>`.
 
 ## When errand leases
 

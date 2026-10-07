@@ -95,19 +95,37 @@ func TestWhereLocalRequiresPersonalOptIn(t *testing.T) {
 	}
 }
 
-// With no peers, the error points at the runner installed here, which a
-// one-machine setup has to opt into.
-func TestWhereWithoutPeersNamesInstalledRunner(t *testing.T) {
-	root := runFixture(t, "", "[run]\nwhere='gpu'")
-	if _, err := ResolveRun(root, RunOverrides{}); err == nil || strings.Contains(err.Error(), "[peers.local]") {
-		t.Fatalf("no runner installed: %v", err)
-	}
-	path, _ := DaemonPath()
-	if err := os.WriteFile(path, []byte("transport = 'local'\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ResolveRun(root, RunOverrides{}); err == nil || !strings.Contains(err.Error(), "add [peers.local] to ") {
-		t.Fatalf("runner installed: %v", err)
+// The runner installed here supplies leases once it has cloud offers, but
+// is run on only when added; a Tailscale-only one cannot take local requests.
+func TestWhereRentsThroughInstalledCloudPeer(t *testing.T) {
+	for _, tc := range []struct {
+		personal, daemon string
+		candidates       int
+		supplier         bool
+	}{
+		{"", "", 0, false},
+		{"", "transport = 'local'\n", 0, false},
+		{"", "transport = 'local'\n[cloud.lambda]\napi_key_file = '/k'\n", 0, true},
+		{"", "transport = 'tailscale'\n[cloud.lambda]\napi_key_file = '/k'\n", 0, false},
+		{"[peers.local]\n", "transport = 'local'\n[cloud.lambda]\napi_key_file = '/k'\n", 1, false},
+	} {
+		root := runFixture(t, tc.personal, "")
+		if tc.daemon != "" {
+			path, _ := DaemonPath()
+			if err := os.WriteFile(path, []byte(tc.daemon), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		e, err := ResolveRun(root, RunOverrides{Where: "gpu"})
+		if tc.candidates == 0 && !tc.supplier {
+			if err == nil || !strings.Contains(err.Error(), "add a peer first") {
+				t.Fatalf("%q %q: %+v %v", tc.personal, tc.daemon, e.Suppliers, err)
+			}
+			continue
+		}
+		if err != nil || len(e.Candidates) != tc.candidates || (len(e.Suppliers) == 1) != tc.supplier || tc.supplier && (e.Suppliers[0].Name != "local" || !strings.HasPrefix(e.Suppliers[0].URL, "unix://")) {
+			t.Fatalf("%q %q: candidates %+v suppliers %+v %v", tc.personal, tc.daemon, e.Candidates, e.Suppliers, err)
+		}
 	}
 }
 

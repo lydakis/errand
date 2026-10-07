@@ -51,6 +51,7 @@ type EffectiveRun struct {
 	// pick your runners but not spend money renting one.
 	WhereMayLease  bool              `json:"-"`
 	Candidates     []RunCandidate    `json:"-"`
+	Suppliers      []RunCandidate    `json:"-"` // may supply a lease, but are never run on
 	Peer           string            `json:"peer"`
 	URL            string            `json:"url"`
 	RemoteCommand  string            `json:"remote_command,omitempty"`

@@ -38,13 +38,23 @@ func (c Client) WithLocalPeer() Client {
 // socket takes jobs. Tailscale-only sockets expose health/setup but refuse job
 // APIs, so they are not offered as a target.
 func localRunnerInstalled() bool {
+	_, ok := installedLocalRunner()
+	return ok
+}
+
+// installedLocalRunner is localRunnerInstalled with the runner's config, which
+// is empty when the file exists but cannot be loaded.
+func installedLocalRunner() (Daemon, bool) {
 	path, err := DaemonPath()
 	if err != nil {
-		return false
+		return Daemon{}, false
 	}
 	if _, err := os.Stat(path); err != nil {
-		return false
+		return Daemon{}, false
 	}
 	d, err := LoadDaemon(path)
-	return err != nil || d.Transport != TransportTailscale
+	if err != nil {
+		return Daemon{}, true
+	}
+	return d, d.Transport != TransportTailscale
 }

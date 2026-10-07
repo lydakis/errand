@@ -180,6 +180,42 @@ func TestReadyLeasesAreReusedThroughTheirCloudPeer(t *testing.T) {
 	}
 }
 
+// The runner installed here, when it has cloud offers, supplies leases
+// without being added as a peer, but is never run on unless it is added: it
+// is asked only once renting is needed, and only for its offers.
+func TestLocalCloudPeerOnlySuppliesLeases(t *testing.T) {
+	gpu := proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 81920}}}
+	var probed []string
+	cabalFacts := proto.Facts{OS: "linux"}
+	probe := func(_ context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
+		probed = append(probed, target)
+		if target == "local" {
+			return proto.Info{MaxJobs: 1, Facts: gpu, Offers: []proto.Offer{{Name: "h100", Facts: gpu}}}, nil
+		}
+		return proto.Info{MaxJobs: 1, Facts: cabalFacts}, nil
+	}
+	local := []config.RunCandidate{{Name: "local", URL: "local"}}
+	e := config.EffectiveRun{Where: "gpu", WhereMayLease: true, Candidates: []config.RunCandidate{{Name: "cabal", URL: "cabal"}}, Suppliers: local}
+	s, err := chooseRunners(context.Background(), e, probe)
+	if err != nil || len(s.Choices) != 0 || len(s.Leases) != 1 || s.Leases[0].Broker.Name != "local" {
+		t.Fatalf("rent through local: %v %+v", err, s)
+	}
+	// A runner of yours that matches is used, and local is not asked.
+	cabalFacts, probed = gpu, nil
+	if s, err := chooseRunners(context.Background(), e, probe); err != nil || len(s.Choices) != 1 || s.Choices[0].Name != "cabal" || strings.Join(probed, " ") != "cabal" {
+		t.Fatalf("matching runner: %v %+v probed %q", err, s, probed)
+	}
+	// With no peers at all, local alone can still rent.
+	e.Candidates = nil
+	if s, err := chooseRunners(context.Background(), e, probe); err != nil || len(s.Leases) != 1 || len(s.Choices) != 0 {
+		t.Fatalf("local only: %v %+v", err, s)
+	}
+	e.Where = "gpu=a100"
+	if _, err := chooseRunners(context.Background(), e, probe); err == nil || !strings.Contains(err.Error(), "no cloud peer offers a machine that does") {
+		t.Fatalf("nothing to rent: %v", err)
+	}
+}
+
 // Every reachable cloud peer offering a match is a supplier. The cheapest
 // offer comes first, priced before unpriced, and equal offers are tried in
 // random order. The cloud peers' own load does not matter.
