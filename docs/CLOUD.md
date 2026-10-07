@@ -9,7 +9,7 @@ idle. The cloud peer never relays jobs.
 ## Quick start with Lambda
 
 Pick a runner that is always on, since it is what ends the machines when your
-laptop is asleep ([only one machine?](#only-one-machine)). On it:
+laptop is asleep. On it:
 
 1. Save a [Lambda Cloud](https://lambda.ai) API key alone in a file owned by
    the user errand runs as, with mode 600. errand refuses files other users
@@ -84,23 +84,24 @@ point the name `cabal` at another runner, its leases, and job handles such as
 release` cannot reach them either. The cloud peer still ends them when they go
 idle or reach their lifetime.
 
-### Only one machine
+### Only one machine?
 
-Your laptop can be its own cloud peer. Installing errand does not install a
-runner, so:
+Your laptop can be the cloud peer. Installing errand does not set up a
+runner on it, so:
 
-1. Run `errand setup` on the laptop to install its runner.
-2. Add `[cloud.lambda]` to `~/.config/errand/errandd.toml` as above, and run
-   `errand setup` again.
-3. Add an empty `[peers.local]` table to `~/.config/errand/config.toml`.
-   `--where` picks only among runners you have configured, and the runner
-   installed here is not one until you add it.
+1. Run `errand setup --local` to install a runner that only this machine can
+   reach.
+2. Add `[cloud.lambda]` with your `api_key_file` to its `errandd.toml`, as
+   above, and run `errand setup` again.
+3. Add `default_peer = "local"` to `~/.config/errand/config.toml`. `--where`
+   picks only from runners you have added, and an installed local runner is
+   never picked otherwise.
 
-The laptop's runner then ends the machines, so it can do that only while the
-laptop is awake. Lambda keeps billing a lease while the laptop sleeps or is off,
-past its idle window and even past `max_lifetime`, until the runner is back and
-releases it. Run `errand leases release` before you close the lid, and consider
-a shorter `max_lifetime` under `[cloud.lambda]`.
+Then `errand --where gpu=h100 -- python train.py` rents from the laptop. The
+cloud peer is what ends machines, so while the laptop sleeps nothing releases
+them, whatever `idle_timeout` and `max_lifetime` say, and Lambda keeps billing
+until it wakes. Before you close the lid, end your leases with `errand leases
+release <name>`.
 
 ## When errand leases
 
