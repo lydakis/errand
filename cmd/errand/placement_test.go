@@ -219,8 +219,8 @@ func TestLocalCloudPeerOnlySuppliesLeases(t *testing.T) {
 	failing := func(context.Context, string, string, time.Duration) (proto.Info, error) {
 		return proto.Info{}, errors.New("connection refused")
 	}
-	if _, err := chooseRunners(context.Background(), e, failing); err == nil || !strings.Contains(err.Error(), "local: connection refused") {
-		t.Fatalf("unreachable local: %v", err)
+	if s, err := chooseRunners(context.Background(), e, failing); err == nil || !strings.Contains(err.Error(), "local: connection refused") || len(s.Excluded) != 1 || s.Excluded[0].Peer != "local" {
+		t.Fatalf("unreachable local: %v %+v", err, s.Excluded)
 	}
 }
 

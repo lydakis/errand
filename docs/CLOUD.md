@@ -97,7 +97,7 @@ runner on it, so:
 Then `errand --where gpu=h100 -- python train.py` rents from the laptop. A
 runner installed here with cloud offers supplies leases without being added
 as a peer. `--where` still never runs jobs on it unless you add `[peers.local]`
-to `~/.config/errand/config.toml`.
+to your `config.toml`.
 
 The cloud peer is what ends machines, so while the laptop sleeps nothing
 releases them, whatever `idle_timeout` and `max_lifetime` say, and Lambda

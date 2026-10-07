@@ -87,7 +87,9 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 			suppliers := append(slices.Clone(candidates), e.Suppliers...)
 			for i, p := range probeCandidates(ctx, e.Suppliers, e.Where, q, probe) {
 				if p.info == nil {
-					exclusions = append(exclusions, fmt.Sprintf("%s: %s", terminalSafeField(e.Suppliers[i].Name), terminalSafeField(p.reason)))
+					name := e.Suppliers[i].Name
+					result.Excluded = append(result.Excluded, placementExclusion{Peer: name, Reason: p.reason})
+					exclusions = append(exclusions, fmt.Sprintf("%s: %s", terminalSafeField(name), terminalSafeField(p.reason)))
 				}
 				probed = append(probed, p)
 			}
