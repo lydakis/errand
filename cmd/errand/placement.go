@@ -53,18 +53,22 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 		return placementSelection{}, err
 	}
 	candidates := e.Candidates
-	// Suppliers, such as the runner installed here, are asked alongside the
-	// candidates, so selection keeps one deadline and a peer that hangs
-	// cannot use up a supplier's time. They go first so the fan-out limit
-	// never holds them back. The bare wildcard never rents.
+	// Suppliers, such as the runner installed here, are asked at the same
+	// time as the candidates and under the same deadline, but on their own,
+	// so peers that hang can neither use up a supplier's time nor take its
+	// probe slots. Their answers are awaited only when renting; otherwise
+	// they are cancelled. The bare wildcard never rents.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	var suppliers []config.RunCandidate
-	if !q.Any() {
+	supplierProbes := make(chan []candidateProbe, 1)
+	if !q.Any() && len(e.Suppliers) > 0 {
 		suppliers = e.Suppliers
+		go func() { supplierProbes <- probeCandidates(ctx, suppliers, e.Where, q, probe) }()
 	}
 	// A ready lease of yours is not a candidate here: it is reused by asking
 	// its cloud peer, which hands it to this run like a new lease.
-	all := probeCandidates(ctx, append(slices.Clip(suppliers), candidates...), e.Where, q, probe)
-	supplied, probed := all[:len(suppliers)], all[len(suppliers):]
+	probed := probeCandidates(ctx, candidates, e.Where, q, probe)
 	var eligible []placementChoice
 	var exclusions []string
 	result := placementSelection{Probed: map[string]proto.Info{}}
@@ -92,6 +96,10 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 		// equal ones are tried in random order. How busy a cloud peer's own
 		// runner is does not matter; the job runs on the rented machine.
 		if !matched && !q.Any() {
+			var supplied []candidateProbe
+			if len(suppliers) > 0 {
+				supplied = <-supplierProbes
+			}
 			brokers := append(slices.Clip(candidates), suppliers...)
 			for i, p := range supplied {
 				if p.info == nil {

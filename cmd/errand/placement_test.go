@@ -239,7 +239,7 @@ func TestSupplierProbeSharesSelectionDeadline(t *testing.T) {
 	}
 	gpu := proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 81920}}}
 	asleep := func(ctx context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
-		if target == "cabal" {
+		if target != "local" {
 			<-ctx.Done()
 			return proto.Info{}, ctx.Err()
 		}
@@ -247,6 +247,26 @@ func TestSupplierProbeSharesSelectionDeadline(t *testing.T) {
 	}
 	if s, err := chooseRunners(context.Background(), e, asleep); err != nil || len(s.Leases) != 1 || s.Leases[0].Broker.Name != "local" {
 		t.Fatalf("peer asleep: %v %+v", err, s)
+	}
+	// Peers that hang cannot take the supplier's probe slot either.
+	for i := 0; i < 12; i++ {
+		e.Candidates = append(e.Candidates, config.RunCandidate{Name: fmt.Sprint("asleep", i), URL: fmt.Sprint("asleep", i)})
+	}
+	if s, err := chooseRunners(context.Background(), e, asleep); err != nil || len(s.Leases) != 1 || s.Leases[0].Broker.Name != "local" {
+		t.Fatalf("many peers asleep: %v %+v", err, s)
+	}
+	// A supplier that hangs never delays a runner of yours that matches.
+	e.Candidates = []config.RunCandidate{{Name: "cabal", URL: "cabal"}}
+	hungSupplier := func(ctx context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
+		if target == "local" {
+			<-ctx.Done()
+			return proto.Info{}, ctx.Err()
+		}
+		return proto.Info{MaxJobs: 1, Facts: gpu}, nil
+	}
+	start = time.Now()
+	if s, err := chooseRunners(context.Background(), e, hungSupplier); err != nil || len(s.Choices) != 1 || time.Since(start) > time.Second {
+		t.Fatalf("matching runner took %s: %v %+v", time.Since(start), err, s)
 	}
 }
 
