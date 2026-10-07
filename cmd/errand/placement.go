@@ -85,8 +85,11 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 		if !matched && !q.Any() {
 			// Suppliers are asked only now, when renting is needed.
 			suppliers := append(slices.Clone(candidates), e.Suppliers...)
-			if len(e.Suppliers) > 0 {
-				probed = append(probed, probeCandidates(ctx, e.Suppliers, e.Where, q, probe)...)
+			for i, p := range probeCandidates(ctx, e.Suppliers, e.Where, q, probe) {
+				if p.info == nil {
+					exclusions = append(exclusions, fmt.Sprintf("%s: %s", terminalSafeField(e.Suppliers[i].Name), terminalSafeField(p.reason)))
+				}
+				probed = append(probed, p)
 			}
 			for i, p := range probed {
 				if p.info == nil {

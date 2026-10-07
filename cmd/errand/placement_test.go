@@ -214,6 +214,14 @@ func TestLocalCloudPeerOnlySuppliesLeases(t *testing.T) {
 	if _, err := chooseRunners(context.Background(), e, probe); err == nil || !strings.Contains(err.Error(), "no cloud peer offers a machine that does") {
 		t.Fatalf("nothing to rent: %v", err)
 	}
+	// A local runner that cannot be reached is named with the reason.
+	e.Suppliers = []config.RunCandidate{{Name: "local", URL: "down"}}
+	failing := func(context.Context, string, string, time.Duration) (proto.Info, error) {
+		return proto.Info{}, errors.New("connection refused")
+	}
+	if _, err := chooseRunners(context.Background(), e, failing); err == nil || !strings.Contains(err.Error(), "local: connection refused") {
+		t.Fatalf("unreachable local: %v", err)
+	}
 }
 
 // Every reachable cloud peer offering a match is a supplier. The cheapest
