@@ -185,10 +185,8 @@ func TestReadyLeasesAreReusedThroughTheirCloudPeer(t *testing.T) {
 // is asked only once renting is needed, and only for its offers.
 func TestLocalCloudPeerOnlySuppliesLeases(t *testing.T) {
 	gpu := proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 81920}}}
-	var probed []string
 	cabalFacts := proto.Facts{OS: "linux"}
 	probe := func(_ context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
-		probed = append(probed, target)
 		if target == "local" {
 			return proto.Info{MaxJobs: 1, Facts: gpu, Offers: []proto.Offer{{Name: "h100", Facts: gpu}}}, nil
 		}
@@ -200,10 +198,11 @@ func TestLocalCloudPeerOnlySuppliesLeases(t *testing.T) {
 	if err != nil || len(s.Choices) != 0 || len(s.Leases) != 1 || s.Leases[0].Broker.Name != "local" {
 		t.Fatalf("rent through local: %v %+v", err, s)
 	}
-	// A runner of yours that matches is used, and local is not asked.
-	cabalFacts, probed = gpu, nil
-	if s, err := chooseRunners(context.Background(), e, probe); err != nil || len(s.Choices) != 1 || s.Choices[0].Name != "cabal" || strings.Join(probed, " ") != "cabal" {
-		t.Fatalf("matching runner: %v %+v probed %q", err, s, probed)
+	// A runner of yours that matches is used; local, whose own facts match
+	// too, is never a choice.
+	cabalFacts = gpu
+	if s, err := chooseRunners(context.Background(), e, probe); err != nil || len(s.Choices) != 1 || s.Choices[0].Name != "cabal" || len(s.Leases) != 0 {
+		t.Fatalf("matching runner: %v %+v", err, s)
 	}
 	// With no peers at all, local alone can still rent.
 	e.Candidates = nil
@@ -224,9 +223,9 @@ func TestLocalCloudPeerOnlySuppliesLeases(t *testing.T) {
 	}
 }
 
-// A supplier asked once no runner matched shares the selection's one
-// deadline: a slow peer and a slow local runner together still take about
-// two seconds, not two each.
+// Suppliers are asked alongside the candidates, under one deadline: a slow
+// peer and a slow local runner together take about two seconds, not two
+// each, and a peer that hangs leaves the local runner its answer.
 func TestSupplierProbeSharesSelectionDeadline(t *testing.T) {
 	slow := func(ctx context.Context, _, _ string, _ time.Duration) (proto.Info, error) {
 		<-ctx.Done()
@@ -237,6 +236,37 @@ func TestSupplierProbeSharesSelectionDeadline(t *testing.T) {
 	_, err := chooseRunners(context.Background(), e, slow)
 	if took := time.Since(start); err == nil || took > 3*time.Second {
 		t.Fatalf("took %s: %v", took, err)
+	}
+	gpu := proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "H100", MemoryMiB: 81920}}}
+	asleep := func(ctx context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
+		if target != "local" {
+			<-ctx.Done()
+			return proto.Info{}, ctx.Err()
+		}
+		return proto.Info{MaxJobs: 1, Offers: []proto.Offer{{Name: "h100", Facts: gpu}}}, nil
+	}
+	if s, err := chooseRunners(context.Background(), e, asleep); err != nil || len(s.Leases) != 1 || s.Leases[0].Broker.Name != "local" {
+		t.Fatalf("peer asleep: %v %+v", err, s)
+	}
+	// Peers that hang cannot take the supplier's probe slot either.
+	for i := 0; i < 12; i++ {
+		e.Candidates = append(e.Candidates, config.RunCandidate{Name: fmt.Sprint("asleep", i), URL: fmt.Sprint("asleep", i)})
+	}
+	if s, err := chooseRunners(context.Background(), e, asleep); err != nil || len(s.Leases) != 1 || s.Leases[0].Broker.Name != "local" {
+		t.Fatalf("many peers asleep: %v %+v", err, s)
+	}
+	// A supplier that hangs never delays a runner of yours that matches.
+	e.Candidates = []config.RunCandidate{{Name: "cabal", URL: "cabal"}}
+	hungSupplier := func(ctx context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
+		if target == "local" {
+			<-ctx.Done()
+			return proto.Info{}, ctx.Err()
+		}
+		return proto.Info{MaxJobs: 1, Facts: gpu}, nil
+	}
+	start = time.Now()
+	if s, err := chooseRunners(context.Background(), e, hungSupplier); err != nil || len(s.Choices) != 1 || time.Since(start) > time.Second {
+		t.Fatalf("matching runner took %s: %v %+v", time.Since(start), err, s)
 	}
 }
 

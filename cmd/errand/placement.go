@@ -52,10 +52,20 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 	if err != nil {
 		return placementSelection{}, err
 	}
-	// Every probe, a supplier's asked later included, shares one deadline.
+	candidates := e.Candidates
+	// Suppliers, such as the runner installed here, are asked at the same
+	// time as the candidates and under the same deadline, but on their own,
+	// so peers that hang can neither use up a supplier's time nor take its
+	// probe slots. Their answers are awaited only when renting; otherwise
+	// they are cancelled. The bare wildcard never rents.
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	candidates := e.Candidates
+	var suppliers []config.RunCandidate
+	supplierProbes := make(chan []candidateProbe, 1)
+	if !q.Any() && len(e.Suppliers) > 0 {
+		suppliers = e.Suppliers
+		go func() { supplierProbes <- probeCandidates(ctx, suppliers, e.Where, q, probe) }()
+	}
 	// A ready lease of yours is not a candidate here: it is reused by asking
 	// its cloud peer, which hands it to this run like a new lease.
 	probed := probeCandidates(ctx, candidates, e.Where, q, probe)
@@ -86,22 +96,24 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 		// equal ones are tried in random order. How busy a cloud peer's own
 		// runner is does not matter; the job runs on the rented machine.
 		if !matched && !q.Any() {
-			// Suppliers are asked only now, when renting is needed.
-			suppliers := append(slices.Clone(candidates), e.Suppliers...)
-			for i, p := range probeCandidates(ctx, e.Suppliers, e.Where, q, probe) {
+			var supplied []candidateProbe
+			if len(suppliers) > 0 {
+				supplied = <-supplierProbes
+			}
+			brokers := append(slices.Clip(candidates), suppliers...)
+			for i, p := range supplied {
 				if p.info == nil {
-					name := e.Suppliers[i].Name
+					name := suppliers[i].Name
 					result.Excluded = append(result.Excluded, placementExclusion{Peer: name, Reason: p.reason})
 					exclusions = append(exclusions, fmt.Sprintf("%s: %s", terminalSafeField(name), terminalSafeField(p.reason)))
 				}
-				probed = append(probed, p)
 			}
-			for i, p := range probed {
+			for i, p := range append(slices.Clip(probed), supplied...) {
 				if p.info == nil {
 					continue
 				}
 				if offer, ok := matchingOffer(q, p.info.Offers); ok {
-					c := suppliers[i]
+					c := brokers[i]
 					target := client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
 					result.Leases = append(result.Leases, leaseOption{Broker: placementChoice{RunCandidate: c, Info: *p.info, Target: target}, Offer: offer})
 				}
