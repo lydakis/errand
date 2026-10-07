@@ -95,6 +95,22 @@ func TestWhereLocalRequiresPersonalOptIn(t *testing.T) {
 	}
 }
 
+// With no peers, the error points at the runner installed here, which a
+// one-machine setup has to opt into.
+func TestWhereWithoutPeersNamesInstalledRunner(t *testing.T) {
+	root := runFixture(t, "", "[run]\nwhere='gpu'")
+	if _, err := ResolveRun(root, RunOverrides{}); err == nil || strings.Contains(err.Error(), "[peers.local]") {
+		t.Fatalf("no runner installed: %v", err)
+	}
+	path, _ := DaemonPath()
+	if err := os.WriteFile(path, []byte("transport = 'local'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveRun(root, RunOverrides{}); err == nil || !strings.Contains(err.Error(), "add [peers.local] to ") {
+		t.Fatalf("runner installed: %v", err)
+	}
+}
+
 func TestWhereRejectsInvalidAndAmbiguousSettings(t *testing.T) {
 	for _, project := range []string{"[run]\nwhere=''", "[run]\nwhere='tpu'", "[run]\nwhere='*'\npeer='linux'"} {
 		root := runFixture(t, personalPeers, project)

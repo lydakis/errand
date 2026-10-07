@@ -95,6 +95,9 @@ func resolvePlacement(out *EffectiveRun, personal Client, selected workspace.Sel
 		out.Candidates = append(out.Candidates, RunCandidate{Name: name, URL: url, RemoteCommand: personal.SSHRemoteCommand(name), RemoteSocket: personal.SSHRemoteSocket(name)})
 	}
 	if len(out.Candidates) == 0 {
+		if path, err := ClientPath(); err == nil && localRunnerInstalled() {
+			return fmt.Errorf("where has no personally configured runners; add a peer, or add [peers.local] to %s to use the runner installed here", path)
+		}
 		return fmt.Errorf("where has no personally configured runners; add a peer first")
 	}
 	return nil
