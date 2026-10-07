@@ -84,6 +84,25 @@ point the name `cabal` at another runner, its leases, and job handles such as
 release` cannot reach them either. The cloud peer still ends them when they go
 idle or reach their lifetime.
 
+### Only one machine?
+
+Your laptop can be the cloud peer. Installing errand does not set up a
+runner on it, so:
+
+1. Run `errand setup --local` to install a runner that only this machine can
+   reach.
+2. Add `[cloud.lambda]` with your `api_key_file` to its `errandd.toml`, as
+   above, and run `errand setup` again.
+3. Add `default_peer = "local"` to `~/.config/errand/config.toml`. `--where`
+   picks only from runners you have added, and an installed local runner is
+   never picked otherwise.
+
+Then `errand --where gpu=h100 -- python train.py` rents from the laptop. The
+cloud peer is what ends machines, so while the laptop sleeps nothing releases
+them, whatever `idle_timeout` and `max_lifetime` say, and Lambda keeps billing
+until it wakes. Before you close the lid, end your leases with `errand leases
+release <name>`.
+
 ## When errand leases
 
 - Only when no reachable runner of yours matches the requirements. A matching
