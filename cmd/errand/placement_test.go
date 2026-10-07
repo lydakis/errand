@@ -226,3 +226,47 @@ func TestLeaseSuppliersRankedByOffer(t *testing.T) {
 		t.Fatalf("equal offers not shared: %v", first)
 	}
 }
+
+// An installed local runner rents through its cloud offers when nothing of
+// yours matches, but it is asked only then and never runs the job itself.
+func TestLocalRunnerOnlySuppliesLeases(t *testing.T) {
+	gpu := proto.Facts{OS: "linux", GPUs: []proto.GPU{{Name: "A10", MemoryMiB: 24576}}}
+	var probed []string
+	down := false
+	probe := func(_ context.Context, target, _ string, _ time.Duration) (proto.Info, error) {
+		probed = append(probed, target)
+		if target == "local" {
+			if down {
+				return proto.Info{}, errors.New("connection refused")
+			}
+			// The laptop's own facts match, so only the supplier rule keeps
+			// the job off it.
+			return proto.Info{MaxJobs: 1, Facts: gpu, Offers: []proto.Offer{{Name: "a10", Facts: gpu}}}, nil
+		}
+		return proto.Info{MaxJobs: 1, Facts: proto.Facts{OS: "linux"}}, nil
+	}
+	local := []config.RunCandidate{{Name: "local", URL: "local"}}
+	e := config.EffectiveRun{Where: "gpu", WhereMayLease: true, LeaseSuppliers: local}
+	s, err := chooseRunners(context.Background(), e, probe)
+	if err != nil || len(s.Choices) != 0 || len(s.Leases) != 1 || s.Leases[0].Broker.Name != "local" {
+		t.Fatalf("laptop only: %v %+v", err, s)
+	}
+	e.Candidates = []config.RunCandidate{{Name: "box", URL: "box"}}
+	if s, err := chooseRunners(context.Background(), e, probe); err != nil || len(s.Leases) != 1 || s.Leases[0].Broker.Name != "local" {
+		t.Fatalf("with a non-matching runner: %v %+v", err, s)
+	}
+	probed = nil
+	e.Where = "os=linux"
+	if s, err := chooseRunners(context.Background(), e, probe); err != nil || len(s.Choices) != 1 || s.Choices[0].Name != "box" || strings.Join(probed, " ") != "box" {
+		t.Fatalf("matching runner: %v %+v, probed %q", err, s, probed)
+	}
+	e = config.EffectiveRun{Where: "gpu", WhereMayLease: true, LeaseSuppliers: local}
+	down = true
+	if _, err := chooseRunners(context.Background(), e, probe); err == nil || !strings.Contains(err.Error(), "local: connection refused") {
+		t.Fatalf("unreachable local runner: %v", err)
+	}
+	e.LeaseSuppliers = nil
+	if _, err := chooseRunners(context.Background(), e, probe); err == nil || !strings.Contains(err.Error(), "add a peer first") {
+		t.Fatalf("no runners: %v", err)
+	}
+}

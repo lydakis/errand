@@ -86,12 +86,35 @@ func TestWhereLocalRequiresPersonalOptIn(t *testing.T) {
 			if len(e.Candidates) != tc.count {
 				t.Fatalf("candidates=%+v", e.Candidates)
 			}
+			// An installed local runner that is not a candidate may still
+			// rent a machine through its cloud offers.
+			if suppliers := len(e.LeaseSuppliers); suppliers != 2-tc.count {
+				t.Fatalf("lease suppliers=%+v", e.LeaseSuppliers)
+			}
 		})
 	}
 	root := runFixture(t, "default_peer='local'", "[run]\nwhere='*'")
 	e, err := ResolveRun(root, RunOverrides{})
-	if err != nil || len(e.Candidates) != 1 || e.Candidates[0].Name != "local" {
+	if err != nil || len(e.Candidates) != 1 || e.Candidates[0].Name != "local" || len(e.LeaseSuppliers) != 0 {
 		t.Fatalf("explicit local default: %+v %v", e, err)
+	}
+}
+
+// With no peers of your own, an installed local runner lets --where rent a
+// machine, and without one there is nothing to place on.
+func TestWhereWithOnlyALocalRunner(t *testing.T) {
+	root := runFixture(t, "", "")
+	if _, err := ResolveRun(root, RunOverrides{Where: "gpu"}); err == nil || !strings.Contains(err.Error(), "add a peer first") {
+		t.Fatalf("no runners: %v", err)
+	}
+	path, _ := DaemonPath()
+	if err := os.WriteFile(path, []byte("transport = 'local'\nsocket = '/tmp/where-test.sock'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	e, err := ResolveRun(root, RunOverrides{Where: "gpu"})
+	want, _ := LocalURL("/tmp/where-test.sock")
+	if err != nil || len(e.Candidates) != 0 || len(e.LeaseSuppliers) != 1 || e.LeaseSuppliers[0] != (RunCandidate{Name: "local", URL: want}) {
+		t.Fatalf("local supplier: %+v %v", e, err)
 	}
 }
 

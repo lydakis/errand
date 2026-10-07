@@ -94,7 +94,16 @@ func resolvePlacement(out *EffectiveRun, personal Client, selected workspace.Sel
 		}
 		out.Candidates = append(out.Candidates, RunCandidate{Name: name, URL: url, RemoteCommand: personal.SSHRemoteCommand(name), RemoteSocket: personal.SSHRemoteSocket(name)})
 	}
-	if len(out.Candidates) == 0 {
+	// An installed local runner is never picked to run the job unless you
+	// target it, but its cloud offers can still rent you a machine.
+	if _, ok := personal.Peers["local"]; !ok && personal.DefaultPeer != "local" {
+		if _, ok := personal.WithLocalPeer().Peers["local"]; ok {
+			if url, err := personal.PeerURL("local"); err == nil {
+				out.LeaseSuppliers = append(out.LeaseSuppliers, RunCandidate{Name: "local", URL: url})
+			}
+		}
+	}
+	if len(out.Candidates) == 0 && len(out.LeaseSuppliers) == 0 {
 		return fmt.Errorf("where has no personally configured runners; add a peer first")
 	}
 	return nil

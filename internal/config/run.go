@@ -49,8 +49,10 @@ type EffectiveRun struct {
 	Where             string                `json:"where,omitempty"`
 	// WhereMayLease is false when Where came from the workspace, which may
 	// pick your runners but not spend money renting one.
-	WhereMayLease  bool              `json:"-"`
-	Candidates     []RunCandidate    `json:"-"`
+	WhereMayLease bool           `json:"-"`
+	Candidates    []RunCandidate `json:"-"`
+	// LeaseSuppliers may rent a machine for Where but never run it.
+	LeaseSuppliers []RunCandidate    `json:"-"`
 	Peer           string            `json:"peer"`
 	URL            string            `json:"url"`
 	RemoteCommand  string            `json:"remote_command,omitempty"`

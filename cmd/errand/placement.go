@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -81,13 +82,25 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 		// cheapest matching offer competes with the others' on price, and
 		// equal ones are tried in random order. How busy a cloud peer's own
 		// runner is does not matter; the job runs on the rented machine.
+		// A lease supplier that is not a candidate, such as an installed local
+		// runner, is asked only now, when renting is the only way.
 		if !matched && !q.Any() {
+			suppliers := candidates
+			if len(e.LeaseSuppliers) > 0 {
+				suppliers = append(slices.Clip(candidates), e.LeaseSuppliers...)
+				for i, p := range probeCandidates(ctx, e.LeaseSuppliers, e.Where, q, probe) {
+					if p.info == nil {
+						exclusions = append(exclusions, fmt.Sprintf("%s: %s", terminalSafeField(e.LeaseSuppliers[i].Name), terminalSafeField(p.reason)))
+					}
+					probed = append(probed, p)
+				}
+			}
 			for i, p := range probed {
 				if p.info == nil {
 					continue
 				}
 				if offer, ok := matchingOffer(q, p.info.Offers); ok {
-					c := candidates[i]
+					c := suppliers[i]
 					target := client.ConfigureSSHPeer(c.URL, c.Name, c.RemoteCommand, c.RemoteSocket)
 					result.Leases = append(result.Leases, leaseOption{Broker: placementChoice{RunCandidate: c, Info: *p.info, Target: target}, Offer: offer})
 				}
@@ -103,6 +116,9 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 				}
 				return result, nil
 			}
+		}
+		if len(exclusions) == 0 {
+			return result, fmt.Errorf("where has no personally configured runners; add a peer first")
 		}
 		return result, fmt.Errorf("no runner matches %q: %s", e.Where, strings.Join(exclusions, "; "))
 	}

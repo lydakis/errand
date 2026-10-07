@@ -93,22 +93,21 @@ runner on it, so:
    reach.
 2. Add `[cloud.lambda]` with your `api_key_file` to its `errandd.toml`, as
    above, and run `errand setup` again.
-3. Add `default_peer = "local"` to `~/.config/errand/config.toml`. `--where`
-   picks only from runners you have added, and an installed local runner is
-   never picked otherwise.
 
 Then `errand --where gpu=h100 -- python train.py` rents from the laptop. The
-cloud peer is what ends machines, so while the laptop sleeps nothing releases
-them, whatever `idle_timeout` and `max_lifetime` say, and Lambda keeps billing
-until it wakes. Before you close the lid, end your leases with `errand leases
-release <name>`.
+local runner only rents the machine; jobs run on it only when you target it.
+The cloud peer is what ends machines, so while the laptop sleeps nothing
+releases them, whatever `idle_timeout` and `max_lifetime` say, and Lambda keeps
+billing until it wakes. Before you close the lid, end your leases with
+`errand leases release <name>`.
 
 ## When errand leases
 
 - Only when no reachable runner of yours matches the requirements. A matching
   runner that is busy queues the job; errand does not rent a second machine.
 - Never for `--where '*'`.
-- Every reachable cloud peer with a matching offer can supply the machine.
+- Every reachable cloud peer with a matching offer can supply the machine,
+  including your installed local runner.
   The cheapest matching offer wins: an offer with `price_per_hour`, even
   `0`, before one without, and equal offers in random order. Neither your default peer nor how
   busy a cloud peer's own runner is plays a part. If a cloud peer turns the
