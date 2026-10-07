@@ -224,6 +224,22 @@ func TestLocalCloudPeerOnlySuppliesLeases(t *testing.T) {
 	}
 }
 
+// A supplier asked once no runner matched shares the selection's one
+// deadline: a slow peer and a slow local runner together still take about
+// two seconds, not two each.
+func TestSupplierProbeSharesSelectionDeadline(t *testing.T) {
+	slow := func(ctx context.Context, _, _ string, _ time.Duration) (proto.Info, error) {
+		<-ctx.Done()
+		return proto.Info{}, ctx.Err()
+	}
+	e := config.EffectiveRun{Where: "gpu", WhereMayLease: true, Candidates: []config.RunCandidate{{Name: "cabal", URL: "cabal"}}, Suppliers: []config.RunCandidate{{Name: "local", URL: "local"}}}
+	start := time.Now()
+	_, err := chooseRunners(context.Background(), e, slow)
+	if took := time.Since(start); err == nil || took > 3*time.Second {
+		t.Fatalf("took %s: %v", took, err)
+	}
+}
+
 // Every reachable cloud peer offering a match is a supplier. The cheapest
 // offer comes first, priced before unpriced, and equal offers are tried in
 // random order. The cloud peers' own load does not matter.

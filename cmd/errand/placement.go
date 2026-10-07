@@ -52,6 +52,9 @@ func chooseRunners(ctx context.Context, e config.EffectiveRun, probe placementPr
 	if err != nil {
 		return placementSelection{}, err
 	}
+	// Every probe, a supplier's asked later included, shares one deadline.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	candidates := e.Candidates
 	// A ready lease of yours is not a candidate here: it is reused by asking
 	// its cloud peer, which hands it to this run like a new lease.
