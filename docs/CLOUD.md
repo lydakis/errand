@@ -98,10 +98,10 @@ runner on it, so:
    never picked otherwise.
 
 Then `errand --where gpu=h100 -- python train.py` rents from the laptop. The
-cloud peer is what ends idle machines, so while the laptop sleeps nothing
-releases them, and Lambda keeps billing until it wakes. Give the offer a
-shorter `max_lifetime`, or run `errand leases release` before you close the
-lid.
+cloud peer is what ends machines, so while the laptop sleeps nothing releases
+them, whatever `idle_timeout` and `max_lifetime` say, and Lambda keeps billing
+until it wakes. Before you close the lid, end your leases with `errand leases
+release <name>`.
 
 ## When errand leases
 
